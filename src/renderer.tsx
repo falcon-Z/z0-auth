@@ -6,7 +6,7 @@ export const renderer = jsxRenderer(({ children }) => {
     <html class={"dark"}>
       <head>
         <ViteClient />
-        <Link href="/src/style.css" rel="stylesheet" />
+        <Link href="/src/index.css" rel="stylesheet" />
       </head>
       <body
         class={
