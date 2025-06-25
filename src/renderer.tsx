@@ -8,11 +8,7 @@ export const renderer = jsxRenderer(({ children }) => {
         <ViteClient />
         <Link href="/src/index.css" rel="stylesheet" />
       </head>
-      <body
-        class={
-          "dark:bg-black dark:text-neutral-50 bg-neutral-100 text-neutral-950 h-full w-full"
-        }
-      >
+      <body>
         <main class={"h-screen w-full"}>{children}</main>
       </body>
     </html>
