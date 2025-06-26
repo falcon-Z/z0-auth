@@ -3,17 +3,14 @@ import { renderer } from "./renderer";
 import Login from "./components/auth/login";
 import Auth from "./pages/auth";
 import Dashboard from "./pages/dashboard";
+import ApiRoutes from "./api/routes";
+import PageRoutes from "./pages/routes";
 
 const app = new Hono();
 
 app.use(renderer);
 
-app.get("/", (c) => {
-  return c.render(<Dashboard />);
-});
-
-app.get("/auth", (c) => {
-  return c.render(<Auth />);
-});
+app.route("/", PageRoutes);
+app.route("api", ApiRoutes);
 
 export default app;
