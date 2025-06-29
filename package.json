@@ -21,6 +21,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.2.3",
     "@types/bun": "^1.2.17",
+    "prisma": "^6.10.1",
     "tw-animate-css": "^1.3.4",
     "vite": "^6.3.5",
     "vite-ssr-components": "^0.3.0",
