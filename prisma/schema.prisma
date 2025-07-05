@@ -148,8 +148,8 @@ model App {
   status         AppStatus @default(ACTIVE)
   
   // API Authentication
-  apiKey         String    @unique @default(cuid())
-  apiSecret      String    @default(cuid())
+  apiKey         String    @unique
+  apiSecret      String
   
   // App Configuration
   allowedOrigins String[]  // CORS origins
@@ -171,7 +171,13 @@ model App {
   sessions     Session[]
   apiKeys      ApiKey[]
   
+  // Enhanced constraints and indexes
   @@unique([organizationId, slug])
+  @@unique([organizationId, name]) // Unique app names per organization
+  @@index([organizationId, status]) // For org app management
+  @@index([status, ssoEnabled]) // For SSO-enabled apps
+  @@index([organizationId, createdAt]) // For app analytics
+  @@index([webhookUrl]) // For webhook management
   @@map("apps")
 }
 
@@ -188,7 +194,7 @@ model ApiKey {
   id          String       @id @default(cuid())
   appId       String
   name        String       // e.g., "Production", "Development"
-  key         String       @unique @default(cuid())
+  key         String       @unique
   secretHash  String       // Hashed secret for security
   status      ApiKeyStatus @default(ACTIVE)
   
@@ -218,10 +224,15 @@ model ApiKey {
   // Relations
   app App @relation(fields: [appId], references: [id], onDelete: Cascade)
   
-  // Indexes for performance
+  // Enhanced indexes for performance
+  @@unique([appId, name]) // Unique key names per app
   @@index([appId, status])
+  @@index([appId, isCurrentKey]) // For finding current keys
   @@index([rotationId])
   @@index([expiresAt])
+  @@index([status, expiresAt]) // For cleanup queries
+  @@index([lastUsedAt]) // For usage analytics
+  @@index([createdByUserId, createdAt]) // For audit trails
   @@map("api_keys")
 }
 
@@ -271,10 +282,15 @@ model User {
   externalIdentities ExternalIdentity[]
   externalIdentityEvents ExternalIdentityEvent[]
   
-  // Indexes for metadata queries
+  // Enhanced indexes for performance
+  @@index([organizationId, status]) // For org user management
   @@index([organizationId, metadataVersion])
   @@index([roleId, status])
-  @@index([organizationId, status])
+  @@index([email, status]) // For login optimization
+  @@index([organizationId, roleId]) // For role-based queries
+  @@index([status, emailVerified]) // For user validation
+  @@index([organizationId, createdAt]) // For user analytics
+  @@index([lastLoginAt]) // For activity tracking
   @@map("users")
 }
 
@@ -294,7 +310,13 @@ model UserApp {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
   
+  // Enhanced constraints and indexes
   @@unique([userId, appId])
+  @@unique([appId, appUserId]) // Ensure unique custom user ID per app
+  @@index([userId, isActive]) // For active user apps
+  @@index([appId, isActive]) // For app's active users
+  @@index([appId, joinedAt]) // For app user analytics
+  @@index([userId, joinedAt]) // For user activity timeline
   @@map("user_apps")
 }
 
@@ -315,7 +337,11 @@ model Scope {
   users        UserScope[]
   roles        RoleScope[]
   
+  // Enhanced constraints and indexes
   @@unique([organizationId, name])
+  @@index([organizationId, category]) // For scope management by category
+  @@index([category, name]) // For cross-org scope analysis
+  @@index([organizationId, createdAt]) // For scope analytics
   @@map("scopes")
 }
 
@@ -329,7 +355,9 @@ model AppScope {
   app   App   @relation(fields: [appId], references: [id], onDelete: Cascade)
   scope Scope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
   
+  // Enhanced constraints and indexes
   @@unique([appId, scopeId])
+  @@index([scopeId, appId]) // For scope usage analysis
   @@map("app_scopes")
 }
 
@@ -349,7 +377,12 @@ model UserScope {
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   scope Scope  @relation(fields: [scopeId], references: [id], onDelete: Cascade)
   
+  // Enhanced constraints and indexes
   @@unique([userId, scopeId, appId])
+  @@index([userId, appId]) // For app-specific user scopes
+  @@index([scopeId, appId]) // For scope usage by app
+  @@index([userId, grantedAt]) // For user permission history
+  @@index([grantedBy, grantedAt]) // For admin audit trails
   @@map("user_scopes")
 }
 
@@ -377,6 +410,14 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
   
+  // Optimized indexes
+  @@index([userId, appId])
+  @@index([userId, status])
+  @@index([appId, status])
+  @@index([expiresAt])
+  @@index([lastUsedAt])
+  @@index([userId, appId, status]) // Composite for active sessions
+  @@index([status, expiresAt]) // For cleanup queries
   @@map("sessions")
 }
 
@@ -393,6 +434,10 @@ model PasswordReset {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  // Enhanced indexes
+  @@index([userId, used]) // For user's active reset tokens
+  @@index([expiresAt, used]) // For cleanup queries
+  @@index([token, used]) // For token validation
   @@map("password_resets")
 }
 
@@ -575,7 +620,11 @@ model RoleScope {
   role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
   scope Scope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
   
+  // Enhanced constraints and indexes
   @@unique([roleId, scopeId])
+  @@index([scopeId, roleId]) // For scope assignment analysis
+  @@index([roleId, canManage]) // For management permissions
+  @@index([grantedBy, grantedAt]) // For audit trails
   @@map("role_scopes")
 }
 
