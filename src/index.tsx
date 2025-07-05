@@ -12,6 +12,7 @@ import { bodyLimit } from "hono/body-limit";
 import { renderer } from "./renderer";
 import ApiRoutes from "./api/routes";
 import PageRoutes from "./pages/routes";
+import { HTTPException } from "hono/http-exception";
 
 const app = new Hono();
 
@@ -74,9 +75,9 @@ app.use(
   })
 );
 
-app.use(logger());
-app.use(timing());
 app.use(requestId());
+app.use(timing());
+app.use(logger());
 
 if (isProduction) {
   app.use(
@@ -88,7 +89,6 @@ if (isProduction) {
 app.use(etag());
 
 app.use(prettyJSON());
-import { HTTPException } from "hono/http-exception";
 
 app.use(
   timeout(parseInt(process.env.REQUEST_TIMEOUT || "30000"), (c) => {
