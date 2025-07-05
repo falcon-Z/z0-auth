@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -12,4 +6,338 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  ORG_USER
+  APP_USER
+}
+
+enum AppStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum SessionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+// Super Admin and Organization Management
+model SuperAdmin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Audit fields
+  lastLoginAt DateTime?
+  loginCount  Int       @default(0)
+  
+  @@map("super_admins")
+}
+
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  description String?
+  status      OrganizationStatus @default(ACTIVE)
+  
+  // Settings
+  maxUsers    Int?               // User limit for the organization
+  maxApps     Int?               // App limit for the organization
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  users         User[]
+  apps          App[]
+  scopes        Scope[]
+  orgAdmins     OrganizationAdmin[]
+  
+  @@map("organizations")
+}
+
+model OrganizationAdmin {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  permissions    String[]     // JSON array of specific admin permissions
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([organizationId, userId])
+  @@map("organization_admins")
+}
+
+// Applications within Organizations
+model App {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String    // Unique within organization
+  description    String?
+  status         AppStatus @default(ACTIVE)
+  
+  // API Authentication
+  apiKey         String    @unique @default(cuid())
+  apiSecret      String    @default(cuid())
+  
+  // App Configuration
+  allowedOrigins String[]  // CORS origins
+  webhookUrl     String?   // For auth events
+  
+  // SSO Configuration
+  ssoEnabled     Boolean   @default(false)
+  ssoProvider    String?   // e.g., "saml", "oauth2", "oidc"
+  ssoConfig      Json?     // Provider-specific configuration
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        UserApp[]
+  scopes       AppScope[]
+  sessions     Session[]
+  apiKeys      ApiKey[]
+  
+  @@unique([organizationId, slug])
+  @@map("apps")
+}
+
+// Additional API Keys for Apps (for different environments, etc.)
+model ApiKey {
+  id          String    @id @default(cuid())
+  appId       String
+  name        String    // e.g., "Production", "Development"
+  key         String    @unique @default(cuid())
+  secret      String    @default(cuid())
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  
+  // Usage tracking
+  usageCount  Int       @default(0)
+  rateLimit   Int?      // Requests per minute
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@map("api_keys")
+}
+
+// Users and Authentication
+model User {
+  id             String     @id @default(cuid())
+  organizationId String
+  email          String     @unique
+  password       String?    // Nullable for SSO-only users
+  name           String
+  avatar         String?
+  role           UserRole   @default(APP_USER)
+  status         UserStatus @default(ACTIVE)
+  
+  // Authentication metadata
+  emailVerified  Boolean    @default(false)
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret String?
+  
+  // Timestamps
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+  loginCount   Int       @default(0)
+  
+  // Relations
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apps             UserApp[]
+  sessions         Session[]
+  scopes           UserScope[]
+  orgAdmins        OrganizationAdmin[]
+  passwordResets   PasswordReset[]
+  
+  @@map("users")
+}
+
+// Junction table for User-App relationships
+model UserApp {
+  id         String   @id @default(cuid())
+  userId     String
+  appId      String
+  joinedAt   DateTime @default(now())
+  isActive   Boolean  @default(true)
+  
+  // App-specific user data
+  appUserId  String?  // Custom user ID within the app
+  metadata   Json?    // App-specific user metadata
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, appId])
+  @@map("user_apps")
+}
+
+// Scopes and Permissions
+model Scope {
+  id             String @id @default(cuid())
+  organizationId String
+  name           String // e.g., "read:profile", "write:posts"
+  description    String?
+  category       String? // e.g., "user", "admin", "content"
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apps         AppScope[]
+  users        UserScope[]
+  
+  @@unique([organizationId, name])
+  @@map("scopes")
+}
+
+// Junction table for App-Scope relationships
+model AppScope {
+  id      String @id @default(cuid())
+  appId   String
+  scopeId String
+  
+  // Relations
+  app   App   @relation(fields: [appId], references: [id], onDelete: Cascade)
+  scope Scope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  
+  @@unique([appId, scopeId])
+  @@map("app_scopes")
+}
+
+// Junction table for User-Scope relationships
+model UserScope {
+  id      String @id @default(cuid())
+  userId  String
+  scopeId String
+  
+  // Optional: scope can be granted for specific apps
+  appId   String?
+  
+  grantedAt DateTime @default(now())
+  grantedBy String?  // User ID who granted this scope
+  
+  // Relations
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope Scope  @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, scopeId, appId])
+  @@map("user_scopes")
+}
+
+// Sessions and Authentication
+model Session {
+  id         String        @id @default(cuid())
+  userId     String
+  appId      String
+  token      String        @unique
+  refreshToken String?     @unique
+  status     SessionStatus @default(ACTIVE)
+  
+  // Session metadata
+  userAgent  String?
+  ipAddress  String?
+  location   String?
+  
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime
+  lastUsedAt DateTime?
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@map("sessions")
+}
+
+// Password Reset Tokens
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("password_resets")
+}
+
+// Audit Logs
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?  // Nullable for system events
+  appId      String?  // Nullable for org-level events
+  action     String   // e.g., "user.login", "app.created"
+  resource   String?  // Resource type affected
+  resourceId String?  // ID of the affected resource
+  metadata   Json?    // Additional context
+  
+  // Request context
+  ipAddress  String?
+  userAgent  String?
+  
+  createdAt DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+// Webhook Events
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  appId       String?  // Nullable for org-level events
+  eventType   String   // e.g., "user.created", "session.expired"
+  payload     Json
+  status      String   @default("pending") // pending, sent, failed
+  attempts    Int      @default(0)
+  lastAttempt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("webhook_events")
 }
