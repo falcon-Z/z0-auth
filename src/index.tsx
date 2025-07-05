@@ -74,7 +74,11 @@ app.use(timing());
 app.use(requestId());
 
 // Performance middlewares
-app.use(compress());
+if (isProduction) {
+  app.use(compress({
+    encoding: 'gzip',
+  }));
+}
 app.use(etag());
 
 // Error handling middlewares
