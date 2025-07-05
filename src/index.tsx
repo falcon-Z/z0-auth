@@ -22,13 +22,13 @@ app.use(
   cors({
     origin: (origin) => {
       if (isDevelopment) {
-        return true;
+        return origin;
       }
 
       const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [
         "https://localhost:3000",
       ];
-      return allowedOrigins.includes(origin);
+      return allowedOrigins.includes(origin) ? origin : null;
     },
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -88,9 +88,13 @@ if (isProduction) {
 app.use(etag());
 
 app.use(prettyJSON());
+import { HTTPException } from "hono/http-exception";
+
 app.use(
   timeout(parseInt(process.env.REQUEST_TIMEOUT || "30000"), (c) => {
-    return c.json({ error: "Request timeout", timeout: "30s" }, 504);
+    throw new HTTPException(504, {
+      res: c.json({ error: "Request timeout", timeout: "30s" }, 504),
+    });
   })
 );
 
