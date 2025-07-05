@@ -15,7 +15,9 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.0",
+    "@hookform/resolvers": "^5.1.1",
     "@prisma/client": "^6.10.1",
+    "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@tailwindcss/vite": "^4.1.10",
     "bcryptjs": "^3.0.2",
@@ -23,6 +25,7 @@
     "clsx": "^2.1.1",
     "hono": "^4.8.3",
     "lucide-react": "^0.523.0",
+    "react-hook-form": "^7.60.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.10",
     "zod": "^3.25.74"
