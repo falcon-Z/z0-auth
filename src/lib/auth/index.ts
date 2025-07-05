@@ -1,4 +1,20 @@
 import { sign, verify, decode } from "hono/jwt";
+import * as bcrypt from "bcryptjs";
+/**
+ * Hashes a password using bcryptjs.
+ * @param password - The plain text password
+ * @param saltRounds - Number of salt Rounds
+ * @returns The hashed password
+ */
+export async function hashPassword(
+  password: string,
+  saltRounds?: number
+): Promise<string> {
+  return await bcrypt.hash(
+    password,
+    saltRounds || process.env.SALT_ROUNDS || 10
+  );
+}
 
 /**
  * JWT payload for authentication and authorization.
