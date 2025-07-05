@@ -40,6 +40,45 @@ enum SessionStatus {
   REVOKED
 }
 
+// New Enums for Role Types and Built-in Roles
+enum RoleType {
+  SYSTEM      // Built-in roles (SUPER_ADMIN, ORG_ADMIN, etc.)
+  CUSTOM      // Organization-defined roles
+}
+
+enum BuiltInRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  ORG_USER
+  APP_USER
+}
+
+enum ExternalProviderType {
+  OAUTH2
+  SAML
+  OIDC
+  LDAP
+  CUSTOM
+}
+
+enum ExternalProvider {
+  GOOGLE
+  GITHUB
+  MICROSOFT
+  FACEBOOK
+  LINKEDIN
+  TWITTER
+  DISCORD
+  SLACK
+  OKTA
+  AUTH0
+  KEYCLOAK
+  AZURE_AD
+  SAML_GENERIC
+  LDAP_GENERIC
+  CUSTOM_OAUTH2
+}
+
 // Super Admin and Organization Management
 model SuperAdmin {
   id        String   @id @default(cuid())
@@ -76,6 +115,9 @@ model Organization {
   apps          App[]
   scopes        Scope[]
   orgAdmins     OrganizationAdmin[]
+  metadataSchemas UserMetadataSchema[]
+  roles         Role[]
+  externalProviders OrganizationExternalProvider[]
   
   @@map("organizations")
 }
@@ -133,20 +175,42 @@ model App {
   @@map("apps")
 }
 
+// API Key Rotation Status
+enum ApiKeyStatus {
+  ACTIVE
+  ROTATING
+  DEPRECATED
+  REVOKED
+}
+
 // Additional API Keys for Apps (for different environments, etc.)
 model ApiKey {
-  id          String    @id @default(cuid())
+  id          String       @id @default(cuid())
   appId       String
-  name        String    // e.g., "Production", "Development"
-  key         String    @unique @default(cuid())
-  secret      String    @default(cuid())
-  isActive    Boolean   @default(true)
-  expiresAt   DateTime?
-  lastUsedAt  DateTime?
+  name        String       // e.g., "Production", "Development"
+  key         String       @unique @default(cuid())
+  secretHash  String       // Hashed secret for security
+  status      ApiKeyStatus @default(ACTIVE)
+  
+  // Key rotation support
+  rotationId     String?   // Links keys during rotation
+  isCurrentKey   Boolean   @default(true)  // Primary key for the rotation group
+  lastRotated    DateTime? // When this key was last rotated
+  rotationCount  Int       @default(0)     // Number of times rotated
+  
+  // Expiration and lifecycle
+  expiresAt      DateTime?
+  gracePeriodEnd DateTime? // End of grace period for old keys
+  lastUsedAt     DateTime?
   
   // Usage tracking
-  usageCount  Int       @default(0)
-  rateLimit   Int?      // Requests per minute
+  usageCount     Int       @default(0)
+  rateLimit      Int?      // Requests per minute
+  
+  // Security metadata
+  createdByUserId String?  // User who created/rotated the key
+  revokedAt      DateTime?
+  revokedReason  String?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,6 +218,10 @@ model ApiKey {
   // Relations
   app App @relation(fields: [appId], references: [id], onDelete: Cascade)
   
+  // Indexes for performance
+  @@index([appId, status])
+  @@index([rotationId])
+  @@index([expiresAt])
   @@map("api_keys")
 }
 
@@ -165,13 +233,25 @@ model User {
   password       String?    // Nullable for SSO-only users
   name           String
   avatar         String?
-  role           UserRole   @default(APP_USER)
+  
+  // Role-based access control
+  roleId         String?    // Reference to Role model
+  legacyRole     UserRole?  // Deprecated: for backward compatibility
   status         UserStatus @default(ACTIVE)
   
   // Authentication metadata
   emailVerified  Boolean    @default(false)
   twoFactorEnabled Boolean  @default(false)
   twoFactorSecret String?
+  
+  // Dynamic metadata storage
+  metadata       Json?      // Organization-level custom attributes
+  globalMetadata Json?      // Global custom attributes (managed by super admin)
+  
+  // Metadata versioning and tracking
+  metadataVersion     Int      @default(1)  // Version for metadata changes
+  metadataUpdatedAt   DateTime? // When metadata was last updated
+  metadataUpdatedBy   String?  // User ID who updated the metadata
   
   // Timestamps
   createdAt    DateTime  @default(now())
@@ -181,12 +261,20 @@ model User {
   
   // Relations
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role             Role?               @relation(fields: [roleId], references: [id], onDelete: SetNull)
   apps             UserApp[]
   sessions         Session[]
   scopes           UserScope[]
   orgAdmins        OrganizationAdmin[]
   passwordResets   PasswordReset[]
+  metadataHistory  UserMetadataHistory[]
+  externalIdentities ExternalIdentity[]
+  externalIdentityEvents ExternalIdentityEvent[]
   
+  // Indexes for metadata queries
+  @@index([organizationId, metadataVersion])
+  @@index([roleId, status])
+  @@index([organizationId, status])
   @@map("users")
 }
 
@@ -225,6 +313,7 @@ model Scope {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   apps         AppScope[]
   users        UserScope[]
+  roles        RoleScope[]
   
   @@unique([organizationId, name])
   @@map("scopes")
@@ -315,14 +404,50 @@ model AuditLog {
   action     String   // e.g., "user.login", "app.created"
   resource   String?  // Resource type affected
   resourceId String?  // ID of the affected resource
-  metadata   Json?    // Additional context
+  
+  // Change tracking
+  oldValues  Json?    // Previous values before the change
+  newValues  Json?    // New values after the change
+  changes    Json?    // Specific fields that changed with before/after
+  
+  // Request traceability
+  requestId  String?  // Request ID for linking related operations
+  sessionId  String?  // Session ID for user context
+  traceId    String?  // Distributed tracing ID
+  
+  // Additional context
+  metadata   Json?    // Additional context and event-specific data
   
   // Request context
   ipAddress  String?
   userAgent  String?
+  referer    String?  // HTTP referer
+  
+  // Processing metadata
+  duration   Int?     // Operation duration in milliseconds
+  success    Boolean  @default(true)
+  errorCode  String?  // Error code if success is false
+  errorMessage String? // Error message if success is false
+  
+  // Severity and categorization
+  severity   String   @default("info") // "debug", "info", "warn", "error", "critical"
+  category   String?  // Category for grouping (auth, user_mgmt, api_access, etc.)
+  tags       String[] // Tags for flexible categorization
   
   createdAt DateTime @default(now())
   
+  // Relations
+  requestTrace RequestTrace? @relation("RequestTraceAuditLogs", fields: [requestId], references: [requestId])
+  
+  // Indexes for performance
+  @@index([userId, createdAt])
+  @@index([appId, createdAt])
+  @@index([action, createdAt])
+  @@index([resource, resourceId])
+  @@index([requestId])
+  @@index([sessionId])
+  @@index([severity, category])
+  @@index([success, severity])
   @@map("audit_logs")
 }
 
@@ -340,4 +465,298 @@ model WebhookEvent {
   updatedAt DateTime @updatedAt
   
   @@map("webhook_events")
+}
+
+// Metadata Schema Management
+model UserMetadataSchema {
+  id             String @id @default(cuid())
+  organizationId String
+  name           String // e.g., "employee_data", "custom_fields"
+  description    String?
+  
+  // Schema definition
+  schema         Json   // JSON schema for validation
+  isActive       Boolean @default(true)
+  version        Int     @default(1)
+  
+  // Access control
+  isGlobal       Boolean @default(false) // Can be managed by super admin
+  requiredRole   UserRole @default(ORG_ADMIN) // Minimum role to manage
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  // User ID who created the schema
+  
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@unique([organizationId, name, version])
+  @@index([organizationId, isActive])
+  @@map("user_metadata_schemas")
+}
+
+// Metadata Change History
+model UserMetadataHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  fieldName   String   // The metadata field that changed
+  oldValue    Json?    // Previous value
+  newValue    Json?    // New value
+  changeType  String   // "create", "update", "delete"
+  
+  // Change context
+  changedBy   String?  // User ID who made the change
+  reason      String?  // Optional reason for the change
+  
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([fieldName, createdAt])
+  @@map("user_metadata_history")
+}
+
+// Role Management System
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String?  // Nullable for system roles
+  name           String   // e.g., "Content Manager", "Support Agent"
+  description    String?
+  
+  // Role type and hierarchy
+  roleType       RoleType @default(CUSTOM)
+  builtInRole    BuiltInRole? // Only set for system roles
+  isActive       Boolean  @default(true)
+  
+  // Role hierarchy and permissions
+  level          Int      @default(0)    // Higher numbers = more permissions
+  inheritsFrom   String?  // Role ID to inherit permissions from
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  // User ID who created the role
+  
+  // Relations
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  roleScopes     RoleScope[]
+  parentRole     Role?     @relation("RoleHierarchy", fields: [inheritsFrom], references: [id])
+  childRoles     Role[]    @relation("RoleHierarchy")
+  
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@index([roleType, builtInRole])
+  @@map("roles")
+}
+
+// Junction table for Role-Scope relationships
+model RoleScope {
+  id      String @id @default(cuid())
+  roleId  String
+  scopeId String
+  
+  // Permission level for this scope
+  canRead    Boolean @default(true)
+  canWrite   Boolean @default(false)
+  canDelete  Boolean @default(false)
+  canManage  Boolean @default(false) // Admin-level permissions
+  
+  // Context and conditions
+  conditions Json?   // Optional conditions for when this scope applies
+  
+  grantedAt DateTime @default(now())
+  grantedBy String?  // User ID who granted this scope to the role
+  
+  // Relations
+  role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  scope Scope @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, scopeId])
+  @@map("role_scopes")
+}
+
+// External Identity Management
+model ExternalIdentity {
+  id          String   @id @default(cuid())
+  userId      String
+  
+  // Provider information
+  provider    ExternalProvider
+  providerId  String   // External user ID from the provider
+  providerType ExternalProviderType
+  
+  // Provider-specific data
+  email       String?  // Email from the provider
+  username    String?  // Username from the provider
+  displayName String?  // Display name from the provider
+  avatarUrl   String?  // Profile picture URL
+  
+  // Authentication tokens
+  accessToken  String?  // OAuth access token (encrypted)
+  refreshToken String?  // OAuth refresh token (encrypted)
+  tokenType    String?  // Token type (Bearer, etc.)
+  expiresAt    DateTime? // Token expiration
+  
+  // Provider metadata
+  profileData Json?    // Additional profile data from provider
+  scopes      String[] // OAuth scopes granted
+  
+  // Linking metadata
+  isVerified   Boolean  @default(false) // Whether the external identity is verified
+  isPrimary    Boolean  @default(false) // Primary external identity for the user
+  
+  // Timestamps
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastUsedAt   DateTime? // When this identity was last used for authentication
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Constraints and indexes
+  @@unique([provider, providerId])
+  @@unique([userId, provider]) // One identity per provider per user
+  @@index([userId, isPrimary])
+  @@index([provider, email])
+  @@index([isVerified, isPrimary])
+  @@map("external_identities")
+}
+
+// External Identity Linking Events
+model ExternalIdentityEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  identityId  String
+  eventType   String   // "linked", "unlinked", "updated", "used"
+  
+  // Event context
+  ipAddress   String?
+  userAgent   String?
+  location    String?
+  
+  // Event metadata
+  metadata    Json?    // Additional event data
+  success     Boolean  @default(true)
+  errorMessage String? // Error message if success is false
+  
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  identity    ExternalIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, eventType])
+  @@index([identityId, eventType])
+  @@index([createdAt])
+  @@map("external_identity_events")
+}
+
+// Organization External Provider Configuration
+model OrganizationExternalProvider {
+  id             String   @id @default(cuid())
+  organizationId String
+  
+  // Provider configuration
+  provider       ExternalProvider
+  providerType   ExternalProviderType
+  isEnabled      Boolean  @default(true)
+  
+  // Provider settings
+  clientId       String?  // OAuth client ID
+  clientSecret   String?  // OAuth client secret (encrypted)
+  redirectUri    String?  // OAuth redirect URI
+  
+  // SAML specific settings
+  samlEntityId   String?  // SAML entity ID
+  samlSsoUrl     String?  // SAML SSO URL
+  samlCertificate String? // SAML certificate
+  
+  // LDAP specific settings
+  ldapUrl        String?  // LDAP server URL
+  ldapBindDn     String?  // LDAP bind DN
+  ldapBindPassword String? // LDAP bind password (encrypted)
+  ldapBaseDn     String?  // LDAP base DN
+  
+  // Advanced configuration
+  scopes         String[] // OAuth scopes to request
+  mappings       Json?    // Field mappings from provider to user
+  restrictions   Json?    // Domain restrictions, group requirements, etc.
+  
+  // Auto-provisioning settings
+  autoProvision  Boolean  @default(false) // Auto-create users on first login
+  defaultRole    String?  // Default role for auto-provisioned users
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  // User ID who configured this provider
+  
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@unique([organizationId, provider])
+  @@index([organizationId, isEnabled])
+  @@map("organization_external_providers")
+}
+
+// Request Tracing for Audit Correlation
+model RequestTrace {
+  id         String   @id @default(cuid())
+  requestId  String   @unique
+  
+  // Request information
+  method     String   // HTTP method (GET, POST, etc.)
+  path       String   // Request path
+  query      String?  // Query parameters
+  
+  // User context
+  userId     String?  // User making the request
+  appId      String?  // App context
+  sessionId  String?  // Session ID
+  
+  // Request metadata
+  ipAddress  String?
+  userAgent  String?
+  referer    String?
+  contentType String?
+  
+  // Timing information
+  startTime  DateTime @default(now())
+  endTime    DateTime?
+  duration   Int?     // Total request duration in milliseconds
+  
+  // Response information
+  statusCode Int?     // HTTP status code
+  responseSize Int?   // Response size in bytes
+  
+  // Distributed tracing
+  traceId    String?  // Distributed tracing ID
+  parentSpanId String? // Parent span ID for nested operations
+  
+  // Request outcome
+  success    Boolean  @default(true)
+  errorCode  String?
+  errorMessage String?
+  
+  // Related audit logs count
+  auditLogCount Int   @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  auditLogs AuditLog[] @relation("RequestTraceAuditLogs")
+  
+  // Indexes
+  @@index([requestId])
+  @@index([userId, startTime])
+  @@index([appId, startTime])
+  @@index([traceId])
+  @@index([success, statusCode])
+  @@index([startTime])
+  @@map("request_traces")
 }
