@@ -12,10 +12,7 @@ import type { Context, MiddlewareHandler, Next } from "hono";
  * @param c - Hono context object
  * @param next - Hono next middleware function
  */
-export default async function initialSetupMiddleware(
-  c: Context,
-  next: Next
-): Promise<MiddlewareHandler> {
+const initialSetupMiddleware: MiddlewareHandler = async (c, next) => {
   const superAdmin = await db.platformManager.findFirst({
     where: { roleType: "SUPER_ADMIN" },
   });
@@ -26,12 +23,14 @@ export default async function initialSetupMiddleware(
     if (path !== "/auth/setup/register") {
       return c.redirect("/auth/setup/register");
     }
-    return next();
+    return await next();
   }
 
   if (path === "/auth/setup/register") {
     return c.redirect("/");
   }
 
-  return next();
-}
+  return await next();
+};
+
+export default initialSetupMiddleware;
