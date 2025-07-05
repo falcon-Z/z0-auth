@@ -152,7 +152,6 @@ model App {
   apiSecret      String
   
   // App Configuration
-  allowedOrigins String[]  // CORS origins
   webhookUrl     String?   // For auth events
   
   // SSO Configuration
@@ -170,6 +169,7 @@ model App {
   scopes       AppScope[]
   sessions     Session[]
   apiKeys      ApiKey[]
+  allowedOrigins AllowedOrigin[]
   
   // Enhanced constraints and indexes
   @@unique([organizationId, slug])
@@ -808,4 +808,50 @@ model RequestTrace {
   @@index([success, statusCode])
   @@index([startTime])
   @@map("request_traces")
+}
+
+// CORS Origins Management
+model AllowedOrigin {
+  id             String   @id @default(cuid())
+  appId          String
+  origin         String   // e.g., "https://app.example.com", "*"
+  environment    String?  // e.g., "production", "staging", "development"
+  isActive       Boolean  @default(true)
+  
+  // Origin configuration
+  allowCredentials Boolean @default(true)   // Allow credentials in CORS requests
+  maxAge         Int?     // CORS preflight cache duration in seconds
+  allowedMethods String[] @default(["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+  allowedHeaders String[] @default(["Content-Type", "Authorization"])
+  exposedHeaders String[] @default([])
+  
+  // Metadata
+  description    String?  // Description for this origin
+  tags           String[] // Tags for organization (e.g., ["frontend", "mobile"])
+  
+  // Validation and security
+  isWildcard     Boolean  @default(false) // True if origin contains wildcards
+  pattern        String?  // Regex pattern for wildcard origins
+  
+  // Usage tracking
+  lastUsed       DateTime? // Last time this origin was used
+  usageCount     Int       @default(0)
+  
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?  // User ID who added this origin
+  
+  // Relations
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  // Constraints and indexes
+  @@unique([appId, origin, environment]) // Unique origin per app per environment
+  @@index([appId, isActive]) // For active origins lookup
+  @@index([appId, environment]) // For environment-specific queries
+  @@index([origin, isActive]) // For origin validation
+  @@index([isWildcard, isActive]) // For wildcard origin processing
+  @@index([lastUsed]) // For usage analytics
+  @@index([createdBy, createdAt]) // For audit trails
+  @@map("allowed_origins")
 }
