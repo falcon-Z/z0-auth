@@ -9,10 +9,21 @@ datasource db {
 }
 
 enum UserRole {
-  SUPER_ADMIN
   ORG_ADMIN
   ORG_USER
   APP_USER
+}
+
+enum PlatformRoleType {
+  SUPER_ADMIN
+  ORG_MANAGER
+  SECURITY_MANAGER
+  DEVOPS_MANAGER
+  ANALYTICS_MANAGER
+  SUPPORT_MANAGER
+  AUDITOR
+  INTEGRATION_MANAGER
+  FEATURE_MANAGER
 }
 
 enum AppStatus {
@@ -92,17 +103,20 @@ enum DeviceStatus {
   SUSPICIOUS
 }
 
-model SuperAdmin {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  password    String
-  name        String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  lastLoginAt DateTime?
-  loginCount  Int       @default(0)
 
-  @@map("super_admins")
+model PlatformManager {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  password     String
+  name         String
+  roleType     PlatformRoleType
+  scopes       String[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  lastLoginAt  DateTime?
+  loginCount   Int              @default(0)
+
+  @@map("platform_managers")
 }
 
 model Organization {
