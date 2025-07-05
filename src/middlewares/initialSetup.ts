@@ -1,5 +1,4 @@
-import { db } from "../lib/database/client";
-import type { Context, MiddlewareHandler, Next } from "hono";
+import type { MiddlewareHandler } from "hono";
 
 /**
  * Hono middleware to enforce initial setup for platform managers.
@@ -12,14 +11,20 @@ import type { Context, MiddlewareHandler, Next } from "hono";
  * @param c - Hono context object
  * @param next - Hono next middleware function
  */
+
+// This middleware checks Cloudflare KV for the initial setup status.
+// Assumes a KV namespace is bound as `SETUP_KV` in your environment.
 const initialSetupMiddleware: MiddlewareHandler = async (c, next) => {
-  const superAdmin = await db.platformManager.findFirst({
-    where: { roleType: "SUPER_ADMIN" },
-  });
+  const kv = c.env?.SETUP_KV;
+  let setupComplete = false;
+  if (kv) {
+    const value = await kv.get("initial_setup_complete");
+    setupComplete = value === "true";
+  }
 
   const path = c.req.path;
 
-  if (!superAdmin) {
+  if (!setupComplete) {
     if (path !== "/auth/setup/register") {
       return c.redirect("/auth/setup/register");
     }
