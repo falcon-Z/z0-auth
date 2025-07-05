@@ -79,6 +79,19 @@ enum ExternalProvider {
   CUSTOM_OAUTH2
 }
 
+enum DeviceType {
+  DESKTOP
+  MOBILE
+  TABLET
+  UNKNOWN
+}
+
+enum DeviceStatus {
+  ACTIVE
+  BLOCKED
+  SUSPICIOUS
+}
+
 // Super Admin and Organization Management
 model SuperAdmin {
   id        String   @id @default(cuid())
@@ -281,6 +294,8 @@ model User {
   metadataHistory  UserMetadataHistory[]
   externalIdentities ExternalIdentity[]
   externalIdentityEvents ExternalIdentityEvent[]
+  devices          Device[]
+  deviceEvents     DeviceEvent[]
   
   // Enhanced indexes for performance
   @@index([organizationId, status]) // For org user management
@@ -391,6 +406,7 @@ model Session {
   id         String        @id @default(cuid())
   userId     String
   appId      String
+  deviceId   String?       // Optional link to device
   token      String        @unique
   refreshToken String?     @unique
   status     SessionStatus @default(ACTIVE)
@@ -409,15 +425,18 @@ model Session {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   
   // Optimized indexes
   @@index([userId, appId])
   @@index([userId, status])
   @@index([appId, status])
+  @@index([deviceId, status]) // For device-specific sessions
   @@index([expiresAt])
   @@index([lastUsedAt])
   @@index([userId, appId, status]) // Composite for active sessions
   @@index([status, expiresAt]) // For cleanup queries
+  @@index([deviceId, userId]) // For device session management
   @@map("sessions")
 }
 
@@ -854,4 +873,104 @@ model AllowedOrigin {
   @@index([lastUsed]) // For usage analytics
   @@index([createdBy, createdAt]) // For audit trails
   @@map("allowed_origins")
+}
+
+// Device Tracking for Security and Analytics
+model Device {
+  id             String       @id @default(cuid())
+  userId         String
+  fingerprint    String       // Unique device fingerprint
+  
+  // Device identification
+  deviceType     DeviceType   @default(UNKNOWN)
+  deviceName     String?      // User-defined device name
+  status         DeviceStatus @default(ACTIVE)
+  
+  // Browser and OS information
+  userAgent      String
+  browserName    String?      // e.g., "Chrome", "Firefox", "Safari"
+  browserVersion String?      // e.g., "120.0.0.0"
+  osName         String?      // e.g., "Windows", "macOS", "iOS", "Android"
+  osVersion      String?      // e.g., "11.0", "14.2"
+  
+  // Device characteristics
+  screenResolution String?    // e.g., "1920x1080"
+  timezone       String?      // e.g., "America/New_York"
+  language       String?      // e.g., "en-US"
+  
+  // Security tracking
+  ipAddress      String?      // Last known IP address
+  location       Json?        // Geolocation data (city, country, etc.)
+  isTrusted      Boolean      @default(false) // User has marked device as trusted
+  
+  // Device fingerprinting details
+  fingerprintData Json?       // Additional fingerprinting data
+  
+  // Usage analytics
+  loginCount     Int          @default(0)
+  lastLoginAt    DateTime?
+  lastUsedAt     DateTime?
+  
+  // Device management
+  isBlocked      Boolean      @default(false)
+  blockedAt      DateTime?
+  blockedReason  String?
+  
+  // Registration and tracking
+  firstSeenAt    DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  // Relations
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions       Session[]
+  deviceEvents   DeviceEvent[]
+  
+  // Constraints and indexes
+  @@unique([userId, fingerprint]) // One device record per user per fingerprint
+  @@index([userId, status]) // For user device management
+  @@index([fingerprint]) // For device identification
+  @@index([userId, lastUsedAt]) // For recent device activity
+  @@index([status, isBlocked]) // For security monitoring
+  @@index([deviceType, osName]) // For device analytics
+  @@index([isTrusted, userId]) // For trusted device lookups
+  @@index([lastLoginAt]) // For login analytics
+  @@map("devices")
+}
+
+// Device Events for Security Monitoring
+model DeviceEvent {
+  id         String   @id @default(cuid())
+  deviceId   String
+  userId     String
+  eventType  String   // "login", "logout", "blocked", "trusted", "suspicious"
+  
+  // Event context
+  ipAddress  String?
+  location   Json?    // Geolocation at time of event
+  userAgent  String?
+  
+  // Security metadata
+  riskScore  Int?     // Risk assessment score (0-100)
+  riskFactors String[] // Risk factors identified
+  
+  // Event details
+  success    Boolean  @default(true)
+  errorCode  String?
+  errorMessage String?
+  metadata   Json?    // Additional event data
+  
+  createdAt  DateTime @default(now())
+  
+  // Relations
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Indexes for security monitoring
+  @@index([deviceId, eventType])
+  @@index([userId, eventType])
+  @@index([eventType, createdAt])
+  @@index([riskScore, createdAt])
+  @@index([userId, createdAt])
+  @@map("device_events")
 }
