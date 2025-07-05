@@ -103,4 +103,15 @@ app.use(renderer);
 app.route("/", PageRoutes);
 app.route("api", ApiRoutes);
 
+app.notFound((c) => {
+  return c.json(
+    {
+      error: "Bad Request",
+      message:
+        "The requested resource was not found or the request is invalid.",
+    },
+    400
+  );
+});
+
 export default app;
