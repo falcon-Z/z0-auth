@@ -11,7 +11,6 @@ import { sign } from "hono/jwt";
  * @param {UserRole} options.role - The user's role (required).
  * @param {string} [options.orgId] - The organization ID (optional, required for org/app roles).
  * @param {string} [options.appId] - The app ID (optional, required for app users).
- * @param {string} options.secret - The secret key to sign the JWT (required).
  * @param {number} [options.expiresIn=3600] - Token expiration in seconds (default: 3600).
  * @returns {Promise<string>} The signed JWT token as a string.
  */
@@ -27,18 +26,25 @@ type IssueTokenOptions = {
   role: UserRole;
   orgId?: string;
   appId?: string;
-  secret: string;
   expiresIn?: number; // seconds
 };
 
+/**
+ * Issues a JWT token for a user with a payload based on their role.
+ *
+ * The secret is read from the environment variable JWT_SECRET.
+ */
 export async function issueToken({
   userId,
   role,
   orgId,
   appId,
-  secret,
   expiresIn = 3600,
 }: IssueTokenOptions): Promise<string> {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET environment variable is not set");
+  }
   const payload: Record<string, any> = {
     sub: userId,
     role,
