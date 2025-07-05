@@ -1,6 +1,3 @@
-import { Hono } from "hono";
-import Dashboard from "./dashboard";
-import Auth from "./auth";
 import AuthPageRoutes from "./auth/routes";
 
 const PageRoutes = new Hono();
