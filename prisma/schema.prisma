@@ -26,6 +26,7 @@ enum UserStatus {
   INACTIVE
   PENDING
   SUSPENDED
+  DELETED  // For soft-deleted users
 }
 
 enum OrganizationStatus {
@@ -283,6 +284,14 @@ model User {
   lastLoginAt  DateTime?
   loginCount   Int       @default(0)
   
+  // Soft delete fields
+  // Soft delete allows users to be marked as deleted without actually removing them from the database
+  // This preserves referential integrity and allows for potential recovery
+  deletedAt    DateTime? // Soft delete timestamp
+  deletedBy    String?   // User ID who performed the soft delete
+  deleteReason String?   // Reason for deletion
+  isPermanentlyDeleted Boolean @default(false) // Flag for permanent deletion
+  
   // Relations
   organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   role             Role?               @relation(fields: [roleId], references: [id], onDelete: SetNull)
@@ -306,6 +315,10 @@ model User {
   @@index([status, emailVerified]) // For user validation
   @@index([organizationId, createdAt]) // For user analytics
   @@index([lastLoginAt]) // For activity tracking
+  @@index([deletedAt]) // For soft delete queries
+  @@index([organizationId, deletedAt]) // For org-level soft delete management
+  @@index([deletedBy, deletedAt]) // For tracking who deleted what
+  @@index([isPermanentlyDeleted, deletedAt]) // For permanent deletion queries
   @@map("users")
 }
 
