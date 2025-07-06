@@ -8,7 +8,7 @@ import type { Context } from "hono";
  * Registers the platform super admin (first-time setup).
  * @param c - Hono context
  */
-export const setupRoute = async (c: Context) => {
+export const setupHandler = async (c: Context) => {
   if (c.req.method !== "POST") {
     return c.json({ error: "Method not allowed" }, 405);
   }

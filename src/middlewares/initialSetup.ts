@@ -3,9 +3,9 @@ import type { MiddlewareHandler } from "hono";
 /**
  * Hono middleware to enforce initial setup for platform managers.
  *
- * - If no super admin exists in the PlatformManager table, all routes except `/auth/setup/register`
- *   will redirect to `/auth/setup/register` to force super admin registration.
- * - If a super admin exists, any access to `/auth/setup/register` is always redirected to `/`.
+ * - If no super admin exists in the PlatformManager table, all routes except `/setup/register`
+ *   will redirect to `/setup/register` to force super admin registration.
+ * - If a super admin exists, any access to `/setup/register` is always redirected to `/`.
  * - Otherwise, the request proceeds as normal.
  *
  * @param c - Hono context object
@@ -25,13 +25,13 @@ const initialSetupMiddleware: MiddlewareHandler = async (c, next) => {
   const path = c.req.path;
 
   if (!setupComplete) {
-    if (path !== "/auth/setup/register") {
-      return c.redirect("/auth/setup/register");
+    if (path !== "/setup/register") {
+      return c.redirect("/setup/register");
     }
     return await next();
   }
 
-  if (path === "/auth/setup/register") {
+  if (path === "/setup/register") {
     return c.redirect("/");
   }
 

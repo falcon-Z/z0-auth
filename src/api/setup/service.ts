@@ -1,5 +1,5 @@
 import { PrismaClient, PlatformRoleType } from "@prisma/client";
-import { hashPassword } from "../../../lib/auth";
+import { hashPassword } from "../../lib/auth";
 import type { SuperAdminInput } from "./validations";
 
 const prisma = new PrismaClient();

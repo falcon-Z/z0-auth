@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import V1Routes from "./v1/routes";
+import { setupHandler } from "./setup";
 
 const ApiRoutes = new Hono();
 
 ApiRoutes.route("v1", V1Routes);
+ApiRoutes.post("/setup", setupHandler);
 
 export default ApiRoutes;
