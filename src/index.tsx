@@ -75,17 +75,10 @@ app.use(
   })
 );
 
-app.use(requestId());
-app.use(timing());
 app.use(logger());
+app.use(timing());
+app.use(requestId());
 
-if (isProduction) {
-  app.use(
-    compress({
-      encoding: "gzip",
-    })
-  );
-}
 app.use(etag());
 
 app.use(prettyJSON());
@@ -97,8 +90,6 @@ app.use(
     });
   })
 );
-
-app.use(renderer);
 
 app.route("/", PageRoutes);
 app.route("api", ApiRoutes);
