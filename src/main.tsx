@@ -1,7 +1,7 @@
 import { jsxRenderer } from "hono/jsx-renderer";
 import { Link, ViteClient } from "vite-ssr-components/hono";
 
-export const renderer = jsxRenderer(
+export const Root = jsxRenderer(
   ({ children }) => {
     return (
       <html class={"dark"}>

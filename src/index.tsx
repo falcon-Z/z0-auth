@@ -4,15 +4,14 @@ import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
 import { secureHeaders } from "hono/secure-headers";
 import { timing } from "hono/timing";
-import { compress } from "hono/compress";
 import { etag } from "hono/etag";
 import { requestId } from "hono/request-id";
 import { timeout } from "hono/timeout";
 import { bodyLimit } from "hono/body-limit";
-import { renderer } from "./renderer";
 import ApiRoutes from "./api/routes";
-import PageRoutes from "./pages/routes";
 import { HTTPException } from "hono/http-exception";
+import AppRoutes from "./app/routes";
+import { Root } from "./main";
 
 const app = new Hono();
 
@@ -91,7 +90,9 @@ app.use(
   })
 );
 
-app.route("/", PageRoutes);
+app.use(Root);
+
+app.route("/", AppRoutes);
 app.route("api", ApiRoutes);
 
 app.notFound((c) => {
