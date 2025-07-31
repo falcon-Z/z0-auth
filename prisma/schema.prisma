@@ -1,0 +1,755 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ORG_ADMIN
+  ORG_USER
+  APP_USER
+}
+
+enum PlatformRoleType {
+  SUPER_ADMIN
+  ORG_MANAGER
+  SECURITY_MANAGER
+  DEVOPS_MANAGER
+  ANALYTICS_MANAGER
+  SUPPORT_MANAGER
+  AUDITOR
+  INTEGRATION_MANAGER
+  FEATURE_MANAGER
+}
+
+enum AppStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+  DELETED
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum SessionStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum RoleType {
+  SYSTEM
+  CUSTOM
+}
+
+enum BuiltInRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  ORG_USER
+  APP_USER
+}
+
+enum ExternalProviderType {
+  OAUTH2
+  SAML
+  OIDC
+  LDAP
+  CUSTOM
+}
+
+enum ExternalProvider {
+  GOOGLE
+  GITHUB
+  MICROSOFT
+  FACEBOOK
+  LINKEDIN
+  TWITTER
+  DISCORD
+  SLACK
+  OKTA
+  AUTH0
+  KEYCLOAK
+  AZURE_AD
+  SAML_GENERIC
+  LDAP_GENERIC
+  CUSTOM_OAUTH2
+}
+
+enum DeviceType {
+  DESKTOP
+  MOBILE
+  TABLET
+  UNKNOWN
+}
+
+enum DeviceStatus {
+  ACTIVE
+  BLOCKED
+  SUSPICIOUS
+}
+
+
+model PlatformManager {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  password     String
+  name         String
+  organization String
+  roleType     PlatformRoleType
+  scopes       String[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  lastLoginAt  DateTime?
+  loginCount   Int              @default(0)
+
+  @@map("platform_managers")
+}
+
+model Organization {
+  id                String                         @id @default(cuid())
+  name              String
+  slug              String                         @unique
+  description       String?
+  status            OrganizationStatus             @default(ACTIVE)
+  maxUsers          Int?
+  maxApps           Int?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  users             User[]
+  apps              App[]
+  scopes            Scope[]
+  orgAdmins         OrganizationAdmin[]
+  metadataSchemas   UserMetadataSchema[]
+  roles             Role[]
+  externalProviders OrganizationExternalProvider[]
+
+  @@map("organizations")
+}
+
+model OrganizationAdmin {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  permissions    String[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_admins")
+}
+
+model App {
+  id             String          @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  status         AppStatus       @default(ACTIVE)
+  apiKey         String          @unique
+  apiSecret      String
+  webhookUrl     String?
+  ssoEnabled     Boolean         @default(false)
+  ssoProvider    String?
+  ssoConfig      Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          UserApp[]
+  scopes         AppScope[]
+  sessions       Session[]
+  apiKeys        ApiKey[]
+  allowedOrigins AllowedOrigin[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@index([status, ssoEnabled])
+  @@index([organizationId, createdAt])
+  @@index([webhookUrl])
+  @@map("apps")
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  ROTATING
+  DEPRECATED
+  REVOKED
+}
+
+model ApiKey {
+  id              String       @id @default(cuid())
+  appId           String
+  name            String
+  key             String       @unique
+  secretHash      String
+  status          ApiKeyStatus @default(ACTIVE)
+  rotationId      String?
+  isCurrentKey    Boolean      @default(true)
+  lastRotated     DateTime?
+  rotationCount   Int          @default(0)
+  expiresAt       DateTime?
+  gracePeriodEnd  DateTime?
+  lastUsedAt      DateTime?
+  usageCount      Int          @default(0)
+  rateLimit       Int?
+  createdByUserId String?
+  revokedAt       DateTime?
+  revokedReason   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  app             App          @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, name])
+  @@index([appId, status])
+  @@index([appId, isCurrentKey])
+  @@index([rotationId])
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+  @@index([lastUsedAt])
+  @@index([createdByUserId, createdAt])
+  @@map("api_keys")
+}
+
+model User {
+  id                     String                  @id @default(cuid())
+  organizationId         String
+  email                  String                  @unique
+  password               String?
+  name                   String
+  avatar                 String?
+  roleId                 String?
+  legacyRole             UserRole?
+  status                 UserStatus              @default(ACTIVE)
+  emailVerified          Boolean                 @default(false)
+  twoFactorEnabled       Boolean                 @default(false)
+  twoFactorSecret        String?
+  metadata               Json?
+  globalMetadata         Json?
+  metadataVersion        Int                     @default(1)
+  metadataUpdatedAt      DateTime?
+  metadataUpdatedBy      String?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  lastLoginAt            DateTime?
+  loginCount             Int                     @default(0)
+  deletedAt              DateTime?
+  deletedBy              String?
+  deleteReason           String?
+  isPermanentlyDeleted   Boolean                 @default(false)
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role                   Role?                   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  apps                   UserApp[]
+  sessions               Session[]
+  scopes                 UserScope[]
+  orgAdmins              OrganizationAdmin[]
+  passwordResets         PasswordReset[]
+  metadataHistory        UserMetadataHistory[]
+  externalIdentities     ExternalIdentity[]
+  externalIdentityEvents ExternalIdentityEvent[]
+  devices                Device[]
+  deviceEvents           DeviceEvent[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, metadataVersion])
+  @@index([roleId, status])
+  @@index([email, status])
+  @@index([organizationId, roleId])
+  @@index([status, emailVerified])
+  @@index([organizationId, createdAt])
+  @@index([lastLoginAt])
+  @@index([deletedAt])
+  @@index([organizationId, deletedAt])
+  @@index([deletedBy, deletedAt])
+  @@index([isPermanentlyDeleted, deletedAt])
+  @@map("users")
+}
+
+model UserApp {
+  id        String   @id @default(cuid())
+  userId    String
+  appId     String
+  joinedAt  DateTime @default(now())
+  isActive  Boolean  @default(true)
+  appUserId String?
+  metadata  Json?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app       App      @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, appId])
+  @@unique([appId, appUserId])
+  @@index([userId, isActive])
+  @@index([appId, isActive])
+  @@index([appId, joinedAt])
+  @@index([userId, joinedAt])
+  @@map("user_apps")
+}
+
+model Scope {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  category       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apps           AppScope[]
+  users          UserScope[]
+  roles          RoleScope[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, category])
+  @@index([category, name])
+  @@index([organizationId, createdAt])
+  @@map("scopes")
+}
+
+model AppScope {
+  id      String @id @default(cuid())
+  appId   String
+  scopeId String
+  app     App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+  scope   Scope  @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, scopeId])
+  @@index([scopeId, appId])
+  @@map("app_scopes")
+}
+
+model UserScope {
+  id        String   @id @default(cuid())
+  userId    String
+  scopeId   String
+  appId     String?
+  grantedAt DateTime @default(now())
+  grantedBy String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scope     Scope    @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeId, appId])
+  @@index([userId, appId])
+  @@index([scopeId, appId])
+  @@index([userId, grantedAt])
+  @@index([grantedBy, grantedAt])
+  @@map("user_scopes")
+}
+
+model Session {
+  id           String        @id @default(cuid())
+  userId       String
+  appId        String
+  deviceId     String?
+  token        String        @unique
+  refreshToken String?       @unique
+  status       SessionStatus @default(ACTIVE)
+  userAgent    String?
+  ipAddress    String?
+  location     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  expiresAt    DateTime
+  lastUsedAt   DateTime?
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app          App           @relation(fields: [appId], references: [id], onDelete: Cascade)
+  device       Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, appId])
+  @@index([userId, status])
+  @@index([appId, status])
+  @@index([deviceId, status])
+  @@index([expiresAt])
+  @@index([lastUsedAt])
+  @@index([userId, appId, status])
+  @@index([status, expiresAt])
+  @@index([deviceId, userId])
+  @@map("sessions")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, used])
+  @@index([expiresAt, used])
+  @@index([token, used])
+  @@map("password_resets")
+}
+
+model AuditLog {
+  id           String        @id @default(cuid())
+  userId       String?
+  appId        String?
+  action       String
+  resource     String?
+  resourceId   String?
+  oldValues    Json?
+  newValues    Json?
+  changes      Json?
+  requestId    String?
+  sessionId    String?
+  traceId      String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  referer      String?
+  duration     Int?
+  success      Boolean       @default(true)
+  errorCode    String?
+  errorMessage String?
+  severity     String        @default("info")
+  category     String?
+  tags         String[]
+  createdAt    DateTime      @default(now())
+  requestTrace RequestTrace? @relation("RequestTraceAuditLogs", fields: [requestId], references: [requestId])
+
+  @@index([userId, createdAt])
+  @@index([appId, createdAt])
+  @@index([action, createdAt])
+  @@index([resource, resourceId])
+  @@index([requestId])
+  @@index([sessionId])
+  @@index([severity, category])
+  @@index([success, severity])
+  @@map("audit_logs")
+}
+
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  appId       String?
+  eventType   String
+  payload     Json
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  lastAttempt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("webhook_events")
+}
+
+model UserMetadataSchema {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  schema         Json
+  isActive       Boolean      @default(true)
+  version        Int          @default(1)
+  isGlobal       Boolean      @default(false)
+  requiredRole   UserRole     @default(ORG_ADMIN)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  createdBy      String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, isActive])
+  @@map("user_metadata_schemas")
+}
+
+model UserMetadataHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  fieldName  String
+  oldValue   Json?
+  newValue   Json?
+  changeType String
+  changedBy  String?
+  reason     String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([fieldName, createdAt])
+  @@map("user_metadata_history")
+}
+
+model Role {
+  id             String        @id @default(cuid())
+  organizationId String?
+  name           String
+  description    String?
+  roleType       RoleType      @default(CUSTOM)
+  builtInRole    BuiltInRole?
+  isActive       Boolean       @default(true)
+  level          Int           @default(0)
+  inheritsFrom   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  createdBy      String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users          User[]
+  roleScopes     RoleScope[]
+  parentRole     Role?         @relation("RoleHierarchy", fields: [inheritsFrom], references: [id])
+  childRoles     Role[]        @relation("RoleHierarchy")
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@index([roleType, builtInRole])
+  @@map("roles")
+}
+
+model RoleScope {
+  id         String   @id @default(cuid())
+  roleId     String
+  scopeId    String
+  canRead    Boolean  @default(true)
+  canWrite   Boolean  @default(false)
+  canDelete  Boolean  @default(false)
+  canManage  Boolean  @default(false)
+  conditions Json?
+  grantedAt  DateTime @default(now())
+  grantedBy  String?
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  scope      Scope    @relation(fields: [scopeId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, scopeId])
+  @@index([scopeId, roleId])
+  @@index([roleId, canManage])
+  @@index([grantedBy, grantedAt])
+  @@map("role_scopes")
+}
+
+model ExternalIdentity {
+  id                    String                  @id @default(cuid())
+  userId                String
+  provider              ExternalProvider
+  providerId            String
+  providerType          ExternalProviderType
+  email                 String?
+  username              String?
+  displayName           String?
+  avatarUrl             String?
+  accessToken           String?
+  refreshToken          String?
+  tokenType             String?
+  expiresAt             DateTime?
+  profileData           Json?
+  scopes                String[]
+  isVerified            Boolean                 @default(false)
+  isPrimary             Boolean                 @default(false)
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  lastUsedAt            DateTime?
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ExternalIdentityEvent ExternalIdentityEvent[]
+
+  @@unique([provider, providerId])
+  @@unique([userId, provider])
+  @@index([userId, isPrimary])
+  @@index([provider, email])
+  @@index([isVerified, isPrimary])
+  @@map("external_identities")
+}
+
+model ExternalIdentityEvent {
+  id           String           @id @default(cuid())
+  userId       String
+  identityId   String
+  eventType    String
+  ipAddress    String?
+  userAgent    String?
+  location     String?
+  metadata     Json?
+  success      Boolean          @default(true)
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  identity     ExternalIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventType])
+  @@index([identityId, eventType])
+  @@index([createdAt])
+  @@map("external_identity_events")
+}
+
+model OrganizationExternalProvider {
+  id               String               @id @default(cuid())
+  organizationId   String
+  provider         ExternalProvider
+  providerType     ExternalProviderType
+  isEnabled        Boolean              @default(true)
+  clientId         String?
+  clientSecret     String?
+  redirectUri      String?
+  samlEntityId     String?
+  samlSsoUrl       String?
+  samlCertificate  String?
+  ldapUrl          String?
+  ldapBindDn       String?
+  ldapBindPassword String?
+  ldapBaseDn       String?
+  scopes           String[]
+  mappings         Json?
+  restrictions     Json?
+  autoProvision    Boolean              @default(false)
+  defaultRole      String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  createdBy        String?
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([organizationId, isEnabled])
+  @@map("organization_external_providers")
+}
+
+model RequestTrace {
+  id            String     @id @default(cuid())
+  requestId     String     @unique
+  method        String
+  path          String
+  query         String?
+  userId        String?
+  appId         String?
+  sessionId     String?
+  ipAddress     String?
+  userAgent     String?
+  referer       String?
+  contentType   String?
+  startTime     DateTime   @default(now())
+  endTime       DateTime?
+  duration      Int?
+  statusCode    Int?
+  responseSize  Int?
+  traceId       String?
+  parentSpanId  String?
+  success       Boolean    @default(true)
+  errorCode     String?
+  errorMessage  String?
+  auditLogCount Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  auditLogs     AuditLog[] @relation("RequestTraceAuditLogs")
+
+  @@index([requestId])
+  @@index([userId, startTime])
+  @@index([appId, startTime])
+  @@index([traceId])
+  @@index([success, statusCode])
+  @@index([startTime])
+  @@map("request_traces")
+}
+
+model AllowedOrigin {
+  id               String    @id @default(cuid())
+  appId            String
+  origin           String
+  environment      String?
+  isActive         Boolean   @default(true)
+  allowCredentials Boolean   @default(true)
+  maxAge           Int?
+  allowedMethods   String[]  @default(["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+  allowedHeaders   String[]  @default(["Content-Type", "Authorization"])
+  exposedHeaders   String[]  @default([])
+  description      String?
+  tags             String[]
+  isWildcard       Boolean   @default(false)
+  pattern          String?
+  lastUsed         DateTime?
+  usageCount       Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  createdBy        String?
+  app              App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, origin, environment])
+  @@index([appId, isActive])
+  @@index([appId, environment])
+  @@index([origin, isActive])
+  @@index([isWildcard, isActive])
+  @@index([lastUsed])
+  @@index([createdBy, createdAt])
+  @@map("allowed_origins")
+}
+
+model Device {
+  id               String        @id @default(cuid())
+  userId           String
+  fingerprint      String
+  deviceType       DeviceType    @default(UNKNOWN)
+  deviceName       String?
+  status           DeviceStatus  @default(ACTIVE)
+  userAgent        String
+  browserName      String?
+  browserVersion   String?
+  osName           String?
+  osVersion        String?
+  screenResolution String?
+  timezone         String?
+  language         String?
+  ipAddress        String?
+  location         Json?
+  isTrusted        Boolean       @default(false)
+  fingerprintData  Json?
+  loginCount       Int           @default(0)
+  lastLoginAt      DateTime?
+  lastUsedAt       DateTime?
+  isBlocked        Boolean       @default(false)
+  blockedAt        DateTime?
+  blockedReason    String?
+  firstSeenAt      DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions         Session[]
+  deviceEvents     DeviceEvent[]
+
+  @@unique([userId, fingerprint])
+  @@index([userId, status])
+  @@index([fingerprint])
+  @@index([userId, lastUsedAt])
+  @@index([status, isBlocked])
+  @@index([deviceType, osName])
+  @@index([isTrusted, userId])
+  @@index([lastLoginAt])
+  @@map("devices")
+}
+
+model DeviceEvent {
+  id           String   @id @default(cuid())
+  deviceId     String
+  userId       String
+  eventType    String
+  ipAddress    String?
+  location     Json?
+  userAgent    String?
+  riskScore    Int?
+  riskFactors  String[]
+  success      Boolean  @default(true)
+  errorCode    String?
+  errorMessage String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId, eventType])
+  @@index([userId, eventType])
+  @@index([eventType, createdAt])
+  @@index([riskScore, createdAt])
+  @@index([userId, createdAt])
+  @@map("device_events")
+}

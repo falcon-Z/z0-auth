@@ -1,6 +1,7 @@
 import { serve } from "bun";
 import app from "./index";
 import index from "./index.html";
+import { connectToDb } from "./utils/db";
 
 export const server = serve({
   routes: {
@@ -14,3 +15,5 @@ export const server = serve({
 });
 
 console.log(`🚀 Server running on http://${server.hostname}:${server.port}`);
+
+connectToDb();
