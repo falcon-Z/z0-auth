@@ -12,3 +12,5 @@ export const server = serve({
     console: true,
   },
 });
+
+console.log(`🚀 Server running on http://${server.hostname}:${server.port}`);
