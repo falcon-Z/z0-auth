@@ -8,14 +8,12 @@ import { etag } from "hono/etag";
 import { requestId } from "hono/request-id";
 import { timeout } from "hono/timeout";
 import { bodyLimit } from "hono/body-limit";
-import ApiRoutes from "./api/routes";
 import { HTTPException } from "hono/http-exception";
-import AppRoutes from "./app/routes";
-import { Root } from "./main";
+import API from "./api";
 
 const app = new Hono();
 
-const isDevelopment = process.env.NODE_ENV === "development";
+const isDevelopment = process.env.NODE_ENV !== "production";
 const isProduction = process.env.NODE_ENV === "production";
 
 app.use(
@@ -82,6 +80,19 @@ app.use(etag());
 
 app.use(prettyJSON());
 
+app.route("/api/", API);
+
+app.notFound((c) =>
+  c.json(
+    {
+      error: "Bad Request",
+      message:
+        "The requested endpoint does not exist or the request could not be understood by the server. Please check your URL and request method.",
+    },
+    400
+  )
+);
+
 app.use(
   timeout(parseInt(process.env.REQUEST_TIMEOUT || "30000"), (c) => {
     throw new HTTPException(504, {
@@ -89,21 +100,5 @@ app.use(
     });
   })
 );
-
-app.use(Root);
-
-app.route("/", AppRoutes);
-app.route("api", ApiRoutes);
-
-app.notFound((c) => {
-  return c.json(
-    {
-      error: "Bad Request",
-      message:
-        "The requested resource was not found or the request is invalid.",
-    },
-    400
-  );
-});
 
 export default app;

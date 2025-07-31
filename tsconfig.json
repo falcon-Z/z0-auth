@@ -1,17 +1,19 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "skipLibCheck": true,
-    "lib": ["ESNext"],
-    "types": ["vite/client"],
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx",
+    "allowJs": true,
+
+    "moduleResolution": "bundler",
+    "module": "Preserve",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
     "baseUrl": ".",
     "paths": {
       "@z0/*": ["./src/*"]
     }
-  }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["dist", "node_modules"]
 }
