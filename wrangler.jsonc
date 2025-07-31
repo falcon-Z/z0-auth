@@ -1,6 +1,0 @@
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "z0-auth",
-  "compatibility_date": "2024-04-01",
-  "main": "./src/index.tsx"
-}

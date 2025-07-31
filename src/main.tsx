@@ -1,22 +1,25 @@
-import { jsxRenderer } from "hono/jsx-renderer";
-import { Link, ViteClient } from "vite-ssr-components/hono";
+/**
+ * This file is the entry point for the React app, it sets up the root
+ * element and renders the App component to the DOM.
+ *
+ * It is included in `src/index.html`.
+ */
 
-export const Root = jsxRenderer(
-  ({ children }) => {
-    return (
-      <html class={"dark"}>
-        <head>
-          <ViteClient />
-          <Link href="/src/index.css" rel="stylesheet" />
-        </head>
-        <body>
-          <main class={"h-screen w-full"}>{children}</main>
-        </body>
-      </html>
-    );
-  },
-  {
-    docType: true,
-    stream: false,
-  }
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { RouterProvider } from "react-router";
+import { router } from "./app/routes";
+
+const elem = document.getElementById("root")!;
+const app = (
+  <StrictMode>
+    <RouterProvider router={router} />
+  </StrictMode>
 );
+
+if (import.meta.hot) {
+  const root = (import.meta.hot.data.root ??= createRoot(elem));
+  root.render(app);
+} else {
+  createRoot(elem).render(app);
+}
