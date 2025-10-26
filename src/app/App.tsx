@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import "../index.css";
 import { Outlet } from "react-router";
 

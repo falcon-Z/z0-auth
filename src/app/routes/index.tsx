@@ -1,9 +1,9 @@
 import { lazy, useEffect } from "react";
-import { createBrowserRouter } from "react-router";
-import App from "../app";
+import { createBrowserRouter, RouterProvider } from "react-router";
+import App from "../App";
 import { isSuperAdminConfigured } from "../../utils/config-state";
 import { Navigate, Outlet, useLocation } from "react-router";
-import InitialSetup from "../pages/initialSetup/initialSetup";
+import Setup from "../pages/setup";
 
 function SetupGuard() {
   const location = useLocation();
@@ -35,7 +35,7 @@ export const router = createBrowserRouter([
           },
           {
             path: "setup",
-            element: <InitialSetup />,
+            element: <Setup />,
           },
         ],
       },
