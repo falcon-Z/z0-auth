@@ -251,19 +251,20 @@ export default function Setup() {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
-      <div className="w-full max-w-7xl grid lg:grid-cols-[1fr,1.2fr] gap-8 lg:gap-12 items-stretch">
-        {/* Left side - Illustration */}
-        <SetupIllustration currentStep={currentStep} steps={STEPS} />
+      <div className="w-full max-w-7xl">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(400px,1fr)_minmax(500px,1.3fr)] gap-8 lg:gap-12">
+          {/* Left side - Illustration */}
+          <SetupIllustration currentStep={currentStep} steps={STEPS} />
 
-        {/* Right side - Form */}
-        <div className="flex items-center">
-          <Card className="w-full border-2 shadow-xl">
-            <SetupCardHeader
-              currentStep={currentStep}
-              steps={STEPS}
-              stateIcon={getStateIcon()}
-              isOnline={isOnline}
-            />
+          {/* Right side - Form */}
+          <div className="flex items-center w-full">
+            <Card className="w-full border-2 shadow-xl">
+              <SetupCardHeader
+                currentStep={currentStep}
+                steps={STEPS}
+                stateIcon={getStateIcon()}
+                isOnline={isOnline}
+              />
 
             <CardContent className="pb-6">
               {error && (
@@ -339,7 +340,8 @@ export default function Setup() {
                 </p>
               </div>
             )}
-          </Card>
+            </Card>
+          </div>
         </div>
       </div>
     </div>

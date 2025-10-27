@@ -47,7 +47,7 @@ export function SetupIllustration({
   );
 
   return (
-    <div className="hidden lg:flex flex-col justify-between p-8 space-y-8">
+    <div className="hidden lg:flex lg:flex-col lg:justify-between lg:p-8 lg:space-y-8 lg:min-h-full">
       {/* Main Illustration */}
       <div className="flex-1 flex flex-col justify-center items-center space-y-6">
         <div className="w-full max-w-lg">
