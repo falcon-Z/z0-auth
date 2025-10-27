@@ -171,8 +171,8 @@ export default function Setup() {
       setSetupProgress(0);
 
       try {
-        const result = await retrySetup(data);
-        setSuccess(result.message || "Setup complete!");
+        await retrySetup(data);
+        setSuccess("Setup complete! Redirecting to dashboard...");
         setRetryCount(0);
       } catch (err: any) {
         // Handle network errors
@@ -250,96 +250,97 @@ export default function Setup() {
   }, [currentStep]);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4">
-      <div className="w-full max-w-6xl grid lg:grid-cols-2 gap-8 items-center">
+    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
+      <div className="w-full max-w-7xl grid lg:grid-cols-[1fr,1.2fr] gap-8 lg:gap-12 items-stretch">
+        {/* Left side - Illustration */}
         <SetupIllustration currentStep={currentStep} steps={STEPS} />
 
-        <Card className="w-full border-2 shadow-xl">
-          <SetupCardHeader
-            currentStep={currentStep}
-            steps={STEPS}
-            stateIcon={getStateIcon()}
-            isOnline={isOnline}
-          />
+        {/* Right side - Form */}
+        <div className="flex items-center">
+          <Card className="w-full border-2 shadow-xl">
+            <SetupCardHeader
+              currentStep={currentStep}
+              steps={STEPS}
+              stateIcon={getStateIcon()}
+              isOnline={isOnline}
+            />
 
-          <CardContent>
-            {error && (
-              <SetupErrorAlert
-                error={error}
-                retryCount={retryCount}
-                onRetry={handleRetry}
-                isRetrying={loadingState !== "idle"}
-              />
+            <CardContent className="pb-6">
+              {error && (
+                <SetupErrorAlert
+                  error={error}
+                  retryCount={retryCount}
+                  onRetry={handleRetry}
+                  isRetrying={loadingState !== "idle"}
+                />
+              )}
+
+              {success && (
+                <SetupSuccessAlert
+                  message={success}
+                  progress={setupProgress}
+                  isRedirecting={loadingState === "redirecting"}
+                />
+              )}
+
+              {loadingState !== "idle" && !success && (
+                <SetupProgressIndicator
+                  progress={setupProgress}
+                  message={getLoadingMessage()}
+                />
+              )}
+
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6">
+                  {currentStep === "email" && (
+                    <SetupEmailStep
+                      form={form}
+                      disabled={loadingState !== "idle"}
+                      onKeyPress={handleKeyPressWithSubmit}
+                    />
+                  )}
+
+                  {currentStep === "password" && (
+                    <SetupPasswordStep
+                      form={form}
+                      disabled={loadingState !== "idle"}
+                      onKeyPress={handleKeyPressWithSubmit}
+                      onValidationChange={handlePasswordValidationChange}
+                    />
+                  )}
+
+                  {currentStep === "organization" && (
+                    <SetupOrganizationStep
+                      form={form}
+                      disabled={loadingState !== "idle"}
+                      onKeyPress={handleKeyPressWithSubmit}
+                    />
+                  )}
+                </form>
+              </Form>
+            </CardContent>
+
+            <SetupFooter
+              currentStep={currentStep}
+              isStepValid={isStepValid(currentStep)}
+              disabled={loadingState !== "idle" || !canSubmit()}
+              onPrevious={handlePreviousStep}
+              onNext={handleNextStep}
+              onSubmit={form.handleSubmit(onSubmit)}
+              submitIcon={getStateIcon()}
+              submitLabel={getLoadingMessage()}
+            />
+
+            {!isOnline && (
+              <div className="px-6 pb-6">
+                <p className="text-center text-sm text-muted-foreground flex items-center justify-center gap-1">
+                  <WifiOff className="h-3 w-3" />
+                  Waiting for internet connection...
+                </p>
+              </div>
             )}
-
-            {success && (
-              <SetupSuccessAlert
-                message={success}
-                progress={setupProgress}
-                isRedirecting={loadingState === "redirecting"}
-              />
-            )}
-
-            {loadingState !== "idle" && !success && (
-              <SetupProgressIndicator
-                progress={setupProgress}
-                message={getLoadingMessage()}
-              />
-            )}
-
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
-              >
-                {currentStep === "email" && (
-                  <SetupEmailStep
-                    form={form}
-                    disabled={loadingState !== "idle"}
-                    onKeyPress={handleKeyPressWithSubmit}
-                  />
-                )}
-
-                {currentStep === "password" && (
-                  <SetupPasswordStep
-                    form={form}
-                    disabled={loadingState !== "idle"}
-                    onKeyPress={handleKeyPressWithSubmit}
-                    onValidationChange={handlePasswordValidationChange}
-                  />
-                )}
-
-                {currentStep === "organization" && (
-                  <SetupOrganizationStep
-                    form={form}
-                    disabled={loadingState !== "idle"}
-                    onKeyPress={handleKeyPressWithSubmit}
-                  />
-                )}
-              </form>
-            </Form>
-          </CardContent>
-
-          <SetupFooter
-            currentStep={currentStep}
-            isStepValid={isStepValid(currentStep)}
-            disabled={loadingState !== "idle" || !canSubmit()}
-            onPrevious={handlePreviousStep}
-            onNext={handleNextStep}
-            onSubmit={form.handleSubmit(onSubmit)}
-            submitIcon={getStateIcon()}
-            submitLabel={getLoadingMessage()}
-          />
-
-          {!isOnline && (
-            <div className="px-6 pb-6">
-              <p className="text-center text-sm text-muted-foreground flex items-center justify-center gap-1">
-                <WifiOff className="h-3 w-3" />
-                Waiting for internet connection...
-              </p>
-            </div>
-          )}
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );
