@@ -7,8 +7,15 @@ import {
   FormDescription,
 } from "@z0/components/ui/form";
 import { Input } from "@z0/components/ui/input";
-import { Building2, User } from "lucide-react";
+import {
+  Building2,
+  User,
+  CheckCircle2,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import type { UseFormReturn } from "react-hook-form";
+import { useOrganizationValidation } from "../../hooks/useSetupValidation";
 
 interface SetupFormValues {
   organization: string;
@@ -28,6 +35,9 @@ export function SetupOrganizationStep({
   disabled,
   onKeyPress,
 }: SetupOrganizationStepProps) {
+  const organization = form.watch("organization");
+  const orgValidation = useOrganizationValidation(organization, !disabled);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-5 duration-300">
       <div className="rounded-lg bg-muted/50 p-4 border">
@@ -47,17 +57,56 @@ export function SetupOrganizationStep({
               Organization Name
             </FormLabel>
             <FormControl>
-              <Input
-                type="text"
-                placeholder="e.g., Acme Corp"
-                autoFocus
-                disabled={disabled}
-                className="h-12 text-base"
-                {...field}
-              />
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="e.g., Acme Corp"
+                  autoFocus
+                  disabled={disabled}
+                  className="h-12 text-base pr-10"
+                  {...field}
+                />
+                {orgValidation.isValidating && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+                {!orgValidation.isValidating &&
+                  orgValidation.isValid === true && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    </div>
+                  )}
+                {!orgValidation.isValidating &&
+                  orgValidation.isValid === false && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <AlertCircle className="w-4 h-4 text-destructive" />
+                    </div>
+                  )}
+              </div>
             </FormControl>
             <FormDescription>
-              The name of your company or organization
+              {orgValidation.isValidating && (
+                <span className="text-muted-foreground">
+                  Checking availability...
+                </span>
+              )}
+              {!orgValidation.isValidating &&
+                orgValidation.isValid === true && (
+                  <span className="text-green-600 dark:text-green-400">
+                    {orgValidation.message}
+                  </span>
+                )}
+              {!orgValidation.isValidating &&
+                orgValidation.isValid === false && (
+                  <span className="text-destructive">
+                    {orgValidation.error || orgValidation.message}
+                  </span>
+                )}
+              {!orgValidation.isValidating &&
+                orgValidation.isValid === null && (
+                  <span>The name of your company or organization</span>
+                )}
             </FormDescription>
             <FormMessage />
           </FormItem>
