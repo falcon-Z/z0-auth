@@ -9,7 +9,7 @@ import { Input } from "@z0/components/ui/input";
 import { Button } from "@z0/components/ui/button";
 import { Eye, EyeOff, Shield } from "lucide-react";
 import type { UseFormReturn } from "react-hook-form";
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import { cn } from "@z0/lib/utils";
 import { PasswordStrengthIndicator } from "@z0/components/ui/password-strength-indicator";
 import {
@@ -38,21 +38,22 @@ export function SetupPasswordStep({
   onValidationChange,
 }: SetupPasswordStepProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [validation, setValidation] = useState<PasswordValidationResult>(
-    validatePassword("")
-  );
-  const passwordValue = form.watch("password");
+  const passwordValue = form.watch("password") || "";
+
+  // Calculate validation on every render to stay in sync
+  const validation = validatePassword(passwordValue);
+
+  // Update parent component when validation changes
+  React.useEffect(() => {
+    onValidationChange(validation);
+  }, [passwordValue, onValidationChange]);
 
   const handlePasswordChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const newValue = e.target.value;
       form.setValue("password", newValue);
-
-      const newValidation = validatePassword(newValue);
-      setValidation(newValidation);
-      onValidationChange(newValidation);
     },
-    [form, onValidationChange]
+    [form]
   );
 
   return (
@@ -113,15 +114,69 @@ export function SetupPasswordStep({
         )}
       />
 
-      {/* Password Strength Indicator in a separate card */}
-      {passwordValue && (
-        <div className="rounded-lg border bg-card p-4 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {/* Password Strength Indicator - Always visible to prevent layout shift */}
+      <div
+        className="rounded-lg border bg-card p-4 shadow-sm transition-opacity duration-200"
+        style={{ minHeight: "280px" }}
+      >
+        {passwordValue ? (
           <PasswordStrengthIndicator
             validation={validation}
             showDetails={true}
           />
-        </div>
-      )}
+        ) : (
+          <div className="space-y-3 opacity-60">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Password Strength
+                </span>
+                <span className="text-sm font-semibold text-muted-foreground">
+                  Not set
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="h-2 rounded-full bg-muted"
+                  style={{ width: "0%" }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-muted-foreground">
+                Requirements:
+              </h4>
+              <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                  <span>At least 8 characters long</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                  <span>Contains uppercase letter (A-Z)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                  <span>Contains lowercase letter (a-z)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                  <span>Contains number (0-9)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                  <span>Contains special character (!@#$%...)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                  <span>Avoids common patterns</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
