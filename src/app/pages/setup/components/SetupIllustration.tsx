@@ -1,6 +1,11 @@
 import { Check } from "lucide-react";
 import { cn } from "@z0/lib/utils";
 
+// Import SVG illustrations as modules
+import emailIllustration from "@z0/assets/illustrations/undraw_email-consent_j36b.svg";
+import passwordIllustration from "@z0/assets/illustrations/undraw_two-factor-authentication_8tds.svg";
+import organizationIllustration from "@z0/assets/illustrations/undraw_shared-workspace_6y9d.svg";
+
 export type SetupStep = "email" | "password" | "organization";
 
 interface SetupIllustrationProps {
@@ -13,7 +18,7 @@ const STEP_CONFIG = [
     step: "email",
     label: "Email Address",
     icon: "📧",
-    illustration: "/assets/illustrations/undraw_email-consent_j36b.svg",
+    illustration: emailIllustration,
     title: "Let's Get Started",
     description:
       "Enter your admin email to begin setting up your authentication system",
@@ -22,8 +27,7 @@ const STEP_CONFIG = [
     step: "password",
     label: "Secure Password",
     icon: "🔐",
-    illustration:
-      "/assets/illustrations/undraw_two-factor-authentication_8tds.svg",
+    illustration: passwordIllustration,
     title: "Secure Your Account",
     description:
       "Create a strong password that meets our security requirements",
@@ -32,7 +36,7 @@ const STEP_CONFIG = [
     step: "organization",
     label: "Organization Details",
     icon: "🏢",
-    illustration: "/assets/illustrations/undraw_shared-workspace_6y9d.svg",
+    illustration: organizationIllustration,
     title: "Almost There!",
     description: "Tell us about your organization to complete the setup",
   },
@@ -48,16 +52,7 @@ export function SetupIllustration({
 
   return (
     <div className="hidden lg:flex lg:flex-col lg:justify-between lg:p-8 lg:space-y-8 lg:min-h-full">
-      {/* Main Illustration */}
       <div className="flex-1 flex flex-col justify-center items-center space-y-6">
-        <div className="w-full max-w-lg">
-          <img
-            src={currentConfig?.illustration}
-            alt={currentConfig?.label}
-            className="w-full h-auto animate-in fade-in zoom-in duration-500"
-          />
-        </div>
-
         <div className="text-center space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
             {currentConfig?.title}
