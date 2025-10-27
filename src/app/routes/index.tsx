@@ -5,12 +5,27 @@ import { isSuperAdminConfigured } from "../../utils/config-state";
 import { Navigate, Outlet, useLocation } from "react-router";
 import Setup from "../pages/setup";
 
+/**
+ * Guard that redirects to /setup if super admin is not configured
+ * Prevents access to main app without setup
+ */
 function SetupGuard() {
   const location = useLocation();
   if (!isSuperAdminConfigured() && location.pathname !== "/setup") {
     return <Navigate to="/setup" replace />;
   }
   return <Outlet />;
+}
+
+/**
+ * Guard that redirects to / if super admin is already configured
+ * Prevents access to setup page after initial setup
+ */
+function SetupRedirectGuard() {
+  if (isSuperAdminConfigured()) {
+    return <Navigate to="/" replace />;
+  }
+  return <Setup />;
 }
 
 export const router = createBrowserRouter([
@@ -33,11 +48,11 @@ export const router = createBrowserRouter([
             path: "*",
             element: <h1 className="text-5xl">Page not found</h1>,
           },
-          {
-            path: "setup",
-            element: <Setup />,
-          },
         ],
+      },
+      {
+        path: "setup",
+        element: <SetupRedirectGuard />,
       },
     ],
   },

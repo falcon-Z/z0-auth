@@ -10,6 +10,8 @@ import {
 } from "@z0/utils/password-validation";
 import { useNavigate } from "react-router";
 import { Loader2, AlertCircle, CheckCircle2, WifiOff } from "lucide-react";
+import { checkSetupEligibility } from "@z0/utils/api/setup";
+import { isSuperAdminConfigured } from "@z0/utils/config-state";
 
 // Components
 import { SetupIllustration } from "./components/SetupIllustration";
@@ -82,6 +84,7 @@ export default function Setup() {
   const [passwordValidation, setPasswordValidation] =
     useState<PasswordValidationResult | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(true);
 
   // Custom hooks
   const {
@@ -107,6 +110,33 @@ export default function Setup() {
     passwordValidation,
     steps: STEPS,
   });
+
+  // Check setup eligibility on mount
+  useEffect(() => {
+    const checkEligibility = async () => {
+      // First check local config state
+      if (isSuperAdminConfigured()) {
+        navigate("/", { replace: true });
+        return;
+      }
+
+      // Then verify with server
+      try {
+        const result = await checkSetupEligibility();
+        if (!result.eligible) {
+          navigate("/", { replace: true });
+          return;
+        }
+      } catch (err) {
+        // If API fails, allow to continue (will fail on submit if not eligible)
+        console.warn("Failed to check setup eligibility:", err);
+      } finally {
+        setIsCheckingEligibility(false);
+      }
+    };
+
+    checkEligibility();
+  }, [navigate]);
 
   // Monitor online status for better network error handling
   useEffect(() => {
@@ -248,6 +278,25 @@ export default function Setup() {
   useEffect(() => {
     setError(null);
   }, [currentStep]);
+
+  // Show loading state while checking eligibility
+  if (isCheckingEligibility) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20">
+        <Card className="w-full max-w-md border-2 shadow-xl">
+          <CardContent className="p-8">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-lg font-medium">Checking setup status...</p>
+              <p className="text-sm text-muted-foreground text-center">
+                Please wait while we verify the system configuration
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
