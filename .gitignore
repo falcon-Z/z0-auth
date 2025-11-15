@@ -47,3 +47,4 @@ keys/
 *.pub
 jwt-private.key
 jwt-public.key
+.github/copilot-instructions.md

@@ -31,7 +31,6 @@ export interface SetupCompleteResponse {
   success: boolean;
   message: string;
   accessToken: string;
-  refreshToken: string;
   user: {
     id: string;
     email: string;

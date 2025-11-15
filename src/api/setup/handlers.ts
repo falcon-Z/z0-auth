@@ -510,7 +510,7 @@ export async function handleSetup(c: Context) {
 
     const authResponse: AuthResponse = {
       accessToken,
-      refreshToken,
+      refreshToken, // retained internally; will not be returned in JSON below
       user: {
         id: safeAdminData.id,
         email: safeAdminData.email,
@@ -554,7 +554,8 @@ export async function handleSetup(c: Context) {
     const response = c.json({
       success: true,
       message: "Super admin setup complete",
-      ...authResponse,
+      accessToken: authResponse.accessToken,
+      user: authResponse.user,
       requestId,
     });
 

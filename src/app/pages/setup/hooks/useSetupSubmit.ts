@@ -94,11 +94,10 @@ export function useSetupSubmit() {
         setSetupProgress(80);
         setLoadingState("storing-tokens");
 
-        if (result.accessToken && result.refreshToken && result.user) {
+        if (result.accessToken && result.user) {
           try {
             storeTokens({
               accessToken: result.accessToken,
-              refreshToken: result.refreshToken,
               user: result.user,
             });
           } catch (tokenError) {
