@@ -38,7 +38,7 @@ const PUBLIC_KEY_PATH = join(KEYS_DIR, "jwt-public.key");
  * @param timeStr - Time string like '15m', '7d', '1h'
  * @returns number - Time in seconds
  */
-function parseTimeToSeconds(timeStr: string): number {
+export function parseTimeToSeconds(timeStr: string): number {
   const unit = timeStr.slice(-1);
   const value = parseInt(timeStr.slice(0, -1));
 
@@ -201,7 +201,7 @@ export async function hashPassword(password: string): Promise<string> {
     const hashedPassword = await Bun.password.hash(password, {
       algorithm: "argon2id",
       memoryCost: 65536, // 64 MB
-      timeCost: 2, 
+      timeCost: 2,
     });
     return hashedPassword;
   } catch (error) {

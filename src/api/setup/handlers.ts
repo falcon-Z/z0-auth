@@ -9,6 +9,7 @@
  */
 
 import type { Context } from "hono";
+import { setCookie } from "hono/cookie";
 import {
   type SuperAdminSetupData,
   type ValidateEmailRequest,
@@ -21,6 +22,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
   type AuthResponse,
+  parseTimeToSeconds,
 } from "@z0/utils/auth";
 import { validatePassword } from "@z0/utils/password-validation";
 import {
@@ -518,7 +520,39 @@ export async function handleSetup(c: Context) {
       },
     };
 
+    try {
+      const isProd = process.env.NODE_ENV === "production";
+      const accessTtl = parseTimeToSeconds(
+        process.env.JWT_ACCESS_EXPIRES_IN || "15m"
+      );
+      const refreshTtl = parseTimeToSeconds(
+        process.env.JWT_REFRESH_EXPIRES_IN || "7d"
+      );
+
+      setCookie(c, "access_token", accessToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: "Strict",
+        path: "/",
+        maxAge: accessTtl,
+      });
+
+      setCookie(c, "refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: "Strict",
+        path: "/",
+        maxAge: refreshTtl,
+      });
+    } catch (cookieErr) {
+      Logger.warn("Failed setting auth cookies; continuing with body tokens", {
+        error: (cookieErr as Error).message,
+        requestId,
+      });
+    }
+
     const response = c.json({
+      success: true,
       message: "Super admin setup complete",
       ...authResponse,
       requestId,
