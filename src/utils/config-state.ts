@@ -1,7 +1,11 @@
 /**
  * Configuration state management utilities
  * Handles dynamic updates to configuration state on the client side
- * Uses localStorage for persistence to survive page navigations
+ *
+ * Priority: config.json (server-updated) > localStorage (session persistence)
+ * The server updates config.json on startup based on database state,
+ * so it's the source of truth. localStorage is only used for in-session
+ * persistence after setup completes.
  */
 
 import configFile from "../config.json";
@@ -38,10 +42,27 @@ function persistConfig(config: AppConfig): void {
   }
 }
 
-let currentConfig: AppConfig = {
-  ...configFile,
-  ...getPersistedConfig(),
-};
+function initializeConfig(): AppConfig {
+  const persisted = getPersistedConfig();
+
+  if (configFile.SuperAdminConfigured) {
+    return { ...configFile };
+  }
+
+  if (!configFile.SuperAdminConfigured && persisted.SuperAdminConfigured) {
+    if (typeof window !== "undefined" && window.localStorage) {
+      localStorage.removeItem(CONFIG_STORAGE_KEY);
+    }
+    return { ...configFile };
+  }
+
+  return {
+    ...configFile,
+    ...persisted,
+  };
+}
+
+let currentConfig: AppConfig = initializeConfig();
 
 export function getConfig(): AppConfig {
   return { ...currentConfig };

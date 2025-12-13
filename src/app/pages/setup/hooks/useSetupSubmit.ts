@@ -94,9 +94,9 @@ export function useSetupSubmit() {
 
         // Mark super admin as configured and ensure state persistence
         markSuperAdminConfigured();
-        
+
         // Small delay to ensure config state is properly updated
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
         setSetupProgress(100);
         setLoadingState("redirecting");
