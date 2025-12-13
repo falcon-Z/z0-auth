@@ -233,8 +233,11 @@ export async function verifyPassword(
 export interface TokenPayload {
   userId: string;
   email: string;
-  roleType: string;
-  scopes: string[];
+  roleType?: string; // Optional because generic Users have roles in DB but maybe different field names
+  role?: string;     // Generic user role
+  scopes?: string[];
+  orgId?: string;    // Context for Org Users
+  type: "platform_manager" | "user"; // Discriminator
   iat?: number;
   exp?: number;
 }
