@@ -84,6 +84,7 @@ export default function Setup() {
     useState<PasswordValidationResult | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isCheckingEligibility, setIsCheckingEligibility] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Custom hooks
   const {
@@ -141,7 +142,9 @@ export default function Setup() {
         setSetupProgress(progress);
         if (progress >= 100) {
           clearInterval(progressInterval);
-          navigate("/", { replace: true });
+          setTimeout(() => {
+            navigate("/login", { replace: true });
+          }, 300);
         }
       }, 200);
 
@@ -167,24 +170,27 @@ export default function Setup() {
       formValues.password;
     const hasValidPassword = passwordValidation?.isValid || false;
     return (
-      hasAllFields && hasValidPassword && loadingState === "idle" && isOnline
+      hasAllFields && hasValidPassword && loadingState === "idle" && isOnline && !isSubmitting
     );
-  }, [form, passwordValidation, loadingState, isOnline]);
+  }, [form, passwordValidation, loadingState, isOnline, isSubmitting]);
 
   // Main submit handler with enhanced error handling
   const onSubmit = useCallback(
     async (data: SetupFormValues) => {
-      if (!canSubmit()) return;
+      if (!canSubmit() || isSubmitting) return;
 
+      setIsSubmitting(true);
       setError(null);
       setSuccess(null);
       setSetupProgress(0);
 
       try {
         await retrySetup(data);
-        setSuccess("Setup complete! Redirecting to dashboard...");
+        setSuccess("Setup complete! Redirecting to login...");
         setRetryCount(0);
       } catch (err: any) {
+        setIsSubmitting(false);
+        
         // Handle network errors
         if (!navigator.onLine) {
           setError({
@@ -213,17 +219,14 @@ export default function Setup() {
         }
 
         setRetryCount((prev) => prev + 1);
-      } finally {
-        if (loadingState !== "redirecting") {
-          setLoadingState("idle");
-          setSetupProgress(0);
-        }
+        setLoadingState("idle");
+        setSetupProgress(0);
       }
     },
     [
       canSubmit,
+      isSubmitting,
       retrySetup,
-      loadingState,
       setLoadingState,
       setSetupProgress,
       setRetryCount,
@@ -353,7 +356,7 @@ export default function Setup() {
               <SetupFooter
                 currentStep={currentStep}
                 isStepValid={isStepValid(currentStep)}
-                disabled={loadingState !== "idle" || !canSubmit()}
+                disabled={loadingState !== "idle" || !canSubmit() || isSubmitting}
                 onPrevious={handlePreviousStep}
                 onNext={handleNextStep}
                 onSubmit={form.handleSubmit(onSubmit)}

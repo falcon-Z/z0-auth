@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { storeTokens } from "@z0/utils/token-storage";
 import { markSuperAdminConfigured } from "@z0/utils/config-state";
 import { completeSetup, type ApiError } from "@z0/utils/api/setup";
 import type { SetupError } from "../components/SetupErrorAlert";
@@ -7,7 +6,6 @@ import type { SetupError } from "../components/SetupErrorAlert";
 export type LoadingState =
   | "idle"
   | "submitting"
-  | "storing-tokens"
   | "updating-config"
   | "redirecting";
 
@@ -92,26 +90,6 @@ export function useSetupSubmit() {
         setSetupProgress(60);
 
         setSetupProgress(80);
-        setLoadingState("storing-tokens");
-
-        if (result.accessToken && result.user) {
-          try {
-            storeTokens({
-              accessToken: result.accessToken,
-              user: result.user,
-            });
-          } catch (tokenError) {
-            throw {
-              error:
-                "Setup completed but failed to store authentication tokens",
-              type: "system",
-              code: "TOKEN_STORAGE_FAILED",
-              retryable: false,
-            } as ApiError;
-          }
-        }
-
-        setSetupProgress(90);
         setLoadingState("updating-config");
 
         markSuperAdminConfigured();

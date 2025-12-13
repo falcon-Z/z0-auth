@@ -30,14 +30,7 @@ export interface OrganizationValidationResponse {
 export interface SetupCompleteResponse {
   success: boolean;
   message: string;
-  accessToken: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    roleType: string;
-    scopes: string[];
-  };
+  email: string;
   requestId?: string;
 }
 

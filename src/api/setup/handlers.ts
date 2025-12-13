@@ -9,7 +9,6 @@
  */
 
 import type { Context } from "hono";
-import { setCookie } from "hono/cookie";
 import {
   type SuperAdminSetupData,
   type ValidateEmailRequest,
@@ -17,13 +16,7 @@ import {
   generateSlug,
 } from "./validations";
 import { db } from "@z0/utils/db/client";
-import {
-  hashPassword,
-  generateAccessToken,
-  generateRefreshToken,
-  type AuthResponse,
-  parseTimeToSeconds,
-} from "@z0/utils/auth";
+import { hashPassword } from "@z0/utils/auth";
 import { validatePassword } from "@z0/utils/password-validation";
 import {
   Logger,
@@ -446,17 +439,16 @@ export async function handleSetup(c: Context) {
           name: organization,
           slug: finalSlug,
           description: "Default organization created during system setup",
-          status: "ACTIVE"
-        }
+          status: "ACTIVE",
+        },
       });
 
       Logger.info("Default organization created", {
         orgId: defaultOrg.id,
         name: organization,
         slug: finalSlug,
-        requestId
+        requestId,
       });
-
     } catch (error: any) {
       /**
        * Log but don't fail setup, as Super Admin is already created.
@@ -464,7 +456,7 @@ export async function handleSetup(c: Context) {
        */
       Logger.error("Failed to create default organization during setup", {
         error: error.message,
-        requestId
+        requestId,
       });
     }
 
@@ -494,40 +486,6 @@ export async function handleSetup(c: Context) {
     }
 
     /**
-     * Generate authentication tokens for immediate login
-     */
-    let accessToken: string;
-    let refreshToken: string;
-    try {
-      const tokenPayload = {
-        userId: superAdmin.id,
-        email: superAdmin.email,
-        roleType: superAdmin.roleType,
-        scopes: superAdmin.scopes,
-      };
-
-      accessToken = await generateAccessToken(tokenPayload);
-      refreshToken = await generateRefreshToken(tokenPayload);
-
-      Logger.info("Authentication tokens generated successfully", {
-        userId: superAdmin.id,
-        requestId,
-      });
-    } catch (error) {
-      Logger.error("Token generation failed during setup", {
-        error: error.message,
-        userId: superAdmin.id,
-        requestId,
-      });
-
-      const errorResponse = ErrorResponseBuilder.authentication(
-        "Failed to generate authentication tokens. Please try again.",
-        "TOKEN_GENERATION_FAILED"
-      );
-      return c.json({ ...errorResponse, requestId }, 500);
-    }
-
-    /**
      * Log successful setup for security monitoring
      */
     SecurityLogger.logSetupAttempt(c, true, {
@@ -536,70 +494,15 @@ export async function handleSetup(c: Context) {
       requestId,
     });
 
-    SecurityLogger.logAuthenticationEvent(
-      "Super admin setup completed",
-      c,
-      superAdmin.id,
-      {
-        email,
-        requestId,
-      }
-    );
-
     /**
-     * Return authentication response with tokens and user data (excluding password).
-     * Add security headers to the response.
+     * Return setup completion response (no authentication tokens)
+     * User must login separately to acquire tokens
      */
-    const { password: _, ...safeAdminData } = superAdmin;
-
-    const authResponse: AuthResponse = {
-      accessToken,
-      refreshToken, // retained internally; will not be returned in JSON below
-      user: {
-        id: safeAdminData.id,
-        email: safeAdminData.email,
-        name: safeAdminData.name,
-        roleType: safeAdminData.roleType,
-        scopes: safeAdminData.scopes,
-      },
-    };
-
-    try {
-      const isProd = process.env.NODE_ENV === "production";
-      const accessTtl = parseTimeToSeconds(
-        process.env.JWT_ACCESS_EXPIRES_IN || "15m"
-      );
-      const refreshTtl = parseTimeToSeconds(
-        process.env.JWT_REFRESH_EXPIRES_IN || "7d"
-      );
-
-      setCookie(c, "access_token", accessToken, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "Strict",
-        path: "/",
-        maxAge: accessTtl,
-      });
-
-      setCookie(c, "refresh_token", refreshToken, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "Strict",
-        path: "/",
-        maxAge: refreshTtl,
-      });
-    } catch (cookieErr) {
-      Logger.warn("Failed setting auth cookies; continuing with body tokens", {
-        error: (cookieErr as Error).message,
-        requestId,
-      });
-    }
-
     const response = c.json({
       success: true,
-      message: "Super admin setup complete",
-      accessToken: authResponse.accessToken,
-      user: authResponse.user,
+      message:
+        "Super admin setup complete. Please login with your credentials to acquire access tokens.",
+      email,
       requestId,
     });
 
