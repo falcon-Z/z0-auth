@@ -9,7 +9,8 @@ import {
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware } from "@z0/utils/auth";
-import { randomBytes, createHash } from "crypto";
+import { requireOrgAccess } from "./middleware";
+import { randomBytes } from "crypto";
 
 const orgApps = new Hono();
 
@@ -23,33 +24,7 @@ const createAppSchema = z.object({
 
 // Middleware: Ensure user has access to this organization
 // Access: Platform Managers OR Org Admins of this Org
-const requireOrgAccess = async (c: any, next: any) => {
-    const user = c.get('user') as any;
-    const orgId = c.req.param('orgId');
-
-    if (!user) {
-        return c.json(ErrorResponseBuilder.authentication("Authentication required", "AUTH_REQUIRED"), 401);
-    }
-
-    // 1. Platform Manager - Access All
-    if (user.type === 'platform_manager') {
-        await next();
-        return;
-    }
-
-    // 2. Org Admin - Access Own Org
-    if (user.type === 'user' && user.orgId === orgId) {
-        // Check for Admin Role (assuming 'ORG_ADMIN' or similar from schema Enums)
-        // The schema says UserRole { ORG_ADMIN, ORG_USER ... }
-        // In Unified Login we mapped generic role to `user.role`.
-        if (user.role === 'ORG_ADMIN') {
-            await next();
-            return;
-        }
-    }
-
-    return c.json(ErrorResponseBuilder.authorization("Access denied. Insufficient permissions for this organization."), 403);
-};
+// Middleware local definition removed in favor of import from ./middleware
 
 // Helper: Generate API Keys
 function generateApiKey() {

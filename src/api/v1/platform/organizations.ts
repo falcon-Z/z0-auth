@@ -9,8 +9,11 @@ import {
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware } from "@z0/utils/auth";
+import { requirePlatformManager } from "./middleware";
 
 const platformOrgs = new Hono();
+
+// Schema for creating an organization
 
 // Schema for creating an organization
 const createOrgSchema = z.object({
@@ -19,15 +22,8 @@ const createOrgSchema = z.object({
     description: z.string().optional(),
 });
 
-// Middleware: Ensure user is a Platform Manager
-// We assume 'verifyAccessTokenMiddleware' sets c.get('user')
-const requirePlatformManager = async (c: any, next: any) => {
-    const user = c.get('user') as any;
-    if (!user || user.type !== 'platform_manager') {
-        return c.json(ErrorResponseBuilder.authorization("Access denied. Platform Manager only."), 403);
-    }
-    await next();
-};
+// Local definition removed in favor of import from ./middleware
+
 
 /**
  * GET /api/v1/platform/organizations

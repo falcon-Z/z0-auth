@@ -425,6 +425,50 @@ export async function handleSetup(c: Context) {
     }
 
     /**
+     * Create the Default Organization specified during setup
+     */
+    try {
+      const defaultOrgSlug = generateSlug(organization);
+
+      let finalSlug = defaultOrgSlug;
+      let counter = 1;
+
+      /**
+       * Check for slug collision and increment if necessary
+       */
+      while (await db.organization.findUnique({ where: { slug: finalSlug } })) {
+        finalSlug = `${defaultOrgSlug}-${counter}`;
+        counter++;
+      }
+
+      const defaultOrg = await db.organization.create({
+        data: {
+          name: organization,
+          slug: finalSlug,
+          description: "Default organization created during system setup",
+          status: "ACTIVE"
+        }
+      });
+
+      Logger.info("Default organization created", {
+        orgId: defaultOrg.id,
+        name: organization,
+        slug: finalSlug,
+        requestId
+      });
+
+    } catch (error: any) {
+      /**
+       * Log but don't fail setup, as Super Admin is already created.
+       * Rollback could be implemented here if strict atomicity is required.
+       */
+      Logger.error("Failed to create default organization during setup", {
+        error: error.message,
+        requestId
+      });
+    }
+
+    /**
      * Update config.json to mark SuperAdminConfigured as true
      */
     const fs = await import("fs/promises");
