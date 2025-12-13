@@ -15,8 +15,91 @@ import {
   SecurityLogger,
   RequestContext,
 } from "@z0/utils/error-handling";
+import { z } from "zod";
+import { validator } from "hono/validator";
+import { hashPassword } from "@z0/utils/auth";
 
 const AuthRoutes = new Hono();
+
+const REGISTRATION_SCHEMA = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  name: z.string().min(2),
+  organizationId: z.string().cuid(),
+});
+
+AuthRoutes.post(
+  "/register",
+  validator("json", (value, c) => {
+    const parsed = REGISTRATION_SCHEMA.safeParse(value);
+    if (!parsed.success) {
+      return c.json(
+        ErrorResponseBuilder.validation(
+          "Invalid registration data",
+          parsed.error.issues.map((i) => ({
+            field: i.path.join("."),
+            message: i.message,
+            code: i.code,
+          }))
+        ),
+        400
+      );
+    }
+    return parsed.data;
+  }),
+  async (c) => {
+    const requestId = RequestContext.generateRequestId();
+    const { email, password, name, organizationId } = c.req.valid("json");
+
+    try {
+      // 1. Check if user exists
+      const existingUser = await db.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        return c.json(
+          ErrorResponseBuilder.conflict("User with this email already exists"),
+          409
+        );
+      }
+
+      // 2. Initial Setup: If first user in Org, make valid? 
+      // Actually we just create them as APP_USER by default unless specified otherwise?
+      // For public registration, default to APP_USER.
+
+      const hashedPassword = await hashPassword(password);
+
+      const newUser = await db.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name,
+          organizationId,
+          legacyRole: "APP_USER",
+        },
+      });
+
+      Logger.info("User registered", { userId: newUser.id, orgId: organizationId, requestId });
+
+      return c.json({
+        success: true,
+        message: "User registered successfully",
+        data: {
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          role: newUser.legacyRole
+        },
+        requestId
+      }, 201);
+
+    } catch (error) {
+      const dbError = DatabaseErrorHandler.handleError(error);
+      return c.json(ErrorResponseBuilder.database("Registration failed", dbError.code), 500);
+    }
+  }
+);
 
 AuthRoutes.post("/login", async (c) => {
   const requestId = RequestContext.generateRequestId();
