@@ -10,7 +10,6 @@ import {
 } from "@z0/utils/password-validation";
 import { useNavigate } from "react-router";
 import { Loader2, AlertCircle, CheckCircle2, WifiOff } from "lucide-react";
-import { checkSetupEligibility } from "@z0/utils/api/setup";
 import { isSuperAdminConfigured } from "@z0/utils/config-state";
 
 // Components
@@ -111,31 +110,12 @@ export default function Setup() {
     steps: STEPS,
   });
 
-  // Check setup eligibility on mount
   useEffect(() => {
-    const checkEligibility = async () => {
-      // First check local config state
-      if (isSuperAdminConfigured()) {
-        navigate("/", { replace: true });
-        return;
-      }
-
-      // Then verify with server
-      try {
-        const result = await checkSetupEligibility();
-        if (!result.eligible) {
-          navigate("/", { replace: true });
-          return;
-        }
-      } catch (err) {
-        // If API fails, allow to continue (will fail on submit if not eligible)
-        console.warn("Failed to check setup eligibility:", err);
-      } finally {
-        setIsCheckingEligibility(false);
-      }
-    };
-
-    checkEligibility();
+    if (isSuperAdminConfigured()) {
+      navigate("/", { replace: true });
+      return;
+    }
+    setIsCheckingEligibility(false);
   }, [navigate]);
 
   // Monitor online status for better network error handling

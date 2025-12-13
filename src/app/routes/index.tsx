@@ -19,7 +19,7 @@ import PlatformUsers from "../pages/admin/platform/users";
 
 /**
  * Guard that redirects to /setup if super admin is not configured
- * Prevents access to main app without setup
+ * Uses static config.json which is updated by the server on startup
  */
 function SetupGuard() {
   const location = useLocation();
@@ -31,7 +31,7 @@ function SetupGuard() {
 
 /**
  * Guard that redirects to / if super admin is already configured
- * Prevents access to setup page after initial setup
+ * Uses static config.json which is updated by the server on startup
  */
 function SetupRedirectGuard() {
   if (isSuperAdminConfigured()) {
