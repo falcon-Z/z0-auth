@@ -8,7 +8,6 @@ import {
   validatePassword,
   type PasswordValidationResult,
 } from "@z0/utils/password-validation";
-import { useNavigate } from "react-router";
 import { Loader2, AlertCircle, CheckCircle2, WifiOff } from "lucide-react";
 import { isSuperAdminConfigured } from "@z0/utils/config-state";
 
@@ -66,7 +65,6 @@ type SetupFormValues = z.infer<typeof setupSchema>;
 const STEPS = ["email", "password", "organization"] as const;
 
 export default function Setup() {
-  const navigate = useNavigate();
   const form = useForm<SetupFormValues>({
     resolver: zodResolver(setupSchema),
     defaultValues: {
@@ -112,12 +110,18 @@ export default function Setup() {
   });
 
   useEffect(() => {
-    if (isSuperAdminConfigured()) {
-      navigate("/", { replace: true });
-      return;
-    }
-    setIsCheckingEligibility(false);
-  }, [navigate]);
+    const checkInitialState = async () => {
+      if (isSuperAdminConfigured()) {
+        if (!success && loadingState === "idle") {
+          window.location.href = "/login";
+          return;
+        }
+      }
+      setIsCheckingEligibility(false);
+    };
+
+    checkInitialState();
+  }, [success, loadingState]);
 
   // Monitor online status for better network error handling
   useEffect(() => {
@@ -143,14 +147,14 @@ export default function Setup() {
         if (progress >= 100) {
           clearInterval(progressInterval);
           setTimeout(() => {
-            navigate("/login", { replace: true });
+            window.location.href = "/login";
           }, 300);
         }
-      }, 200);
+      }, 150);
 
       return () => clearInterval(progressInterval);
     }
-  }, [success, loadingState, navigate, setSetupProgress]);
+  }, [success, loadingState, setSetupProgress]);
 
   // Handle password validation changes
   const handlePasswordValidationChange = useCallback(
@@ -170,7 +174,11 @@ export default function Setup() {
       formValues.password;
     const hasValidPassword = passwordValidation?.isValid || false;
     return (
-      hasAllFields && hasValidPassword && loadingState === "idle" && isOnline && !isSubmitting
+      hasAllFields &&
+      hasValidPassword &&
+      loadingState === "idle" &&
+      isOnline &&
+      !isSubmitting
     );
   }, [form, passwordValidation, loadingState, isOnline, isSubmitting]);
 
@@ -190,7 +198,7 @@ export default function Setup() {
         setRetryCount(0);
       } catch (err: any) {
         setIsSubmitting(false);
-        
+
         // Handle network errors
         if (!navigator.onLine) {
           setError({
@@ -356,7 +364,9 @@ export default function Setup() {
               <SetupFooter
                 currentStep={currentStep}
                 isStepValid={isStepValid(currentStep)}
-                disabled={loadingState !== "idle" || !canSubmit() || isSubmitting}
+                disabled={
+                  loadingState !== "idle" || !canSubmit() || isSubmitting
+                }
                 onPrevious={handlePreviousStep}
                 onNext={handleNextStep}
                 onSubmit={form.handleSubmit(onSubmit)}

@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import App from "../App";
 import { isSuperAdminConfigured } from "../../utils/config-state";
@@ -19,7 +18,7 @@ import PlatformUsers from "../pages/admin/platform/users";
 
 /**
  * Guard that redirects to /setup if super admin is not configured
- * Uses static config.json which is updated by the server on startup
+ * Uses config state which is persisted in localStorage
  */
 function SetupGuard() {
   const location = useLocation();
@@ -30,12 +29,12 @@ function SetupGuard() {
 }
 
 /**
- * Guard that redirects to / if super admin is already configured
- * Uses static config.json which is updated by the server on startup
+ * Guard that redirects to /login if super admin is already configured
+ * Uses config state which is persisted in localStorage
  */
 function SetupRedirectGuard() {
   if (isSuperAdminConfigured()) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
   return <Setup />;
 }

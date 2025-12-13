@@ -1,6 +1,7 @@
 /**
  * Configuration state management utilities
  * Handles dynamic updates to configuration state on the client side
+ * Uses localStorage for persistence to survive page navigations
  */
 
 import configFile from "../config.json";
@@ -9,43 +10,59 @@ export interface AppConfig {
   SuperAdminConfigured: boolean;
 }
 
-// Initialize with the static config
-let currentConfig: AppConfig = { ...configFile };
+const CONFIG_STORAGE_KEY = "z0_config_state";
 
-/**
- * Get the current configuration state
- * @returns AppConfig - Current configuration
- */
+function getPersistedConfig(): Partial<AppConfig> {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return {};
+  }
+  try {
+    const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return {};
+}
+
+function persistConfig(config: AppConfig): void {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+  try {
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+let currentConfig: AppConfig = {
+  ...configFile,
+  ...getPersistedConfig(),
+};
+
 export function getConfig(): AppConfig {
   return { ...currentConfig };
 }
 
-/**
- * Update the configuration state
- * @param updates - Partial configuration updates
- */
 export function updateConfig(updates: Partial<AppConfig>): void {
   currentConfig = { ...currentConfig, ...updates };
+  persistConfig(currentConfig);
 }
 
-/**
- * Check if super admin is configured
- * @returns boolean - True if super admin is configured
- */
 export function isSuperAdminConfigured(): boolean {
   return currentConfig.SuperAdminConfigured;
 }
 
-/**
- * Mark super admin as configured
- */
 export function markSuperAdminConfigured(): void {
   updateConfig({ SuperAdminConfigured: true });
 }
 
-/**
- * Reset configuration to initial state (useful for testing)
- */
 export function resetConfig(): void {
   currentConfig = { ...configFile };
+  if (typeof window !== "undefined" && window.localStorage) {
+    localStorage.removeItem(CONFIG_STORAGE_KEY);
+  }
 }
