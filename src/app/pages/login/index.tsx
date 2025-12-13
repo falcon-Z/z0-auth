@@ -74,6 +74,7 @@ export default function Login() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify(data),
       });
 
@@ -83,8 +84,12 @@ export default function Login() {
       }
 
       const result = await response.json();
-      localStorage.setItem("accessToken", result.data.accessToken);
-      navigate("/dashboard");
+      if (result.success && result.user) {
+        localStorage.setItem("user", JSON.stringify(result.user));
+        navigate(result.redirect || "/dashboard");
+      } else {
+        throw new Error("Invalid response from server");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
