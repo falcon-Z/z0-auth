@@ -9,7 +9,6 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware, type TokenPayload, hashPassword } from "@z0/utils/auth";
 import { validatePassword } from "@z0/utils/password-validation";
-import { verify } from "bun"; // Bun.password.verify
 
 const userSecurity = new Hono();
 
@@ -81,8 +80,6 @@ userSecurity.post("/change-password",
 
             Logger.info("Password changed successfully", { userId: user.userId, requestId });
 
-            // Revoke all other sessions? (Phase 4 idea)
-            
             return c.json({
                 success: true,
                 message: "Password updated successfully",
