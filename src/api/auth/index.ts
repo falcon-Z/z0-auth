@@ -158,7 +158,7 @@ AuthRoutes.post("/login", async (c) => {
             role: platformManager.roleType,
             type: "platform"
           },
-          redirect: "/platform/dashboard"
+          redirect: "/admin"
         });
       }
     }

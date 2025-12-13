@@ -41,16 +41,17 @@ function SetupRedirectGuard() {
 
 /**
  * Guard that checks if user is authenticated
+ * Since tokens are stored as HttpOnly cookies, we check for user data in localStorage
  */
 function AuthGuard() {
   const location = useLocation();
-  const token = localStorage.getItem("accessToken");
+  const user = localStorage.getItem("user");
 
-  if (!token && location.pathname !== "/login") {
+  if (!user && location.pathname !== "/login") {
     return <Navigate to="/login" replace />;
   }
 
-  if (token && location.pathname === "/login") {
+  if (user && location.pathname === "/login") {
     return <Navigate to="/dashboard" replace />;
   }
 
