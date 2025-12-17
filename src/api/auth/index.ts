@@ -64,7 +64,7 @@ AuthRoutes.post(
         );
       }
 
-      // 2. Initial Setup: If first user in Org, make valid? 
+      // 2. Initial Setup: If first user in Org, make valid?
       // Actually we just create them as APP_USER by default unless specified otherwise?
       // For public registration, default to APP_USER.
 
@@ -80,23 +80,32 @@ AuthRoutes.post(
         },
       });
 
-      Logger.info("User registered", { userId: newUser.id, orgId: organizationId, requestId });
+      Logger.info("User registered", {
+        userId: newUser.id,
+        orgId: organizationId,
+        requestId,
+      });
 
-      return c.json({
-        success: true,
-        message: "User registered successfully",
-        data: {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.name,
-          role: newUser.legacyRole
+      return c.json(
+        {
+          success: true,
+          message: "User registered successfully",
+          data: {
+            id: newUser.id,
+            email: newUser.email,
+            name: newUser.name,
+            role: newUser.legacyRole,
+          },
+          requestId,
         },
-        requestId
-      }, 201);
-
+        201
+      );
     } catch (error) {
       const dbError = DatabaseErrorHandler.handleError(error);
-      return c.json(ErrorResponseBuilder.database("Registration failed", dbError.code), 500);
+      return c.json(
+        ErrorResponseBuilder.database("Registration failed", dbError.code),
+        500
+      );
     }
   }
 );
@@ -112,10 +121,13 @@ AuthRoutes.post("/login", async (c) => {
 
     if (!email || !password) {
       return c.json(
-        ErrorResponseBuilder.validation(
-          "Email and password are required",
-          [{ code: "missing_field", message: "Email and password are required", field: "email/password" }]
-        ),
+        ErrorResponseBuilder.validation("Email and password are required", [
+          {
+            code: "missing_field",
+            message: "Email and password are required",
+            field: "email/password",
+          },
+        ]),
         400
       );
     }
@@ -127,7 +139,10 @@ AuthRoutes.post("/login", async (c) => {
 
     if (platformManager) {
       // Verify password (assuming Bun.password is used for hashing)
-      const validPassword = await Bun.password.verify(password, platformManager.password);
+      const validPassword = await Bun.password.verify(
+        password,
+        platformManager.password
+      );
 
       if (validPassword) {
         // Create Session/Tokens for Platform Manager
@@ -136,7 +151,7 @@ AuthRoutes.post("/login", async (c) => {
           email: platformManager.email,
           roleType: platformManager.roleType,
           scopes: platformManager.scopes,
-          type: "platform_manager" // Explicit type
+          type: "platform_manager", // Explicit type
         };
 
         const accessToken = await generateAccessToken(tokenPayload);
@@ -144,10 +159,27 @@ AuthRoutes.post("/login", async (c) => {
 
         // Set Cookies
         const isProd = process.env.NODE_ENV === "production";
-        setCookie(c, "access_token", accessToken, { httpOnly: true, secure: isProd, sameSite: "Strict", path: "/", maxAge: 900 }); // 15m
-        setCookie(c, "refresh_token", refreshToken, { httpOnly: true, secure: isProd, sameSite: "Strict", path: "/", maxAge: 604800 }); // 7d
+        setCookie(c, "access_token", accessToken, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: "Strict",
+          path: "/",
+          maxAge: 900,
+        }); // 15m
+        setCookie(c, "refresh_token", refreshToken, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: "Strict",
+          path: "/",
+          maxAge: 604800,
+        }); // 7d
 
-        SecurityLogger.logAuthenticationEvent("Platform Manager Login Success", c, platformManager.id, { requestId });
+        SecurityLogger.logAuthenticationEvent(
+          "Platform Manager Login Success",
+          c,
+          platformManager.id,
+          { requestId }
+        );
 
         return c.json({
           success: true,
@@ -156,24 +188,25 @@ AuthRoutes.post("/login", async (c) => {
             email: platformManager.email,
             name: platformManager.name,
             role: platformManager.roleType,
-            type: "platform"
+            type: "platform",
           },
-          redirect: "/admin"
+          redirect: "/admin",
         });
       }
     }
 
     // 2. Waterfall Step 2: Check User (Org Admins, Developers)
-    // IMPORTANT: "App Users" should generally NOT be logging in via this Dashboard flow 
+    // IMPORTANT: "App Users" should generally NOT be logging in via this Dashboard flow
     // unless this is their App's IDP page. But based on requirements, we filter for Org roles here
     // or return the role and let UI handle it (but strictly enforcing in backend is safer).
 
     const user = await db.user.findUnique({
       where: { email },
-      include: { organization: true } // Get Org Context
+      include: { organization: true }, // Get Org Context
     });
 
-    if (user && user.password) { // Only checking users with password set
+    if (user && user.password) {
+      // Only checking users with password set
       const validPassword = await Bun.password.verify(password, user.password);
 
       if (validPassword) {
@@ -181,8 +214,8 @@ AuthRoutes.post("/login", async (c) => {
         // If the user's explicit legacyRole or derived role indicates APP_USER, deny/restrict
         // Note: Schema has `legacyRole`. We should check that.
 
-        // Allow ORG_ADMIN and ORG_USER. 
-        // In a real system, we might allow APP_USER but redirect them to a user profile. 
+        // Allow ORG_ADMIN and ORG_USER.
+        // In a real system, we might allow APP_USER but redirect them to a user profile.
         // Constraint says: "app users should not be able to access the platform".
         // We'll interpret this as: Login OK, but type triggers restricted UI or 403 if they try to hit /platform APIs.
         // For now, let's login but return type 'user' or 'app_user'.
@@ -192,17 +225,34 @@ AuthRoutes.post("/login", async (c) => {
           email: user.email,
           role: user.legacyRole || "APP_USER",
           orgId: user.organizationId,
-          type: "user"
+          type: "user",
         };
 
         const accessToken = await generateAccessToken(tokenPayload);
         const refreshToken = await generateRefreshToken(tokenPayload);
 
         const isProd = process.env.NODE_ENV === "production";
-        setCookie(c, "access_token", accessToken, { httpOnly: true, secure: isProd, sameSite: "Strict", path: "/", maxAge: 900 });
-        setCookie(c, "refresh_token", refreshToken, { httpOnly: true, secure: isProd, sameSite: "Strict", path: "/", maxAge: 604800 });
+        setCookie(c, "access_token", accessToken, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: "Strict",
+          path: "/",
+          maxAge: 900,
+        });
+        setCookie(c, "refresh_token", refreshToken, {
+          httpOnly: true,
+          secure: isProd,
+          sameSite: "Strict",
+          path: "/",
+          maxAge: 604800,
+        });
 
-        SecurityLogger.logAuthenticationEvent("User Login Success", c, user.id, { requestId });
+        SecurityLogger.logAuthenticationEvent(
+          "User Login Success",
+          c,
+          user.id,
+          { requestId }
+        );
 
         return c.json({
           success: true,
@@ -212,21 +262,40 @@ AuthRoutes.post("/login", async (c) => {
             name: user.name,
             role: user.legacyRole,
             orgId: user.organizationId,
-            type: "organization"
+            type: "organization",
           },
           // Hint to UI: If ORG_ADMIN -> /org/dashboard, if APP_USER -> /profile
-          redirect: user.legacyRole === "APP_USER" ? "/profile" : `/orgs/${user.organization.slug}/dashboard`
+          redirect:
+            user.legacyRole === "APP_USER"
+              ? "/profile"
+              : `/orgs/${user.organization.slug}/dashboard`,
         });
       }
     }
 
     // If we reach here: Invalid credentials (generic message)
-    SecurityLogger.logAuthenticationEvent("Login Failed: Invalid Credentials", c, undefined, { requestId, email });
-    return c.json(ErrorResponseBuilder.authentication("Invalid email or password", "INVALID_CREDENTIALS"), 401);
-
+    SecurityLogger.logAuthenticationEvent(
+      "Login Failed: Invalid Credentials",
+      c,
+      undefined,
+      { requestId, email }
+    );
+    return c.json(
+      ErrorResponseBuilder.authentication(
+        "Invalid email or password",
+        "INVALID_CREDENTIALS"
+      ),
+      401
+    );
   } catch (error) {
     Logger.error("Login error", { error: (error as Error).message, requestId });
-    return c.json(ErrorResponseBuilder.system("Internal Server Error", "INTERNAL_SERVER_ERROR"), 500);
+    return c.json(
+      ErrorResponseBuilder.system(
+        "Internal Server Error",
+        "INTERNAL_SERVER_ERROR"
+      ),
+      500
+    );
   }
 });
 
@@ -247,12 +316,15 @@ AuthRoutes.get("/me", async (c) => {
   if (!token) return c.json({ authenticated: false }, 401);
 
   try {
-    // verify implementation is needed in imports? 
+    // verify implementation is needed in imports?
     // We imported `verifyRefreshToken`, we assume `verifyAccessToken` exists or we reuse.
     // Actually imports showed `generateAccessToken`. Checking utils/auth.ts content next.
     // Assuming verifyAccessToken functionality is similar.
     // Let's hold off on detailed /me implementation until I see utils/auth.ts
-    return c.json({ authenticated: true, message: "Use middleware for full details" });
+    return c.json({
+      authenticated: true,
+      message: "Use middleware for full details",
+    });
   } catch (e) {
     return c.json({ authenticated: false }, 401);
   }
