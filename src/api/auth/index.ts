@@ -18,8 +18,37 @@ import {
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { hashPassword } from "@z0/utils/auth";
+import { emailService } from "@z0/utils/email";
+import VerificationRoutes from "./verification";
+import PasswordResetRoutes from "./password-reset";
+
+// Token expiration time for verification (24 hours)
+const VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
+
+/**
+ * Generate a secure random token
+ */
+function generateVerificationToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Get the verification URL
+ */
+function getVerificationUrl(token: string): string {
+  const baseUrl = process.env.APP_URL ?? "http://localhost:3000";
+  return `${baseUrl}/auth/verify-email?token=${token}`;
+}
 
 const AuthRoutes = new Hono();
+
+// Mount verification and password reset routes
+AuthRoutes.route("/", VerificationRoutes);
+AuthRoutes.route("/", PasswordResetRoutes);
 
 const REGISTRATION_SCHEMA = z.object({
   email: z.string().email(),
@@ -77,7 +106,34 @@ AuthRoutes.post(
           name,
           organizationId,
           legacyRole: "APP_USER",
+          status: "PENDING", // User starts as pending until email verified
         },
+      });
+
+      // Create verification token and send email
+      const verificationToken = generateVerificationToken();
+      const expiresAt = new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
+
+      await db.emailVerificationToken.create({
+        data: {
+          userId: newUser.id,
+          token: verificationToken,
+          expiresAt,
+        },
+      });
+
+      // Send verification email (async, don't block response)
+      const verificationUrl = getVerificationUrl(verificationToken);
+      emailService.sendVerification(email, {
+        userName: name,
+        verificationUrl,
+        expiresInHours: VERIFICATION_TOKEN_EXPIRY_HOURS,
+      }).catch((error) => {
+        Logger.error("Failed to send verification email", {
+          userId: newUser.id,
+          error: error.message,
+          requestId,
+        });
       });
 
       Logger.info("User registered", {
@@ -89,12 +145,13 @@ AuthRoutes.post(
       return c.json(
         {
           success: true,
-          message: "User registered successfully",
+          message: "User registered successfully. Please check your email to verify your account.",
           data: {
             id: newUser.id,
             email: newUser.email,
             name: newUser.name,
             role: newUser.legacyRole,
+            emailVerified: false,
           },
           requestId,
         },

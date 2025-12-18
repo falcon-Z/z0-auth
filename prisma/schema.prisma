@@ -259,8 +259,9 @@ model User {
   sessions               Session[]
   scopes                 UserScope[]
   orgAdmins              OrganizationAdmin[]
-  passwordResets         PasswordReset[]
-  metadataHistory        UserMetadataHistory[]
+  passwordResets             PasswordReset[]
+  emailVerificationTokens    EmailVerificationToken[]
+  metadataHistory            UserMetadataHistory[]
   externalIdentities     ExternalIdentity[]
   externalIdentityEvents ExternalIdentityEvent[]
   devices                Device[]
@@ -395,6 +396,34 @@ model PasswordReset {
   @@index([expiresAt, used])
   @@index([token, used])
   @@map("password_resets")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, used])
+  @@index([expiresAt, used])
+  @@index([token, used])
+  @@map("email_verification_tokens")
+}
+
+model AccountLockout {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  failedAttempts Int       @default(0)
+  lastAttempt    DateTime?
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([lockedUntil])
+  @@map("account_lockouts")
 }
 
 model AuditLog {
