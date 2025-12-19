@@ -177,6 +177,68 @@ class EmailService {
     return testResult.success;
   }
 
+  /**
+   * Reinitialize the email service with current config
+   */
+  reinitialize(): void {
+    this.client = null;
+    this.initialized = false;
+    // Will auto-initialize on next send
+  }
+
+  /**
+   * Send a test email
+   */
+  async sendTest(to: string): Promise<SendEmailResult> {
+    const config = loadSMTPConfig();
+    if (!config) {
+      return {
+        success: false,
+        error: "SMTP is not configured",
+        timestamp: new Date(),
+      };
+    }
+
+    const fromName = config.from?.name ?? "Z0 Auth";
+    const subject = "Z0 Auth - SMTP Test Email";
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); padding: 30px; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">SMTP Test Email</h1>
+        </div>
+        <div style="background: #f8fafc; padding: 30px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="color: #334155; font-size: 16px; line-height: 1.6;">
+            This is a test email from <strong>${fromName}</strong>.
+          </p>
+          <p style="color: #334155; font-size: 16px; line-height: 1.6;">
+            If you received this email, your SMTP configuration is working correctly!
+          </p>
+          <div style="background: #dcfce7; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="color: #166534; margin: 0; font-size: 14px;">
+              <strong>Success!</strong> Your email server is configured and operational.
+            </p>
+          </div>
+          <p style="color: #64748b; font-size: 14px;">
+            Sent at: ${new Date().toISOString()}
+          </p>
+        </div>
+        <div style="text-align: center; padding: 20px;">
+          <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+            This email was sent by Z0 Auth SMTP Test
+          </p>
+        </div>
+      </div>
+    `;
+    const text = `SMTP Test Email\n\nThis is a test email from ${fromName}.\n\nIf you received this email, your SMTP configuration is working correctly!\n\nSent at: ${new Date().toISOString()}`;
+
+    return this.send({
+      to,
+      subject,
+      html,
+      text,
+    });
+  }
+
   private extractEmailFromUrl(url: string): string | null {
     try {
       const urlObj = new URL(url);

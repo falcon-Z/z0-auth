@@ -5,6 +5,9 @@ import { Navigate, Outlet, useLocation } from "react-router";
 
 import Setup from "../pages/setup";
 import Login from "../pages/login";
+import VerifyEmail from "../pages/auth/verify-email";
+import ForgotPassword from "../pages/auth/forgot-password";
+import ResetPassword from "../pages/auth/reset-password";
 import Dashboard from "../pages/dashboard";
 import OrganizationsList from "../pages/dashboard/organizations";
 import OrganizationDetail from "../pages/dashboard/organizations/detail";
@@ -15,6 +18,7 @@ import ProfilePage from "../pages/dashboard/profile";
 import AdminDashboard from "../pages/admin";
 import PlatformOrganizations from "../pages/admin/platform/organizations";
 import PlatformUsers from "../pages/admin/platform/users";
+import SMTPSettings from "../pages/admin/settings/smtp";
 
 /**
  * Guard that redirects to /setup if super admin is not configured
@@ -67,6 +71,18 @@ export const router = createBrowserRouter([
         element: <SetupRedirectGuard />,
       },
       {
+        path: "auth/verify-email",
+        element: <VerifyEmail />,
+      },
+      {
+        path: "auth/forgot-password",
+        element: <ForgotPassword />,
+      },
+      {
+        path: "auth/reset-password",
+        element: <ResetPassword />,
+      },
+      {
         element: <AuthGuard />,
         children: [
           {
@@ -116,6 +132,10 @@ export const router = createBrowserRouter([
               {
                 path: "admin/platform/users",
                 element: <PlatformUsers />,
+              },
+              {
+                path: "admin/settings/smtp",
+                element: <SMTPSettings />,
               },
               {
                 path: "*",

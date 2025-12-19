@@ -7,6 +7,7 @@ import {
   Shield,
   Zap,
   ArrowRight,
+  Mail,
 } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
@@ -49,6 +50,13 @@ export default function AdminDashboard() {
       icon: Shield,
       href: "/admin/security",
       stats: "View logs",
+    },
+    {
+      title: "SMTP Configuration",
+      description: "Configure email server settings for notifications",
+      icon: Mail,
+      href: "/admin/settings/smtp",
+      stats: "Configure",
     },
     {
       title: "System Configuration",

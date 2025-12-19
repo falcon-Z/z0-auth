@@ -4,6 +4,7 @@ import setupAdmin from "./setup";
 import AuthRoutes from "./auth";
 import HealthRoutes from "./health";
 import AdminKeyRoutes from "./admin/keys";
+import SMTPAdminRoutes from "./admin/smtp";
 
 const API = new Hono();
 
@@ -12,5 +13,6 @@ API.route("/auth/", AuthRoutes);
 API.route("/v1/", V1Routes);
 API.route("/health/", HealthRoutes);
 API.route("/admin/keys/", AdminKeyRoutes);
+API.route("/admin/smtp/", SMTPAdminRoutes);
 
 export default API;

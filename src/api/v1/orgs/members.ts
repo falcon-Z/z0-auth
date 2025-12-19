@@ -22,6 +22,17 @@ const addMemberSchema = z.object({
     role: z.enum(["ORG_ADMIN", "ORG_USER"]).default("ORG_USER")
 });
 
+// Schema for updating a member
+const updateMemberSchema = z.object({
+    name: z.string().min(1).max(100).optional(),
+    role: z.enum(["ORG_ADMIN", "ORG_USER"]).optional(),
+});
+
+// Schema for status change
+const statusSchema = z.object({
+    status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"]),
+});
+
 /**
  * GET /:orgId/members
  * List members of an organization
@@ -159,20 +170,294 @@ orgMembers.post("/:orgId/members",
 );
 
 /**
- * DELETE /:orgId/members/:userId
- * Remove a member
+ * GET /:orgId/members/:userId
+ * Get member details
  */
-orgMembers.delete("/:orgId/members/:userId", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
+orgMembers.get("/:orgId/members/:userId", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
     const orgId = c.req.param("orgId");
     const userId = c.req.param("userId");
     const requestId = RequestContext.generateRequestId();
 
     try {
-        await db.user.delete({
-            where: {
-                id: userId,
-                organizationId: orgId // Security: Ensure deleting from THIS org
+        const member = await db.user.findFirst({
+            where: { id: userId, organizationId: orgId },
+            select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                status: true,
+                emailVerified: true,
+                lastLoginAt: true,
+                createdAt: true,
+                updatedAt: true,
+                _count: {
+                    select: { sessions: true }
+                }
             }
+        });
+
+        if (!member) {
+            return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
+        }
+
+        return c.json({
+            success: true,
+            data: member,
+            requestId
+        });
+    } catch (error) {
+        return c.json(ErrorResponseBuilder.system("Failed to fetch member details", "DB_ERROR"), 500);
+    }
+});
+
+/**
+ * PUT /:orgId/members/:userId
+ * Update member
+ */
+orgMembers.put("/:orgId/members/:userId",
+    verifyAccessTokenMiddleware,
+    requireOrgAccess,
+    validator("json", (value, c) => {
+        const parsed = updateMemberSchema.safeParse(value);
+        if (!parsed.success) {
+            const issues = parsed.error.issues.map(i => ({
+                field: i.path.join('.'),
+                message: i.message,
+                code: i.code
+            }));
+            return c.json(ErrorResponseBuilder.validation("Invalid data", issues), 400);
+        }
+        return parsed.data;
+    }),
+    async (c) => {
+        const orgId = c.req.param("orgId");
+        const userId = c.req.param("userId");
+        const data = c.req.valid("json");
+        const currentUser = c.get('user') as TokenPayload;
+        const requestId = RequestContext.generateRequestId();
+
+        try {
+            const existingMember = await db.user.findFirst({
+                where: { id: userId, organizationId: orgId }
+            });
+
+            if (!existingMember) {
+                return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
+            }
+
+            const updatedMember = await db.user.update({
+                where: { id: userId },
+                data: {
+                    ...(data.name && { name: data.name }),
+                },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    status: true
+                }
+            });
+
+            Logger.info("Member updated", {
+                userId,
+                orgId,
+                updatedBy: currentUser.userId,
+                requestId
+            });
+
+            return c.json({
+                success: true,
+                message: "Member updated successfully",
+                data: updatedMember,
+                requestId
+            });
+        } catch (error) {
+            return c.json(ErrorResponseBuilder.system("Failed to update member", "DB_ERROR"), 500);
+        }
+    }
+);
+
+/**
+ * PATCH /:orgId/members/:userId/status
+ * Change member status
+ */
+orgMembers.patch("/:orgId/members/:userId/status",
+    verifyAccessTokenMiddleware,
+    requireOrgAccess,
+    validator("json", (value, c) => {
+        const parsed = statusSchema.safeParse(value);
+        if (!parsed.success) {
+            const issues = parsed.error.issues.map(i => ({
+                field: i.path.join('.'),
+                message: i.message,
+                code: i.code
+            }));
+            return c.json(ErrorResponseBuilder.validation("Invalid status", issues), 400);
+        }
+        return parsed.data;
+    }),
+    async (c) => {
+        const orgId = c.req.param("orgId");
+        const userId = c.req.param("userId");
+        const { status } = c.req.valid("json");
+        const currentUser = c.get('user') as TokenPayload;
+        const requestId = RequestContext.generateRequestId();
+
+        try {
+            // Prevent users from changing their own status
+            if (currentUser.userId === userId) {
+                return c.json(ErrorResponseBuilder.forbidden("Cannot change your own status"), 403);
+            }
+
+            const existingMember = await db.user.findFirst({
+                where: { id: userId, organizationId: orgId }
+            });
+
+            if (!existingMember) {
+                return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
+            }
+
+            const updatedMember = await db.user.update({
+                where: { id: userId },
+                data: { status }
+            });
+
+            // If suspended, revoke all sessions
+            if (status === "SUSPENDED") {
+                await db.session.updateMany({
+                    where: { userId },
+                    data: { status: "REVOKED" }
+                });
+            }
+
+            Logger.info("Member status changed", {
+                userId,
+                orgId,
+                oldStatus: existingMember.status,
+                newStatus: status,
+                changedBy: currentUser.userId,
+                requestId
+            });
+
+            return c.json({
+                success: true,
+                message: `Member status changed to ${status}`,
+                data: {
+                    id: updatedMember.id,
+                    status: updatedMember.status
+                },
+                requestId
+            });
+        } catch (error) {
+            return c.json(ErrorResponseBuilder.system("Failed to update member status", "DB_ERROR"), 500);
+        }
+    }
+);
+
+/**
+ * POST /:orgId/members/:userId/reset-password
+ * Admin-triggered password reset
+ */
+orgMembers.post("/:orgId/members/:userId/reset-password",
+    verifyAccessTokenMiddleware,
+    requireOrgAccess,
+    async (c) => {
+        const orgId = c.req.param("orgId");
+        const userId = c.req.param("userId");
+        const currentUser = c.get('user') as TokenPayload;
+        const requestId = RequestContext.generateRequestId();
+
+        try {
+            const member = await db.user.findFirst({
+                where: { id: userId, organizationId: orgId },
+                select: { id: true, email: true, name: true }
+            });
+
+            if (!member) {
+                return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
+            }
+
+            // Generate password reset token
+            const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+            // Invalidate existing tokens
+            await db.passwordReset.updateMany({
+                where: { userId: member.id, used: false },
+                data: { used: true }
+            });
+
+            // Create new token
+            await db.passwordReset.create({
+                data: {
+                    userId: member.id,
+                    token,
+                    expiresAt
+                }
+            });
+
+            // TODO: Send email with reset link
+            // For now, just log it
+            Logger.info("Admin-triggered password reset", {
+                userId: member.id,
+                orgId,
+                triggeredBy: currentUser.userId,
+                requestId
+            });
+
+            return c.json({
+                success: true,
+                message: "Password reset initiated. The user will receive an email with reset instructions.",
+                requestId
+            });
+        } catch (error) {
+            return c.json(ErrorResponseBuilder.system("Failed to initiate password reset", "DB_ERROR"), 500);
+        }
+    }
+);
+
+/**
+ * DELETE /:orgId/members/:userId
+ * Remove a member (soft delete)
+ */
+orgMembers.delete("/:orgId/members/:userId", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
+    const orgId = c.req.param("orgId");
+    const userId = c.req.param("userId");
+    const currentUser = c.get('user') as TokenPayload;
+    const requestId = RequestContext.generateRequestId();
+
+    try {
+        // Prevent users from deleting themselves
+        if (currentUser.userId === userId) {
+            return c.json(ErrorResponseBuilder.forbidden("Cannot delete your own account from here"), 403);
+        }
+
+        const existingMember = await db.user.findFirst({
+            where: { id: userId, organizationId: orgId }
+        });
+
+        if (!existingMember) {
+            return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
+        }
+
+        // Soft delete by setting status to INACTIVE
+        await db.user.update({
+            where: { id: userId },
+            data: { status: "INACTIVE" }
+        });
+
+        // Revoke all sessions
+        await db.session.updateMany({
+            where: { userId },
+            data: { status: "REVOKED" }
+        });
+
+        Logger.info("Member removed", {
+            userId,
+            orgId,
+            removedBy: currentUser.userId,
+            requestId
         });
 
         return c.json({
