@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link, useLocation } from "react-router";
 import {
   LayoutDashboard,
@@ -62,12 +63,21 @@ const navItems: NavItem[] = [
   },
 ];
 
+// Parse user once outside component to avoid re-parsing on every render
+function getStoredUser() {
+  try {
+    const userStr = localStorage.getItem("user");
+    return userStr ? JSON.parse(userStr) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AppSidebar() {
   const location = useLocation();
 
-  // Get user from localStorage to check if admin
-  const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
+  // Memoize user to prevent re-parsing localStorage on every render
+  const user = useMemo(() => getStoredUser(), []);
   const isPlatformAdmin = user?.type === "platform";
 
   // Filter nav items based on user role

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   DropdownMenu,
@@ -11,12 +12,21 @@ import { Button } from "@z0/components/ui/button";
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import { User, Settings, LogOut } from "lucide-react";
 
+// Parse user once to avoid re-parsing on every render
+function getStoredUser() {
+  try {
+    const userStr = localStorage.getItem("user");
+    return userStr ? JSON.parse(userStr) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function UserNav() {
   const navigate = useNavigate();
 
-  // Get user from localStorage
-  const userStr = localStorage.getItem("user");
-  const user = userStr ? JSON.parse(userStr) : null;
+  // Memoize user to prevent re-parsing localStorage on every render
+  const user = useMemo(() => getStoredUser(), []);
 
   const handleLogout = async () => {
     try {
