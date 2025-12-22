@@ -233,41 +233,25 @@ export default function SMTPSettings() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/admin")}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                <Mail className="h-8 w-8" />
-                SMTP Configuration
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Configure email server settings for sending verification emails,
-                password resets, and notifications.
-              </p>
-            </div>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+          <Mail className="h-8 w-8" />
+          SMTP Configuration
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Configure email server settings for sending verification emails,
+          password resets, and notifications.
+        </p>
       </div>
-
-      {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* Status Card */}
         <Card className="mb-6">
           <CardHeader>
@@ -670,7 +654,6 @@ export default function SMTPSettings() {
             </div>
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

@@ -254,7 +254,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
@@ -262,44 +262,35 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>Failed to load profile</AlertDescription>
-          </Alert>
-        </div>
+      <div className="py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Failed to load profile</AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 animate-page-enter">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16">
-              <AvatarImage
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`}
-              />
-              <AvatarFallback>
-                {user.name.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{user.name}</h1>
-              <p className="text-muted-foreground">{user.email}</p>
-              <div className="flex gap-2 mt-1">
-                <Badge variant="outline">{user.role}</Badge>
-              </div>
-            </div>
+      <div className="flex items-center gap-4">
+        <Avatar className="h-16 w-16">
+          <AvatarImage
+            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`}
+          />
+          <AvatarFallback>
+            {user.name.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{user.name}</h1>
+          <p className="text-muted-foreground">{user.email}</p>
+          <div className="flex gap-2 mt-1">
+            <Badge variant="outline">{user.role}</Badge>
           </div>
         </div>
       </div>
-
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -614,7 +605,6 @@ export default function ProfilePage() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }

@@ -153,31 +153,16 @@ export default function PlatformOrganizations() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <Breadcrumb className="mb-4">
-            <BreadcrumbItem>
-              <BreadcrumbLink onClick={() => navigate("/admin")}>
-                Admin
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Platform Organizations</BreadcrumbPage>
-            </BreadcrumbItem>
-          </Breadcrumb>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Organizations
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Manage all organizations on the platform
-              </p>
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Organizations</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage all organizations on the platform
+          </p>
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
@@ -254,14 +239,10 @@ export default function PlatformOrganizations() {
                   </form>
                 </Form>
               </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+        </Dialog>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {error && (
+      {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -343,7 +324,6 @@ export default function PlatformOrganizations() {
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

@@ -123,7 +123,7 @@ export default function AppDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
@@ -131,47 +131,29 @@ export default function AppDetail() {
 
   if (!app) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>Application not found</AlertDescription>
-          </Alert>
-        </div>
+      <div className="py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>Application not found</AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mb-4"
-            onClick={() => navigate(`/dashboard/organizations/${id}`)}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">{app.name}</h1>
-              <p className="text-muted-foreground mt-1 font-mono text-sm">
-                {app.slug}
-              </p>
-            </div>
-            <Badge variant={app.status === "ACTIVE" ? "default" : "secondary"}>
-              {app.status}
-            </Badge>
-          </div>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{app.name}</h1>
+          <p className="text-muted-foreground mt-1 font-mono text-sm">
+            {app.slug}
+          </p>
         </div>
+        <Badge variant={app.status === "ACTIVE" ? "default" : "secondary"}>
+          {app.status}
+        </Badge>
       </div>
-
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -356,7 +338,6 @@ export default function AppDetail() {
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }

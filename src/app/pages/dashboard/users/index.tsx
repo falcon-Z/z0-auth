@@ -172,20 +172,18 @@ export default function OrgUserManagement() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 animate-page-enter">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                Team Members
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your organization members
-              </p>
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Team Members
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your organization members
+          </p>
+        </div>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="w-full sm:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
@@ -281,14 +279,10 @@ export default function OrgUserManagement() {
                   </form>
                 </Form>
               </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+        </Dialog>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {error && (
+      {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -370,7 +364,6 @@ export default function OrgUserManagement() {
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }
