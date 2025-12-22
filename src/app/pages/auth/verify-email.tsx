@@ -1,15 +1,9 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, useNavigate, Link } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import { Loader2, CheckCircle2, XCircle, Mail } from "lucide-react";
 
+import { PublicLayout } from "../../components/layout/public-layout";
 import { Button } from "@z0/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@z0/components/ui/card";
 import { Alert, AlertDescription } from "@z0/components/ui/alert";
 
 type VerificationStatus = "loading" | "success" | "error" | "expired" | "used";
@@ -43,14 +37,18 @@ export default function VerifyEmail() {
 
       if (response.ok && data.success) {
         setStatus("success");
-        setMessage(data.message || "Your email has been verified successfully!");
+        setMessage(
+          data.message || "Your email has been verified successfully!"
+        );
       } else {
         if (data.code === "TOKEN_EXPIRED") {
           setStatus("expired");
           setMessage(data.message || "This verification link has expired.");
         } else if (data.code === "TOKEN_ALREADY_USED") {
           setStatus("used");
-          setMessage(data.message || "This verification link has already been used.");
+          setMessage(
+            data.message || "This verification link has already been used."
+          );
         } else {
           setStatus("error");
           setMessage(data.message || "Failed to verify email.");
@@ -62,87 +60,118 @@ export default function VerifyEmail() {
     }
   };
 
-  const renderContent = () => {
-    switch (status) {
-      case "loading":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Verifying your email...</p>
-          </div>
-        );
+  // Loading state
+  if (status === "loading") {
+    return (
+      <PublicLayout showLogo={true}>
+        <div className="flex flex-col items-center py-8 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-sm text-muted-foreground">
+            Verifying your email...
+          </p>
+        </div>
+      </PublicLayout>
+    );
+  }
 
-      case "success":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Email Verified!</h3>
-            <p className="text-muted-foreground text-center mb-6">{message}</p>
-            <Button onClick={() => navigate("/login")}>
-              Continue to Login
-            </Button>
-          </div>
-        );
-
-      case "expired":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <XCircle className="h-12 w-12 text-yellow-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Link Expired</h3>
-            <p className="text-muted-foreground text-center mb-6">{message}</p>
-            <div className="space-y-2">
-              <Button onClick={() => navigate("/login")} className="w-full">
-                Go to Login
-              </Button>
-              <p className="text-sm text-muted-foreground text-center">
-                You can request a new verification email after logging in.
-              </p>
+  // Success state
+  if (status === "success") {
+    return (
+      <PublicLayout title="Email verified!">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-green-100 dark:bg-green-900/20 p-3">
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
           </div>
-        );
 
-      case "used":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <Mail className="h-12 w-12 text-blue-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Already Verified</h3>
-            <p className="text-muted-foreground text-center mb-6">{message}</p>
-            <Button onClick={() => navigate("/login")}>
-              Continue to Login
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{message}</p>
+          </div>
+
+          <div className="pt-4">
+            <Button onClick={() => navigate("/login")} className="w-full">
+              Continue to login
             </Button>
           </div>
-        );
+        </div>
+      </PublicLayout>
+    );
+  }
 
-      case "error":
-      default:
-        return (
-          <div className="flex flex-col items-center py-8">
-            <XCircle className="h-12 w-12 text-red-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Verification Failed</h3>
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{message}</AlertDescription>
-            </Alert>
-            <Button onClick={() => navigate("/login")}>
-              Go to Login
+  // Expired state
+  if (status === "expired") {
+    return (
+      <PublicLayout title="Link expired">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-yellow-100 dark:bg-yellow-900/20 p-3">
+              <XCircle className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{message}</p>
+            <p className="text-xs text-muted-foreground">
+              You can request a new verification email after logging in.
+            </p>
+          </div>
+
+          <div className="pt-4">
+            <Button onClick={() => navigate("/login")} className="w-full">
+              Go to login
             </Button>
           </div>
-        );
-    }
-  };
+        </div>
+      </PublicLayout>
+    );
+  }
 
+  // Used/Already verified state
+  if (status === "used") {
+    return (
+      <PublicLayout title="Already verified">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-blue-100 dark:bg-blue-900/20 p-3">
+              <Mail className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{message}</p>
+          </div>
+
+          <div className="pt-4">
+            <Button onClick={() => navigate("/login")} className="w-full">
+              Continue to login
+            </Button>
+          </div>
+        </div>
+      </PublicLayout>
+    );
+  }
+
+  // Error state
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl font-bold text-center">
-            Email Verification
-          </CardTitle>
-          <CardDescription className="text-center">
-            Z0 Auth - Secure authentication platform
-          </CardDescription>
-        </CardHeader>
-        <CardContent>{renderContent()}</CardContent>
-      </Card>
-    </div>
+    <PublicLayout title="Verification failed">
+      <div className="text-center space-y-4">
+        <div className="flex justify-center">
+          <div className="rounded-full bg-red-100 dark:bg-red-900/20 p-3">
+            <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+          </div>
+        </div>
+
+        <Alert variant="destructive">
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+
+        <div className="pt-4">
+          <Button onClick={() => navigate("/login")} className="w-full">
+            Go to login
+          </Button>
+        </div>
+      </div>
+    </PublicLayout>
   );
 }

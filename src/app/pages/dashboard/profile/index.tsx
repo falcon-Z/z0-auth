@@ -274,7 +274,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 animate-page-enter">
       {/* Header */}
       <div className="border-b bg-white">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
@@ -288,7 +288,7 @@ export default function ProfilePage() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">{user.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{user.name}</h1>
               <p className="text-muted-foreground">{user.email}</p>
               <div className="flex gap-2 mt-1">
                 <Badge variant="outline">{user.role}</Badge>

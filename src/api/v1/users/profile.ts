@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware, type TokenPayload } from "@z0/utils/auth";
+import { AuditLogger } from "@z0/utils/audit-logger";
 
 const userProfile = new Hono();
 
@@ -109,18 +110,66 @@ userProfile.put("/me",
 
         try {
             if (user.type === 'platform_manager') {
+                // Fetch current data for audit trail
+                const current = await db.platformManager.findUnique({
+                    where: { id: user.userId },
+                    select: { name: true, email: true }
+                });
+
                 const updated = await db.platformManager.update({
                     where: { id: user.userId },
                     data: { name: data.name },
                     select: { id: true, name: true, email: true }
                 });
+
+                // Log audit trail
+                await AuditLogger.logUserManagement(
+                    "USER_UPDATED",
+                    user.userId,
+                    user.userId,
+                    updated.email,
+                    {
+                        actorType: "platform_manager",
+                        metadata: {
+                            changes: {
+                                name: { from: current?.name, to: data.name }
+                            }
+                        }
+                    }
+                );
+
                 return c.json({ success: true, data: updated, requestId });
             } else {
+                // Fetch current data for audit trail
+                const current = await db.user.findUnique({
+                    where: { id: user.userId },
+                    select: { name: true, email: true, organizationId: true }
+                });
+
                 const updated = await db.user.update({
                     where: { id: user.userId },
                     data: { name: data.name },
                     select: { id: true, name: true, email: true }
                 });
+
+                // Log audit trail
+                await AuditLogger.logUserManagement(
+                    "USER_UPDATED",
+                    user.userId,
+                    user.userId,
+                    updated.email,
+                    {
+                        actorType: "user",
+                        organizationId: current?.organizationId,
+                        metadata: {
+                            changes: {
+                                name: { from: current?.name, to: data.name }
+                            },
+                            selfUpdate: true
+                        }
+                    }
+                );
+
                 return c.json({ success: true, data: updated, requestId });
             }
         } catch (error) {

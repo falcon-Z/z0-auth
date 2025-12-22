@@ -5,6 +5,8 @@ import AuthRoutes from "./auth";
 import HealthRoutes from "./health";
 import AdminKeyRoutes from "./admin/keys";
 import SMTPAdminRoutes from "./admin/smtp";
+import LockoutAdminRoutes from "./admin/security/lockouts";
+import AuditLogsRoutes from "./admin/audit-logs";
 
 const API = new Hono();
 
@@ -14,5 +16,7 @@ API.route("/v1/", V1Routes);
 API.route("/health/", HealthRoutes);
 API.route("/admin/keys/", AdminKeyRoutes);
 API.route("/admin/smtp/", SMTPAdminRoutes);
+API.route("/admin/security/", LockoutAdminRoutes);
+API.route("/admin/audit-logs/", AuditLogsRoutes);
 
 export default API;

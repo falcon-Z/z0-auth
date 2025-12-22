@@ -6,6 +6,7 @@ import {
     RequestContext
 } from "@z0/utils/error-handling";
 import { verifyAccessTokenMiddleware, type TokenPayload } from "@z0/utils/auth";
+import { AuditLogger } from "@z0/utils/audit-logger";
 
 const userSessions = new Hono();
 
@@ -136,6 +137,20 @@ userSessions.delete("/sessions/:sessionId", verifyAccessTokenMiddleware, async (
             data: { status: "REVOKED" }
         });
 
+        // Log audit trail
+        await AuditLogger.log({
+            action: "SESSION_REVOKED",
+            severity: "MEDIUM",
+            actorId: currentUser.userId,
+            actorType: currentUser.type === 'platform_manager' ? 'platform_manager' : 'user',
+            targetId: sessionId,
+            targetType: "session",
+            metadata: {
+                revokedBy: "user",
+                deviceInfo: session.deviceInfo
+            }
+        });
+
         Logger.info("Session revoked", {
             sessionId,
             userId: currentUser.userId,
@@ -169,6 +184,20 @@ userSessions.delete("/sessions", verifyAccessTokenMiddleware, async (c) => {
                 status: { in: ["ACTIVE", "IDLE"] }
             },
             data: { status: "REVOKED" }
+        });
+
+        // Log audit trail
+        await AuditLogger.log({
+            action: "SESSION_REVOKED",
+            severity: "HIGH",
+            actorId: currentUser.userId,
+            actorType: currentUser.type === 'platform_manager' ? 'platform_manager' : 'user',
+            metadata: {
+                revokedBy: "user",
+                bulkRevocation: true,
+                revokedCount: result.count,
+                currentSessionPreserved: true
+            }
         });
 
         Logger.info("All other sessions revoked", {

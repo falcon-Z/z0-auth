@@ -14,6 +14,7 @@ import {
   RequestContext,
 } from "@z0/utils/error-handling";
 import { verifyAccessTokenMiddleware, type TokenPayload } from "@z0/utils/auth";
+import { AuditLogger } from "@z0/utils/audit-logger";
 
 const VerificationRoutes = new Hono();
 
@@ -260,6 +261,22 @@ VerificationRoutes.get("/verify-email/:token", async (c) => {
         data: { emailVerified: true },
       }),
     ]);
+
+    // Log audit trail
+    await AuditLogger.logAuth(
+      "EMAIL_VERIFIED",
+      c,
+      verificationToken.userId,
+      verificationToken.user.email,
+      {
+        actorType: "user",
+        severity: "MEDIUM",
+        metadata: {
+          tokenUsed: true,
+          verifiedAt: new Date().toISOString()
+        }
+      }
+    );
 
     Logger.info("Email verified", {
       userId: verificationToken.userId,

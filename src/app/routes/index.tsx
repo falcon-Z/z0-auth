@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 import App from "../App";
 import { isSuperAdminConfigured } from "../../utils/config-state";
 import { Navigate, Outlet, useLocation } from "react-router";
+import { ErrorBoundary } from "../components/shared/error-boundary";
 
 import Setup from "../pages/setup";
 import Login from "../pages/login";
@@ -14,6 +15,7 @@ import OrganizationDetail from "../pages/dashboard/organizations/detail";
 import AppDetail from "../pages/dashboard/apps/[appId]";
 import OrgUserManagement from "../pages/dashboard/users";
 import ProfilePage from "../pages/dashboard/profile";
+import SessionsPage from "../pages/dashboard/sessions";
 
 import AdminDashboard from "../pages/admin";
 import PlatformOrganizations from "../pages/admin/platform/organizations";
@@ -120,6 +122,10 @@ export const router = createBrowserRouter([
               {
                 path: "dashboard/profile",
                 element: <ProfilePage />,
+              },
+              {
+                path: "dashboard/sessions",
+                element: <SessionsPage />,
               },
               {
                 path: "admin",

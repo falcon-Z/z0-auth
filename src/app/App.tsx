@@ -1,12 +1,12 @@
-import type { ReactNode } from "react";
 import "../index.css";
 import { Outlet } from "react-router";
+import { AuthLayout } from "./components/layout/auth-layout";
 
 export function App() {
   return (
-    <main className="grid place-items-center w-full h-screen">
+    <AuthLayout>
       <Outlet />
-    </main>
+    </AuthLayout>
   );
 }
 

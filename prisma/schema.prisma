@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum UserRole {
@@ -60,6 +59,7 @@ enum RoleType {
 enum BuiltInRole {
   SUPER_ADMIN
   ORG_ADMIN
+  ORG_DEVELOPER
   ORG_USER
   APP_USER
 }
@@ -426,44 +426,6 @@ model AccountLockout {
   @@map("account_lockouts")
 }
 
-model AuditLog {
-  id           String        @id @default(cuid())
-  userId       String?
-  appId        String?
-  action       String
-  resource     String?
-  resourceId   String?
-  oldValues    Json?
-  newValues    Json?
-  changes      Json?
-  requestId    String?
-  sessionId    String?
-  traceId      String?
-  metadata     Json?
-  ipAddress    String?
-  userAgent    String?
-  referer      String?
-  duration     Int?
-  success      Boolean       @default(true)
-  errorCode    String?
-  errorMessage String?
-  severity     String        @default("info")
-  category     String?
-  tags         String[]
-  createdAt    DateTime      @default(now())
-  requestTrace RequestTrace? @relation("RequestTraceAuditLogs", fields: [requestId], references: [requestId])
-
-  @@index([userId, createdAt])
-  @@index([appId, createdAt])
-  @@index([action, createdAt])
-  @@index([resource, resourceId])
-  @@index([requestId])
-  @@index([sessionId])
-  @@index([severity, category])
-  @@index([success, severity])
-  @@map("audit_logs")
-}
-
 model WebhookEvent {
   id          String    @id @default(cuid())
   appId       String?
@@ -671,7 +633,6 @@ model RequestTrace {
   auditLogCount Int        @default(0)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
-  auditLogs     AuditLog[] @relation("RequestTraceAuditLogs")
 
   @@index([requestId])
   @@index([userId, startTime])
@@ -781,4 +742,128 @@ model DeviceEvent {
   @@index([riskScore, createdAt])
   @@index([userId, createdAt])
   @@map("device_events")
+}
+
+enum AuditAction {
+  // Authentication events
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  PASSWORD_CHANGED
+  EMAIL_VERIFIED
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  TWO_FACTOR_VERIFIED
+
+  // User management
+  USER_CREATED
+  USER_UPDATED
+  USER_DELETED
+  USER_SUSPENDED
+  USER_ACTIVATED
+  USER_ROLE_CHANGED
+
+  // Organization management
+  ORGANIZATION_CREATED
+  ORGANIZATION_UPDATED
+  ORGANIZATION_DELETED
+  ORGANIZATION_SUSPENDED
+  ORGANIZATION_ACTIVATED
+
+  // Application management
+  APP_CREATED
+  APP_UPDATED
+  APP_DELETED
+  APP_SUSPENDED
+  APP_ACTIVATED
+
+  // API Key management
+  API_KEY_CREATED
+  API_KEY_ROTATED
+  API_KEY_REVOKED
+  API_KEY_ACCESSED
+
+  // Role and permission management
+  ROLE_CREATED
+  ROLE_UPDATED
+  ROLE_DELETED
+  ROLE_ASSIGNED
+  ROLE_REVOKED
+  SCOPE_CREATED
+  SCOPE_UPDATED
+  SCOPE_DELETED
+  SCOPE_ASSIGNED
+  SCOPE_REVOKED
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+
+  // Session management
+  SESSION_CREATED
+  SESSION_REVOKED
+  SESSION_EXPIRED
+
+  // Security events
+  ACCOUNT_LOCKED
+  ACCOUNT_UNLOCKED
+  SUSPICIOUS_ACTIVITY
+  UNAUTHORIZED_ACCESS
+  RATE_LIMIT_EXCEEDED
+
+  // Admin actions
+  ADMIN_ACCESS
+  SETTINGS_CHANGED
+  SMTP_CONFIGURED
+  WEBHOOK_CREATED
+  WEBHOOK_UPDATED
+  WEBHOOK_DELETED
+
+  // Data access
+  DATA_EXPORTED
+  DATA_IMPORTED
+  SENSITIVE_DATA_ACCESSED
+}
+
+enum AuditSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model AuditLog {
+  id              String         @id @default(cuid())
+  action          AuditAction
+  severity        AuditSeverity  @default(MEDIUM)
+  actorId         String?        // User or Platform Manager who performed the action
+  actorType       String?        // 'user', 'platform_manager', 'system', 'api'
+  actorEmail      String?
+  targetId        String?        // ID of the resource being acted upon
+  targetType      String?        // Type of resource: 'user', 'organization', 'app', etc.
+  targetEmail     String?
+  organizationId  String?        // Organization context if applicable
+  ipAddress       String?
+  userAgent       String?
+  status          String         @default("success") // 'success', 'failure', 'error'
+  errorMessage    String?
+  metadata        Json?          // Additional context (old values, new values, etc.)
+  requestId       String?        // Correlate with request logs
+  sessionId       String?        // Session identifier
+  deviceId        String?        // Device fingerprint
+  location        String?        // Geographic location
+  createdAt       DateTime       @default(now())
+
+  @@index([action, createdAt])
+  @@index([actorId, action])
+  @@index([targetId, action])
+  @@index([organizationId, createdAt])
+  @@index([severity, createdAt])
+  @@index([actorType, actorId])
+  @@index([targetType, targetId])
+  @@index([status, createdAt])
+  @@index([requestId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

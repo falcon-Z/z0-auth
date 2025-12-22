@@ -156,10 +156,10 @@ export default function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8 animate-page-enter">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-3xl font-bold tracking-tight">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Welcome back, {user?.name}!
           </h2>
           <p className="text-muted-foreground mt-2">

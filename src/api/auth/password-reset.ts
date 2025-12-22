@@ -16,6 +16,7 @@ import {
   SecurityLogger,
 } from "@z0/utils/error-handling";
 import { validatePassword } from "@z0/utils/password-validation";
+import { AuditLogger } from "@z0/utils/audit-logger";
 
 const PasswordResetRoutes = new Hono();
 
@@ -167,6 +168,22 @@ PasswordResetRoutes.post(
         c,
         user.id,
         { requestId, userType }
+      );
+
+      // Log audit trail
+      await AuditLogger.logAuth(
+        "PASSWORD_RESET_REQUESTED",
+        c,
+        user.id,
+        user.email,
+        {
+          actorType: userType === "platform_manager" ? "platform_manager" : "user",
+          severity: "MEDIUM",
+          metadata: {
+            resetUrl: resetUrl.replace(token, "***"),
+            expiresAt: expiresAt.toISOString()
+          }
+        }
       );
 
       Logger.info("Password reset email sent", { userId: user.id, requestId });
@@ -375,6 +392,21 @@ PasswordResetRoutes.post(
         c,
         resetToken.userId,
         { requestId }
+      );
+
+      // Log audit trail
+      await AuditLogger.logAuth(
+        "PASSWORD_RESET_COMPLETED",
+        c,
+        resetToken.userId,
+        resetToken.user?.email,
+        {
+          actorType: "user", // Assuming regular user, platform managers should use admin panel
+          severity: "HIGH",
+          metadata: {
+            tokenUsed: true
+          }
+        }
       );
 
       Logger.info("Password reset completed", {

@@ -19,8 +19,23 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { hashPassword } from "@z0/utils/auth";
 import { emailService } from "@z0/utils/email";
+import { createRateLimit, rateLimitConfigs } from "@z0/utils/rate-limiter";
+import {
+  checkLockoutStatus,
+  recordFailedAttempt,
+  resetLockout,
+  formatRemainingTime,
+} from "@z0/utils/account-lockout";
+import {
+  generateFingerprint,
+  parseDeviceInfo,
+  isSuspiciousDevice,
+} from "@z0/utils/device-fingerprint";
+import { AuditLogger } from "@z0/utils/audit-logger";
 import VerificationRoutes from "./verification";
 import PasswordResetRoutes from "./password-reset";
+import TwoFactorRoutes from "./two-factor";
+import OAuthRoutes from "./oauth";
 
 // Token expiration time for verification (24 hours)
 const VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
@@ -49,6 +64,8 @@ const AuthRoutes = new Hono();
 // Mount verification and password reset routes
 AuthRoutes.route("/", VerificationRoutes);
 AuthRoutes.route("/", PasswordResetRoutes);
+AuthRoutes.route("/", TwoFactorRoutes);
+AuthRoutes.route("/oauth", OAuthRoutes);
 
 const REGISTRATION_SCHEMA = z.object({
   email: z.string().email(),
@@ -57,8 +74,12 @@ const REGISTRATION_SCHEMA = z.object({
   organizationId: z.string().cuid(),
 });
 
+// Apply rate limiting to register endpoint
+const registerRateLimit = createRateLimit(rateLimitConfigs.auth);
+
 AuthRoutes.post(
   "/register",
+  registerRateLimit,
   validator("json", (value, c) => {
     const parsed = REGISTRATION_SCHEMA.safeParse(value);
     if (!parsed.success) {
@@ -167,14 +188,17 @@ AuthRoutes.post(
   }
 );
 
-AuthRoutes.post("/login", async (c) => {
+// Apply rate limiting to login endpoint
+const loginRateLimit = createRateLimit(rateLimitConfigs.auth);
+
+AuthRoutes.post("/login", loginRateLimit, async (c) => {
   const requestId = RequestContext.generateRequestId();
   const clientInfo = RequestContext.getClientInfo(c);
   Logger.info("Login attempt", { requestId, ...clientInfo });
 
   try {
     const body = await c.req.json();
-    const { email, password } = body;
+    const { email, password, twoFactorToken } = body;
 
     if (!email || !password) {
       return c.json(
@@ -189,7 +213,42 @@ AuthRoutes.post("/login", async (c) => {
       );
     }
 
-    // 1. Waterfall Step 1: Check PlatformManager (Super Admins, Support)
+    // 1. Check account lockout status
+    const lockoutStatus = await checkLockoutStatus(email);
+    if (lockoutStatus.isLocked && lockoutStatus.remainingMs) {
+      SecurityLogger.logSuspiciousActivity(
+        "Login attempt on locked account",
+        c,
+        { email, requestId, lockoutUntil: lockoutStatus.lockoutUntil }
+      );
+
+      return c.json(
+        ErrorResponseBuilder.security(
+          `Account is locked due to too many failed attempts. Try again in ${formatRemainingTime(lockoutStatus.remainingMs)}.`,
+          "ACCOUNT_LOCKED",
+          {
+            lockoutUntil: lockoutStatus.lockoutUntil,
+            remainingMs: lockoutStatus.remainingMs,
+          }
+        ),
+        423 // 423 Locked
+      );
+    }
+
+    // 2. Generate device fingerprint
+    const fingerprint = await generateFingerprint(c);
+    const deviceInfo = parseDeviceInfo(fingerprint.userAgent);
+
+    // 3. Check for suspicious device
+    if (isSuspiciousDevice(deviceInfo, fingerprint.userAgent)) {
+      SecurityLogger.logSuspiciousActivity(
+        "Login attempt from suspicious device",
+        c,
+        { email, requestId, deviceInfo, fingerprint }
+      );
+    }
+
+    // 4. Waterfall Step 1: Check PlatformManager (Super Admins, Support)
     const platformManager = await db.platformManager.findUnique({
       where: { email },
     });
@@ -201,7 +260,52 @@ AuthRoutes.post("/login", async (c) => {
         platformManager.password
       );
 
-      if (validPassword) {
+      if (!validPassword) {
+        // Record failed attempt and check lockout
+        const lockoutResult = await recordFailedAttempt(email);
+
+        SecurityLogger.logAuthenticationEvent(
+          "Platform Manager Login Failed: Invalid Password",
+          c,
+          undefined,
+          {
+            requestId,
+            email,
+            remainingAttempts: lockoutResult.remainingAttempts,
+            isLocked: lockoutResult.isLocked,
+          }
+        );
+
+        // Continue to user check (don't reveal that platform manager exists)
+      } else {
+        // Password is valid - check 2FA if enabled
+        // Note: Platform managers don't currently have 2FA in schema
+        // This is a placeholder for future implementation
+
+        // Reset lockout on successful login
+        await resetLockout(email);
+
+        // Track device
+        await db.userDevice.create({
+          data: {
+            userId: platformManager.id,
+            deviceType: deviceInfo.type,
+            deviceName: `${deviceInfo.browser} on ${deviceInfo.os}`,
+            fingerprint: fingerprint.fingerprintHash,
+            userAgent: fingerprint.userAgent,
+            ipAddress: fingerprint.ipAddress,
+            lastUsedAt: new Date(),
+            isTrusted: !isSuspiciousDevice(deviceInfo, fingerprint.userAgent),
+          },
+        }).catch((error) => {
+          // Device tracking is non-critical, log but don't fail login
+          Logger.error("Failed to track device", {
+            error: error.message,
+            userId: platformManager.id,
+            requestId,
+          });
+        });
+
         // Create Session/Tokens for Platform Manager
         const tokenPayload: Omit<TokenPayload, "iat" | "exp"> = {
           userId: platformManager.id,
@@ -235,7 +339,25 @@ AuthRoutes.post("/login", async (c) => {
           "Platform Manager Login Success",
           c,
           platformManager.id,
-          { requestId }
+          { requestId, deviceInfo, fingerprint: fingerprint.fingerprintHash }
+        );
+
+        // Audit log: Platform manager login
+        await AuditLogger.logAuth(
+          "LOGIN",
+          c,
+          platformManager.id,
+          platformManager.email,
+          {
+            actorType: "platform_manager",
+            severity: "HIGH",
+            deviceId: fingerprint.fingerprintHash,
+            metadata: {
+              deviceType: deviceInfo.type,
+              browser: deviceInfo.browser,
+              os: deviceInfo.os,
+            },
+          }
         );
 
         return c.json({
@@ -252,91 +374,238 @@ AuthRoutes.post("/login", async (c) => {
       }
     }
 
-    // 2. Waterfall Step 2: Check User (Org Admins, Developers)
-    // IMPORTANT: "App Users" should generally NOT be logging in via this Dashboard flow
-    // unless this is their App's IDP page. But based on requirements, we filter for Org roles here
-    // or return the role and let UI handle it (but strictly enforcing in backend is safer).
-
+    // 5. Waterfall Step 2: Check User (Org Admins, Developers)
     const user = await db.user.findUnique({
       where: { email },
       include: { organization: true }, // Get Org Context
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        name: true,
+        legacyRole: true,
+        organizationId: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        twoFactorBackupCodes: true,
+        organization: true,
+      },
     });
 
     if (user && user.password) {
       // Only checking users with password set
       const validPassword = await Bun.password.verify(password, user.password);
 
-      if (validPassword) {
-        // ENFORCE: Only ORG_ADMIN/ORG_USER allowed on Platform Dashboard
-        // If the user's explicit legacyRole or derived role indicates APP_USER, deny/restrict
-        // Note: Schema has `legacyRole`. We should check that.
-
-        // Allow ORG_ADMIN and ORG_USER.
-        // In a real system, we might allow APP_USER but redirect them to a user profile.
-        // Constraint says: "app users should not be able to access the platform".
-        // We'll interpret this as: Login OK, but type triggers restricted UI or 403 if they try to hit /platform APIs.
-        // For now, let's login but return type 'user' or 'app_user'.
-
-        const tokenPayload: Omit<TokenPayload, "iat" | "exp"> = {
-          userId: user.id,
-          email: user.email,
-          role: user.legacyRole || "APP_USER",
-          orgId: user.organizationId,
-          type: "user",
-        };
-
-        const accessToken = await generateAccessToken(tokenPayload);
-        const refreshToken = await generateRefreshToken(tokenPayload);
-
-        const isProd = process.env.NODE_ENV === "production";
-        setCookie(c, "access_token", accessToken, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: "Strict",
-          path: "/",
-          maxAge: 900,
-        });
-        setCookie(c, "refresh_token", refreshToken, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: "Strict",
-          path: "/",
-          maxAge: 604800,
-        });
+      if (!validPassword) {
+        // Record failed attempt
+        const lockoutResult = await recordFailedAttempt(email);
 
         SecurityLogger.logAuthenticationEvent(
-          "User Login Success",
+          "User Login Failed: Invalid Password",
           c,
-          user.id,
-          { requestId }
+          undefined,
+          {
+            requestId,
+            email,
+            remainingAttempts: lockoutResult.remainingAttempts,
+            isLocked: lockoutResult.isLocked,
+          }
         );
 
-        return c.json({
-          success: true,
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.legacyRole,
-            orgId: user.organizationId,
-            type: "organization",
-          },
-          // Hint to UI: If ORG_ADMIN -> /org/dashboard, if APP_USER -> /profile
-          redirect:
-            user.legacyRole === "APP_USER"
-              ? "/profile"
-              : `/orgs/${user.organization.slug}/dashboard`,
-        });
+        // Generic error message (don't reveal user exists)
+        return c.json(
+          ErrorResponseBuilder.authentication(
+            "Invalid email or password",
+            "INVALID_CREDENTIALS"
+          ),
+          401
+        );
       }
+
+      // Password is valid - check 2FA if enabled
+      if (user.twoFactorEnabled) {
+        if (!twoFactorToken) {
+          // Password correct but 2FA required
+          SecurityLogger.logAuthenticationEvent(
+            "User Login: 2FA Required",
+            c,
+            user.id,
+            { requestId, email }
+          );
+
+          return c.json({
+            success: false,
+            requiresTwoFactor: true,
+            message: "Two-factor authentication required",
+            // Return a temporary token that can be used for 2FA verification
+            tempUserId: user.id, // In production, use a signed temporary token
+          });
+        }
+
+        // Verify 2FA token
+        const { verifyTOTP, verifyBackupCode } = await import("@z0/utils/totp");
+
+        let twoFactorValid = false;
+
+        // Check if it's a 6-digit TOTP code
+        if (/^\d{6}$/.test(twoFactorToken)) {
+          if (user.twoFactorSecret) {
+            twoFactorValid = await verifyTOTP(user.twoFactorSecret, twoFactorToken);
+          }
+        }
+        // Check if it's a backup code
+        else if (/^[A-Z2-7]{4}-[A-Z2-7]{4}$/i.test(twoFactorToken)) {
+          const normalizedCode = twoFactorToken.toUpperCase();
+          const backupCodes = (user.twoFactorBackupCodes as string[]) || [];
+
+          for (let i = 0; i < backupCodes.length; i++) {
+            const isMatch = await verifyBackupCode(normalizedCode, backupCodes[i]);
+            if (isMatch) {
+              twoFactorValid = true;
+
+              // Remove used backup code
+              const updatedCodes = backupCodes.filter((_, idx) => idx !== i);
+              await db.user.update({
+                where: { id: user.id },
+                data: { twoFactorBackupCodes: updatedCodes },
+              });
+
+              SecurityLogger.logAuthenticationEvent(
+                "User Login: Backup Code Used",
+                c,
+                user.id,
+                { requestId, remainingCodes: updatedCodes.length }
+              );
+
+              break;
+            }
+          }
+        }
+
+        if (!twoFactorValid) {
+          SecurityLogger.logAuthenticationEvent(
+            "User Login Failed: Invalid 2FA Token",
+            c,
+            user.id,
+            { requestId }
+          );
+
+          return c.json(
+            ErrorResponseBuilder.authentication(
+              "Invalid two-factor authentication code",
+              "INVALID_2FA_TOKEN"
+            ),
+            401
+          );
+        }
+      }
+
+      // All authentication checks passed - reset lockout
+      await resetLockout(email);
+
+      // Track device
+      await db.userDevice.create({
+        data: {
+          userId: user.id,
+          deviceType: deviceInfo.type,
+          deviceName: `${deviceInfo.browser} on ${deviceInfo.os}`,
+          fingerprint: fingerprint.fingerprintHash,
+          userAgent: fingerprint.userAgent,
+          ipAddress: fingerprint.ipAddress,
+          lastUsedAt: new Date(),
+          isTrusted: !isSuspiciousDevice(deviceInfo, fingerprint.userAgent),
+        },
+      }).catch((error) => {
+        Logger.error("Failed to track device", {
+          error: error.message,
+          userId: user.id,
+          requestId,
+        });
+      });
+
+      // Create Session/Tokens
+      const tokenPayload: Omit<TokenPayload, "iat" | "exp"> = {
+        userId: user.id,
+        email: user.email,
+        role: user.legacyRole || "APP_USER",
+        orgId: user.organizationId,
+        type: "user",
+      };
+
+      const accessToken = await generateAccessToken(tokenPayload);
+      const refreshToken = await generateRefreshToken(tokenPayload);
+
+      const isProd = process.env.NODE_ENV === "production";
+      setCookie(c, "access_token", accessToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: "Strict",
+        path: "/",
+        maxAge: 900,
+      });
+      setCookie(c, "refresh_token", refreshToken, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: "Strict",
+        path: "/",
+        maxAge: 604800,
+      });
+
+      SecurityLogger.logAuthenticationEvent(
+        "User Login Success",
+        c,
+        user.id,
+        { requestId, deviceInfo, fingerprint: fingerprint.fingerprintHash, twoFactorUsed: user.twoFactorEnabled }
+      );
+
+      // Audit log: User login
+      await AuditLogger.logAuth(
+        "LOGIN",
+        c,
+        user.id,
+        user.email,
+        {
+          actorType: "user",
+          organizationId: user.organizationId || undefined,
+          deviceId: fingerprint.fingerprintHash,
+          metadata: {
+            deviceType: deviceInfo.type,
+            browser: deviceInfo.browser,
+            os: deviceInfo.os,
+            twoFactorUsed: user.twoFactorEnabled,
+            role: user.legacyRole,
+          },
+        }
+      );
+
+      return c.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.legacyRole,
+          orgId: user.organizationId,
+          type: "organization",
+        },
+        redirect:
+          user.legacyRole === "APP_USER"
+            ? "/profile"
+            : `/orgs/${user.organization.slug}/dashboard`,
+      });
     }
 
     // If we reach here: Invalid credentials (generic message)
+    // Record failed attempt for non-existent users (to prevent user enumeration timing attacks)
+    await recordFailedAttempt(email);
+
     SecurityLogger.logAuthenticationEvent(
       "Login Failed: Invalid Credentials",
       c,
       undefined,
       { requestId, email }
     );
+
     return c.json(
       ErrorResponseBuilder.authentication(
         "Invalid email or password",

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware, type TokenPayload, hashPassword } from "@z0/utils/auth";
 import { validatePassword } from "@z0/utils/password-validation";
+import { AuditLogger } from "@z0/utils/audit-logger";
 
 const userSecurity = new Hono();
 
@@ -66,17 +67,40 @@ userSecurity.post("/change-password",
             // 4. Update
             const newHash = await hashPassword(newPassword);
 
+            let organizationId: string | undefined;
+
             if (user.type === 'platform_manager') {
                 await db.platformManager.update({
                     where: { id: user.userId },
                     data: { password: newHash }
                 });
             } else {
+                const orgUser = await db.user.findUnique({
+                    where: { id: user.userId },
+                    select: { organizationId: true }
+                });
+                organizationId = orgUser?.organizationId;
+
                 await db.user.update({
                     where: { id: user.userId },
                     data: { password: newHash }
                 });
             }
+
+            // Log audit trail
+            await AuditLogger.logAuth(
+                "PASSWORD_CHANGED",
+                c,
+                user.userId,
+                email,
+                {
+                    actorType: user.type === 'platform_manager' ? 'platform_manager' : 'user',
+                    organizationId,
+                    metadata: {
+                        selfChange: true
+                    }
+                }
+            );
 
             Logger.info("Password changed successfully", { userId: user.userId, requestId });
 

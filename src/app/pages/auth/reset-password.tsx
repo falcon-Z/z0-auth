@@ -3,16 +3,11 @@ import { useSearchParams, useNavigate, Link } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, AlertCircle, ArrowLeft } from "lucide-react";
 
+import { PublicLayout } from "../../components/layout/public-layout";
 import { Button } from "@z0/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@z0/components/ui/card";
+import { Input } from "@z0/components/ui/input";
 import {
   Form,
   FormControl,
@@ -22,24 +17,31 @@ import {
   FormMessage,
 } from "@z0/components/ui/form";
 import { Alert, AlertDescription } from "@z0/components/ui/alert";
-import { PasswordInput } from "@z0/components/ui/password-input";
 
-const resetPasswordSchema = z.object({
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+      .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+      .regex(/[0-9]/, "Password must contain at least one number"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 
 type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 
-type PageStatus = "validating" | "ready" | "success" | "expired" | "used" | "invalid";
+type PageStatus =
+  | "validating"
+  | "ready"
+  | "success"
+  | "expired"
+  | "used"
+  | "invalid";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -111,6 +113,8 @@ export default function ResetPassword() {
 
       if (response.ok && result.success) {
         setStatus("success");
+        // Auto-redirect after 3 seconds
+        setTimeout(() => navigate("/login"), 3000);
       } else {
         if (result.code === "TOKEN_EXPIRED") {
           setStatus("expired");
@@ -127,171 +131,225 @@ export default function ResetPassword() {
     }
   };
 
-  const renderContent = () => {
-    switch (status) {
-      case "validating":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <p className="text-muted-foreground">Validating reset link...</p>
-          </div>
-        );
+  // Validating state
+  if (status === "validating") {
+    return (
+      <PublicLayout showLogo={true}>
+        <div className="flex flex-col items-center py-8 text-center">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-sm text-muted-foreground">
+            Validating reset link...
+          </p>
+        </div>
+      </PublicLayout>
+    );
+  }
 
-      case "success":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Password Reset!</h3>
-            <p className="text-muted-foreground text-center mb-6">
-              Your password has been reset successfully. You can now log in with your new password.
+  // Success state
+  if (status === "success") {
+    return (
+      <PublicLayout title="Password reset!">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-green-100 dark:bg-green-900/20 p-3">
+              <CheckCircle2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Your password has been reset successfully.
             </p>
-            <Button onClick={() => navigate("/login")}>
-              Continue to Login
+            <p className="text-sm text-muted-foreground">
+              You can now log in with your new password.
+            </p>
+          </div>
+
+          <div className="pt-4">
+            <Button onClick={() => navigate("/login")} className="w-full">
+              Continue to login
             </Button>
           </div>
-        );
+        </div>
+      </PublicLayout>
+    );
+  }
 
-      case "expired":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <XCircle className="h-12 w-12 text-yellow-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Link Expired</h3>
-            <p className="text-muted-foreground text-center mb-6">
-              This password reset link has expired. Please request a new one.
+  // Expired state
+  if (status === "expired") {
+    return (
+      <PublicLayout title="Link expired">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-yellow-100 dark:bg-yellow-900/20 p-3">
+              <XCircle className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              This password reset link has expired.
             </p>
+            <p className="text-sm text-muted-foreground">
+              Please request a new one.
+            </p>
+          </div>
+
+          <div className="pt-4">
             <Link to="/auth/forgot-password">
-              <Button>Request New Link</Button>
+              <Button className="w-full">Request new link</Button>
             </Link>
           </div>
-        );
+        </div>
+      </PublicLayout>
+    );
+  }
 
-      case "used":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <CheckCircle2 className="h-12 w-12 text-blue-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Already Used</h3>
-            <p className="text-muted-foreground text-center mb-6">
-              This password reset link has already been used. If you need to reset your password again, please request a new link.
+  // Used state
+  if (status === "used") {
+    return (
+      <PublicLayout title="Already used">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-blue-100 dark:bg-blue-900/20 p-3">
+              <CheckCircle2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              This password reset link has already been used.
             </p>
-            <div className="space-y-2">
-              <Button onClick={() => navigate("/login")} className="w-full">
-                Go to Login
+            <p className="text-sm text-muted-foreground">
+              If you need to reset your password again, please request a new
+              link.
+            </p>
+          </div>
+
+          <div className="pt-4 space-y-2">
+            <Button onClick={() => navigate("/login")} className="w-full">
+              Go to login
+            </Button>
+            <Link to="/auth/forgot-password">
+              <Button variant="outline" className="w-full">
+                Request new link
               </Button>
-              <Link to="/auth/forgot-password" className="block">
-                <Button variant="outline" className="w-full">
-                  Request New Link
-                </Button>
-              </Link>
-            </div>
-          </div>
-        );
-
-      case "invalid":
-        return (
-          <div className="flex flex-col items-center py-8">
-            <XCircle className="h-12 w-12 text-red-500 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Invalid Link</h3>
-            <p className="text-muted-foreground text-center mb-6">
-              This password reset link is invalid. Please request a new one.
-            </p>
-            <Link to="/auth/forgot-password">
-              <Button>Request New Link</Button>
             </Link>
           </div>
-        );
+        </div>
+      </PublicLayout>
+    );
+  }
 
-      case "ready":
-      default:
-        return (
-          <>
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>New Password</FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          placeholder="Enter your new password"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirm Password</FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          placeholder="Confirm your new password"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="text-sm text-muted-foreground">
-                  Password must:
-                  <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>Be at least 8 characters long</li>
-                    <li>Contain at least one uppercase letter</li>
-                    <li>Contain at least one lowercase letter</li>
-                    <li>Contain at least one number</li>
-                  </ul>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Reset Password
-                </Button>
-              </form>
-            </Form>
-
-            <div className="mt-6 text-center">
-              <Link
-                to="/login"
-                className="text-sm text-muted-foreground hover:text-primary"
-              >
-                <ArrowLeft className="inline mr-1 h-4 w-4" />
-                Back to Login
-              </Link>
+  // Invalid state
+  if (status === "invalid") {
+    return (
+      <PublicLayout title="Invalid link">
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-red-100 dark:bg-red-900/20 p-3">
+              <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
             </div>
-          </>
-        );
-    }
-  };
+          </div>
 
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              This password reset link is invalid.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Please request a new one.
+            </p>
+          </div>
+
+          <div className="pt-4">
+            <Link to="/auth/forgot-password">
+              <Button className="w-full">Request new link</Button>
+            </Link>
+          </div>
+        </div>
+      </PublicLayout>
+    );
+  }
+
+  // Ready state - show form
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl font-bold text-center">
-            Reset Password
-          </CardTitle>
-          {status === "ready" && (
-            <CardDescription className="text-center">
-              Enter your new password below.
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent>{renderContent()}</CardContent>
-      </Card>
-    </div>
+    <PublicLayout
+      title="Reset your password"
+      description="Enter your new password below"
+    >
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>New Password</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder="Enter your new password"
+                    autoComplete="new-password"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm Password</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder="Confirm your new password"
+                    autoComplete="new-password"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="rounded-lg bg-muted p-3">
+            <p className="text-sm font-medium mb-2">Password must contain:</p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• At least 8 characters</li>
+              <li>• One uppercase letter</li>
+              <li>• One lowercase letter</li>
+              <li>• One number</li>
+            </ul>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Reset password
+          </Button>
+        </form>
+      </Form>
+
+      <div className="mt-6 text-center">
+        <Link
+          to="/login"
+          className="text-sm text-muted-foreground hover:text-primary inline-flex items-center"
+        >
+          <ArrowLeft className="mr-2 h-3 w-3" />
+          Back to login
+        </Link>
+      </div>
+    </PublicLayout>
   );
 }

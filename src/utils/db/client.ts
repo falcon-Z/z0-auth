@@ -7,6 +7,11 @@ import { Logger, DatabaseErrorHandler } from "../error-handling";
 class EnhancedPrismaClient extends PrismaClient {
   constructor() {
     super({
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
       log: [
         { emit: 'event', level: 'error' },
         { emit: 'event', level: 'warn' },

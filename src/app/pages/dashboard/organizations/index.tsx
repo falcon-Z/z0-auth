@@ -1,357 +1,220 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import {
-  Loader2,
-  Plus,
-  Edit2,
-  Trash2,
-  AlertCircle,
-  Users,
-  Zap,
-} from "lucide-react";
-
+import { ColumnDef } from "@tanstack/react-table";
+import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
+import { StatusBadge } from "@z0/app/components/shared/status-badge";
+import { EmptyState } from "@z0/app/components/shared/empty-state";
 import { Button } from "@z0/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@z0/components/ui/card";
-import { Alert, AlertDescription } from "@z0/components/ui/alert";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@z0/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@z0/components/ui/dialog";
 import { Input } from "@z0/components/ui/input";
-import { Textarea } from "@z0/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@z0/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Badge } from "@z0/components/ui/badge";
-
-const createOrgSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").max(100),
-  slug: z
-    .string()
-    .min(2, "Slug must be at least 2 characters")
-    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes"),
-  description: z.string().optional(),
-});
-
-type CreateOrgFormValues = z.infer<typeof createOrgSchema>;
+import { Building2, Plus, Search } from "lucide-react";
+import { format } from "date-fns";
 
 interface Organization {
   id: string;
   name: string;
   slug: string;
-  description?: string;
-  status: string;
+  description: string | null;
+  status: "ACTIVE" | "INACTIVE" | "SUSPENDED";
+  maxUsers: number | null;
+  maxApps: number | null;
+  userCount: number;
+  appCount: number;
   createdAt: string;
-  _count: {
-    users: number;
-    apps: number;
-  };
+  updatedAt: string;
 }
 
-export default function OrganizationsList() {
+const columns: ColumnDef<Organization>[] = [
+  {
+    accessorKey: "name",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
+    cell: ({ row }) => {
+      return (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.original.name}</span>
+          <span className="text-sm text-muted-foreground">/{row.original.slug}</span>
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "description",
+    header: "Description",
+    cell: ({ row }) => {
+      return (
+        <span className="text-sm text-muted-foreground">
+          {row.original.description || "—"}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "status",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+    cell: ({ row }) => {
+      const statusMap: Record<string, "active" | "inactive" | "suspended"> = {
+        ACTIVE: "active",
+        INACTIVE: "inactive",
+        SUSPENDED: "suspended",
+      };
+      return <StatusBadge status={statusMap[row.original.status]} />;
+    },
+  },
+  {
+    accessorKey: "userCount",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Users" />,
+    cell: ({ row }) => {
+      const max = row.original.maxUsers;
+      return (
+        <span className="text-sm">
+          {row.original.userCount}
+          {max && <span className="text-muted-foreground"> / {max}</span>}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "appCount",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Apps" />,
+    cell: ({ row }) => {
+      const max = row.original.maxApps;
+      return (
+        <span className="text-sm">
+          {row.original.appCount}
+          {max && <span className="text-muted-foreground"> / {max}</span>}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "createdAt",
+    header: ({ column }) => <DataTableColumnHeader column={column} title="Created" />,
+    cell: ({ row }) => {
+      return (
+        <span className="text-sm text-muted-foreground">
+          {format(new Date(row.original.createdAt), "MMM d, yyyy")}
+        </span>
+      );
+    },
+  },
+];
+
+export default function OrganizationsPage() {
   const navigate = useNavigate();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [filteredOrganizations, setFilteredOrganizations] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const form = useForm<CreateOrgFormValues>({
-    resolver: zodResolver(createOrgSchema),
-    defaultValues: {
-      name: "",
-      slug: "",
-      description: "",
-    },
-  });
 
   useEffect(() => {
-    loadOrganizations();
+    fetchOrganizations();
   }, []);
 
-  const loadOrganizations = async () => {
+  useEffect(() => {
+    if (searchQuery) {
+      const filtered = organizations.filter(
+        (org) =>
+          org.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          org.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          org.description?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredOrganizations(filtered);
+    } else {
+      setFilteredOrganizations(organizations);
+    }
+  }, [searchQuery, organizations]);
+
+  const fetchOrganizations = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-      const token = localStorage.getItem("accessToken");
+      setLoading(true);
       const response = await fetch("/api/v1/orgs", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
-        throw new Error("Failed to load organizations");
+        throw new Error("Failed to fetch organizations");
       }
 
-      const result = await response.json();
-      setOrganizations(result.data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const data = await response.json();
+      setOrganizations(data.organizations || []);
+      setFilteredOrganizations(data.organizations || []);
+    } catch (err: any) {
+      console.error("Error fetching organizations:", err);
+      setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleCreateOrganization = async (data: CreateOrgFormValues) => {
-    try {
-      setIsSubmitting(true);
-      const token = localStorage.getItem("accessToken");
-      const response = await fetch("/api/v1/orgs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
+  const handleRowClick = (org: Organization) => {
+    navigate(`/dashboard/organizations/${org.id}`);
+  };
 
-      if (!response.ok) {
-        throw new Error("Failed to create organization");
-      }
-
-      setIsDialogOpen(false);
-      form.reset();
-      await loadOrganizations();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleCreateOrganization = () => {
+    navigate("/dashboard/organizations/new");
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="space-y-6 animate-page-enter">
       {/* Header */}
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Organizations
-              </h1>
-              <p className="text-muted-foreground mt-1">
-                Manage your organizations and their settings
-              </p>
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Organization
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Organization</DialogTitle>
-                  <DialogDescription>
-                    Set up a new organization to manage users and applications
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(handleCreateOrganization)}
-                    className="space-y-4"
-                  >
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Organization Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Acme Corporation" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Organizations</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage all organizations and their settings
+          </p>
+        </div>
+        <Button onClick={handleCreateOrganization} className="w-full sm:w-auto">
+          <Plus className="mr-2 h-4 w-4" />
+          New Organization
+        </Button>
+      </div>
 
-                    <FormField
-                      control={form.control}
-                      name="slug"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Slug</FormLabel>
-                          <FormControl>
-                            <Input placeholder="acme-corp" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description (Optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Organization description"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Create Organization
-                    </Button>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
-          </div>
+      {/* Search */}
+      <div className="flex items-center gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search organizations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : organizations.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                No organizations yet. Create one to get started.
-              </p>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Organization
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {organizations.map((org) => (
-              <Card
-                key={org.id}
-                className="hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => navigate(`/dashboard/organizations/${org.id}`)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{org.name}</CardTitle>
-                      <CardDescription className="font-mono text-xs mt-1">
-                        {org.slug}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant={
-                        org.status === "ACTIVE" ? "default" : "secondary"
-                      }
-                    >
-                      {org.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {org.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {org.description}
-                    </p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                    <div>
-                      <div className="text-2xl font-bold">
-                        {org._count.users}
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Users className="h-3 w-3" />
-                        Users
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">
-                        {org._count.apps}
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Zap className="h-3 w-3" />
-                        Apps
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/dashboard/organizations/${org.id}`);
-                      }}
-                    >
-                      View
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Table */}
+      {error ? (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filteredOrganizations}
+          onRowClick={handleRowClick}
+          loading={loading}
+          emptyState={
+            <EmptyState
+              icon={Building2}
+              title="No organizations found"
+              description={
+                searchQuery
+                  ? "No organizations match your search criteria"
+                  : "Get started by creating your first organization"
+              }
+              action={
+                searchQuery
+                  ? undefined
+                  : {
+                      label: "Create Organization",
+                      onClick: handleCreateOrganization,
+                    }
+              }
+            />
+          }
+        />
+      )}
     </div>
   );
 }
