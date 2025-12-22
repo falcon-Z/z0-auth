@@ -1,17 +1,22 @@
 import { PrismaClient } from "generated/prisma";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
 import { Logger, DatabaseErrorHandler } from "../error-handling";
+
+const { Pool } = pg;
 
 /**
  * Enhanced Prisma client with connection error handling
  */
 class EnhancedPrismaClient extends PrismaClient {
   constructor() {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+    const adapter = new PrismaPg(pool);
+
     super({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL,
-        },
-      },
+      adapter,
       log: [
         { emit: 'event', level: 'error' },
         { emit: 'event', level: 'warn' },
