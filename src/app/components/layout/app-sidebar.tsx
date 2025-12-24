@@ -63,8 +63,26 @@ const navItems: NavItem[] = [
   },
 ];
 
+// User type from stored auth data
+interface StoredUser {
+  userId: string;
+  email: string;
+  name?: string;
+  platformRole?: string;
+  orgContext?: {
+    orgId: string;
+    orgName: string;
+    orgRole: string;
+  };
+  appContext?: {
+    appId: string;
+    appName: string;
+    appRole: string;
+  };
+}
+
 // Parse user once outside component to avoid re-parsing on every render
-function getStoredUser() {
+function getStoredUser(): StoredUser | null {
   try {
     const userStr = localStorage.getItem("user");
     return userStr ? JSON.parse(userStr) : null;
@@ -78,7 +96,9 @@ export function AppSidebar() {
 
   // Memoize user to prevent re-parsing localStorage on every render
   const user = useMemo(() => getStoredUser(), []);
-  const isPlatformAdmin = user?.type === "platform";
+
+  // Check if user has platform-level access (any platform role)
+  const isPlatformAdmin = Boolean(user?.platformRole);
 
   // Filter nav items based on user role
   const filteredNavItems = navItems.filter((item) => {

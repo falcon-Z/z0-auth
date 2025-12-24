@@ -95,26 +95,23 @@ PasswordResetRoutes.post(
         requestId,
       };
 
-      // Find user (check both User and PlatformManager)
-      let user = await db.user.findUnique({
+      // Find user by email (with the new user-centric model, all users are in User table)
+      const user = await db.user.findUnique({
         where: { email },
-        select: { id: true, email: true, name: true },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          platformMembership: {
+            select: { isActive: true },
+          },
+        },
       });
 
-      let userType: "user" | "platform_manager" = "user";
-
-      if (!user) {
-        // Check PlatformManager
-        const platformManager = await db.platformManager.findUnique({
-          where: { email },
-          select: { id: true, email: true, name: true },
-        });
-
-        if (platformManager) {
-          user = platformManager;
-          userType = "platform_manager";
-        }
-      }
+      // Determine actor type based on platform membership
+      const userType: "user" | "platform_manager" = user?.platformMembership?.isActive
+        ? "platform_manager"
+        : "user";
 
       if (!user) {
         // User not found, but return success anyway to prevent enumeration

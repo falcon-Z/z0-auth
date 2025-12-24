@@ -12,8 +12,21 @@ import { Button } from "@z0/components/ui/button";
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import { User, Settings, LogOut } from "lucide-react";
 
+// User type from stored auth data
+interface StoredUser {
+  userId: string;
+  email: string;
+  name?: string;
+  platformRole?: string;
+  orgContext?: {
+    orgId: string;
+    orgName: string;
+    orgRole: string;
+  };
+}
+
 // Parse user once to avoid re-parsing on every render
-function getStoredUser() {
+function getStoredUser(): StoredUser | null {
   try {
     const userStr = localStorage.getItem("user");
     return userStr ? JSON.parse(userStr) : null;

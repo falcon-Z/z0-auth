@@ -4,11 +4,18 @@
  */
 
 import { Hono } from "hono";
+import { setCookie } from "hono/cookie";
 import { OAuthService } from "../../utils/oauth/oauth-service";
 import { OAuthProviderFactory } from "../../utils/oauth/provider-factory";
 import { OAuthProvider } from "../../utils/oauth/types";
-import { ErrorResponseBuilder } from "../../utils/error-handling";
-import { signToken } from "../../utils/jwt";
+import { ErrorResponseBuilder, Logger } from "../../utils/error-handling";
+import { db } from "@z0/utils/db/client";
+import {
+  buildTokenPayload,
+  generateAccessToken,
+  generateRefreshToken,
+  type UserWithMemberships,
+} from "@z0/utils/auth";
 import { z } from "zod";
 
 const oauth = new Hono();
@@ -129,44 +136,67 @@ oauth.get("/:provider/callback", async (c) => {
       userAgent
     );
 
-    // Generate JWT tokens
-    const accessToken = await signToken(
-      {
-        userId: result.user.id,
-        email: result.user.email,
-        role: result.user.legacyRole,
-        orgId: result.user.organizationId,
-        type: "user",
+    // Fetch user with all memberships for token building
+    const userWithMemberships = await db.user.findUnique({
+      where: { id: result.user.id },
+      include: {
+        platformMembership: true,
+        organizationMemberships: {
+          where: { isActive: true },
+          include: { organization: true },
+        },
+        appMemberships: {
+          where: { isActive: true },
+        },
       },
-      "15m"
-    );
+    });
 
-    const refreshToken = await signToken(
-      {
-        userId: result.user.id,
-        email: result.user.email,
-        type: "refresh",
-      },
-      "7d"
-    );
+    if (!userWithMemberships) {
+      return c.json(
+        ErrorResponseBuilder.authentication(
+          "User not found after OAuth",
+          "USER_NOT_FOUND"
+        ),
+        401
+      );
+    }
+
+    // Build token payload using memberships
+    const tokenPayload = buildTokenPayload(userWithMemberships as UserWithMemberships);
+
+    // Generate JWT tokens
+    const accessToken = await generateAccessToken(tokenPayload);
+    const refreshToken = await generateRefreshToken(tokenPayload);
 
     // Set cookies
-    c.header(
-      "Set-Cookie",
-      `accessToken=${accessToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=900`
-    );
-    c.header(
-      "Set-Cookie",
-      `refreshToken=${refreshToken}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`
-    );
+    const isProd = process.env.NODE_ENV === "production";
+    setCookie(c, "access_token", accessToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 900, // 15 minutes
+    });
+    setCookie(c, "refresh_token", refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 604800, // 7 days
+    });
 
     // Update user login info
-    await c.env?.prisma?.user.update({
+    await db.user.update({
       where: { id: result.user.id },
       data: {
         lastLoginAt: new Date(),
         loginCount: { increment: 1 },
       },
+    }).catch((error) => {
+      Logger.error("Failed to update login info after OAuth", {
+        userId: result.user.id,
+        error: error.message,
+      });
     });
 
     // Redirect based on state or default to dashboard

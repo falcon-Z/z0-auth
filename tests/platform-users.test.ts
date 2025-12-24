@@ -1,8 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 import { db } from "@z0/utils/db/client";
 import app from "../src/index";
-import { hashPassword } from "@z0/utils/auth";
-import { generateAccessToken } from "@z0/utils/auth";
+import { hashPassword, generateAccessToken, buildTokenPayload, type UserWithMemberships } from "@z0/utils/auth";
 
 const SUPER_ADMIN_EMAIL = "super@z0.com";
 const NEW_ADMIN_EMAIL = "support@z0.com";
@@ -10,38 +9,75 @@ const PASSWORD = "Password123!";
 
 describe("Platform Users Management", () => {
     let superToken: string;
+    let superUserId: string;
     let newUserId: string;
 
     beforeAll(async () => {
-        // Cleanup
-        await db.platformManager.deleteMany({
+        // Cleanup - delete users and their memberships
+        const usersToDelete = await db.user.findMany({
+            where: { email: { in: [SUPER_ADMIN_EMAIL, NEW_ADMIN_EMAIL] } },
+            select: { id: true }
+        });
+
+        for (const user of usersToDelete) {
+            await db.platformMembership.deleteMany({
+                where: { userId: user.id }
+            });
+        }
+
+        await db.user.deleteMany({
             where: { email: { in: [SUPER_ADMIN_EMAIL, NEW_ADMIN_EMAIL] } }
         });
 
-        // Create Super Admin manually
+        // Create Super Admin user with platform membership
         const hashedPassword = await hashPassword(PASSWORD);
-        const superAdmin = await db.platformManager.create({
+        const superAdmin = await db.user.create({
             data: {
                 email: SUPER_ADMIN_EMAIL,
                 password: hashedPassword,
                 name: "Super Admin",
-                organization: "Z0",
-                roleType: "SUPER_ADMIN",
-                scopes: ["*"]
-            }
+                status: "ACTIVE",
+                platformMembership: {
+                    create: {
+                        roleType: "SUPER_ADMIN",
+                        scopes: ["*"],
+                        isActive: true,
+                    }
+                }
+            },
+            include: {
+                platformMembership: true,
+                organizationMemberships: {
+                    where: { isActive: true },
+                    include: { organization: true },
+                },
+                appMemberships: {
+                    where: { isActive: true },
+                },
+            },
         });
 
-        // Mint Token
-        superToken = await generateAccessToken({
-            userId: superAdmin.id,
-            email: superAdmin.email,
-            roleType: superAdmin.roleType,
-            type: "platform_manager"
-        });
+        superUserId = superAdmin.id;
+
+        // Build token using the new token builder
+        const tokenPayload = buildTokenPayload(superAdmin as UserWithMemberships);
+        superToken = await generateAccessToken(tokenPayload);
     });
 
     afterAll(async () => {
-        await db.platformManager.deleteMany({
+        // Cleanup - delete users and their memberships
+        const usersToDelete = await db.user.findMany({
+            where: { email: { in: [SUPER_ADMIN_EMAIL, NEW_ADMIN_EMAIL] } },
+            select: { id: true }
+        });
+
+        for (const user of usersToDelete) {
+            await db.platformMembership.deleteMany({
+                where: { userId: user.id }
+            });
+        }
+
+        await db.user.deleteMany({
             where: { email: { in: [SUPER_ADMIN_EMAIL, NEW_ADMIN_EMAIL] } }
         });
     });
@@ -66,7 +102,7 @@ describe("Platform Users Management", () => {
                 email: NEW_ADMIN_EMAIL,
                 name: "Support Guy",
                 password: "Xy9#mP2$vL5@kQ",
-                roleType: "SUPER_ADMIN" // Schema limitation might strict enum
+                roleType: "SUPPORT_MANAGER"
             })
         });
 
@@ -74,7 +110,7 @@ describe("Platform Users Management", () => {
         if (res.status !== 201) console.log(body);
 
         expect(res.status).toBe(201);
-        newUserId = body.data.id;
+        newUserId = body.data.userId;
         expect(body.data.email).toBe(NEW_ADMIN_EMAIL);
     });
 
@@ -89,7 +125,7 @@ describe("Platform Users Management", () => {
                 email: NEW_ADMIN_EMAIL,
                 name: "Support Guy 2",
                 password: "Xy9#mP2$vL5@kQ",
-                roleType: "SUPER_ADMIN"
+                roleType: "SUPPORT_MANAGER"
             })
         });
         expect(res.status).toBe(409);
@@ -102,10 +138,10 @@ describe("Platform Users Management", () => {
         });
         expect(res.status).toBe(200);
 
-        // Verify gone
-        const check = await db.platformManager.findUnique({
-            where: { id: newUserId }
+        // Verify user membership is deactivated
+        const check = await db.platformMembership.findUnique({
+            where: { userId: newUserId }
         });
-        expect(check).toBeNull();
+        expect(check?.isActive).toBe(false);
     });
 });

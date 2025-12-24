@@ -239,11 +239,16 @@ export class OAuthService {
       };
     }
 
-    // Check if user with this email exists in the organization
+    // Check if user with this email exists and is a member of the organization
     const existingUser = await prisma.user.findFirst({
       where: {
-        organizationId,
         email: identityData.email,
+        organizationMemberships: {
+          some: {
+            organizationId,
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -318,30 +323,36 @@ export class OAuthService {
       );
     }
 
-    // Get default role from provider config or use ORG_USER
-    let roleId: string | undefined;
-    if (providerConfig.defaultRole) {
-      const role = await prisma.role.findFirst({
-        where: {
-          organizationId,
-          name: providerConfig.defaultRole,
+    // Determine default role from provider config (maps to OrganizationMembership roleType)
+    // Default to ORG_MEMBER if not specified
+    const defaultRoleType = (providerConfig.defaultRole as "ORG_OWNER" | "ORG_ADMIN" | "ORG_DEVELOPER" | "ORG_MEMBER") || "ORG_MEMBER";
+
+    // Auto-provision new user with organization membership
+    const newUser = await prisma.$transaction(async (tx) => {
+      // Create user
+      const user = await tx.user.create({
+        data: {
+          email: identityData.email,
+          name: identityData.displayName || identityData.email,
+          avatar: identityData.avatarUrl,
+          emailVerified: true, // OAuth emails are verified
+          status: "ACTIVE",
+          password: crypto.randomBytes(32).toString("hex"), // Random password (won't be used)
         },
       });
-      roleId = role?.id;
-    }
 
-    // Auto-provision new user
-    const newUser = await prisma.user.create({
-      data: {
-        organizationId,
-        email: identityData.email,
-        name: identityData.displayName || identityData.email,
-        avatar: identityData.avatarUrl,
-        emailVerified: true, // OAuth emails are verified
-        status: "ACTIVE",
-        roleId,
-        password: crypto.randomBytes(32).toString("hex"), // Random password (won't be used)
-      },
+      // Create organization membership
+      await tx.organizationMembership.create({
+        data: {
+          userId: user.id,
+          organizationId,
+          roleType: defaultRoleType,
+          isActive: true,
+          isDefault: true,
+        },
+      });
+
+      return user;
     });
 
     // Create external identity
@@ -415,7 +426,12 @@ export class OAuthService {
         include: {
           user: {
             include: {
-              organization: true,
+              organizationMemberships: {
+                where: { isActive: true },
+                include: { organization: true },
+                take: 1,
+                orderBy: { isDefault: "desc" },
+              },
             },
           },
         },
@@ -429,10 +445,16 @@ export class OAuthService {
         throw new Error("No refresh token available");
       }
 
+      // Get organization ID from user's default/first membership
+      const orgMembership = identity.user.organizationMemberships[0];
+      if (!orgMembership) {
+        throw new Error("User has no active organization membership");
+      }
+
       // Create OAuth provider instance
       const oauthProvider =
         await OAuthProviderFactory.createProviderFromOrgConfig(
-          identity.user.organizationId,
+          orgMembership.organizationId,
           identity.provider as OAuthProvider
         );
 
@@ -489,7 +511,16 @@ export class OAuthService {
       const identity = await prisma.externalIdentity.findUnique({
         where: { id: identityId },
         include: {
-          user: true,
+          user: {
+            include: {
+              organizationMemberships: {
+                where: { isActive: true },
+                include: { organization: true },
+                take: 1,
+                orderBy: { isDefault: "desc" },
+              },
+            },
+          },
         },
       });
 
@@ -497,10 +528,16 @@ export class OAuthService {
         throw new Error("External identity not found");
       }
 
+      // Get organization ID from user's default/first membership
+      const orgMembership = identity.user.organizationMemberships[0];
+      if (!orgMembership) {
+        throw new Error("User has no active organization membership");
+      }
+
       // Create OAuth provider instance
       const oauthProvider =
         await OAuthProviderFactory.createProviderFromOrgConfig(
-          identity.user.organizationId,
+          orgMembership.organizationId,
           identity.provider as OAuthProvider
         );
 
@@ -527,7 +564,7 @@ export class OAuthService {
         actorId: identity.userId,
         targetId: identityId,
         targetType: "external_identity",
-        organizationId: identity.user.organizationId,
+        organizationId: orgMembership.organizationId,
         status: "success",
         metadata: { provider: identity.provider },
       });

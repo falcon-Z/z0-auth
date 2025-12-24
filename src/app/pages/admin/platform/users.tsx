@@ -65,26 +65,28 @@ const createUserSchema = z.object({
     "SUPER_ADMIN",
     "ORG_MANAGER",
     "SECURITY_MANAGER",
-    "DEVOPS_MANAGER",
+    "AUDITOR",
     "SUPPORT_MANAGER",
   ]),
 });
 
 type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
-interface PlatformUser {
-  id: string;
+interface PlatformMember {
+  membershipId: string;
+  userId: string;
   email: string;
   name: string;
   roleType: string;
-  createdAt: string;
+  status: string;
+  grantedAt: string;
   lastLoginAt?: string;
-  loginCount: number;
+  userCreatedAt: string;
 }
 
 export default function PlatformUsers() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<PlatformUser[]>([]);
+  const [users, setUsers] = useState<PlatformMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -270,8 +272,8 @@ export default function PlatformUsers() {
                               <SelectItem value="SECURITY_MANAGER">
                                 Security Manager
                               </SelectItem>
-                              <SelectItem value="DEVOPS_MANAGER">
-                                DevOps Manager
+                              <SelectItem value="AUDITOR">
+                                Auditor
                               </SelectItem>
                               <SelectItem value="SUPPORT_MANAGER">
                                 Support Manager
@@ -329,38 +331,42 @@ export default function PlatformUsers() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Last Login</TableHead>
-                    <TableHead>Logins</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead>Granted</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
+                  {users.map((member) => (
+                    <TableRow key={member.membershipId}>
+                      <TableCell className="font-medium">{member.name}</TableCell>
                       <TableCell className="font-mono text-sm">
-                        {user.email}
+                        {member.email}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={getRoleBadgeVariant(user.roleType)}>
-                          {user.roleType.replace(/_/g, " ")}
+                        <Badge variant={getRoleBadgeVariant(member.roleType)}>
+                          {member.roleType.replace(/_/g, " ")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={member.status === "ACTIVE" ? "default" : "secondary"}>
+                          {member.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {user.lastLoginAt
-                          ? new Date(user.lastLoginAt).toLocaleDateString()
+                        {member.lastLoginAt
+                          ? new Date(member.lastLoginAt).toLocaleDateString()
                           : "Never"}
                       </TableCell>
-                      <TableCell>{user.loginCount}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date(user.createdAt).toLocaleDateString()}
+                        {new Date(member.grantedAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/admin/users/${user.id}`)}
+                          onClick={() => navigate(`/admin/users/${member.userId}`)}
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
