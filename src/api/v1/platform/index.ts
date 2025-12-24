@@ -6,11 +6,8 @@ import { verifyAccessTokenMiddleware } from "@z0/utils/auth";
 
 const platformRoutes = new Hono();
 
-// Parent router already checks verifyAccessTokenMiddleware
-// But likely only broadly. We should ensure it checks PlatformManager scope?
-// The parent ../index.ts mount likely applies middleware?
-// Checking ../index.ts... actually let's re-verify middleware application.
-
+// Apply auth middleware to all platform routes
+// requirePlatformManager checks for platformRole presence
 platformRoutes.use("*", verifyAccessTokenMiddleware);
 platformRoutes.use("*", requirePlatformManager);
 

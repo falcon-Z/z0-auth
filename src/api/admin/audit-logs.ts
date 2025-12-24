@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import { AuditLogger } from "@z0/utils/audit-logger";
 import { ErrorResponseBuilder } from "@z0/utils/error-handling";
 import { z } from "zod";
+import type { TokenPayload } from "@z0/utils/auth";
 
 const auditLogsRoutes = new Hono();
 
@@ -29,10 +30,10 @@ const querySchema = z.object({
  */
 auditLogsRoutes.get("/", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    // Only platform managers can view audit logs
-    if (!user || user.type !== "platform_manager") {
+    // Only platform members can view audit logs
+    if (!user || !user.platformRole) {
       return c.json(
         ErrorResponseBuilder.authorization(
           "Unauthorized",
@@ -102,10 +103,10 @@ auditLogsRoutes.get("/", async (c) => {
  */
 auditLogsRoutes.get("/statistics", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    // Only platform managers can view statistics
-    if (!user || user.type !== "platform_manager") {
+    // Only platform members can view statistics
+    if (!user || !user.platformRole) {
       return c.json(
         ErrorResponseBuilder.authorization(
           "Unauthorized",
@@ -149,10 +150,10 @@ auditLogsRoutes.get("/statistics", async (c) => {
  */
 auditLogsRoutes.get("/:id", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    // Only platform managers can view audit logs
-    if (!user || user.type !== "platform_manager") {
+    // Only platform members can view audit logs
+    if (!user || !user.platformRole) {
       return c.json(
         ErrorResponseBuilder.authorization(
           "Unauthorized",
@@ -211,10 +212,10 @@ auditLogsRoutes.get("/:id", async (c) => {
  */
 auditLogsRoutes.get("/user/:userId", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    // Only platform managers can view user audit logs
-    if (!user || user.type !== "platform_manager") {
+    // Only platform members can view user audit logs
+    if (!user || !user.platformRole) {
       return c.json(
         ErrorResponseBuilder.authorization(
           "Unauthorized",
@@ -265,10 +266,10 @@ auditLogsRoutes.get("/user/:userId", async (c) => {
  */
 auditLogsRoutes.get("/organization/:orgId", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    // Only platform managers can view organization audit logs
-    if (!user || user.type !== "platform_manager") {
+    // Only platform members can view organization audit logs
+    if (!user || !user.platformRole) {
       return c.json(
         ErrorResponseBuilder.authorization(
           "Unauthorized",

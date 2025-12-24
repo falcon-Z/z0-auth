@@ -6,7 +6,7 @@
 import { Hono } from "hono";
 import { prisma } from "../../../utils/prisma";
 import { authMiddleware } from "../../../middleware/auth";
-import { requireOrgAccess } from "../../../middleware/org-access";
+import { requireOrgAccess } from "../../../middleware/require-scope";
 import { ErrorResponseBuilder } from "../../../utils/error-handling";
 import { AuditLogger } from "../../../utils/audit-logger";
 import { z } from "zod";
@@ -53,7 +53,7 @@ const updateProviderSchema = createProviderSchema.partial();
 externalProviders.get(
   "/:orgId/external-providers",
   authMiddleware,
-  requireOrgAccess,
+  requireOrgAccess(),
   async (c) => {
     try {
       const orgId = c.req.param("orgId");
@@ -99,7 +99,7 @@ externalProviders.get(
 externalProviders.get(
   "/:orgId/external-providers/:id",
   authMiddleware,
-  requireOrgAccess,
+  requireOrgAccess(),
   async (c) => {
     try {
       const orgId = c.req.param("orgId");
@@ -157,7 +157,7 @@ externalProviders.get(
 externalProviders.post(
   "/:orgId/external-providers",
   authMiddleware,
-  requireOrgAccess,
+  requireOrgAccess(),
   async (c) => {
     try {
       const user = c.get("user");
@@ -279,7 +279,7 @@ externalProviders.post(
 externalProviders.patch(
   "/:orgId/external-providers/:id",
   authMiddleware,
-  requireOrgAccess,
+  requireOrgAccess(),
   async (c) => {
     try {
       const user = c.get("user");
@@ -392,7 +392,7 @@ externalProviders.patch(
 externalProviders.delete(
   "/:orgId/external-providers/:id",
   authMiddleware,
-  requireOrgAccess,
+  requireOrgAccess(),
   async (c) => {
     try {
       const user = c.get("user");
@@ -414,12 +414,17 @@ externalProviders.delete(
         );
       }
 
-      // Check if any users are using this provider
+      // Check if any users in this organization are using this provider
       const identityCount = await prisma.externalIdentity.count({
         where: {
           provider: existing.provider,
           user: {
-            organizationId: orgId,
+            organizationMemberships: {
+              some: {
+                organizationId: orgId,
+                isActive: true,
+              },
+            },
           },
         },
       });
@@ -479,7 +484,7 @@ externalProviders.delete(
 externalProviders.patch(
   "/:orgId/external-providers/:id/toggle",
   authMiddleware,
-  requireOrgAccess,
+  requireOrgAccess(),
   async (c) => {
     try {
       const user = c.get("user");

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import orgCrud from "./crud";
 import orgApps from "./apps";
 import orgMembers from "./members";
+import appMembers from "./app-members";
 import apiKeys from "./api-keys";
 import scopes from "./scopes";
 import roles from "./roles";
@@ -15,14 +16,10 @@ const orgRoutes = new Hono();
 orgRoutes.route("/", orgCrud);
 
 // Mount sub-routers
-// Route is /api/v1/orgs/...
-// So orgApps handles /:orgId/apps
-// We mount it at root so it captures parameters?
-// Hono behavior:
-// If we mount at "/", inside orgApps we need to handle full path or parameter?
-// Better: Mount at "/" and let orgApps define "/:orgId/apps"
+// Each router defines its own paths starting with /:orgId/...
 orgRoutes.route("/", orgApps);
 orgRoutes.route("/", orgMembers);
+orgRoutes.route("/", appMembers); // App memberships (/:orgId/apps/:appId/members)
 orgRoutes.route("/", apiKeys);
 
 // RBAC routes

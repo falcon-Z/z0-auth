@@ -164,6 +164,24 @@ export class AuditLogger {
   }
 
   /**
+   * Log platform-level management event
+   */
+  static async logPlatformManagement(
+    action: string,
+    actorId: string,
+    options?: Partial<AuditLogEntry>
+  ): Promise<void> {
+    await this.log({
+      action,
+      severity: "HIGH",
+      actorId,
+      actorType: "platform_manager",
+      targetType: "platform",
+      ...options,
+    });
+  }
+
+  /**
    * Log role/permission change
    */
   static async logPermissionChange(
@@ -364,6 +382,7 @@ export const auditLog = AuditLogger.log.bind(AuditLogger);
 export const auditAuth = AuditLogger.logAuth.bind(AuditLogger);
 export const auditUserManagement = AuditLogger.logUserManagement.bind(AuditLogger);
 export const auditOrganizationManagement = AuditLogger.logOrganizationManagement.bind(AuditLogger);
+export const auditPlatformManagement = AuditLogger.logPlatformManagement.bind(AuditLogger);
 export const auditPermissionChange = AuditLogger.logPermissionChange.bind(AuditLogger);
 export const auditSecurityEvent = AuditLogger.logSecurityEvent.bind(AuditLogger);
 export const auditDataAccess = AuditLogger.logDataAccess.bind(AuditLogger);

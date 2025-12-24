@@ -1,473 +1,625 @@
+/**
+ * Organization Membership API
+ *
+ * Manages organization members through the OrganizationMembership model.
+ * Users can be members of multiple organizations with different roles.
+ */
+
 import { Hono } from "hono";
 import { db } from "@z0/utils/db/client";
 import {
-    Logger,
-    DatabaseErrorHandler,
-    ErrorResponseBuilder,
-    RequestContext
+  Logger,
+  DatabaseErrorHandler,
+  ErrorResponseBuilder,
+  RequestContext,
 } from "@z0/utils/error-handling";
 import { z } from "zod";
 import { validator } from "hono/validator";
-import { verifyAccessTokenMiddleware, hashPassword, type TokenPayload } from "@z0/utils/auth";
-import { requireOrgAccess } from "./middleware";
+import {
+  verifyAccessTokenMiddleware,
+  hashPassword,
+  type TokenPayload,
+} from "@z0/utils/auth";
+import { requireOrgAccess, requireScope } from "../../../middleware/require-scope";
 import { validatePassword } from "@z0/utils/password-validation";
+import { AuditLogger } from "@z0/utils/audit-logger";
 
 const orgMembers = new Hono();
 
-// Schema for adding a member
+// Schema for inviting/adding a member
 const addMemberSchema = z.object({
-    email: z.string().email(),
-    name: z.string().min(1),
-    password: z.string().min(8).optional(), // Optional if user exists, or creating invite?
-    role: z.enum(["ORG_ADMIN", "ORG_USER"]).default("ORG_USER")
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  password: z.string().min(8).optional(), // Optional if user exists
+  roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]).default("ORG_MEMBER"),
 });
 
-// Schema for updating a member
-const updateMemberSchema = z.object({
-    name: z.string().min(1).max(100).optional(),
-    role: z.enum(["ORG_ADMIN", "ORG_USER"]).optional(),
-});
-
-// Schema for status change
-const statusSchema = z.object({
-    status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED", "PENDING"]),
+// Schema for updating a membership
+const updateMembershipSchema = z.object({
+  roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]).optional(),
+  isDefault: z.boolean().optional(),
 });
 
 /**
  * GET /:orgId/members
- * List members of an organization
+ * List organization memberships
  */
-orgMembers.get("/:orgId/members", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
+orgMembers.get(
+  "/:orgId/members",
+  verifyAccessTokenMiddleware,
+  requireOrgAccess(),
+  async (c) => {
     const orgId = c.req.param("orgId");
     const requestId = RequestContext.generateRequestId();
 
     try {
-        const members = await db.user.findMany({
-            where: { organizationId: orgId },
+      const memberships = await db.organizationMembership.findMany({
+        where: {
+          organizationId: orgId,
+          isActive: true,
+        },
+        include: {
+          user: {
             select: {
-                id: true,
-                email: true,
-                name: true,
-                role: true, // Should map to roleType or builtInRole?
-                // Schema check: User has `roles Role[]`. 
-                // But simplified userauth flow used `role` field in payload.
-                // Re-checking User schema in next step if needed. 
-                // Assuming we use the basic fields.
-                createdAt: true,
-                lastLoginAt: true,
-                status: true
+              id: true,
+              email: true,
+              name: true,
+              avatar: true,
+              status: true,
+              emailVerified: true,
+              lastLoginAt: true,
+              createdAt: true,
             },
-            orderBy: { createdAt: 'desc' }
-        });
+          },
+        },
+        orderBy: { grantedAt: "desc" },
+      });
 
-        return c.json({
-            success: true,
-            data: members,
-            requestId
-        });
+      // Transform to a cleaner response format
+      const members = memberships.map((m) => ({
+        membershipId: m.id,
+        userId: m.userId,
+        email: m.user.email,
+        name: m.user.name,
+        avatar: m.user.avatar,
+        roleType: m.roleType,
+        isDefault: m.isDefault,
+        status: m.user.status,
+        emailVerified: m.user.emailVerified,
+        lastLoginAt: m.user.lastLoginAt,
+        joinedAt: m.grantedAt,
+        userCreatedAt: m.user.createdAt,
+      }));
+
+      return c.json({
+        success: true,
+        data: members,
+        total: members.length,
+        requestId,
+      });
     } catch (error) {
-        return c.json(ErrorResponseBuilder.system("Failed to list members", "DB_ERROR"), 500);
+      Logger.error("Failed to list organization members", { orgId, error });
+      return c.json(
+        ErrorResponseBuilder.system("Failed to list members", "DB_ERROR"),
+        500
+      );
     }
-});
+  }
+);
 
 /**
  * POST /:orgId/members
- * Add or Invite a member
+ * Add a member to the organization
+ * - If user exists, create membership
+ * - If user doesn't exist, create user and membership
  */
-orgMembers.post("/:orgId/members",
-    verifyAccessTokenMiddleware,
-    requireOrgAccess,
-    validator("json", (value, c) => {
-        const parsed = addMemberSchema.safeParse(value);
-        if (!parsed.success) {
-            return c.json(ErrorResponseBuilder.validation("Invalid data", [], parsed.error), 400);
-        }
-        return parsed.data;
-    }),
-    async (c) => {
-        const orgId = c.req.param("orgId");
-        const data = c.req.valid("json");
-        const currentUser = c.get('user') as TokenPayload;
-        const requestId = RequestContext.generateRequestId();
-
-        try {
-            // Check if user exists GLOBALLY?
-            // User email is unique globally in `User` table?
-            // Schema check: `model User { @unique email }`?
-            // Yes usually.
-
-            const existingUser = await db.user.findFirst({
-                where: { email: data.email }
-            });
-
-            if (existingUser) {
-                return c.json(ErrorResponseBuilder.conflict("User with this email already exists (global check)"), 409);
-            }
-
-            // Create New User
-            // Require password for direct creation
-            if (!data.password) {
-                return c.json(ErrorResponseBuilder.validation("Password required for new user creation", []), 400);
-            }
-
-            // Validate Password
-            const pwdValidation = validatePassword(data.password);
-            if (!pwdValidation.isValid) {
-                return c.json(ErrorResponseBuilder.validation("Password weak", [], { feedback: pwdValidation.feedback }), 400);
-            }
-
-            const hashedPassword = await hashPassword(data.password);
-
-            // Role handling: User model has `roles` relation. 
-            // We need to assign `BuiltInRole` or similar.
-            // For Phase 1 simplified, we might just store string if custom, but schema uses relation.
-            // We'll create the user first.
-
-            const newUser = await db.user.create({
-                data: {
-                    email: data.email,
-                    name: data.name,
-                    password: hashedPassword,
-                    organizationId: orgId,
-                    status: "ACTIVE",
-                    // Assign Role? 
-                    // We need to create a `Role` or look it up.
-                    // Or use `OrganizationAdmin` table if role is ORG_ADMIN?
-                    // Schema: `User` -> `roles Role[]`.
-                    // Let's assume we create a default Role entry for them?
-                    // Or maybe for now we don't assign complex roles, relying on defaults.
-                    // IMPORTANT: `verifyAccessToken` logic checks `user.role` from somewhere.
-                    // In `utils/auth.ts`, `generateAccessToken` puts `roleType` or `role`.
-                    // Where does it get it from?
-                    // We need to ensure we populate what Auth expects.
-                }
-            });
-
-            // If ORG_ADMIN, we might need to add to OrganizationAdmin table?
-            if (data.role === 'ORG_ADMIN') {
-                // Add to OrganizationAdmin table if exists
-                // await db.organizationAdmin.create(...)
-            }
-
-            Logger.info("Org Member Added", {
-                newUserId: newUser.id,
-                orgId,
-                addedBy: currentUser.userId
-            });
-
-            return c.json({
-                success: true,
-                message: "User created and added to organization",
-                data: { id: newUser.id, email: newUser.email },
-                requestId
-            }, 201);
-
-        } catch (error) {
-            const dbError = DatabaseErrorHandler.handleError(error);
-            return c.json(ErrorResponseBuilder.database("Failed to add member", dbError.code), 500);
-        }
+orgMembers.post(
+  "/:orgId/members",
+  verifyAccessTokenMiddleware,
+  requireOrgAccess(),
+  requireScope("org:members:manage"),
+  validator("json", (value, c) => {
+    const parsed = addMemberSchema.safeParse(value);
+    if (!parsed.success) {
+      return c.json(
+        ErrorResponseBuilder.validation(
+          "Invalid data",
+          parsed.error.issues.map((i) => ({
+            field: i.path.join("."),
+            message: i.message,
+            code: i.code,
+          }))
+        ),
+        400
+      );
     }
+    return parsed.data;
+  }),
+  async (c) => {
+    const orgId = c.req.param("orgId");
+    const data = c.req.valid("json");
+    const currentUser = c.get("user") as TokenPayload;
+    const requestId = RequestContext.generateRequestId();
+
+    try {
+      // Check if user already exists
+      let user = await db.user.findUnique({
+        where: { email: data.email },
+      });
+
+      // Check if membership already exists
+      if (user) {
+        const existingMembership = await db.organizationMembership.findUnique({
+          where: {
+            userId_organizationId: {
+              userId: user.id,
+              organizationId: orgId,
+            },
+          },
+        });
+
+        if (existingMembership) {
+          if (existingMembership.isActive) {
+            return c.json(
+              ErrorResponseBuilder.conflict(
+                "User is already a member of this organization"
+              ),
+              409
+            );
+          }
+
+          // Reactivate membership
+          const reactivated = await db.organizationMembership.update({
+            where: { id: existingMembership.id },
+            data: {
+              isActive: true,
+              roleType: data.roleType,
+              grantedBy: currentUser.userId,
+              grantedAt: new Date(),
+            },
+          });
+
+          Logger.info("Organization membership reactivated", {
+            membershipId: reactivated.id,
+            userId: user.id,
+            orgId,
+            reactivatedBy: currentUser.userId,
+          });
+
+          return c.json(
+            {
+              success: true,
+              message: "User membership reactivated",
+              data: {
+                membershipId: reactivated.id,
+                userId: user.id,
+                email: user.email,
+                roleType: reactivated.roleType,
+              },
+              requestId,
+            },
+            200
+          );
+        }
+      }
+
+      // If user doesn't exist, create them
+      if (!user) {
+        if (!data.password) {
+          return c.json(
+            ErrorResponseBuilder.validation(
+              "Password required for new user creation",
+              [{ field: "password", message: "Password is required", code: "required" }]
+            ),
+            400
+          );
+        }
+
+        const pwdValidation = validatePassword(data.password);
+        if (!pwdValidation.isValid) {
+          return c.json(
+            ErrorResponseBuilder.validation("Password does not meet requirements", [], {
+              feedback: pwdValidation.feedback,
+            }),
+            400
+          );
+        }
+
+        const hashedPassword = await hashPassword(data.password);
+
+        user = await db.user.create({
+          data: {
+            email: data.email,
+            name: data.name,
+            password: hashedPassword,
+            status: "ACTIVE",
+            emailVerified: false,
+          },
+        });
+      }
+
+      // Create the membership
+      const membership = await db.organizationMembership.create({
+        data: {
+          userId: user.id,
+          organizationId: orgId,
+          roleType: data.roleType,
+          isActive: true,
+          isDefault: false, // Not default unless explicitly set
+          grantedBy: currentUser.userId,
+        },
+      });
+
+      // Audit log
+      await AuditLogger.logOrganizationManagement(
+        "MEMBER_ADDED",
+        currentUser.userId,
+        orgId,
+        {
+          metadata: {
+            targetUserId: user.id,
+            targetEmail: user.email,
+            roleType: data.roleType,
+            membershipId: membership.id,
+          },
+        }
+      );
+
+      Logger.info("Organization member added", {
+        membershipId: membership.id,
+        userId: user.id,
+        orgId,
+        roleType: data.roleType,
+        addedBy: currentUser.userId,
+        requestId,
+      });
+
+      return c.json(
+        {
+          success: true,
+          message: "Member added to organization",
+          data: {
+            membershipId: membership.id,
+            userId: user.id,
+            email: user.email,
+            name: user.name,
+            roleType: membership.roleType,
+          },
+          requestId,
+        },
+        201
+      );
+    } catch (error) {
+      const dbError = DatabaseErrorHandler.handleError(error);
+      Logger.error("Failed to add organization member", {
+        orgId,
+        email: data.email,
+        error: dbError.message,
+      });
+      return c.json(
+        ErrorResponseBuilder.database("Failed to add member", dbError.code),
+        500
+      );
+    }
+  }
 );
 
 /**
  * GET /:orgId/members/:userId
- * Get member details
+ * Get specific member details
  */
-orgMembers.get("/:orgId/members/:userId", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
+orgMembers.get(
+  "/:orgId/members/:userId",
+  verifyAccessTokenMiddleware,
+  requireOrgAccess(),
+  async (c) => {
     const orgId = c.req.param("orgId");
     const userId = c.req.param("userId");
     const requestId = RequestContext.generateRequestId();
 
     try {
-        const member = await db.user.findFirst({
-            where: { id: userId, organizationId: orgId },
+      const membership = await db.organizationMembership.findFirst({
+        where: {
+          organizationId: orgId,
+          userId,
+        },
+        include: {
+          user: {
             select: {
-                id: true,
-                email: true,
-                name: true,
-                role: true,
-                status: true,
-                emailVerified: true,
-                lastLoginAt: true,
-                createdAt: true,
-                updatedAt: true,
-                _count: {
-                    select: { sessions: true }
-                }
-            }
-        });
+              id: true,
+              email: true,
+              name: true,
+              avatar: true,
+              status: true,
+              emailVerified: true,
+              twoFactorEnabled: true,
+              lastLoginAt: true,
+              loginCount: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          role: true, // Custom role if assigned
+        },
+      });
 
-        if (!member) {
-            return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
-        }
+      if (!membership) {
+        return c.json(
+          ErrorResponseBuilder.notFound("Member not found in this organization"),
+          404
+        );
+      }
 
-        return c.json({
-            success: true,
-            data: member,
-            requestId
-        });
+      return c.json({
+        success: true,
+        data: {
+          membershipId: membership.id,
+          userId: membership.userId,
+          ...membership.user,
+          roleType: membership.roleType,
+          customRole: membership.role,
+          isActive: membership.isActive,
+          isDefault: membership.isDefault,
+          grantedAt: membership.grantedAt,
+          grantedBy: membership.grantedBy,
+        },
+        requestId,
+      });
     } catch (error) {
-        return c.json(ErrorResponseBuilder.system("Failed to fetch member details", "DB_ERROR"), 500);
+      Logger.error("Failed to fetch member details", { orgId, userId, error });
+      return c.json(
+        ErrorResponseBuilder.system("Failed to fetch member details", "DB_ERROR"),
+        500
+      );
     }
-});
-
-/**
- * PUT /:orgId/members/:userId
- * Update member
- */
-orgMembers.put("/:orgId/members/:userId",
-    verifyAccessTokenMiddleware,
-    requireOrgAccess,
-    validator("json", (value, c) => {
-        const parsed = updateMemberSchema.safeParse(value);
-        if (!parsed.success) {
-            const issues = parsed.error.issues.map(i => ({
-                field: i.path.join('.'),
-                message: i.message,
-                code: i.code
-            }));
-            return c.json(ErrorResponseBuilder.validation("Invalid data", issues), 400);
-        }
-        return parsed.data;
-    }),
-    async (c) => {
-        const orgId = c.req.param("orgId");
-        const userId = c.req.param("userId");
-        const data = c.req.valid("json");
-        const currentUser = c.get('user') as TokenPayload;
-        const requestId = RequestContext.generateRequestId();
-
-        try {
-            const existingMember = await db.user.findFirst({
-                where: { id: userId, organizationId: orgId }
-            });
-
-            if (!existingMember) {
-                return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
-            }
-
-            const updatedMember = await db.user.update({
-                where: { id: userId },
-                data: {
-                    ...(data.name && { name: data.name }),
-                },
-                select: {
-                    id: true,
-                    email: true,
-                    name: true,
-                    status: true
-                }
-            });
-
-            Logger.info("Member updated", {
-                userId,
-                orgId,
-                updatedBy: currentUser.userId,
-                requestId
-            });
-
-            return c.json({
-                success: true,
-                message: "Member updated successfully",
-                data: updatedMember,
-                requestId
-            });
-        } catch (error) {
-            return c.json(ErrorResponseBuilder.system("Failed to update member", "DB_ERROR"), 500);
-        }
-    }
+  }
 );
 
 /**
- * PATCH /:orgId/members/:userId/status
- * Change member status
+ * PATCH /:orgId/members/:userId
+ * Update member's role in the organization
  */
-orgMembers.patch("/:orgId/members/:userId/status",
-    verifyAccessTokenMiddleware,
-    requireOrgAccess,
-    validator("json", (value, c) => {
-        const parsed = statusSchema.safeParse(value);
-        if (!parsed.success) {
-            const issues = parsed.error.issues.map(i => ({
-                field: i.path.join('.'),
-                message: i.message,
-                code: i.code
-            }));
-            return c.json(ErrorResponseBuilder.validation("Invalid status", issues), 400);
-        }
-        return parsed.data;
-    }),
-    async (c) => {
-        const orgId = c.req.param("orgId");
-        const userId = c.req.param("userId");
-        const { status } = c.req.valid("json");
-        const currentUser = c.get('user') as TokenPayload;
-        const requestId = RequestContext.generateRequestId();
-
-        try {
-            // Prevent users from changing their own status
-            if (currentUser.userId === userId) {
-                return c.json(ErrorResponseBuilder.forbidden("Cannot change your own status"), 403);
-            }
-
-            const existingMember = await db.user.findFirst({
-                where: { id: userId, organizationId: orgId }
-            });
-
-            if (!existingMember) {
-                return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
-            }
-
-            const updatedMember = await db.user.update({
-                where: { id: userId },
-                data: { status }
-            });
-
-            // If suspended, revoke all sessions
-            if (status === "SUSPENDED") {
-                await db.session.updateMany({
-                    where: { userId },
-                    data: { status: "REVOKED" }
-                });
-            }
-
-            Logger.info("Member status changed", {
-                userId,
-                orgId,
-                oldStatus: existingMember.status,
-                newStatus: status,
-                changedBy: currentUser.userId,
-                requestId
-            });
-
-            return c.json({
-                success: true,
-                message: `Member status changed to ${status}`,
-                data: {
-                    id: updatedMember.id,
-                    status: updatedMember.status
-                },
-                requestId
-            });
-        } catch (error) {
-            return c.json(ErrorResponseBuilder.system("Failed to update member status", "DB_ERROR"), 500);
-        }
+orgMembers.patch(
+  "/:orgId/members/:userId",
+  verifyAccessTokenMiddleware,
+  requireOrgAccess(),
+  requireScope("org:members:manage"),
+  validator("json", (value, c) => {
+    const parsed = updateMembershipSchema.safeParse(value);
+    if (!parsed.success) {
+      return c.json(
+        ErrorResponseBuilder.validation(
+          "Invalid data",
+          parsed.error.issues.map((i) => ({
+            field: i.path.join("."),
+            message: i.message,
+            code: i.code,
+          }))
+        ),
+        400
+      );
     }
-);
+    return parsed.data;
+  }),
+  async (c) => {
+    const orgId = c.req.param("orgId");
+    const userId = c.req.param("userId");
+    const data = c.req.valid("json");
+    const currentUser = c.get("user") as TokenPayload;
+    const requestId = RequestContext.generateRequestId();
 
-/**
- * POST /:orgId/members/:userId/reset-password
- * Admin-triggered password reset
- */
-orgMembers.post("/:orgId/members/:userId/reset-password",
-    verifyAccessTokenMiddleware,
-    requireOrgAccess,
-    async (c) => {
-        const orgId = c.req.param("orgId");
-        const userId = c.req.param("userId");
-        const currentUser = c.get('user') as TokenPayload;
-        const requestId = RequestContext.generateRequestId();
+    try {
+      const membership = await db.organizationMembership.findFirst({
+        where: {
+          organizationId: orgId,
+          userId,
+        },
+      });
 
-        try {
-            const member = await db.user.findFirst({
-                where: { id: userId, organizationId: orgId },
-                select: { id: true, email: true, name: true }
-            });
+      if (!membership) {
+        return c.json(
+          ErrorResponseBuilder.notFound("Member not found in this organization"),
+          404
+        );
+      }
 
-            if (!member) {
-                return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
-            }
+      // Prevent demoting yourself from owner if you're the only owner
+      if (
+        data.roleType &&
+        data.roleType !== "ORG_OWNER" &&
+        membership.roleType === "ORG_OWNER" &&
+        currentUser.userId === userId
+      ) {
+        const ownerCount = await db.organizationMembership.count({
+          where: {
+            organizationId: orgId,
+            roleType: "ORG_OWNER",
+            isActive: true,
+          },
+        });
 
-            // Generate password reset token
-            const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
-            const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-            // Invalidate existing tokens
-            await db.passwordReset.updateMany({
-                where: { userId: member.id, used: false },
-                data: { used: true }
-            });
-
-            // Create new token
-            await db.passwordReset.create({
-                data: {
-                    userId: member.id,
-                    token,
-                    expiresAt
-                }
-            });
-
-            // TODO: Send email with reset link
-            // For now, just log it
-            Logger.info("Admin-triggered password reset", {
-                userId: member.id,
-                orgId,
-                triggeredBy: currentUser.userId,
-                requestId
-            });
-
-            return c.json({
-                success: true,
-                message: "Password reset initiated. The user will receive an email with reset instructions.",
-                requestId
-            });
-        } catch (error) {
-            return c.json(ErrorResponseBuilder.system("Failed to initiate password reset", "DB_ERROR"), 500);
+        if (ownerCount <= 1) {
+          return c.json(
+            ErrorResponseBuilder.forbidden(
+              "Cannot demote yourself - you are the only owner"
+            ),
+            403
+          );
         }
+      }
+
+      const oldRoleType = membership.roleType;
+
+      const updated = await db.organizationMembership.update({
+        where: { id: membership.id },
+        data: {
+          ...(data.roleType && { roleType: data.roleType }),
+          ...(typeof data.isDefault === "boolean" && { isDefault: data.isDefault }),
+        },
+      });
+
+      // If setting as default, unset other defaults for this user
+      if (data.isDefault === true) {
+        await db.organizationMembership.updateMany({
+          where: {
+            userId,
+            id: { not: membership.id },
+          },
+          data: { isDefault: false },
+        });
+      }
+
+      // Audit log
+      if (data.roleType && data.roleType !== oldRoleType) {
+        await AuditLogger.logOrganizationManagement(
+          "ROLE_CHANGED",
+          currentUser.userId,
+          orgId,
+          {
+            metadata: {
+              targetUserId: userId,
+              oldRoleType,
+              newRoleType: data.roleType,
+            },
+          }
+        );
+      }
+
+      Logger.info("Organization membership updated", {
+        membershipId: membership.id,
+        userId,
+        orgId,
+        changes: data,
+        updatedBy: currentUser.userId,
+        requestId,
+      });
+
+      return c.json({
+        success: true,
+        message: "Membership updated",
+        data: {
+          membershipId: updated.id,
+          userId,
+          roleType: updated.roleType,
+          isDefault: updated.isDefault,
+        },
+        requestId,
+      });
+    } catch (error) {
+      Logger.error("Failed to update membership", { orgId, userId, error });
+      return c.json(
+        ErrorResponseBuilder.system("Failed to update membership", "DB_ERROR"),
+        500
+      );
     }
+  }
 );
 
 /**
  * DELETE /:orgId/members/:userId
- * Remove a member (soft delete)
+ * Remove a member from the organization (deactivate membership)
  */
-orgMembers.delete("/:orgId/members/:userId", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
+orgMembers.delete(
+  "/:orgId/members/:userId",
+  verifyAccessTokenMiddleware,
+  requireOrgAccess(),
+  requireScope("org:members:manage"),
+  async (c) => {
     const orgId = c.req.param("orgId");
     const userId = c.req.param("userId");
-    const currentUser = c.get('user') as TokenPayload;
+    const currentUser = c.get("user") as TokenPayload;
     const requestId = RequestContext.generateRequestId();
 
     try {
-        // Prevent users from deleting themselves
-        if (currentUser.userId === userId) {
-            return c.json(ErrorResponseBuilder.forbidden("Cannot delete your own account from here"), 403);
+      // Prevent removing yourself
+      if (currentUser.userId === userId) {
+        return c.json(
+          ErrorResponseBuilder.forbidden(
+            "Cannot remove yourself from the organization"
+          ),
+          403
+        );
+      }
+
+      const membership = await db.organizationMembership.findFirst({
+        where: {
+          organizationId: orgId,
+          userId,
+          isActive: true,
+        },
+        include: {
+          user: { select: { email: true } },
+        },
+      });
+
+      if (!membership) {
+        return c.json(
+          ErrorResponseBuilder.notFound("Member not found in this organization"),
+          404
+        );
+      }
+
+      // Prevent removing the last owner
+      if (membership.roleType === "ORG_OWNER") {
+        const ownerCount = await db.organizationMembership.count({
+          where: {
+            organizationId: orgId,
+            roleType: "ORG_OWNER",
+            isActive: true,
+          },
+        });
+
+        if (ownerCount <= 1) {
+          return c.json(
+            ErrorResponseBuilder.forbidden(
+              "Cannot remove the last owner of the organization"
+            ),
+            403
+          );
         }
+      }
 
-        const existingMember = await db.user.findFirst({
-            where: { id: userId, organizationId: orgId }
-        });
+      // Deactivate membership (soft delete)
+      await db.organizationMembership.update({
+        where: { id: membership.id },
+        data: { isActive: false },
+      });
 
-        if (!existingMember) {
-            return c.json(ErrorResponseBuilder.notFound("Member not found"), 404);
+      // Audit log
+      await AuditLogger.logOrganizationManagement(
+        "MEMBER_REMOVED",
+        currentUser.userId,
+        orgId,
+        {
+          metadata: {
+            targetUserId: userId,
+            targetEmail: membership.user.email,
+            roleType: membership.roleType,
+          },
         }
+      );
 
-        // Soft delete by setting status to INACTIVE
-        await db.user.update({
-            where: { id: userId },
-            data: { status: "INACTIVE" }
-        });
+      Logger.info("Organization member removed", {
+        membershipId: membership.id,
+        userId,
+        orgId,
+        removedBy: currentUser.userId,
+        requestId,
+      });
 
-        // Revoke all sessions
-        await db.session.updateMany({
-            where: { userId },
-            data: { status: "REVOKED" }
-        });
-
-        Logger.info("Member removed", {
-            userId,
-            orgId,
-            removedBy: currentUser.userId,
-            requestId
-        });
-
-        return c.json({
-            success: true,
-            message: "Member removed",
-            requestId
-        });
+      return c.json({
+        success: true,
+        message: "Member removed from organization",
+        requestId,
+      });
     } catch (error) {
-        return c.json(ErrorResponseBuilder.system("Failed to remove member", "DB_ERROR"), 500);
+      Logger.error("Failed to remove member", { orgId, userId, error });
+      return c.json(
+        ErrorResponseBuilder.system("Failed to remove member", "DB_ERROR"),
+        500
+      );
     }
-});
+  }
+);
 
 export default orgMembers;

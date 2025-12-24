@@ -36,68 +36,73 @@ userSecurity.post("/change-password",
         const requestId = RequestContext.generateRequestId();
 
         try {
-            // 1. Get current hash
-            let currentHash = "";
-            let email = ""; // For logging
+            // Get user with current password hash
+            const userData = await db.user.findUnique({
+                where: { id: user.userId },
+                select: {
+                    id: true,
+                    email: true,
+                    password: true,
+                    platformMembership: { select: { roleType: true, isActive: true } },
+                    organizationMemberships: {
+                        where: { isDefault: true, isActive: true },
+                        select: { organizationId: true }
+                    }
+                }
+            });
 
-            if (user.type === 'platform_manager') {
-                const manager = await db.platformManager.findUnique({ where: { id: user.userId } });
-                if (!manager) return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
-                currentHash = manager.password;
-                email = manager.email;
-            } else {
-                const orgUser = await db.user.findUnique({ where: { id: user.userId } });
-                if (!orgUser) return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
-                currentHash = orgUser.password;
-                email = orgUser.email;
+            if (!userData) {
+                return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
             }
 
-            // 2. Verify current password
-            const isMatch = await Bun.password.verify(currentPassword, currentHash);
+            if (!userData.password) {
+                return c.json(
+                    ErrorResponseBuilder.validation(
+                        "Password change not available for this account",
+                        [{ field: "currentPassword", message: "Account uses external authentication" }]
+                    ),
+                    400
+                );
+            }
+
+            // Verify current password
+            const isMatch = await Bun.password.verify(currentPassword, userData.password);
             if (!isMatch) {
-                return c.json(ErrorResponseBuilder.authorization("Incorrect current password"), 403); // Or 400/401
+                return c.json(ErrorResponseBuilder.authorization("Incorrect current password"), 403);
             }
 
-            // 3. Validate new password strength
+            // Validate new password strength
             const val = validatePassword(newPassword);
             if (!val.isValid) {
-                 return c.json(ErrorResponseBuilder.validation("New password is weak", [], { feedback: val.feedback }), 400);
+                return c.json(
+                    ErrorResponseBuilder.validation("New password is weak", [], { feedback: val.feedback }),
+                    400
+                );
             }
 
-            // 4. Update
+            // Update password
             const newHash = await hashPassword(newPassword);
+            await db.user.update({
+                where: { id: user.userId },
+                data: { password: newHash }
+            });
 
-            let organizationId: string | undefined;
-
-            if (user.type === 'platform_manager') {
-                await db.platformManager.update({
-                    where: { id: user.userId },
-                    data: { password: newHash }
-                });
-            } else {
-                const orgUser = await db.user.findUnique({
-                    where: { id: user.userId },
-                    select: { organizationId: true }
-                });
-                organizationId = orgUser?.organizationId;
-
-                await db.user.update({
-                    where: { id: user.userId },
-                    data: { password: newHash }
-                });
-            }
+            // Determine actor type for audit
+            const actorType = userData.platformMembership?.isActive ? "platform_manager" : "user";
+            const organizationId = userData.organizationMemberships[0]?.organizationId;
 
             // Log audit trail
             await AuditLogger.logAuth(
                 "PASSWORD_CHANGED",
                 c,
                 user.userId,
-                email,
+                userData.email,
                 {
-                    actorType: user.type === 'platform_manager' ? 'platform_manager' : 'user',
+                    actorType,
                     organizationId,
                     metadata: {
-                        selfChange: true
+                        selfChange: true,
+                        platformRole: userData.platformMembership?.roleType,
                     }
                 }
             );
@@ -111,6 +116,7 @@ userSecurity.post("/change-password",
             });
 
         } catch (error) {
+            console.error("Error changing password:", error);
             return c.json(ErrorResponseBuilder.system("Failed to change password"), 500);
         }
     }

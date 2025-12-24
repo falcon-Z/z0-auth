@@ -6,7 +6,11 @@ import {
   generateAccessToken,
   generateRefreshToken,
   parseTimeToSeconds,
+  buildTokenPayload,
+  buildAuthUser,
+  determineLoginRedirect,
   type TokenPayload,
+  type UserWithMemberships,
 } from "@z0/utils/auth";
 import {
   Logger,
@@ -120,15 +124,30 @@ AuthRoutes.post(
 
       const hashedPassword = await hashPassword(password);
 
-      const newUser = await db.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          name,
-          organizationId,
-          legacyRole: "APP_USER",
-          status: "PENDING", // User starts as pending until email verified
-        },
+      // Create user and organization membership in a transaction
+      const newUser = await db.$transaction(async (tx) => {
+        // Create user without organizationId (it's now tracked via memberships)
+        const user = await tx.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            name,
+            status: "PENDING", // User starts as pending until email verified
+          },
+        });
+
+        // Create organization membership with ORG_MEMBER role (lowest org-level access)
+        await tx.organizationMembership.create({
+          data: {
+            userId: user.id,
+            organizationId,
+            roleType: "ORG_MEMBER",
+            isActive: true,
+            isDefault: true,
+          },
+        });
+
+        return user;
       });
 
       // Create verification token and send email
@@ -171,7 +190,7 @@ AuthRoutes.post(
             id: newUser.id,
             email: newUser.email,
             name: newUser.name,
-            role: newUser.legacyRole,
+            roleType: "ORG_MEMBER", // Default role for new registrations
             emailVerified: false,
           },
           requestId,
@@ -191,6 +210,16 @@ AuthRoutes.post(
 // Apply rate limiting to login endpoint
 const loginRateLimit = createRateLimit(rateLimitConfigs.auth);
 
+/**
+ * Unified Login Handler
+ *
+ * User-centric authentication flow:
+ * 1. Find user by email with all memberships
+ * 2. Verify password
+ * 3. Handle 2FA if enabled
+ * 4. Build token with effective scopes based on memberships
+ * 5. Determine redirect based on user's access level
+ */
 AuthRoutes.post("/login", loginRateLimit, async (c) => {
   const requestId = RequestContext.generateRequestId();
   const clientInfo = RequestContext.getClientInfo(c);
@@ -198,7 +227,7 @@ AuthRoutes.post("/login", loginRateLimit, async (c) => {
 
   try {
     const body = await c.req.json();
-    const { email, password, twoFactorToken } = body;
+    const { email, password, twoFactorToken, orgId } = body;
 
     if (!email || !password) {
       return c.json(
@@ -248,371 +277,263 @@ AuthRoutes.post("/login", loginRateLimit, async (c) => {
       );
     }
 
-    // 4. Waterfall Step 1: Check PlatformManager (Super Admins, Support)
-    const platformManager = await db.platformManager.findUnique({
-      where: { email },
-    });
-
-    if (platformManager) {
-      // Verify password (assuming Bun.password is used for hashing)
-      const validPassword = await Bun.password.verify(
-        password,
-        platformManager.password
-      );
-
-      if (!validPassword) {
-        // Record failed attempt and check lockout
-        const lockoutResult = await recordFailedAttempt(email);
-
-        SecurityLogger.logAuthenticationEvent(
-          "Platform Manager Login Failed: Invalid Password",
-          c,
-          undefined,
-          {
-            requestId,
-            email,
-            remainingAttempts: lockoutResult.remainingAttempts,
-            isLocked: lockoutResult.isLocked,
-          }
-        );
-
-        // Continue to user check (don't reveal that platform manager exists)
-      } else {
-        // Password is valid - check 2FA if enabled
-        // Note: Platform managers don't currently have 2FA in schema
-        // This is a placeholder for future implementation
-
-        // Reset lockout on successful login
-        await resetLockout(email);
-
-        // Track device
-        await db.userDevice.create({
-          data: {
-            userId: platformManager.id,
-            deviceType: deviceInfo.type,
-            deviceName: `${deviceInfo.browser} on ${deviceInfo.os}`,
-            fingerprint: fingerprint.fingerprintHash,
-            userAgent: fingerprint.userAgent,
-            ipAddress: fingerprint.ipAddress,
-            lastUsedAt: new Date(),
-            isTrusted: !isSuspiciousDevice(deviceInfo, fingerprint.userAgent),
-          },
-        }).catch((error) => {
-          // Device tracking is non-critical, log but don't fail login
-          Logger.error("Failed to track device", {
-            error: error.message,
-            userId: platformManager.id,
-            requestId,
-          });
-        });
-
-        // Create Session/Tokens for Platform Manager
-        const tokenPayload: Omit<TokenPayload, "iat" | "exp"> = {
-          userId: platformManager.id,
-          email: platformManager.email,
-          roleType: platformManager.roleType,
-          scopes: platformManager.scopes,
-          type: "platform_manager", // Explicit type
-        };
-
-        const accessToken = await generateAccessToken(tokenPayload);
-        const refreshToken = await generateRefreshToken(tokenPayload);
-
-        // Set Cookies
-        const isProd = process.env.NODE_ENV === "production";
-        setCookie(c, "access_token", accessToken, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: "Strict",
-          path: "/",
-          maxAge: 900,
-        }); // 15m
-        setCookie(c, "refresh_token", refreshToken, {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: "Strict",
-          path: "/",
-          maxAge: 604800,
-        }); // 7d
-
-        SecurityLogger.logAuthenticationEvent(
-          "Platform Manager Login Success",
-          c,
-          platformManager.id,
-          { requestId, deviceInfo, fingerprint: fingerprint.fingerprintHash }
-        );
-
-        // Audit log: Platform manager login
-        await AuditLogger.logAuth(
-          "LOGIN",
-          c,
-          platformManager.id,
-          platformManager.email,
-          {
-            actorType: "platform_manager",
-            severity: "HIGH",
-            deviceId: fingerprint.fingerprintHash,
-            metadata: {
-              deviceType: deviceInfo.type,
-              browser: deviceInfo.browser,
-              os: deviceInfo.os,
-            },
-          }
-        );
-
-        return c.json({
-          success: true,
-          user: {
-            id: platformManager.id,
-            email: platformManager.email,
-            name: platformManager.name,
-            role: platformManager.roleType,
-            type: "platform",
-          },
-          redirect: "/admin",
-        });
-      }
-    }
-
-    // 5. Waterfall Step 2: Check User (Org Admins, Developers)
+    // 4. Find user by email with all memberships (unified query)
     const user = await db.user.findUnique({
       where: { email },
-      include: { organization: true }, // Get Org Context
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        name: true,
-        legacyRole: true,
-        organizationId: true,
-        twoFactorEnabled: true,
-        twoFactorSecret: true,
-        twoFactorBackupCodes: true,
-        organization: true,
+      include: {
+        platformMembership: true,
+        organizationMemberships: {
+          where: { isActive: true },
+          include: { organization: true },
+        },
+        appMemberships: {
+          where: { isActive: true },
+        },
       },
     });
 
-    if (user && user.password) {
-      // Only checking users with password set
-      const validPassword = await Bun.password.verify(password, user.password);
+    // If no user found or no password set, record failed attempt and return generic error
+    if (!user || !user.password) {
+      await recordFailedAttempt(email);
 
-      if (!validPassword) {
-        // Record failed attempt
-        const lockoutResult = await recordFailedAttempt(email);
+      SecurityLogger.logAuthenticationEvent(
+        "Login Failed: Invalid Credentials",
+        c,
+        undefined,
+        { requestId, email }
+      );
 
+      return c.json(
+        ErrorResponseBuilder.authentication(
+          "Invalid email or password",
+          "INVALID_CREDENTIALS"
+        ),
+        401
+      );
+    }
+
+    // 5. Verify password
+    const validPassword = await Bun.password.verify(password, user.password);
+
+    if (!validPassword) {
+      const lockoutResult = await recordFailedAttempt(email);
+
+      SecurityLogger.logAuthenticationEvent(
+        "Login Failed: Invalid Password",
+        c,
+        undefined,
+        {
+          requestId,
+          email,
+          remainingAttempts: lockoutResult.remainingAttempts,
+          isLocked: lockoutResult.isLocked,
+        }
+      );
+
+      return c.json(
+        ErrorResponseBuilder.authentication(
+          "Invalid email or password",
+          "INVALID_CREDENTIALS"
+        ),
+        401
+      );
+    }
+
+    // 6. Check 2FA if enabled
+    if (user.twoFactorEnabled) {
+      if (!twoFactorToken) {
         SecurityLogger.logAuthenticationEvent(
-          "User Login Failed: Invalid Password",
+          "User Login: 2FA Required",
           c,
-          undefined,
-          {
-            requestId,
-            email,
-            remainingAttempts: lockoutResult.remainingAttempts,
-            isLocked: lockoutResult.isLocked,
-          }
+          user.id,
+          { requestId, email }
         );
 
-        // Generic error message (don't reveal user exists)
+        return c.json({
+          success: false,
+          requiresTwoFactor: true,
+          message: "Two-factor authentication required",
+          tempUserId: user.id, // In production, use a signed temporary token
+        });
+      }
+
+      // Verify 2FA token
+      const { verifyTOTP, verifyBackupCode } = await import("@z0/utils/totp");
+      let twoFactorValid = false;
+
+      // Check if it's a 6-digit TOTP code
+      if (/^\d{6}$/.test(twoFactorToken)) {
+        if (user.twoFactorSecret) {
+          twoFactorValid = await verifyTOTP(user.twoFactorSecret, twoFactorToken);
+        }
+      }
+      // Check if it's a backup code
+      else if (/^[A-Z2-7]{4}-[A-Z2-7]{4}$/i.test(twoFactorToken)) {
+        const normalizedCode = twoFactorToken.toUpperCase();
+        const backupCodes = user.twoFactorBackupCodes || [];
+
+        for (let i = 0; i < backupCodes.length; i++) {
+          const isMatch = await verifyBackupCode(normalizedCode, backupCodes[i]);
+          if (isMatch) {
+            twoFactorValid = true;
+
+            // Remove used backup code
+            const updatedCodes = backupCodes.filter((_, idx) => idx !== i);
+            await db.user.update({
+              where: { id: user.id },
+              data: { twoFactorBackupCodes: updatedCodes },
+            });
+
+            SecurityLogger.logAuthenticationEvent(
+              "User Login: Backup Code Used",
+              c,
+              user.id,
+              { requestId, remainingCodes: updatedCodes.length }
+            );
+
+            break;
+          }
+        }
+      }
+
+      if (!twoFactorValid) {
+        SecurityLogger.logAuthenticationEvent(
+          "Login Failed: Invalid 2FA Token",
+          c,
+          user.id,
+          { requestId }
+        );
+
         return c.json(
           ErrorResponseBuilder.authentication(
-            "Invalid email or password",
-            "INVALID_CREDENTIALS"
+            "Invalid two-factor authentication code",
+            "INVALID_2FA_TOKEN"
           ),
           401
         );
       }
-
-      // Password is valid - check 2FA if enabled
-      if (user.twoFactorEnabled) {
-        if (!twoFactorToken) {
-          // Password correct but 2FA required
-          SecurityLogger.logAuthenticationEvent(
-            "User Login: 2FA Required",
-            c,
-            user.id,
-            { requestId, email }
-          );
-
-          return c.json({
-            success: false,
-            requiresTwoFactor: true,
-            message: "Two-factor authentication required",
-            // Return a temporary token that can be used for 2FA verification
-            tempUserId: user.id, // In production, use a signed temporary token
-          });
-        }
-
-        // Verify 2FA token
-        const { verifyTOTP, verifyBackupCode } = await import("@z0/utils/totp");
-
-        let twoFactorValid = false;
-
-        // Check if it's a 6-digit TOTP code
-        if (/^\d{6}$/.test(twoFactorToken)) {
-          if (user.twoFactorSecret) {
-            twoFactorValid = await verifyTOTP(user.twoFactorSecret, twoFactorToken);
-          }
-        }
-        // Check if it's a backup code
-        else if (/^[A-Z2-7]{4}-[A-Z2-7]{4}$/i.test(twoFactorToken)) {
-          const normalizedCode = twoFactorToken.toUpperCase();
-          const backupCodes = (user.twoFactorBackupCodes as string[]) || [];
-
-          for (let i = 0; i < backupCodes.length; i++) {
-            const isMatch = await verifyBackupCode(normalizedCode, backupCodes[i]);
-            if (isMatch) {
-              twoFactorValid = true;
-
-              // Remove used backup code
-              const updatedCodes = backupCodes.filter((_, idx) => idx !== i);
-              await db.user.update({
-                where: { id: user.id },
-                data: { twoFactorBackupCodes: updatedCodes },
-              });
-
-              SecurityLogger.logAuthenticationEvent(
-                "User Login: Backup Code Used",
-                c,
-                user.id,
-                { requestId, remainingCodes: updatedCodes.length }
-              );
-
-              break;
-            }
-          }
-        }
-
-        if (!twoFactorValid) {
-          SecurityLogger.logAuthenticationEvent(
-            "User Login Failed: Invalid 2FA Token",
-            c,
-            user.id,
-            { requestId }
-          );
-
-          return c.json(
-            ErrorResponseBuilder.authentication(
-              "Invalid two-factor authentication code",
-              "INVALID_2FA_TOKEN"
-            ),
-            401
-          );
-        }
-      }
-
-      // All authentication checks passed - reset lockout
-      await resetLockout(email);
-
-      // Track device
-      await db.userDevice.create({
-        data: {
-          userId: user.id,
-          deviceType: deviceInfo.type,
-          deviceName: `${deviceInfo.browser} on ${deviceInfo.os}`,
-          fingerprint: fingerprint.fingerprintHash,
-          userAgent: fingerprint.userAgent,
-          ipAddress: fingerprint.ipAddress,
-          lastUsedAt: new Date(),
-          isTrusted: !isSuspiciousDevice(deviceInfo, fingerprint.userAgent),
-        },
-      }).catch((error) => {
-        Logger.error("Failed to track device", {
-          error: error.message,
-          userId: user.id,
-          requestId,
-        });
-      });
-
-      // Create Session/Tokens
-      const tokenPayload: Omit<TokenPayload, "iat" | "exp"> = {
-        userId: user.id,
-        email: user.email,
-        role: user.legacyRole || "APP_USER",
-        orgId: user.organizationId,
-        type: "user",
-      };
-
-      const accessToken = await generateAccessToken(tokenPayload);
-      const refreshToken = await generateRefreshToken(tokenPayload);
-
-      const isProd = process.env.NODE_ENV === "production";
-      setCookie(c, "access_token", accessToken, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "Strict",
-        path: "/",
-        maxAge: 900,
-      });
-      setCookie(c, "refresh_token", refreshToken, {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: "Strict",
-        path: "/",
-        maxAge: 604800,
-      });
-
-      SecurityLogger.logAuthenticationEvent(
-        "User Login Success",
-        c,
-        user.id,
-        { requestId, deviceInfo, fingerprint: fingerprint.fingerprintHash, twoFactorUsed: user.twoFactorEnabled }
-      );
-
-      // Audit log: User login
-      await AuditLogger.logAuth(
-        "LOGIN",
-        c,
-        user.id,
-        user.email,
-        {
-          actorType: "user",
-          organizationId: user.organizationId || undefined,
-          deviceId: fingerprint.fingerprintHash,
-          metadata: {
-            deviceType: deviceInfo.type,
-            browser: deviceInfo.browser,
-            os: deviceInfo.os,
-            twoFactorUsed: user.twoFactorEnabled,
-            role: user.legacyRole,
-          },
-        }
-      );
-
-      return c.json({
-        success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.legacyRole,
-          orgId: user.organizationId,
-          type: "organization",
-        },
-        redirect:
-          user.legacyRole === "APP_USER"
-            ? "/profile"
-            : `/orgs/${user.organization.slug}/dashboard`,
-      });
     }
 
-    // If we reach here: Invalid credentials (generic message)
-    // Record failed attempt for non-existent users (to prevent user enumeration timing attacks)
-    await recordFailedAttempt(email);
+    // 7. All authentication checks passed - reset lockout
+    await resetLockout(email);
 
+    // 8. Track device
+    await db.device.upsert({
+      where: {
+        userId_fingerprint: {
+          userId: user.id,
+          fingerprint: fingerprint.fingerprintHash,
+        },
+      },
+      create: {
+        userId: user.id,
+        fingerprint: fingerprint.fingerprintHash,
+        deviceType: deviceInfo.type === 'desktop' ? 'DESKTOP' :
+                    deviceInfo.type === 'mobile' ? 'MOBILE' :
+                    deviceInfo.type === 'tablet' ? 'TABLET' : 'UNKNOWN',
+        deviceName: `${deviceInfo.browser} on ${deviceInfo.os}`,
+        userAgent: fingerprint.userAgent,
+        browserName: deviceInfo.browser,
+        osName: deviceInfo.os,
+        ipAddress: fingerprint.ipAddress,
+        lastLoginAt: new Date(),
+        loginCount: 1,
+        isTrusted: !isSuspiciousDevice(deviceInfo, fingerprint.userAgent),
+      },
+      update: {
+        lastLoginAt: new Date(),
+        lastUsedAt: new Date(),
+        loginCount: { increment: 1 },
+        ipAddress: fingerprint.ipAddress,
+      },
+    }).catch((error) => {
+      Logger.error("Failed to track device", {
+        error: error.message,
+        userId: user.id,
+        requestId,
+      });
+    });
+
+    // 9. Update user login stats
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        lastLoginAt: new Date(),
+        loginCount: { increment: 1 },
+      },
+    });
+
+    // 10. Build token payload using memberships
+    const userWithMemberships = user as UserWithMemberships;
+    const tokenPayload = buildTokenPayload(userWithMemberships, { orgId });
+
+    const accessToken = await generateAccessToken(tokenPayload);
+    const refreshToken = await generateRefreshToken(tokenPayload);
+
+    // 11. Set cookies
+    const isProd = process.env.NODE_ENV === "production";
+    setCookie(c, "access_token", accessToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "Strict",
+      path: "/",
+      maxAge: 900, // 15 minutes
+    });
+    setCookie(c, "refresh_token", refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "Strict",
+      path: "/",
+      maxAge: 604800, // 7 days
+    });
+
+    // 12. Log success
+    const hasPlatformAccess = !!user.platformMembership?.isActive;
     SecurityLogger.logAuthenticationEvent(
-      "Login Failed: Invalid Credentials",
+      "Login Success",
       c,
-      undefined,
-      { requestId, email }
+      user.id,
+      {
+        requestId,
+        deviceInfo,
+        fingerprint: fingerprint.fingerprintHash,
+        twoFactorUsed: user.twoFactorEnabled,
+        hasPlatformAccess,
+        orgCount: user.organizationMemberships.length,
+      }
     );
 
-    return c.json(
-      ErrorResponseBuilder.authentication(
-        "Invalid email or password",
-        "INVALID_CREDENTIALS"
-      ),
-      401
+    // 13. Audit log
+    await AuditLogger.logAuth(
+      "LOGIN",
+      c,
+      user.id,
+      user.email,
+      {
+        actorType: "user",
+        organizationId: tokenPayload.orgContext?.orgId,
+        deviceId: fingerprint.fingerprintHash,
+        severity: hasPlatformAccess ? "HIGH" : "MEDIUM",
+        metadata: {
+          deviceType: deviceInfo.type,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+          twoFactorUsed: user.twoFactorEnabled,
+          hasPlatformAccess,
+          platformRole: user.platformMembership?.roleType,
+        },
+      }
     );
+
+    // 14. Build response
+    const authUser = buildAuthUser(userWithMemberships);
+    const redirect = determineLoginRedirect(userWithMemberships);
+
+    return c.json({
+      success: true,
+      user: authUser,
+      redirect,
+    });
   } catch (error) {
     Logger.error("Login error", { error: (error as Error).message, requestId });
     return c.json(
@@ -690,14 +611,18 @@ AuthRoutes.post("/refresh", async (c) => {
     }
 
     try {
-      const user = await db.platformManager.findUnique({
+      // Fetch user with all memberships to rebuild token
+      const user = await db.user.findUnique({
         where: { id: payload.userId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          roleType: true,
-          scopes: true,
+        include: {
+          platformMembership: true,
+          organizationMemberships: {
+            where: { isActive: true },
+            include: { organization: true },
+          },
+          appMemberships: {
+            where: { isActive: true },
+          },
         },
       });
 
@@ -709,13 +634,8 @@ AuthRoutes.post("/refresh", async (c) => {
         return c.json({ ...err, requestId }, 401);
       }
 
-      const tokenPayload: Omit<TokenPayload, "iat" | "exp"> = {
-        userId: user.id,
-        email: user.email,
-        roleType: user.roleType,
-        scopes: user.scopes,
-        type: "platform_manager", // Assuming refresh here is only for platform manager based on the query above (db.platformManager.findUnique)
-      };
+      // Use the token builder to generate the payload
+      const tokenPayload = buildTokenPayload(user as any);
 
       const newAccessToken = await generateAccessToken(tokenPayload);
       const newRefreshToken = await generateRefreshToken(tokenPayload);

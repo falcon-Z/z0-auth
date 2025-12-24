@@ -57,12 +57,12 @@ export async function checkSetupEligibility(c: Context) {
       });
     }
 
-    // Check database
+    // Check database for existing platform membership with SUPER_ADMIN role
     let existingAdmin;
     try {
-      existingAdmin = await db.platformManager.findFirst({
-        where: { roleType: "SUPER_ADMIN" },
-        select: { id: true },
+      existingAdmin = await db.platformMembership.findFirst({
+        where: { roleType: "SUPER_ADMIN", isActive: true },
+        select: { id: true, userId: true },
       });
     } catch (error) {
       const dbError = DatabaseErrorHandler.handleError(error);
@@ -122,14 +122,11 @@ export async function validateEmail(c: Context) {
     const body = (await c.req.json()) as ValidateEmailRequest;
     const { email } = body;
 
-    // Check if super admin with this email exists
-    let existingAdmin;
+    // Check if user with this email exists
+    let existingUser;
     try {
-      existingAdmin = await db.platformManager.findFirst({
-        where: {
-          email,
-          roleType: "SUPER_ADMIN",
-        },
+      existingUser = await db.user.findUnique({
+        where: { email },
         select: { id: true, email: true },
       });
     } catch (error) {
@@ -148,15 +145,15 @@ export async function validateEmail(c: Context) {
       return c.json({ ...errorResponse, requestId }, 500);
     }
 
-    const available = !existingAdmin;
+    const available = !existingUser;
 
     if (!available) {
       SecurityLogger.logSuspiciousActivity(
-        "Attempt to use existing super admin email",
+        "Attempt to use existing user email during setup",
         c,
         {
           email,
-          existingAdminId: existingAdmin?.id,
+          existingUserId: existingUser?.id,
           requestId,
         }
       );
@@ -322,11 +319,13 @@ export async function handleSetup(c: Context) {
 
     /**
      * Check if a super admin already exists in the database.
+     * (User with active platform membership as SUPER_ADMIN)
      */
-    let existing;
+    let existingAdmin;
     try {
-      existing = await db.platformManager.findFirst({
-        where: { roleType: "SUPER_ADMIN" },
+      existingAdmin = await db.platformMembership.findFirst({
+        where: { roleType: "SUPER_ADMIN", isActive: true },
+        include: { user: { select: { id: true, email: true } } },
       });
     } catch (error) {
       const dbError = DatabaseErrorHandler.handleError(error);
@@ -344,7 +343,7 @@ export async function handleSetup(c: Context) {
       return c.json({ ...errorResponse, requestId }, 500);
     }
 
-    if (existing) {
+    if (existingAdmin) {
       /**
        * Log attempt to create duplicate super admin for security monitoring
        */
@@ -352,7 +351,7 @@ export async function handleSetup(c: Context) {
         "Attempt to create duplicate super admin",
         c,
         {
-          existingAdminId: existing.id,
+          existingAdminId: existingAdmin.userId,
           requestId,
         }
       );
@@ -386,23 +385,82 @@ export async function handleSetup(c: Context) {
     }
 
     /**
-     * Create a new super admin account with hashed password.
+     * Create user, organization, and memberships in a transaction
      */
-    let superAdmin;
+    let user;
+    let defaultOrg;
+
     try {
-      superAdmin = await db.platformManager.create({
-        data: {
-          email,
-          password: hashedPassword,
-          name,
-          organization,
-          roleType: "SUPER_ADMIN",
-          scopes: ["*"],
-        },
+      // Generate organization slug
+      const defaultOrgSlug = generateSlug(organization);
+      let finalSlug = defaultOrgSlug;
+      let counter = 1;
+
+      // Check for slug collision
+      while (await db.organization.findUnique({ where: { slug: finalSlug } })) {
+        finalSlug = `${defaultOrgSlug}-${counter}`;
+        counter++;
+      }
+
+      // Create everything in a transaction
+      const result = await db.$transaction(async (tx) => {
+        // 1. Create the Organization first
+        const org = await tx.organization.create({
+          data: {
+            name: organization,
+            slug: finalSlug,
+            description: "Default organization created during system setup",
+            status: "ACTIVE",
+          },
+        });
+
+        // 2. Create the User
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            name,
+            status: "ACTIVE",
+            emailVerified: true, // Super admin is auto-verified
+          },
+        });
+
+        // 3. Create Platform Membership (SUPER_ADMIN)
+        await tx.platformMembership.create({
+          data: {
+            userId: newUser.id,
+            roleType: "SUPER_ADMIN",
+            scopes: ["*"],
+            isActive: true,
+          },
+        });
+
+        // 4. Create Organization Membership (ORG_OWNER)
+        await tx.organizationMembership.create({
+          data: {
+            userId: newUser.id,
+            organizationId: org.id,
+            roleType: "ORG_OWNER",
+            isActive: true,
+            isDefault: true, // This is the user's default org
+          },
+        });
+
+        return { user: newUser, org };
+      });
+
+      user = result.user;
+      defaultOrg = result.org;
+
+      Logger.info("Setup completed: User, Organization, and Memberships created", {
+        userId: user.id,
+        orgId: defaultOrg.id,
+        orgSlug: finalSlug,
+        requestId,
       });
     } catch (error) {
       const dbError = DatabaseErrorHandler.handleError(error);
-      Logger.error("Database error during super admin creation", {
+      Logger.error("Database error during setup transaction", {
         error: dbError.message,
         code: dbError.code,
         email,
@@ -410,54 +468,11 @@ export async function handleSetup(c: Context) {
       });
 
       const errorResponse = ErrorResponseBuilder.database(
-        "Failed to create super admin account. Please try again.",
+        "Failed to complete setup. Please try again.",
         dbError.code,
         dbError.isRetryable
       );
       return c.json({ ...errorResponse, requestId }, 500);
-    }
-
-    /**
-     * Create the Default Organization specified during setup
-     */
-    try {
-      const defaultOrgSlug = generateSlug(organization);
-
-      let finalSlug = defaultOrgSlug;
-      let counter = 1;
-
-      /**
-       * Check for slug collision and increment if necessary
-       */
-      while (await db.organization.findUnique({ where: { slug: finalSlug } })) {
-        finalSlug = `${defaultOrgSlug}-${counter}`;
-        counter++;
-      }
-
-      const defaultOrg = await db.organization.create({
-        data: {
-          name: organization,
-          slug: finalSlug,
-          description: "Default organization created during system setup",
-          status: "ACTIVE",
-        },
-      });
-
-      Logger.info("Default organization created", {
-        orgId: defaultOrg.id,
-        name: organization,
-        slug: finalSlug,
-        requestId,
-      });
-    } catch (error: any) {
-      /**
-       * Log but don't fail setup, as Super Admin is already created.
-       * Rollback could be implemented here if strict atomicity is required.
-       */
-      Logger.error("Failed to create default organization during setup", {
-        error: error.message,
-        requestId,
-      });
     }
 
     /**
@@ -490,7 +505,8 @@ export async function handleSetup(c: Context) {
      */
     SecurityLogger.logSetupAttempt(c, true, {
       email,
-      userId: superAdmin.id,
+      userId: user.id,
+      organizationId: defaultOrg.id,
       requestId,
     });
 
@@ -503,6 +519,9 @@ export async function handleSetup(c: Context) {
       message:
         "Super admin setup complete. Please login with your credentials to acquire access tokens.",
       email,
+      userId: user.id,
+      organizationId: defaultOrg.id,
+      organizationSlug: defaultOrg.slug,
       requestId,
     });
 
@@ -514,7 +533,8 @@ export async function handleSetup(c: Context) {
 
     Logger.info("Setup request completed successfully", {
       requestId,
-      userId: superAdmin.id,
+      userId: user.id,
+      organizationId: defaultOrg.id,
       email,
     });
 

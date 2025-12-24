@@ -3,7 +3,6 @@ import { db } from "@z0/utils/db/client";
 import {
     ErrorResponseBuilder,
     RequestContext,
-    DatabaseErrorHandler
 } from "@z0/utils/error-handling";
 import { z } from "zod";
 import { validator } from "hono/validator";
@@ -27,57 +26,67 @@ userProfile.get("/me", verifyAccessTokenMiddleware, async (c) => {
     const requestId = RequestContext.generateRequestId();
 
     try {
-        // Fetch fresh data
-        // User could be PlatformManager or Org User?
-        // "Unified Auth" logic in login said: 
-        // PlatformManager -> type: "platform_manager"
-        // User -> type: "user" (and orgId)
-        
-        // We should handle both? 
-        // Roadmap said "User Self-Service". Platform Managers are users too.
-        
-        let profileData;
+        // Fetch user with memberships
+        const userData = await db.user.findUnique({
+            where: { id: user.userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                avatar: true,
+                status: true,
+                createdAt: true,
+                lastLoginAt: true,
+                emailVerified: true,
+                twoFactorEnabled: true,
+                platformMembership: {
+                    select: {
+                        roleType: true,
+                        isActive: true,
+                    }
+                },
+                organizationMemberships: {
+                    where: { isActive: true },
+                    select: {
+                        roleType: true,
+                        isDefault: true,
+                        organization: {
+                            select: { id: true, name: true, slug: true }
+                        }
+                    }
+                }
+            }
+        });
 
-        if (user.type === 'platform_manager') {
-             const manager = await db.platformManager.findUnique({
-                 where: { id: user.userId },
-                 select: {
-                     id: true,
-                     name: true,
-                     email: true,
-                     roleType: true,
-                     organization: true, // "System" or name
-                     createdAt: true,
-                     lastLoginAt: true
-                 }
-             });
-             if (!manager) return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
-             profileData = { ...manager, type: 'platform_manager' };
-
-        } else {
-             const orgUser = await db.user.findUnique({
-                 where: { id: user.userId },
-                 include: {
-                     organization: {
-                         select: { id: true, name: true, slug: true }
-                     }
-                 }
-             });
-             
-             if (!orgUser) return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
-             
-             profileData = {
-                 id: orgUser.id,
-                 name: orgUser.name,
-                 email: orgUser.email,
-                 role: orgUser.role,
-                 organization: orgUser.organization,
-                 status: orgUser.status,
-                 createdAt: orgUser.createdAt,
-                 lastLoginAt: orgUser.lastLoginAt,
-                 type: 'organization_user'
-             };
+        if (!userData) {
+            return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
         }
+
+        // Build profile response
+        const profileData = {
+            id: userData.id,
+            name: userData.name,
+            email: userData.email,
+            avatar: userData.avatar,
+            status: userData.status,
+            emailVerified: userData.emailVerified,
+            twoFactorEnabled: userData.twoFactorEnabled,
+            createdAt: userData.createdAt,
+            lastLoginAt: userData.lastLoginAt,
+            // Platform access info
+            hasPlatformAccess: userData.platformMembership?.isActive ?? false,
+            platformRole: userData.platformMembership?.isActive
+                ? userData.platformMembership.roleType
+                : undefined,
+            // Organizations the user belongs to
+            organizations: userData.organizationMemberships.map(m => ({
+                id: m.organization.id,
+                name: m.organization.name,
+                slug: m.organization.slug,
+                roleType: m.roleType,
+                isDefault: m.isDefault,
+            })),
+        };
 
         return c.json({
             success: true,
@@ -86,6 +95,7 @@ userProfile.get("/me", verifyAccessTokenMiddleware, async (c) => {
         });
 
     } catch (error) {
+        console.error("Error fetching profile:", error);
         return c.json(ErrorResponseBuilder.system("Failed to fetch profile"), 500);
     }
 });
@@ -109,71 +119,57 @@ userProfile.put("/me",
         const requestId = RequestContext.generateRequestId();
 
         try {
-            if (user.type === 'platform_manager') {
-                // Fetch current data for audit trail
-                const current = await db.platformManager.findUnique({
-                    where: { id: user.userId },
-                    select: { name: true, email: true }
-                });
-
-                const updated = await db.platformManager.update({
-                    where: { id: user.userId },
-                    data: { name: data.name },
-                    select: { id: true, name: true, email: true }
-                });
-
-                // Log audit trail
-                await AuditLogger.logUserManagement(
-                    "USER_UPDATED",
-                    user.userId,
-                    user.userId,
-                    updated.email,
-                    {
-                        actorType: "platform_manager",
-                        metadata: {
-                            changes: {
-                                name: { from: current?.name, to: data.name }
-                            }
-                        }
+            // Fetch current data for audit trail
+            const current = await db.user.findUnique({
+                where: { id: user.userId },
+                select: {
+                    name: true,
+                    email: true,
+                    platformMembership: { select: { roleType: true } },
+                    organizationMemberships: {
+                        where: { isDefault: true, isActive: true },
+                        select: { organizationId: true }
                     }
-                );
+                }
+            });
 
-                return c.json({ success: true, data: updated, requestId });
-            } else {
-                // Fetch current data for audit trail
-                const current = await db.user.findUnique({
-                    where: { id: user.userId },
-                    select: { name: true, email: true, organizationId: true }
-                });
-
-                const updated = await db.user.update({
-                    where: { id: user.userId },
-                    data: { name: data.name },
-                    select: { id: true, name: true, email: true }
-                });
-
-                // Log audit trail
-                await AuditLogger.logUserManagement(
-                    "USER_UPDATED",
-                    user.userId,
-                    user.userId,
-                    updated.email,
-                    {
-                        actorType: "user",
-                        organizationId: current?.organizationId,
-                        metadata: {
-                            changes: {
-                                name: { from: current?.name, to: data.name }
-                            },
-                            selfUpdate: true
-                        }
-                    }
-                );
-
-                return c.json({ success: true, data: updated, requestId });
+            if (!current) {
+                return c.json(ErrorResponseBuilder.notFound("User not found"), 404);
             }
+
+            const updated = await db.user.update({
+                where: { id: user.userId },
+                data: { name: data.name },
+                select: { id: true, name: true, email: true }
+            });
+
+            // Determine actor type and org context for audit
+            const actorType = current.platformMembership ? "platform_manager" : "user";
+            const organizationId = current.organizationMemberships[0]?.organizationId;
+
+            // Log audit trail
+            await AuditLogger.logUserManagement(
+                "USER_UPDATED",
+                user.userId,
+                user.userId,
+                updated.email,
+                {
+                    actorType,
+                    organizationId,
+                    metadata: {
+                        changes: {
+                            name: { from: current.name, to: data.name }
+                        },
+                        selfUpdate: true,
+                        platformRole: current.platformMembership?.roleType,
+                    }
+                }
+            );
+
+            return c.json({ success: true, data: updated, requestId });
         } catch (error) {
-             return c.json(ErrorResponseBuilder.system("Failed to update profile"), 500);
+            console.error("Error updating profile:", error);
+            return c.json(ErrorResponseBuilder.system("Failed to update profile"), 500);
         }
     }
 );

@@ -4,6 +4,8 @@ import { validator } from "hono/validator";
 import { z } from "zod";
 import { AuditLogger } from "../../../utils/audit-logger";
 import { ErrorResponseBuilder } from "../../../utils/error-handling";
+import type { TokenPayload } from "@z0/utils/auth";
+import { hasScope } from "@z0/utils/scopes";
 
 const orgCrudRoutes = new Hono();
 
@@ -13,11 +15,15 @@ const orgCrudRoutes = new Hono();
  */
 orgCrudRoutes.get("/", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
 
     // Only platform admins can list all organizations
-    if (!user || user.type !== "platform") {
-      return c.json({ error: "Unauthorized" }, 403);
+    if (!user.platformRole || !hasScope(user.effectiveScopes, "platform:organizations:read")) {
+      return c.json({ error: "Forbidden" }, 403);
     }
 
     const organizations = await prisma.organization.findMany({
@@ -33,7 +39,7 @@ orgCrudRoutes.get("/", async (c) => {
         updatedAt: true,
         _count: {
           select: {
-            users: true,
+            memberships: true,
             apps: true,
           },
         },
@@ -46,7 +52,7 @@ orgCrudRoutes.get("/", async (c) => {
     return c.json({
       organizations: organizations.map((org) => ({
         ...org,
-        userCount: org._count.users,
+        userCount: org._count.memberships,
         appCount: org._count.apps,
       })),
     });
@@ -62,7 +68,7 @@ orgCrudRoutes.get("/", async (c) => {
  */
 orgCrudRoutes.get("/:orgId", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
     const orgId = c.req.param("orgId");
 
     if (!user) {
@@ -71,14 +77,10 @@ orgCrudRoutes.get("/:orgId", async (c) => {
 
     // Check if user has access to this organization
     const hasAccess =
-      user.type === "platform" ||
-      user.organizationId === orgId ||
-      (await prisma.organizationAdmin.findFirst({
-        where: {
-          organizationId: orgId,
-          userId: user.id,
-        },
-      }));
+      // Platform member with org read access
+      (user.platformRole && hasScope(user.effectiveScopes, "platform:organizations:read")) ||
+      // User's current org context matches
+      user.orgContext?.orgId === orgId;
 
     if (!hasAccess) {
       return c.json({ error: "Forbidden" }, 403);
@@ -89,7 +91,7 @@ orgCrudRoutes.get("/:orgId", async (c) => {
       include: {
         _count: {
           select: {
-            users: true,
+            memberships: true,
             apps: true,
             scopes: true,
             roles: true,
@@ -105,7 +107,7 @@ orgCrudRoutes.get("/:orgId", async (c) => {
     return c.json({
       organization: {
         ...organization,
-        userCount: organization._count.users,
+        userCount: organization._count.memberships,
         appCount: organization._count.apps,
         scopeCount: organization._count.scopes,
         roleCount: organization._count.roles,
@@ -153,11 +155,15 @@ orgCrudRoutes.post(
   }),
   async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    // Only platform admins can create organizations
-    if (!user || user.type !== "platform") {
-      return c.json({ error: "Unauthorized" }, 403);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Only platform admins with write permission can create organizations
+    if (!user.platformRole || !hasScope(user.effectiveScopes, "platform:organizations:write")) {
+      return c.json({ error: "Forbidden" }, 403);
     }
 
     const data = c.req.valid("json");
@@ -194,7 +200,8 @@ orgCrudRoutes.post(
           name: organization.name,
           slug: organization.slug,
           maxUsers: organization.maxUsers,
-          maxApps: organization.maxApps
+          maxApps: organization.maxApps,
+          platformRole: user.platformRole,
         }
       }
     );
@@ -239,15 +246,15 @@ orgCrudRoutes.patch(
   }),
   async (c) => {
     try {
-      const user = c.get("user");
+      const user = c.get("user") as TokenPayload | undefined;
       const orgId = c.req.param("orgId");
 
       if (!user) {
         return c.json({ error: "Unauthorized" }, 401);
       }
 
-      // Only platform admins can update organizations
-      if (user.type !== "platform") {
+      // Only platform admins with write permission can update organizations
+      if (!user.platformRole || !hasScope(user.effectiveScopes, "platform:organizations:write")) {
         return c.json({ error: "Forbidden" }, 403);
       }
 
@@ -279,7 +286,7 @@ orgCrudRoutes.patch(
         {
           actorType: "platform_manager",
           severity: data.status === "SUSPENDED" || current?.status === "SUSPENDED" ? "CRITICAL" : "HIGH",
-          metadata: { changes }
+          metadata: { changes, platformRole: user.platformRole }
         }
       );
 
@@ -300,17 +307,22 @@ orgCrudRoutes.patch(
  */
 orgCrudRoutes.delete("/:orgId", async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
     const orgId = c.req.param("orgId");
 
-    if (!user || user.type !== "platform") {
-      return c.json({ error: "Unauthorized" }, 403);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    // Only platform admins with delete permission can delete organizations
+    if (!user.platformRole || !hasScope(user.effectiveScopes, "platform:organizations:delete")) {
+      return c.json({ error: "Forbidden" }, 403);
     }
 
     // Fetch organization details for audit trail
     const organization = await prisma.organization.findUnique({
       where: { id: orgId },
-      select: { name: true, slug: true, _count: { select: { users: true, apps: true } } }
+      select: { name: true, slug: true, _count: { select: { memberships: true, apps: true } } }
     });
 
     if (!organization) {
@@ -332,8 +344,9 @@ orgCrudRoutes.delete("/:orgId", async (c) => {
         metadata: {
           name: organization.name,
           slug: organization.slug,
-          userCount: organization._count.users,
-          appCount: organization._count.apps
+          userCount: organization._count.memberships,
+          appCount: organization._count.apps,
+          platformRole: user.platformRole,
         }
       }
     );

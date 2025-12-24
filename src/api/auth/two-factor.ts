@@ -11,6 +11,7 @@ import {
   verifyBackupCode,
 } from "../../utils/totp";
 import { AuditLogger } from "../../utils/audit-logger";
+import type { TokenPayload } from "@z0/utils/auth";
 
 const twoFactor = new Hono();
 
@@ -30,15 +31,15 @@ const disableSchema = z.object({
 // Setup 2FA - Generate secret and QR code
 twoFactor.post("/2fa/setup", authMiddleware, async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    if (!user || !user.id) {
+    if (!user || !user.userId) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
     // Check if 2FA is already enabled
     const existingUser = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: user.userId },
       select: { twoFactorEnabled: true },
     });
 
@@ -54,7 +55,7 @@ twoFactor.post("/2fa/setup", authMiddleware, async (c) => {
 
     // Store secret temporarily (not enabled yet)
     await prisma.user.update({
-      where: { id: user.id },
+      where: { id: user.userId },
       data: {
         twoFactorSecret: secret,
         twoFactorEnabled: false, // Not enabled until verified
@@ -76,9 +77,9 @@ twoFactor.post("/2fa/setup", authMiddleware, async (c) => {
 // Verify setup and enable 2FA
 twoFactor.post("/2fa/verify-setup", authMiddleware, async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    if (!user || !user.id) {
+    if (!user || !user.userId) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
@@ -87,7 +88,7 @@ twoFactor.post("/2fa/verify-setup", authMiddleware, async (c) => {
 
     // Get user's secret
     const existingUser = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: user.userId },
       select: { twoFactorSecret: true, twoFactorEnabled: true },
     });
 
@@ -112,31 +113,25 @@ twoFactor.post("/2fa/verify-setup", authMiddleware, async (c) => {
       backupCodes.map((code) => hashBackupCode(code))
     );
 
-    // Fetch user email for audit log
-    const userData = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { email: true, organizationId: true }
-    });
-
     // Enable 2FA and save backup codes
     await prisma.user.update({
-      where: { id: user.id },
+      where: { id: user.userId },
       data: {
         twoFactorEnabled: true,
         twoFactorBackupCodes: hashedCodes,
       },
     });
 
-    // Log audit trail
+    // Log audit trail using org context from token
     await AuditLogger.logAuth(
       "TWO_FACTOR_ENABLED",
       c,
-      user.id,
-      userData?.email,
+      user.userId,
+      user.email,
       {
         actorType: "user",
         severity: "HIGH",
-        organizationId: userData?.organizationId,
+        organizationId: user.orgContext?.orgId,
         metadata: {
           backupCodesGenerated: backupCodes.length
         }
@@ -150,7 +145,7 @@ twoFactor.post("/2fa/verify-setup", authMiddleware, async (c) => {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return c.json({ error: "Validation failed", details: error.errors }, 400);
+      return c.json({ error: "Validation failed", details: error.issues }, 400);
     }
     console.error("Error verifying 2FA setup:", error);
     return c.json({ error: "Failed to verify 2FA setup" }, 500);
@@ -227,7 +222,7 @@ twoFactor.post("/2fa/verify", async (c) => {
     return c.json({ error: "Invalid verification code" }, 400);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return c.json({ error: "Validation failed", details: error.errors }, 400);
+      return c.json({ error: "Validation failed", details: error.issues }, 400);
     }
     console.error("Error verifying 2FA:", error);
     return c.json({ error: "Failed to verify 2FA" }, 500);
@@ -237,9 +232,9 @@ twoFactor.post("/2fa/verify", async (c) => {
 // Disable 2FA
 twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    if (!user || !user.id) {
+    if (!user || !user.userId) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
@@ -248,7 +243,7 @@ twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
 
     // Get user with password
     const existingUser = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: user.userId },
       select: {
         password: true,
         twoFactorEnabled: true,
@@ -257,6 +252,10 @@ twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
 
     if (!existingUser?.twoFactorEnabled) {
       return c.json({ error: "2FA is not enabled" }, 400);
+    }
+
+    if (!existingUser.password) {
+      return c.json({ error: "Cannot disable 2FA for accounts without password" }, 400);
     }
 
     // Verify password
@@ -269,15 +268,9 @@ twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
       return c.json({ error: "Invalid password" }, 401);
     }
 
-    // Fetch user email and org for audit log
-    const userData = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { email: true, organizationId: true }
-    });
-
     // Disable 2FA
     await prisma.user.update({
-      where: { id: user.id },
+      where: { id: user.userId },
       data: {
         twoFactorEnabled: false,
         twoFactorSecret: null,
@@ -285,16 +278,16 @@ twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
       },
     });
 
-    // Log audit trail
+    // Log audit trail using org context from token
     await AuditLogger.logAuth(
       "TWO_FACTOR_DISABLED",
       c,
-      user.id,
-      userData?.email,
+      user.userId,
+      user.email,
       {
         actorType: "user",
         severity: "HIGH",
-        organizationId: userData?.organizationId,
+        organizationId: user.orgContext?.orgId,
         metadata: {
           disabledBy: "user",
           passwordVerified: true
@@ -305,7 +298,7 @@ twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
     return c.json({ message: "2FA disabled successfully" });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return c.json({ error: "Validation failed", details: error.errors }, 400);
+      return c.json({ error: "Validation failed", details: error.issues }, 400);
     }
     console.error("Error disabling 2FA:", error);
     return c.json({ error: "Failed to disable 2FA" }, 500);
@@ -315,15 +308,15 @@ twoFactor.post("/2fa/disable", authMiddleware, async (c) => {
 // Generate new backup codes
 twoFactor.post("/2fa/backup-codes", authMiddleware, async (c) => {
   try {
-    const user = c.get("user");
+    const user = c.get("user") as TokenPayload | undefined;
 
-    if (!user || !user.id) {
+    if (!user || !user.userId) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
     // Check if 2FA is enabled
     const existingUser = await prisma.user.findUnique({
-      where: { id: user.id },
+      where: { id: user.userId },
       select: { twoFactorEnabled: true },
     });
 
@@ -339,7 +332,7 @@ twoFactor.post("/2fa/backup-codes", authMiddleware, async (c) => {
 
     // Replace old backup codes
     await prisma.user.update({
-      where: { id: user.id },
+      where: { id: user.userId },
       data: {
         twoFactorBackupCodes: hashedCodes,
       },

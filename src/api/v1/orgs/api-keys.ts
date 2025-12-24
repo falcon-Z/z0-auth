@@ -1,15 +1,15 @@
 import { Hono } from "hono";
 import { db } from "@z0/utils/db/client";
 import {
-    Logger,
-    DatabaseErrorHandler,
-    ErrorResponseBuilder,
-    RequestContext
+  Logger,
+  DatabaseErrorHandler,
+  ErrorResponseBuilder,
+  RequestContext,
 } from "@z0/utils/error-handling";
 import { z } from "zod";
 import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware, type TokenPayload } from "@z0/utils/auth";
-import { requireOrgAccess } from "./middleware";
+import { requireOrgAccess, requireScope } from "../../../middleware/require-scope";
 import { randomBytes } from "crypto";
 
 const apiKeys = new Hono();
@@ -42,7 +42,7 @@ function generateApiSecret(): string {
  * GET /api/v1/orgs/:orgId/apps/:appId/keys
  * List all API keys for an app
  */
-apiKeys.get("/:orgId/apps/:appId/keys", verifyAccessTokenMiddleware, requireOrgAccess, async (c) => {
+apiKeys.get("/:orgId/apps/:appId/keys", verifyAccessTokenMiddleware, requireOrgAccess(), async (c) => {
     const orgId = c.req.param("orgId");
     const appId = c.req.param("appId");
     const requestId = RequestContext.generateRequestId();
@@ -88,7 +88,8 @@ apiKeys.get("/:orgId/apps/:appId/keys", verifyAccessTokenMiddleware, requireOrgA
  */
 apiKeys.post("/:orgId/apps/:appId/keys",
     verifyAccessTokenMiddleware,
-    requireOrgAccess,
+    requireOrgAccess(),
+    requireScope("org:apps:write"),
     validator("json", (value, c) => {
         const parsed = createKeySchema.safeParse(value);
         if (!parsed.success) {
@@ -173,7 +174,8 @@ apiKeys.post("/:orgId/apps/:appId/keys",
  */
 apiKeys.post("/:orgId/apps/:appId/keys/:keyId/rotate",
     verifyAccessTokenMiddleware,
-    requireOrgAccess,
+    requireOrgAccess(),
+    requireScope("org:apps:write"),
     async (c) => {
         const orgId = c.req.param("orgId");
         const appId = c.req.param("appId");
@@ -270,7 +272,8 @@ apiKeys.post("/:orgId/apps/:appId/keys/:keyId/rotate",
  */
 apiKeys.patch("/:orgId/apps/:appId/keys/:keyId",
     verifyAccessTokenMiddleware,
-    requireOrgAccess,
+    requireOrgAccess(),
+    requireScope("org:apps:write"),
     validator("json", (value, c) => {
         const parsed = updateKeySchema.safeParse(value);
         if (!parsed.success) {
@@ -351,7 +354,8 @@ apiKeys.patch("/:orgId/apps/:appId/keys/:keyId",
  */
 apiKeys.delete("/:orgId/apps/:appId/keys/:keyId",
     verifyAccessTokenMiddleware,
-    requireOrgAccess,
+    requireOrgAccess(),
+    requireScope("org:apps:delete"),
     async (c) => {
         const orgId = c.req.param("orgId");
         const appId = c.req.param("appId");
