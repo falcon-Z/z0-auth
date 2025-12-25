@@ -204,6 +204,19 @@ orgMembers.post(
         }
       }
 
+      // Check user quota (platform admins bypass) - only for new memberships, not reactivations
+      if (!isPlatformAdmin(currentUser.platformRole)) {
+        const quotaCheck = await checkUserQuota(orgId);
+        if (!quotaCheck.allowed) {
+          return c.json(
+            ErrorResponseBuilder.validation("Organization capacity reached", [
+              { field: "organization", message: quotaCheck.reason || "Maximum user limit reached" },
+            ]),
+            400
+          );
+        }
+      }
+
       // If user doesn't exist, create them
       if (!user) {
         if (!data.password) {

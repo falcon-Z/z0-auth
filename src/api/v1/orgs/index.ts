@@ -13,6 +13,7 @@ import webhooks from "./webhooks";
 import invitations from "./invitations";
 import metadataSchemas from "./metadata-schemas";
 import appScopes from "./app-scopes";
+import batch from "./batch";
 
 const orgRoutes = new Hono();
 
@@ -46,5 +47,8 @@ orgRoutes.route("/", metadataSchemas);
 
 // App scopes management
 orgRoutes.route("/", appScopes);
+
+// Batch operations
+orgRoutes.route("/", batch);
 
 export default orgRoutes;

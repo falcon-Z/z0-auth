@@ -17,6 +17,7 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { randomBytes } from "crypto";
 import { dispatchWebhook } from "@z0/utils/webhooks";
+import { checkUserQuota, isPlatformAdmin } from "@z0/utils/quota";
 
 const invitations = new Hono();
 
@@ -201,25 +202,20 @@ invitations.post(
         );
       }
 
-      const org = await db.organization.findUnique({
-        where: { id: orgId },
-        select: { name: true, maxUsers: true, _count: { select: { memberships: { where: { isActive: true } } } } },
-      });
-
-      if (!org) {
-        return c.json(ErrorResponseBuilder.notFound("Organization not found"), 404);
-      }
-
-      if (org.maxUsers && org._count.memberships >= org.maxUsers) {
-        return c.json(
-          ErrorResponseBuilder.validation("User limit reached", [
-            {
-              field: "email",
-              message: `Organization has reached maximum user limit of ${org.maxUsers}`,
-            },
-          ]),
-          400
-        );
+      // Check user quota (platform admins bypass)
+      if (!isPlatformAdmin(user.platformRole)) {
+        const quotaCheck = await checkUserQuota(orgId);
+        if (!quotaCheck.allowed) {
+          return c.json(
+            ErrorResponseBuilder.validation("Organization capacity reached", [
+              {
+                field: "email",
+                message: quotaCheck.reason || "Maximum user limit reached",
+              },
+            ]),
+            400
+          );
+        }
       }
 
       const token = generateInvitationToken();
