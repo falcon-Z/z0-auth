@@ -50,3 +50,4 @@ jwt-public.key
 .github/copilot-instructions.md
 .claude/claude.md
 .claude/plan.md
+.claude/plan-fe.md

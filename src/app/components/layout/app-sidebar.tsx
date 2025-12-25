@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import {
   LayoutDashboard,
   Building2,
@@ -9,79 +9,50 @@ import {
   Settings,
   AppWindow,
   Layers,
+  Mail,
+  Webhook,
+  ExternalLink,
+  Activity,
+  FileText,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@z0/lib/utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@z0/components/ui/collapsible";
+import { Badge } from "@z0/components/ui/badge";
 
 interface NavItem {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  adminOnly?: boolean;
+  badge?: number;
 }
 
-const navItems: NavItem[] = [
-  {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Organizations",
-    href: "/dashboard/organizations",
-    icon: Building2,
-    adminOnly: true, // Platform admin only
-  },
-  {
-    title: "Applications",
-    href: "/dashboard/apps",
-    icon: AppWindow,
-  },
-  {
-    title: "Team Members",
-    href: "/dashboard/users",
-    icon: Users,
-  },
-  {
-    title: "API Keys",
-    href: "/dashboard/api-keys",
-    icon: Key,
-  },
-  {
-    title: "Roles & Permissions",
-    href: "/dashboard/roles",
-    icon: Shield,
-  },
-  {
-    title: "Scopes",
-    href: "/dashboard/scopes",
-    icon: Layers,
-  },
-  {
-    title: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
-  },
-];
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+  defaultOpen?: boolean;
+}
 
-// User type from stored auth data
 interface StoredUser {
-  userId: string;
+  id: string;
   email: string;
-  name?: string;
+  name: string;
+  avatar?: string | null;
+  hasPlatformAccess: boolean;
   platformRole?: string;
-  orgContext?: {
-    orgId: string;
-    orgName: string;
-    orgRole: string;
-  };
-  appContext?: {
-    appId: string;
-    appName: string;
-    appRole: string;
-  };
+  organizations: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    roleType: string;
+    isDefault: boolean;
+  }>;
 }
 
-// Parse user once outside component to avoid re-parsing on every render
 function getStoredUser(): StoredUser | null {
   try {
     const userStr = localStorage.getItem("user");
@@ -93,65 +64,257 @@ function getStoredUser(): StoredUser | null {
 
 export function AppSidebar() {
   const location = useLocation();
+  const { orgSlug } = useParams<{ orgSlug: string }>();
 
-  // Memoize user to prevent re-parsing localStorage on every render
-  const user = useMemo(() => getStoredUser(), []);
+  const { user, currentOrg, isPlatformAdmin, orgRole } = useMemo(() => {
+    const storedUser = getStoredUser();
+    const orgs = storedUser?.organizations || [];
+    const currentOrganization = orgSlug
+      ? orgs.find((o) => o.slug === orgSlug)
+      : null;
 
-  // Check if user has platform-level access (any platform role)
-  const isPlatformAdmin = Boolean(user?.platformRole);
+    return {
+      user: storedUser,
+      currentOrg: currentOrganization,
+      isPlatformAdmin: Boolean(storedUser?.platformRole),
+      orgRole: currentOrganization?.roleType || null,
+    };
+  }, [orgSlug]);
 
-  // Filter nav items based on user role
-  const filteredNavItems = navItems.filter((item) => {
-    if (item.adminOnly) {
-      return isPlatformAdmin;
+  // Role-based visibility
+  const isOwner = orgRole === "ORG_OWNER";
+  const isAdmin = orgRole === "ORG_ADMIN" || isOwner;
+  const isDeveloper = orgRole === "ORG_DEVELOPER" || isAdmin;
+
+  // Build org-scoped base path
+  const orgBasePath = orgSlug ? `/org/${orgSlug}` : "";
+
+  // Navigation groups
+  const navGroups: NavGroup[] = useMemo(() => {
+    const groups: NavGroup[] = [];
+
+    // Main section (always visible when in org context)
+    if (orgSlug) {
+      groups.push({
+        title: "Main",
+        defaultOpen: true,
+        items: [
+          {
+            title: "Dashboard",
+            href: `${orgBasePath}/dashboard`,
+            icon: LayoutDashboard,
+          },
+        ],
+      });
+
+      // Organization section (visible to all org members)
+      groups.push({
+        title: "Organization",
+        defaultOpen: true,
+        items: [
+          {
+            title: "Members",
+            href: `${orgBasePath}/members`,
+            icon: Users,
+          },
+          {
+            title: "Invitations",
+            href: `${orgBasePath}/invitations`,
+            icon: Mail,
+          },
+          {
+            title: "Applications",
+            href: `${orgBasePath}/apps`,
+            icon: AppWindow,
+          },
+          {
+            title: "Settings",
+            href: `${orgBasePath}/settings`,
+            icon: Settings,
+          },
+        ],
+      });
+
+      // Access Control section (visible to admins)
+      if (isAdmin) {
+        groups.push({
+          title: "Access Control",
+          defaultOpen: false,
+          items: [
+            {
+              title: "Roles",
+              href: `${orgBasePath}/roles`,
+              icon: Shield,
+            },
+            {
+              title: "Scopes",
+              href: `${orgBasePath}/scopes`,
+              icon: Layers,
+            },
+          ],
+        });
+      }
+
+      // Developers section (visible to developers and above)
+      if (isDeveloper) {
+        groups.push({
+          title: "Developers",
+          defaultOpen: false,
+          items: [
+            {
+              title: "API Keys",
+              href: `${orgBasePath}/api-keys`,
+              icon: Key,
+            },
+            {
+              title: "Webhooks",
+              href: `${orgBasePath}/webhooks`,
+              icon: Webhook,
+            },
+            {
+              title: "OAuth Providers",
+              href: `${orgBasePath}/providers`,
+              icon: ExternalLink,
+            },
+          ],
+        });
+      }
     }
-    return true;
-  });
+
+    // Platform Admin section (visible to platform admins)
+    if (isPlatformAdmin) {
+      groups.push({
+        title: "Admin",
+        defaultOpen: !orgSlug, // Open by default if no org context
+        items: [
+          {
+            title: "Organizations",
+            href: "/admin/organizations",
+            icon: Building2,
+          },
+          {
+            title: "Platform Users",
+            href: "/admin/users",
+            icon: Users,
+          },
+          {
+            title: "Request Traces",
+            href: "/admin/request-traces",
+            icon: Activity,
+          },
+          {
+            title: "SMTP Settings",
+            href: "/admin/smtp",
+            icon: Mail,
+          },
+          {
+            title: "Audit Logs",
+            href: "/admin/audit-logs",
+            icon: FileText,
+          },
+        ],
+      });
+    }
+
+    return groups;
+  }, [orgSlug, orgBasePath, isAdmin, isDeveloper, isPlatformAdmin]);
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") {
-      return location.pathname === "/dashboard";
+    // Exact match for dashboard
+    if (href.endsWith("/dashboard")) {
+      return location.pathname === href;
     }
     return location.pathname.startsWith(href);
   };
 
   return (
-    <aside className="w-64 border-r bg-card h-[calc(100vh-4rem)] sticky top-16">
-      <div className="flex h-full flex-col gap-6 p-6">
-        {/* Organization Selector - can be added later if multi-org */}
-        {/* <OrganizationSelector /> */}
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1">
-          {filteredNavItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(item.href);
-
-            return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                  active
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                {item.title}
-              </Link>
-            );
-          })}
+    <aside className="w-64 border-r bg-card h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">
+      <div className="flex h-full flex-col p-4">
+        {/* Navigation Groups */}
+        <nav className="flex-1 space-y-4">
+          {navGroups.map((group) => (
+            <NavGroupComponent
+              key={group.title}
+              group={group}
+              isActive={isActive}
+            />
+          ))}
         </nav>
 
-        {/* Footer - can add version, help links, etc. */}
-        <div className="border-t pt-4">
+        {/* User Profile Link */}
+        {orgSlug && (
+          <div className="border-t pt-4 mt-4">
+            <Link
+              to={`${orgBasePath}/profile`}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                isActive(`${orgBasePath}/profile`)
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              <Users className="h-4 w-4" />
+              Profile & Sessions
+            </Link>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="border-t pt-4 mt-4">
           <p className="text-xs text-muted-foreground text-center">
             Z0 Auth v1.0.0
           </p>
         </div>
       </div>
     </aside>
+  );
+}
+
+function NavGroupComponent({
+  group,
+  isActive,
+}: {
+  group: NavGroup;
+  isActive: (href: string) => boolean;
+}) {
+  // Check if any item in the group is active
+  const hasActiveItem = group.items.some((item) => isActive(item.href));
+
+  return (
+    <Collapsible defaultOpen={group.defaultOpen || hasActiveItem}>
+      <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors">
+        {group.title}
+        <ChevronRight className="h-3 w-3 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-1 mt-1">
+        {group.items.map((item) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+
+          return (
+            <Link
+              key={item.href}
+              to={item.href}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                active
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <Icon className="h-4 w-4" />
+                {item.title}
+              </div>
+              {item.badge !== undefined && item.badge > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                  {item.badge}
+                </Badge>
+              )}
+            </Link>
+          );
+        })}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
