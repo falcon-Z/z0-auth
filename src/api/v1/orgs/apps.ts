@@ -11,6 +11,7 @@ import { validator } from "hono/validator";
 import { verifyAccessTokenMiddleware, type TokenPayload } from "@z0/utils/auth";
 import { requireOrgAccess, requireScope } from "../../../middleware/require-scope";
 import { randomBytes } from "crypto";
+import { checkAppQuota, isPlatformAdmin } from "@z0/utils/quota";
 
 const orgApps = new Hono();
 
@@ -134,6 +135,22 @@ orgApps.post(
     const user = c.get("user") as TokenPayload;
 
     try {
+      // Check app quota (platform admins bypass)
+      if (!isPlatformAdmin(user.platformRole)) {
+        const quotaCheck = await checkAppQuota(orgId);
+        if (!quotaCheck.allowed) {
+          return c.json(
+            ErrorResponseBuilder.validation("Organization capacity reached", [
+              {
+                field: "organization",
+                message: quotaCheck.reason || "Maximum app limit reached",
+              },
+            ]),
+            400
+          );
+        }
+      }
+
       const apiKey = generateApiKey();
       const apiSecret = generateApiSecret();
 

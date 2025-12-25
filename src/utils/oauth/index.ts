@@ -25,3 +25,6 @@ export { GitHubOAuthProvider } from "./providers/github";
 export { MicrosoftOAuthProvider } from "./providers/microsoft";
 export { DiscordOAuthProvider } from "./providers/discord";
 export { SlackOAuthProvider } from "./providers/slack";
+export { FacebookOAuthProvider } from "./providers/facebook";
+export { LinkedInOAuthProvider } from "./providers/linkedin";
+export { TwitterOAuthProvider } from "./providers/twitter";

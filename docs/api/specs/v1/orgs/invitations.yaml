@@ -1,0 +1,337 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Organization Invitations API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Invitations
+      summary: List invitations
+      description: |
+        List all invitations for an organization.
+        Can filter by status (pending, accepted, declined, revoked, expired).
+        Requires org:members:read scope.
+      operationId: listInvitations
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, accepted, declined, revoked, expired, all]
+            default: pending
+          description: Filter by invitation status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: List of invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InvitationSummary'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Invitations
+      summary: Send invitation
+      description: |
+        Send an invitation to join the organization.
+        An email will be sent to the invitee with a link to accept.
+        Requires org:members:write scope.
+      operationId: sendInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitation'
+            example:
+              email: newuser@example.com
+              roleType: ORG_MEMBER
+              message: Welcome to our organization!
+              expiresInDays: 7
+      responses:
+        '201':
+          description: Invitation sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/InvitationDetail'
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '409':
+          description: Invitation already exists or user is already a member
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /{invitationId}:
+    get:
+      tags:
+        - Invitations
+      summary: Get invitation details
+      description: |
+        Get detailed information about a specific invitation.
+        Requires org:members:read scope.
+      operationId: getInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/InvitationDetail'
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Invitations
+      summary: Revoke invitation
+      description: |
+        Revoke a pending invitation.
+        The invitation link will no longer work.
+        Requires org:members:delete scope.
+      operationId: revokeInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+        '409':
+          description: Invitation already accepted or processed
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /{invitationId}/resend:
+    post:
+      tags:
+        - Invitations
+      summary: Resend invitation
+      description: |
+        Resend the invitation email.
+        Generates a new token and extends the expiration.
+        Requires org:members:write scope.
+      operationId: resendInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation resent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+        '409':
+          description: Invitation already accepted or processed
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    InvitationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        roleType:
+          type: string
+          enum: [ORG_OWNER, ORG_ADMIN, ORG_MEMBER]
+        status:
+          type: string
+          enum: [pending, accepted, declined, revoked, expired]
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        invitedBy:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+
+    InvitationDetail:
+      allOf:
+        - $ref: '#/components/schemas/InvitationSummary'
+        - type: object
+          properties:
+            message:
+              type: string
+              nullable: true
+            acceptedAt:
+              type: string
+              format: date-time
+              nullable: true
+            declinedAt:
+              type: string
+              format: date-time
+              nullable: true
+            revokedAt:
+              type: string
+              format: date-time
+              nullable: true
+            updatedAt:
+              type: string
+              format: date-time
+
+    CreateInvitation:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+        roleType:
+          type: string
+          enum: [ORG_OWNER, ORG_ADMIN, ORG_MEMBER]
+          default: ORG_MEMBER
+        message:
+          type: string
+          maxLength: 500
+          description: Optional personal message to include in invitation email
+        expiresInDays:
+          type: integer
+          minimum: 1
+          maximum: 30
+          default: 7
+          description: Number of days until invitation expires

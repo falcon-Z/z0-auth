@@ -1,0 +1,307 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Organization Members API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Organizations
+      summary: List organization members
+      description: |
+        List all members of an organization. Requires org:members:read scope.
+      operationId: listOrganizationMembers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - $ref: '../../openapi.yaml#/components/parameters/Limit'
+        - $ref: '../../openapi.yaml#/components/parameters/Offset'
+        - name: roleType
+          in: query
+          schema:
+            $ref: '../../openapi.yaml#/components/schemas/OrgRoleType'
+          description: Filter by role
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search by name or email
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        membershipId:
+                          type: string
+                        userId:
+                          type: string
+                        email:
+                          type: string
+                        name:
+                          type: string
+                        avatar:
+                          type: string
+                          nullable: true
+                        roleType:
+                          $ref: '../../openapi.yaml#/components/schemas/OrgRoleType'
+                        isActive:
+                          type: boolean
+                        isDefault:
+                          type: boolean
+                        grantedAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Organizations
+      summary: Add member to organization
+      description: |
+        Add a user to the organization or invite a new user.
+        Requires org:members:invite scope.
+      operationId: addOrganizationMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  title: Existing User
+                  required:
+                    - userId
+                    - roleType
+                  properties:
+                    userId:
+                      type: string
+                      description: ID of existing user
+                    roleType:
+                      $ref: '../../openapi.yaml#/components/schemas/OrgRoleType'
+                - type: object
+                  title: New User Invite
+                  required:
+                    - email
+                    - name
+                    - roleType
+                  properties:
+                    email:
+                      type: string
+                      format: email
+                      description: Email to invite
+                    name:
+                      type: string
+                      description: Name for new user
+                    roleType:
+                      $ref: '../../openapi.yaml#/components/schemas/OrgRoleType'
+            examples:
+              existingUser:
+                summary: Add existing user
+                value:
+                  userId: clx123abc
+                  roleType: ORG_DEVELOPER
+              newUser:
+                summary: Invite new user
+                value:
+                  email: newuser@example.com
+                  name: New User
+                  roleType: ORG_MEMBER
+      responses:
+        '201':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '../../openapi.yaml#/components/schemas/OrganizationMembership'
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '409':
+          description: User is already a member
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /{userId}:
+    get:
+      tags:
+        - Organizations
+      summary: Get member details
+      description: |
+        Get details about a specific organization member.
+      operationId: getOrganizationMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - $ref: '../../openapi.yaml#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Member details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      membership:
+                        $ref: '../../openapi.yaml#/components/schemas/OrganizationMembership'
+                      user:
+                        $ref: '../../openapi.yaml#/components/schemas/User'
+                      appMemberships:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            appId:
+                              type: string
+                            appName:
+                              type: string
+                            roleType:
+                              type: string
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Organizations
+      summary: Update member
+      description: |
+        Update a member's role or settings.
+        Requires org:members:manage scope.
+      operationId: updateOrganizationMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - $ref: '../../openapi.yaml#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleType:
+                  $ref: '../../openapi.yaml#/components/schemas/OrgRoleType'
+                isDefault:
+                  type: boolean
+                  description: Make this the user's default organization
+            example:
+              roleType: ORG_ADMIN
+              isDefault: true
+      responses:
+        '200':
+          description: Member updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '../../openapi.yaml#/components/schemas/OrganizationMembership'
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Organizations
+      summary: Remove member
+      description: |
+        Remove a member from the organization.
+        Requires org:members:remove scope.
+        Cannot remove the last owner.
+      operationId: removeOrganizationMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - $ref: '../../openapi.yaml#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: Member removed from organization
+                requestId: req_abc123
+        '400':
+          description: Cannot remove (e.g., last owner)
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'

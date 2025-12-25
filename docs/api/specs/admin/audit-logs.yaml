@@ -1,0 +1,303 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Admin Audit Logs API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Admin
+      summary: Query audit logs
+      description: |
+        Query audit logs with various filters.
+        Requires platform admin access.
+      operationId: queryAuditLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: action
+          in: query
+          schema:
+            type: string
+          description: Filter by action type (e.g., LOGIN, USER_CREATED)
+        - name: actorId
+          in: query
+          schema:
+            type: string
+          description: Filter by actor user ID
+        - name: targetId
+          in: query
+          schema:
+            type: string
+          description: Filter by target resource ID
+        - name: organizationId
+          in: query
+          schema:
+            type: string
+          description: Filter by organization ID
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [LOW, MEDIUM, HIGH, CRITICAL]
+          description: Filter by severity level
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start date for filtering
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End date for filtering
+        - $ref: '../openapi.yaml#/components/parameters/Limit'
+        - $ref: '../openapi.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Audit logs query result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '../openapi.yaml#/components/schemas/AuditLog'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+              example:
+                logs:
+                  - id: clx123abc
+                    action: LOGIN
+                    actorId: clx456def
+                    actorType: user
+                    targetId: null
+                    targetType: null
+                    organizationId: clx789ghi
+                    severity: MEDIUM
+                    metadata:
+                      browser: Chrome
+                      os: Windows
+                    createdAt: "2024-01-15T10:00:00.000Z"
+                total: 150
+                limit: 100
+                offset: 0
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '500':
+          $ref: '../openapi.yaml#/components/responses/InternalError'
+
+  /statistics:
+    get:
+      tags:
+        - Admin
+      summary: Get audit log statistics
+      description: |
+        Get aggregated statistics from audit logs.
+        Requires platform admin access.
+      operationId: getAuditStatistics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: organizationId
+          in: query
+          schema:
+            type: string
+          description: Filter by organization
+        - name: actorId
+          in: query
+          schema:
+            type: string
+          description: Filter by actor
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  statistics:
+                    type: object
+                    properties:
+                      totalLogs:
+                        type: integer
+                      byAction:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                      bySeverity:
+                        type: object
+                        properties:
+                          LOW:
+                            type: integer
+                          MEDIUM:
+                            type: integer
+                          HIGH:
+                            type: integer
+                          CRITICAL:
+                            type: integer
+                      byActorType:
+                        type: object
+                        additionalProperties:
+                          type: integer
+              example:
+                statistics:
+                  totalLogs: 1500
+                  byAction:
+                    LOGIN: 500
+                    USER_CREATED: 100
+                    USER_UPDATED: 200
+                  bySeverity:
+                    LOW: 800
+                    MEDIUM: 500
+                    HIGH: 150
+                    CRITICAL: 50
+                  byActorType:
+                    user: 1200
+                    platform_manager: 200
+                    system: 100
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+  /{id}:
+    get:
+      tags:
+        - Admin
+      summary: Get audit log entry
+      description: |
+        Get a specific audit log entry by ID.
+        Requires platform admin access.
+      operationId: getAuditLog
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Audit log entry ID
+      responses:
+        '200':
+          description: Audit log entry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  log:
+                    $ref: '../openapi.yaml#/components/schemas/AuditLog'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+  /user/{userId}:
+    get:
+      tags:
+        - Admin
+      summary: Get user audit logs
+      description: |
+        Get audit logs for a specific user.
+        Requires platform admin access.
+      operationId: getUserAuditLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/UserId'
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '../openapi.yaml#/components/parameters/Limit'
+        - $ref: '../openapi.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: User audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '../openapi.yaml#/components/schemas/AuditLog'
+                  total:
+                    type: integer
+                  userId:
+                    type: string
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+  /organization/{orgId}:
+    get:
+      tags:
+        - Admin
+      summary: Get organization audit logs
+      description: |
+        Get audit logs for a specific organization.
+        Requires platform admin access.
+      operationId: getOrganizationAuditLogs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - $ref: '../openapi.yaml#/components/parameters/Limit'
+        - $ref: '../openapi.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Organization audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '../openapi.yaml#/components/schemas/AuditLog'
+                  total:
+                    type: integer
+                  organizationId:
+                    type: string
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'

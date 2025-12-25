@@ -1,0 +1,292 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - User Security API
+  version: 1.0.0
+
+paths:
+  /2fa/status:
+    get:
+      tags:
+        - Users
+      summary: Get 2FA status
+      description: |
+        Get the current two-factor authentication status for the user.
+      operationId: get2FAStatus
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: 2FA status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      enabledAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      backupCodesRemaining:
+                        type: integer
+                        description: Number of unused backup codes
+                  requestId:
+                    type: string
+              example:
+                success: true
+                data:
+                  enabled: true
+                  enabledAt: "2024-01-01T00:00:00.000Z"
+                  backupCodesRemaining: 8
+                requestId: req_abc123
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+
+  /2fa/backup-codes:
+    post:
+      tags:
+        - Users
+      summary: Regenerate backup codes
+      description: |
+        Generate new backup codes. This invalidates all existing backup codes.
+        Requires password verification.
+      operationId: regenerateBackupCodes
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  description: Current password for verification
+            example:
+              password: CurrentPassword123!
+      responses:
+        '200':
+          description: New backup codes generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      backupCodes:
+                        type: array
+                        items:
+                          type: string
+                        description: New one-time use backup codes
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: New backup codes generated. Store them securely.
+                data:
+                  backupCodes:
+                    - "ABCD-1234"
+                    - "EFGH-5678"
+                    - "IJKL-9012"
+                    - "MNOP-3456"
+                    - "QRST-7890"
+                    - "UVWX-1234"
+                    - "YZAB-5678"
+                    - "CDEF-9012"
+                    - "GHIJ-3456"
+                    - "KLMN-7890"
+                requestId: req_abc123
+        '401':
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /external-identities:
+    get:
+      tags:
+        - Users
+      summary: List linked external identities
+      description: |
+        List all external OAuth identities linked to the account.
+      operationId: listExternalIdentities
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: List of linked identities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        provider:
+                          type: string
+                          enum: [GOOGLE, GITHUB, MICROSOFT, DISCORD, SLACK]
+                        providerId:
+                          type: string
+                        email:
+                          type: string
+                        displayName:
+                          type: string
+                          nullable: true
+                        avatarUrl:
+                          type: string
+                          nullable: true
+                        linkedAt:
+                          type: string
+                          format: date-time
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                  requestId:
+                    type: string
+              example:
+                success: true
+                data:
+                  - id: clx123abc
+                    provider: GOOGLE
+                    providerId: "123456789"
+                    email: user@gmail.com
+                    displayName: John Doe
+                    avatarUrl: "https://lh3.googleusercontent.com/..."
+                    linkedAt: "2024-01-01T00:00:00.000Z"
+                    lastUsedAt: "2024-01-15T10:00:00.000Z"
+                requestId: req_abc123
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+
+  /external-identities/{identityId}:
+    delete:
+      tags:
+        - Users
+      summary: Unlink external identity
+      description: |
+        Remove a linked external OAuth identity from the account.
+        Cannot unlink if it's the only login method and no password is set.
+      operationId: unlinkExternalIdentity
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: identityId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Identity unlinked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: External identity unlinked successfully
+                requestId: req_abc123
+        '400':
+          description: Cannot unlink (no other login method)
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+  /activity:
+    get:
+      tags:
+        - Users
+      summary: Get security activity
+      description: |
+        Get recent security-related activity for the account.
+      operationId: getSecurityActivity
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/Limit'
+        - $ref: '../../openapi.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Security activity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        action:
+                          type: string
+                          enum:
+                            - LOGIN
+                            - LOGOUT
+                            - PASSWORD_CHANGE
+                            - 2FA_ENABLED
+                            - 2FA_DISABLED
+                            - NEW_DEVICE
+                            - IDENTITY_LINKED
+                            - IDENTITY_UNLINKED
+                        ipAddress:
+                          type: string
+                        userAgent:
+                          type: string
+                        location:
+                          type: string
+                          nullable: true
+                        createdAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'

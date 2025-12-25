@@ -170,6 +170,7 @@ model User {
   devices                  Device[]
   deviceEvents             DeviceEvent[]
   metadataHistory          UserMetadataHistory[]
+  invitationsSent          Invitation[]          @relation("InvitationsSent")
 
   @@index([email, status])
   @@index([status, emailVerified])
@@ -273,8 +274,35 @@ model Organization {
   roles             Role[]
   metadataSchemas   UserMetadataSchema[]
   externalProviders OrganizationExternalProvider[]
+  webhooks          Webhook[]
+  invitations       Invitation[]
 
   @@map("organizations")
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String
+  roleType       OrgRoleType  @default(ORG_MEMBER)
+  token          String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  declinedAt     DateTime?
+  revokedAt      DateTime?
+  invitedById    String
+  message        String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitationsSent", fields: [invitedById], references: [id])
+
+  @@unique([organizationId, email])
+  @@index([token])
+  @@index([organizationId, email])
+  @@index([expiresAt])
+  @@map("invitations")
 }
 
 model App {
@@ -789,18 +817,47 @@ model UserMetadataHistory {
   @@map("user_metadata_history")
 }
 
-model WebhookEvent {
-  id          String    @id @default(cuid())
-  appId       String?
-  eventType   String
-  payload     Json
-  status      String    @default("pending")
-  attempts    Int       @default(0)
-  lastAttempt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model Webhook {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  url            String
+  secret         String
+  isActive       Boolean  @default(true)
+  eventTypes     String[]
+  headers        Json?
+  timeout        Int      @default(5000)
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      String?
 
-  @@index([appId, status])
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       WebhookEvent[]
+
+  @@unique([organizationId, url])
+  @@index([organizationId, isActive])
+  @@map("webhooks")
+}
+
+model WebhookEvent {
+  id             String    @id @default(cuid())
+  webhookId      String
+  eventType      String
+  payload        Json
+  status         String    @default("pending")
+  statusCode     Int?
+  responseBody   String?
+  errorMessage   String?
+  deliveredAt    DateTime?
+  durationMs     Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, status])
+  @@index([webhookId, createdAt])
   @@index([status, createdAt])
   @@map("webhook_events")
 }

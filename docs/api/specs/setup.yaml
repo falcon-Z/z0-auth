@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Setup API
+  version: 1.0.0
+
+paths:
+  /eligibility:
+    get:
+      tags:
+        - Setup
+      summary: Check setup eligibility
+      description: |
+        Check if the system is eligible for initial setup.
+        Returns true if no users exist and the platform hasn't been initialized.
+      operationId: checkSetupEligibility
+      responses:
+        '200':
+          description: Setup eligibility status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  eligible:
+                    type: boolean
+                    description: Whether the system can be set up
+                  message:
+                    type: string
+              examples:
+                eligible:
+                  summary: System is eligible for setup
+                  value:
+                    success: true
+                    eligible: true
+                    message: System is ready for initial setup
+                notEligible:
+                  summary: System already configured
+                  value:
+                    success: true
+                    eligible: false
+                    message: Platform has already been set up
+
+  /validate/email:
+    post:
+      tags:
+        - Setup
+      summary: Validate email availability
+      description: |
+        Check if an email address is available for the super admin account.
+      operationId: validateEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+            example:
+              email: admin@example.com
+      responses:
+        '200':
+          description: Email validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  available:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                available: true
+                message: Email is available
+        '400':
+          description: Invalid email format
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ValidationError'
+
+  /validate/organization:
+    post:
+      tags:
+        - Setup
+      summary: Validate organization name
+      description: |
+        Check if an organization name/slug is available.
+      operationId: validateOrganization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                slug:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+                  pattern: '^[a-z0-9-]+$'
+            example:
+              name: My Organization
+              slug: my-organization
+      responses:
+        '200':
+          description: Organization validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  available:
+                    type: boolean
+                  suggestedSlug:
+                    type: string
+                  message:
+                    type: string
+              example:
+                success: true
+                available: true
+                suggestedSlug: my-organization
+                message: Organization name is available
+        '400':
+          description: Invalid organization data
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ValidationError'
+
+  /:
+    post:
+      tags:
+        - Setup
+      summary: Complete platform setup
+      description: |
+        Complete the initial platform setup by creating the first super admin user and organization.
+        This endpoint can only be called once when the system is in an uninitialized state.
+      operationId: completeSetup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+                - organizationName
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Super admin email address
+                password:
+                  type: string
+                  minLength: 8
+                  description: Password (min 8 characters)
+                name:
+                  type: string
+                  minLength: 2
+                  description: Super admin display name
+                organizationName:
+                  type: string
+                  minLength: 2
+                  maxLength: 100
+                  description: Default organization name
+                organizationSlug:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+                  pattern: '^[a-z0-9-]+$'
+                  description: Organization URL slug
+            example:
+              email: admin@example.com
+              password: SecurePassword123!
+              name: Admin User
+              organizationName: My Organization
+              organizationSlug: my-org
+      responses:
+        '201':
+          description: Setup completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          email:
+                            type: string
+                          name:
+                            type: string
+                      organization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          slug:
+                            type: string
+              example:
+                success: true
+                message: Platform setup completed successfully
+                data:
+                  user:
+                    id: clx123abc
+                    email: admin@example.com
+                    name: Admin User
+                  organization:
+                    id: clx456def
+                    name: My Organization
+                    slug: my-org
+        '400':
+          description: Invalid setup data
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ValidationError'
+        '409':
+          description: Platform already set up
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  message: Platform has already been set up
+                  code: ALREADY_SETUP

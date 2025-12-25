@@ -40,6 +40,7 @@ import VerificationRoutes from "./verification";
 import PasswordResetRoutes from "./password-reset";
 import TwoFactorRoutes from "./two-factor";
 import OAuthRoutes from "./oauth";
+import AcceptInviteRoutes from "./accept-invite";
 
 // Token expiration time for verification (24 hours)
 const VERIFICATION_TOKEN_EXPIRY_HOURS = 24;
@@ -70,6 +71,7 @@ AuthRoutes.route("/", VerificationRoutes);
 AuthRoutes.route("/", PasswordResetRoutes);
 AuthRoutes.route("/", TwoFactorRoutes);
 AuthRoutes.route("/oauth", OAuthRoutes);
+AuthRoutes.route("/accept-invite", AcceptInviteRoutes);
 
 const REGISTRATION_SCHEMA = z.object({
   email: z.string().email(),

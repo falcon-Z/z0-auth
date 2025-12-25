@@ -10,6 +10,9 @@ import { GitHubOAuthProvider } from "./providers/github";
 import { MicrosoftOAuthProvider } from "./providers/microsoft";
 import { DiscordOAuthProvider } from "./providers/discord";
 import { SlackOAuthProvider } from "./providers/slack";
+import { FacebookOAuthProvider } from "./providers/facebook";
+import { LinkedInOAuthProvider } from "./providers/linkedin";
+import { TwitterOAuthProvider } from "./providers/twitter";
 import { Logger } from "../error-handling";
 import { prisma } from "../prisma";
 
@@ -51,10 +54,16 @@ export class OAuthProviderFactory {
       case "SLACK":
         return new SlackOAuthProvider(clientId, clientSecret, redirectUri);
 
-      // Add more providers as needed
       case "FACEBOOK":
+        return new FacebookOAuthProvider(clientId, clientSecret, redirectUri);
+
       case "LINKEDIN":
+        return new LinkedInOAuthProvider(clientId, clientSecret, redirectUri);
+
       case "TWITTER":
+        return new TwitterOAuthProvider(clientId, clientSecret, redirectUri);
+
+      // Not yet implemented
       case "OKTA":
       case "AUTH0":
       case "CUSTOM_OAUTH2":
@@ -128,7 +137,9 @@ export class OAuthProviderFactory {
       "MICROSOFT",
       "DISCORD",
       "SLACK",
-      // Add more as implemented
+      "FACEBOOK",
+      "LINKEDIN",
+      "TWITTER",
     ];
   }
 

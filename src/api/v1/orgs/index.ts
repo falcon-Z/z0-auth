@@ -9,6 +9,10 @@ import roles from "./roles";
 import roleScopes from "./role-scopes";
 import userScopes from "./user-scopes";
 import externalProviders from "./external-providers";
+import webhooks from "./webhooks";
+import invitations from "./invitations";
+import metadataSchemas from "./metadata-schemas";
+import appScopes from "./app-scopes";
 
 const orgRoutes = new Hono();
 
@@ -30,5 +34,17 @@ orgRoutes.route("/", userScopes);
 
 // External providers (OAuth, SAML, LDAP)
 orgRoutes.route("/", externalProviders);
+
+// Webhooks
+orgRoutes.route("/", webhooks);
+
+// Invitations
+orgRoutes.route("/", invitations);
+
+// User metadata schemas
+orgRoutes.route("/", metadataSchemas);
+
+// App scopes management
+orgRoutes.route("/", appScopes);
 
 export default orgRoutes;

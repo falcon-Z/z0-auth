@@ -1,0 +1,302 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Organization Scopes API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Scopes
+      summary: List scopes
+      description: |
+        List all scopes for an organization with optional filtering.
+      operationId: listScopes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search in name and description
+      responses:
+        '200':
+          description: List of scopes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScopeSummary'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Scopes
+      summary: Create scope
+      description: |
+        Create a new custom scope for the organization.
+      operationId: createScope
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScope'
+            example:
+              name: custom_reports
+              description: Access to custom report features
+              category: analytics
+      responses:
+        '201':
+          description: Scope created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scope:
+                    $ref: '#/components/schemas/Scope'
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+  /{scopeId}:
+    get:
+      tags:
+        - Scopes
+      summary: Get scope details
+      description: |
+        Get detailed information about a specific scope.
+      operationId: getScope
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: scopeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Scope details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scope:
+                    $ref: '#/components/schemas/ScopeDetail'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Scopes
+      summary: Update scope
+      description: |
+        Update a custom scope. System scopes cannot be modified.
+      operationId: updateScope
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: scopeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateScope'
+      responses:
+        '200':
+          description: Scope updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scope:
+                    $ref: '#/components/schemas/Scope'
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          description: Cannot modify system scopes
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Scopes
+      summary: Delete scope
+      description: |
+        Delete a custom scope. System scopes cannot be deleted.
+        Scopes that are assigned to roles or users cannot be deleted.
+      operationId: deleteScope
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: scopeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Scope deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Scope is in use
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  usageCount:
+                    type: integer
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          description: Cannot delete system scopes
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    Scope:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        isSystem:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ScopeSummary:
+      allOf:
+        - $ref: '#/components/schemas/Scope'
+        - type: object
+          properties:
+            usageCount:
+              type: integer
+              description: Number of roles and users with this scope
+
+    ScopeDetail:
+      allOf:
+        - $ref: '#/components/schemas/ScopeSummary'
+        - type: object
+          properties:
+            roleScopes:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  role:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+
+    CreateScope:
+      type: object
+      required:
+        - name
+        - description
+        - category
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9_]+$
+          minLength: 2
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        category:
+          type: string
+          minLength: 2
+          maxLength: 50
+        isSystem:
+          type: boolean
+          default: false
+
+    UpdateScope:
+      type: object
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9_]+$
+          minLength: 2
+          maxLength: 50
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        category:
+          type: string
+          minLength: 2
+          maxLength: 50

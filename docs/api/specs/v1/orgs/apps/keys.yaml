@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - App API Keys Management
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - App API Keys
+      summary: List app API keys
+      description: |
+        List all API keys for an app.
+        Requires organization access.
+      operationId: listAppApiKeys
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        keyPrefix:
+                          type: string
+                          description: First 10 characters of the key for identification
+                        status:
+                          type: string
+                          enum: [ACTIVE, INACTIVE, ROTATING, REVOKED]
+                        expiresAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        gracePeriodEnd:
+                          type: string
+                          format: date-time
+                          nullable: true
+                          description: For rotated keys, when the old key stops working
+                        createdAt:
+                          type: string
+                          format: date-time
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    post:
+      tags:
+        - App API Keys
+      summary: Create API key
+      description: |
+        Create a new API key for an app.
+        The secret is only returned once - save it securely.
+        Requires org:apps:write scope.
+      operationId: createAppApiKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                expiresIn:
+                  type: integer
+                  minimum: 1
+                  description: Days until expiration (optional, no expiration if not set)
+            example:
+              name: Production API Key
+              expiresIn: 365
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      key:
+                        type: string
+                        description: The API key - save this securely
+                      secret:
+                        type: string
+                        description: The API secret - only shown once
+                      keyPrefix:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+  /{keyId}:
+    patch:
+      tags:
+        - App API Keys
+      summary: Update API key
+      description: |
+        Update API key name or status.
+        Requires org:apps:write scope.
+      operationId: updateAppApiKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                status:
+                  type: string
+                  enum: [ACTIVE, INACTIVE]
+      responses:
+        '200':
+          description: API key updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      keyPrefix:
+                        type: string
+                      status:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      lastUsedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - App API Keys
+      summary: Revoke API key
+      description: |
+        Revoke an API key. The key will immediately stop working.
+        Requires org:apps:delete scope.
+      operationId: revokeAppApiKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+  /{keyId}/rotate:
+    post:
+      tags:
+        - App API Keys
+      summary: Rotate API key
+      description: |
+        Rotate an API key. Creates a new key and sets the old key to ROTATING status
+        with a 24-hour grace period before it stops working.
+        Requires org:apps:write scope.
+      operationId: rotateAppApiKey
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: API key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      newKey:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          key:
+                            type: string
+                            description: The new API key
+                          secret:
+                            type: string
+                            description: The new API secret - only shown once
+                          keyPrefix:
+                            type: string
+                      oldKey:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          status:
+                            type: string
+                          gracePeriodEnd:
+                            type: string
+                            format: date-time
+                            description: When the old key stops working (24 hours)
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'

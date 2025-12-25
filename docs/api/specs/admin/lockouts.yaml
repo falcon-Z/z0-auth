@@ -1,0 +1,115 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Admin Account Lockouts API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Admin
+      summary: List locked accounts
+      description: |
+        List all currently locked accounts.
+        Requires platform admin access.
+      operationId: listLockouts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/Limit'
+        - $ref: '../openapi.yaml#/components/parameters/Offset'
+      responses:
+        '200':
+          description: List of locked accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        email:
+                          type: string
+                        failedAttempts:
+                          type: integer
+                        lastAttempt:
+                          type: string
+                          format: date-time
+                        lockedUntil:
+                          type: string
+                          format: date-time
+                        createdAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+              example:
+                success: true
+                data:
+                  - id: clx123abc
+                    email: user@example.com
+                    failedAttempts: 6
+                    lastAttempt: "2024-01-15T10:00:00.000Z"
+                    lockedUntil: "2024-01-15T10:30:00.000Z"
+                    createdAt: "2024-01-15T09:45:00.000Z"
+                total: 1
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+  /{email}:
+    delete:
+      tags:
+        - Admin
+      summary: Unlock account
+      description: |
+        Unlock a locked account by email address.
+        Requires platform admin access.
+      operationId: unlockAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+          description: Email of the locked account
+      responses:
+        '200':
+          description: Account unlocked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: Account unlocked successfully
+                requestId: req_abc123
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          description: Lockout record not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  message: No lockout record found for this email
+                  code: NOT_FOUND

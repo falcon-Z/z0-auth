@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Admin SMTP API
+  version: 1.0.0
+
+paths:
+  /config:
+    get:
+      tags:
+        - Admin
+      summary: Get SMTP configuration
+      description: |
+        Get the current SMTP configuration with password masked.
+        Requires platform admin access.
+      operationId: getSMTPConfig
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: SMTP configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      host:
+                        type: string
+                      port:
+                        type: integer
+                      secure:
+                        type: boolean
+                      username:
+                        type: string
+                      password:
+                        type: string
+                        description: Masked password (********)
+                      fromName:
+                        type: string
+                      fromEmail:
+                        type: string
+                      configured:
+                        type: boolean
+                  requestId:
+                    type: string
+              example:
+                success: true
+                data:
+                  host: smtp.example.com
+                  port: 587
+                  secure: true
+                  username: user@example.com
+                  password: "********"
+                  fromName: Z0 Auth
+                  fromEmail: noreply@example.com
+                  configured: true
+                requestId: req_abc123
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+    delete:
+      tags:
+        - Admin
+      summary: Delete SMTP configuration
+      description: |
+        Delete the SMTP configuration. Email sending will be disabled.
+        Requires platform admin access.
+      operationId: deleteSMTPConfig
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: SMTP configuration deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: SMTP configuration deleted successfully
+                requestId: req_abc123
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '500':
+          $ref: '../openapi.yaml#/components/responses/InternalError'
+
+  /configure:
+    post:
+      tags:
+        - Admin
+      summary: Configure SMTP settings
+      description: |
+        Configure or update SMTP settings for email sending.
+        Requires platform admin access.
+      operationId: configureSMTP
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - host
+                - port
+                - secure
+                - username
+                - password
+                - fromName
+                - fromEmail
+              properties:
+                host:
+                  type: string
+                  minLength: 1
+                  description: SMTP server hostname
+                port:
+                  type: integer
+                  minimum: 1
+                  maximum: 65535
+                  description: SMTP server port
+                secure:
+                  type: boolean
+                  description: Use TLS/SSL
+                username:
+                  type: string
+                  minLength: 1
+                  description: SMTP username
+                password:
+                  type: string
+                  minLength: 1
+                  description: SMTP password
+                fromName:
+                  type: string
+                  minLength: 1
+                  description: Sender display name
+                fromEmail:
+                  type: string
+                  format: email
+                  description: Sender email address
+            example:
+              host: smtp.example.com
+              port: 587
+              secure: true
+              username: user@example.com
+              password: smtp_password
+              fromName: Z0 Auth
+              fromEmail: noreply@example.com
+      responses:
+        '200':
+          description: SMTP configured successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: SMTP configuration saved successfully
+                requestId: req_abc123
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '500':
+          $ref: '../openapi.yaml#/components/responses/InternalError'
+
+  /test:
+    post:
+      tags:
+        - Admin
+      summary: Send test email
+      description: |
+        Send a test email to verify SMTP configuration.
+        Requires platform admin access.
+      operationId: sendTestEmail
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - recipientEmail
+              properties:
+                recipientEmail:
+                  type: string
+                  format: email
+                  description: Email address to send test to
+            example:
+              recipientEmail: admin@example.com
+      responses:
+        '200':
+          description: Test email result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  messageId:
+                    type: string
+                    description: Email message ID if successful
+                  requestId:
+                    type: string
+              examples:
+                success:
+                  summary: Test email sent
+                  value:
+                    success: true
+                    message: Test email sent successfully to admin@example.com
+                    messageId: msg_abc123
+                    requestId: req_abc123
+                failed:
+                  summary: Test email failed
+                  value:
+                    success: false
+                    message: "Failed to send test email: Connection refused"
+                    requestId: req_abc123
+        '400':
+          description: SMTP not configured or invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: false
+                message: SMTP is not configured. Please configure SMTP settings first.
+                requestId: req_abc123
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'

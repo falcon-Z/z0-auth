@@ -1,0 +1,129 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Health API
+  version: 1.0.0
+
+paths:
+  /live:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: |
+        Basic liveness probe for Kubernetes/load balancers to check if the process is running.
+        This endpoint is always available and does not require authentication.
+      operationId: getLiveness
+      responses:
+        '200':
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Process uptime in seconds
+              example:
+                status: ok
+                timestamp: "2024-01-15T10:30:00.000Z"
+                uptime: 3600.5
+
+  /ready:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: |
+        Readiness probe that checks if critical dependencies (database) are reachable.
+        Returns 503 if the service is not ready to accept traffic.
+      operationId: getReadiness
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+              example:
+                status: ready
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: not_ready
+                  error:
+                    type: string
+              example:
+                status: not_ready
+                error: Database unreachable
+
+  /metrics:
+    get:
+      tags:
+        - Health
+      summary: Application metrics
+      description: |
+        Returns basic application metrics including memory usage, uptime, and system information.
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Application metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uptime:
+                    type: number
+                    description: Process uptime in seconds
+                  memory:
+                    type: object
+                    properties:
+                      rss:
+                        type: string
+                        description: Resident Set Size
+                      heapTotal:
+                        type: string
+                        description: Total heap size
+                      heapUsed:
+                        type: string
+                        description: Used heap size
+                  system:
+                    type: object
+                    properties:
+                      platform:
+                        type: string
+                      arch:
+                        type: string
+                      nodeVersion:
+                        type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+              example:
+                uptime: 3600.5
+                memory:
+                  rss: "128MB"
+                  heapTotal: "64MB"
+                  heapUsed: "32MB"
+                system:
+                  platform: linux
+                  arch: x64
+                  nodeVersion: v20.0.0
+                timestamp: "2024-01-15T10:30:00.000Z"
