@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,15 +14,17 @@ import { User, Settings, LogOut } from "lucide-react";
 
 // User type from stored auth data
 interface StoredUser {
-  userId: string;
+  id: string;
   email: string;
   name?: string;
   platformRole?: string;
-  orgContext?: {
-    orgId: string;
-    orgName: string;
-    orgRole: string;
-  };
+  organizations?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    roleType: string;
+    isDefault: boolean;
+  }>;
 }
 
 // Parse user once to avoid re-parsing on every render
@@ -37,9 +39,24 @@ function getStoredUser(): StoredUser | null {
 
 export function UserNav() {
   const navigate = useNavigate();
+  const { orgSlug } = useParams<{ orgSlug: string }>();
 
   // Memoize user to prevent re-parsing localStorage on every render
   const user = useMemo(() => getStoredUser(), []);
+
+  // Get the profile path based on current context
+  const getProfilePath = () => {
+    if (orgSlug) {
+      return `/org/${orgSlug}/profile`;
+    }
+    // Fallback to default org if not in org context
+    const defaultOrg = user?.organizations?.find((o) => o.isDefault);
+    const targetOrg = defaultOrg || user?.organizations?.[0];
+    if (targetOrg) {
+      return `/org/${targetOrg.slug}/profile`;
+    }
+    return "/login";
+  };
 
   const handleLogout = async () => {
     try {
@@ -91,11 +108,11 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate("/dashboard/profile")}>
+        <DropdownMenuItem onClick={() => navigate(getProfilePath())}>
           <User className="mr-2 h-4 w-4" />
           <span>Profile</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/dashboard/profile")}>
+        <DropdownMenuItem onClick={() => navigate(getProfilePath())}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>

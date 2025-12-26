@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useMemo,
+  useCallback,
   type ReactNode,
 } from "react";
 import { useParams, useNavigate } from "react-router";
@@ -72,6 +73,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const navigate = useNavigate();
 
+  // Memoize switchOrg separately to avoid navigate dependency in main useMemo
+  const switchOrg = useCallback((newSlug: string) => {
+    navigate(`/org/${newSlug}/dashboard`);
+  }, [navigate]);
+
   const value = useMemo(() => {
     const user = getStoredUser();
     const organizations = user?.organizations || [];
@@ -87,11 +93,6 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       return defaultOrg || organizations[0] || null;
     };
 
-    // Switch to different organization
-    const switchOrg = (newSlug: string) => {
-      navigate(`/org/${newSlug}/dashboard`);
-    };
-
     return {
       currentOrg,
       organizations,
@@ -101,7 +102,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       switchOrg,
       getDefaultOrg,
     };
-  }, [orgSlug, navigate]);
+  }, [orgSlug, switchOrg]);
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
 }

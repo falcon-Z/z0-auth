@@ -28,7 +28,7 @@ export async function ensureSuperAdminExists(serverUrl: string): Promise<void> {
       return;
     }
 
-    const superAdminCount = await db.platformManager.count({
+    const superAdminCount = await db.platformMembership.count({
       where: { roleType: "SUPER_ADMIN" },
     });
 
