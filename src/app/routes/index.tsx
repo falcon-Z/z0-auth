@@ -22,11 +22,15 @@ import InvitationsPage from "../pages/dashboard/invitations";
 import RolesPage from "../pages/dashboard/roles";
 import ScopesPage from "../pages/dashboard/scopes";
 import ApiKeysPage from "../pages/dashboard/api-keys";
+import WebhooksPage from "../pages/dashboard/webhooks";
+import ProvidersPage from "../pages/dashboard/providers";
+import SettingsPage from "../pages/dashboard/settings";
 
 import AdminDashboard from "../pages/admin";
 import PlatformOrganizations from "../pages/admin/platform/organizations";
 import PlatformUsers from "../pages/admin/platform/users";
 import SMTPSettings from "../pages/admin/settings/smtp";
+import RequestTracesPage from "../pages/admin/request-traces";
 import AcceptInvite from "../pages/accept-invite";
 
 /**
@@ -165,18 +169,17 @@ export const router = createBrowserRouter([
                     path: "api-keys",
                     element: <ApiKeysPage />,
                   },
-                  // Placeholder routes for future pages
                   {
                     path: "webhooks",
-                    element: <div className="p-6"><h1 className="text-2xl font-semibold">Webhooks</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                    element: <WebhooksPage />,
                   },
                   {
                     path: "providers",
-                    element: <div className="p-6"><h1 className="text-2xl font-semibold">OAuth Providers</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                    element: <ProvidersPage />,
                   },
                   {
                     path: "settings",
-                    element: <div className="p-6"><h1 className="text-2xl font-semibold">Organization Settings</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                    element: <SettingsPage />,
                   },
                 ],
               },
@@ -212,7 +215,7 @@ export const router = createBrowserRouter([
               },
               {
                 path: "admin/request-traces",
-                element: <div className="p-6"><h1 className="text-2xl font-semibold">Request Traces</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                element: <RequestTracesPage />,
               },
               {
                 path: "admin/audit-logs",
