@@ -18,6 +18,7 @@ import {
 } from "@z0/components/ui/form";
 import { Alert, AlertDescription } from "@z0/components/ui/alert";
 import { Checkbox } from "@z0/components/ui/checkbox";
+import { useAuth } from "../../contexts/auth-context";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -29,6 +30,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,8 +68,8 @@ export default function Login() {
       const result = await response.json();
 
       if (result.success && result.user) {
-        // Store user data in localStorage
-        localStorage.setItem("user", JSON.stringify(result.user));
+        // Update auth context (which also updates localStorage)
+        setUser(result.user);
 
         // Navigate to redirect URL or dashboard
         navigate(result.redirect || "/dashboard");

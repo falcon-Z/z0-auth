@@ -2,42 +2,16 @@ import { useMemo } from "react";
 import { useParams } from "react-router";
 import { Building2, Users, AppWindow, Key } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@z0/components/ui/card";
-
-interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  organizations: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    roleType: string;
-    isDefault: boolean;
-  }>;
-}
-
-function getStoredUser(): StoredUser | null {
-  try {
-    const userStr = localStorage.getItem("user");
-    return userStr ? JSON.parse(userStr) : null;
-  } catch {
-    return null;
-  }
-}
+import { useAuth } from "../../contexts/auth-context";
 
 export default function Dashboard() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
+  const { user } = useAuth();
 
-  const { user, currentOrg } = useMemo(() => {
-    const storedUser = getStoredUser();
-    const orgs = storedUser?.organizations || [];
-    const org = orgSlug ? orgs.find((o) => o.slug === orgSlug) : null;
-
-    return {
-      user: storedUser,
-      currentOrg: org,
-    };
-  }, [orgSlug]);
+  const currentOrg = useMemo(() => {
+    const orgs = user?.organizations || [];
+    return orgSlug ? orgs.find((o) => o.slug === orgSlug) : null;
+  }, [user, orgSlug]);
 
   return (
     <div className="p-6">

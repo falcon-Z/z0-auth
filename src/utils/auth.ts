@@ -583,19 +583,15 @@ export function determineLoginRedirect(user: UserWithMemberships): string {
   // User with orgs goes to their default org or first org
   const defaultOrg = user.organizationMemberships.find(m => m.isDefault && m.isActive);
   if (defaultOrg) {
-    return `/org/${defaultOrg.organization.slug}`;
+    return `/org/${defaultOrg.organization.slug}/dashboard`;
   }
 
   const firstOrg = user.organizationMemberships.find(m => m.isActive);
   if (firstOrg) {
-    return `/org/${firstOrg.organization.slug}`;
+    return `/org/${firstOrg.organization.slug}/dashboard`;
   }
 
-  // App-only user goes to dashboard (app will handle redirect)
-  if (user.appMemberships && user.appMemberships.length > 0) {
-    return '/dashboard';
-  }
-
-  // Fallback
+  // App-only user - try to redirect to an org if they have one
+  // The frontend will handle any additional logic
   return '/dashboard';
 }

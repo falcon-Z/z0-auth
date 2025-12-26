@@ -4,6 +4,8 @@ import { isSuperAdminConfigured } from "../../utils/config-state";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { ErrorBoundary } from "../components/shared/error-boundary";
 import { OrgLayout, DashboardRedirect } from "../components/layout/org-layout";
+import { AuthProvider, useAuth } from "../contexts/auth-context";
+import { Loader2 } from "lucide-react";
 
 import Setup from "../pages/setup";
 import Login from "../pages/login";
@@ -58,21 +60,41 @@ function SetupRedirectGuard() {
 
 /**
  * Guard that checks if user is authenticated
- * Since tokens are stored as HttpOnly cookies, we check for user data in localStorage
+ * Uses centralized auth context to prevent multiple localStorage reads
  */
 function AuthGuard() {
   const location = useLocation();
-  const user = localStorage.getItem("user");
+  const { user, isLoading, isAuthenticated } = useAuth();
 
-  if (!user && location.pathname !== "/login") {
+  // Show loading state while auth is initializing
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated && location.pathname !== "/login") {
     return <Navigate to="/login" replace />;
   }
 
-  if (user && location.pathname === "/login") {
+  if (isAuthenticated && location.pathname === "/login") {
     return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;
+}
+
+/**
+ * Wrapper that provides auth context to the router
+ */
+function AuthProviderWrapper() {
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
 }
 
 export const router = createBrowserRouter([
@@ -99,17 +121,21 @@ export const router = createBrowserRouter([
         path: "accept-invite/:token",
         element: <AcceptInvite />,
       },
+      // Wrap authenticated routes with AuthProvider, then AuthGuard
       {
-        element: <AuthGuard />,
+        element: <AuthProviderWrapper />,
         children: [
           {
-            path: "login",
-            element: <Login />,
-          },
-          {
-            path: "",
-            element: <App />,
+            element: <AuthGuard />,
             children: [
+              {
+                path: "login",
+                element: <Login />,
+              },
+              {
+                path: "",
+                element: <App />,
+                children: [
               // Redirect root and /dashboard to org-scoped dashboard
               {
                 path: "",
@@ -129,6 +155,10 @@ export const router = createBrowserRouter([
                 path: "org/:orgSlug",
                 element: <OrgLayout />,
                 children: [
+                  {
+                    index: true,
+                    element: <Navigate to="dashboard" replace />,
+                  },
                   {
                     path: "dashboard",
                     element: <Dashboard />,
@@ -227,6 +257,8 @@ export const router = createBrowserRouter([
               },
             ],
           },
+        ],
+      },
         ],
       },
     ],

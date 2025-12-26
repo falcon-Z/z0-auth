@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   DropdownMenu,
@@ -11,38 +10,12 @@ import {
 import { Button } from "@z0/components/ui/button";
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import { User, Settings, LogOut } from "lucide-react";
-
-// User type from stored auth data
-interface StoredUser {
-  id: string;
-  email: string;
-  name?: string;
-  platformRole?: string;
-  organizations?: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    roleType: string;
-    isDefault: boolean;
-  }>;
-}
-
-// Parse user once to avoid re-parsing on every render
-function getStoredUser(): StoredUser | null {
-  try {
-    const userStr = localStorage.getItem("user");
-    return userStr ? JSON.parse(userStr) : null;
-  } catch {
-    return null;
-  }
-}
+import { useAuth } from "../../contexts/auth-context";
 
 export function UserNav() {
   const navigate = useNavigate();
   const { orgSlug } = useParams<{ orgSlug: string }>();
-
-  // Memoize user to prevent re-parsing localStorage on every render
-  const user = useMemo(() => getStoredUser(), []);
+  const { user, logout } = useAuth();
 
   // Get the profile path based on current context
   const getProfilePath = () => {
@@ -58,19 +31,8 @@ export function UserNav() {
     return "/login";
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-    } catch (error) {
-      console.error("Logout error:", error);
-    } finally {
-      // Clear local storage and redirect
-      localStorage.removeItem("user");
-      navigate("/login");
-    }
+  const handleLogout = () => {
+    logout();
   };
 
   if (!user) {

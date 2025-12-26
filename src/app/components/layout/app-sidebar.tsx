@@ -15,6 +15,7 @@ import {
   Activity,
   FileText,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@z0/lib/utils";
 import {
@@ -23,6 +24,7 @@ import {
   CollapsibleTrigger,
 } from "@z0/components/ui/collapsible";
 import { Badge } from "@z0/components/ui/badge";
+import { useAuth } from "../../contexts/auth-context";
 
 interface NavItem {
   title: string;
@@ -37,49 +39,22 @@ interface NavGroup {
   defaultOpen?: boolean;
 }
 
-interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string | null;
-  hasPlatformAccess: boolean;
-  platformRole?: string;
-  organizations: Array<{
-    id: string;
-    name: string;
-    slug: string;
-    roleType: string;
-    isDefault: boolean;
-  }>;
-}
-
-function getStoredUser(): StoredUser | null {
-  try {
-    const userStr = localStorage.getItem("user");
-    return userStr ? JSON.parse(userStr) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function AppSidebar() {
   const location = useLocation();
   const { orgSlug } = useParams<{ orgSlug: string }>();
+  const { user, isLoading, isPlatformAdmin } = useAuth();
 
-  const { user, currentOrg, isPlatformAdmin, orgRole } = useMemo(() => {
-    const storedUser = getStoredUser();
-    const orgs = storedUser?.organizations || [];
+  const { currentOrg, orgRole } = useMemo(() => {
+    const orgs = user?.organizations || [];
     const currentOrganization = orgSlug
       ? orgs.find((o) => o.slug === orgSlug)
       : null;
 
     return {
-      user: storedUser,
       currentOrg: currentOrganization,
-      isPlatformAdmin: Boolean(storedUser?.platformRole),
       orgRole: currentOrganization?.roleType || null,
     };
-  }, [orgSlug]);
+  }, [user, orgSlug]);
 
   // Role-based visibility
   const isOwner = orgRole === "ORG_OWNER";
@@ -226,6 +201,19 @@ export function AppSidebar() {
     }
     return location.pathname.startsWith(href);
   };
+
+  // Show loading skeleton while auth is initializing
+  if (isLoading) {
+    return (
+      <aside className="w-64 border-r bg-card h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">
+        <div className="flex h-full flex-col p-4">
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="w-64 border-r bg-card h-[calc(100vh-4rem)] sticky top-16 overflow-y-auto">

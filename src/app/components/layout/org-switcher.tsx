@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ChevronsUpDown, Check, Building2, Plus } from "lucide-react";
+import { ChevronsUpDown, Check, Building2, Plus, Loader2 } from "lucide-react";
 import { cn } from "@z0/lib/utils";
 import { Button } from "@z0/components/ui/button";
 import {
@@ -12,42 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@z0/components/ui/dropdown-menu";
 import { Badge } from "@z0/components/ui/badge";
-
-/**
- * Organization type matching backend AuthUser.organizations
- */
-interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  roleType: "ORG_OWNER" | "ORG_ADMIN" | "ORG_DEVELOPER" | "ORG_MEMBER";
-  isDefault: boolean;
-}
-
-/**
- * Stored user data from localStorage
- */
-interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string | null;
-  hasPlatformAccess: boolean;
-  platformRole?: string;
-  organizations: Organization[];
-}
-
-/**
- * Get stored user data from localStorage
- */
-function getStoredUser(): StoredUser | null {
-  try {
-    const userStr = localStorage.getItem("user");
-    return userStr ? JSON.parse(userStr) : null;
-  } catch {
-    return null;
-  }
-}
+import { useAuth, type Organization } from "../../contexts/auth-context";
 
 /**
  * Get role display label
@@ -90,9 +55,9 @@ function getRoleBadgeVariant(
 export function OrgSwitcher() {
   const navigate = useNavigate();
   const { orgSlug } = useParams<{ orgSlug: string }>();
+  const { user, isLoading, isPlatformAdmin } = useAuth();
 
-  const { currentOrg, organizations, isPlatformAdmin } = useMemo(() => {
-    const user = getStoredUser();
+  const { currentOrg, organizations } = useMemo(() => {
     const orgs = user?.organizations || [];
     const current = orgSlug
       ? orgs.find((org) => org.slug === orgSlug) || null
@@ -101,15 +66,24 @@ export function OrgSwitcher() {
     return {
       currentOrg: current,
       organizations: orgs,
-      isPlatformAdmin: Boolean(user?.platformRole),
     };
-  }, [orgSlug]);
+  }, [user, orgSlug]);
 
   const handleOrgSelect = (org: Organization) => {
     if (org.slug !== orgSlug) {
       navigate(`/org/${org.slug}/dashboard`);
     }
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">Loading...</span>
+      </div>
+    );
+  }
 
   // If no org selected (e.g., on admin pages), show platform view
   if (!currentOrg) {
