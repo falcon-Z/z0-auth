@@ -114,19 +114,7 @@ export default function Setup() {
     steps: STEPS,
   });
 
-  // Wrapper to handle email validation on next step
-  const handleNextStep = useCallback(() => {
-    if (currentStep === "email") {
-      // Trigger validation if not already validated
-      if (emailValidation.isValid !== true) {
-        emailValidation.forceValidate(form.getValues("email"));
-        return; // Wait for validation result
-      }
-    }
-    baseHandleNextStep();
-  }, [currentStep, emailValidation, form, baseHandleNextStep]);
-
-  // Wrapper for keypress to use our handleNextStep
+  // Wrapper for keypress to use baseHandleNextStep
   const handleKeyPress = useCallback(
     (e: React.KeyboardEvent, onFinalSubmit: () => void) => {
       if (e.key === "Enter" && isStepValid(currentStep)) {
@@ -134,23 +122,12 @@ export default function Setup() {
         if (currentStep === "organization") {
           onFinalSubmit();
         } else {
-          handleNextStep();
+          baseHandleNextStep();
         }
       }
     },
-    [currentStep, isStepValid, handleNextStep]
+    [currentStep, isStepValid, baseHandleNextStep]
   );
-
-  // Auto-proceed when email validation succeeds (after user clicked Continue)
-  useEffect(() => {
-    if (
-      currentStep === "email" &&
-      emailValidation.isValid === true &&
-      isStepValid("email")
-    ) {
-      baseHandleNextStep();
-    }
-  }, [currentStep, emailValidation.isValid, isStepValid, baseHandleNextStep]);
 
   useEffect(() => {
     const checkInitialState = async () => {
@@ -228,7 +205,13 @@ export default function Setup() {
   // Main submit handler with enhanced error handling
   const onSubmit = useCallback(
     async (data: SetupFormValues) => {
-      if (!canSubmit() || isSubmitting) return;
+      // Prevent double submission
+      if (isSubmitting || loadingState !== "idle") return;
+
+      // Validate all fields before submitting
+      if (!canSubmit()) {
+        return;
+      }
 
       setIsSubmitting(true);
       setError(null);
@@ -277,6 +260,7 @@ export default function Setup() {
     [
       canSubmit,
       isSubmitting,
+      loadingState,
       retrySetup,
       setLoadingState,
       setSetupProgress,
@@ -408,11 +392,10 @@ export default function Setup() {
               <SetupFooter
                 currentStep={currentStep}
                 isStepValid={isStepValid(currentStep)}
-                disabled={
-                  loadingState !== "idle" || !canSubmit() || isSubmitting
-                }
+                disabled={loadingState !== "idle"}
+                isSubmitting={isSubmitting}
                 onPrevious={handlePreviousStep}
-                onNext={handleNextStep}
+                onNext={baseHandleNextStep}
                 onSubmit={form.handleSubmit(onSubmit)}
                 submitIcon={getStateIcon()}
                 submitLabel={getLoadingMessage()}
