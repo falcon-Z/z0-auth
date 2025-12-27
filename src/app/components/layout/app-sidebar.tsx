@@ -42,34 +42,40 @@ interface NavGroup {
 export function AppSidebar() {
   const location = useLocation();
   const { orgSlug } = useParams<{ orgSlug: string }>();
-  const { user, isLoading, isPlatformAdmin } = useAuth();
+  const { user, isLoading, isPlatformAdmin, getDefaultOrg } = useAuth();
 
-  const { currentOrg, orgRole } = useMemo(() => {
+  const { currentOrg, orgRole, effectiveOrgSlug } = useMemo(() => {
     const orgs = user?.organizations || [];
-    const currentOrganization = orgSlug
-      ? orgs.find((o) => o.slug === orgSlug)
+
+    // Use orgSlug from URL, or fall back to default org for consistent navigation
+    const defaultOrg = getDefaultOrg();
+    const effectiveSlug = orgSlug || defaultOrg?.slug;
+
+    const currentOrganization = effectiveSlug
+      ? orgs.find((o) => o.slug === effectiveSlug)
       : null;
 
     return {
       currentOrg: currentOrganization,
       orgRole: currentOrganization?.roleType || null,
+      effectiveOrgSlug: effectiveSlug,
     };
-  }, [user, orgSlug]);
+  }, [user, orgSlug, getDefaultOrg]);
 
   // Role-based visibility
   const isOwner = orgRole === "ORG_OWNER";
   const isAdmin = orgRole === "ORG_ADMIN" || isOwner;
   const isDeveloper = orgRole === "ORG_DEVELOPER" || isAdmin;
 
-  // Build org-scoped base path
-  const orgBasePath = orgSlug ? `/org/${orgSlug}` : "";
+  // Build org-scoped base path using effective org slug
+  const orgBasePath = effectiveOrgSlug ? `/org/${effectiveOrgSlug}` : "";
 
   // Navigation groups
   const navGroups: NavGroup[] = useMemo(() => {
     const groups: NavGroup[] = [];
 
-    // Main section (always visible when in org context)
-    if (orgSlug) {
+    // Main section (always visible when user has an org)
+    if (effectiveOrgSlug) {
       groups.push({
         title: "Main",
         defaultOpen: true,
@@ -160,7 +166,7 @@ export function AppSidebar() {
     if (isPlatformAdmin) {
       groups.push({
         title: "Admin",
-        defaultOpen: !orgSlug, // Open by default if no org context
+        defaultOpen: location.pathname.startsWith("/admin"), // Open by default if on admin page
         items: [
           {
             title: "Organizations",
@@ -192,7 +198,7 @@ export function AppSidebar() {
     }
 
     return groups;
-  }, [orgSlug, orgBasePath, isAdmin, isDeveloper, isPlatformAdmin]);
+  }, [effectiveOrgSlug, orgBasePath, isAdmin, isDeveloper, isPlatformAdmin, location.pathname]);
 
   const isActive = (href: string) => {
     // Exact match for dashboard
@@ -230,7 +236,7 @@ export function AppSidebar() {
         </nav>
 
         {/* User Profile Link */}
-        {orgSlug && (
+        {effectiveOrgSlug && (
           <div className="border-t pt-4 mt-4">
             <Link
               to={`${orgBasePath}/profile`}

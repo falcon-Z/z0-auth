@@ -55,19 +55,25 @@ function getRoleBadgeVariant(
 export function OrgSwitcher() {
   const navigate = useNavigate();
   const { orgSlug } = useParams<{ orgSlug: string }>();
-  const { user, isLoading, isPlatformAdmin } = useAuth();
+  const { user, isLoading, isPlatformAdmin, getDefaultOrg } = useAuth();
 
-  const { currentOrg, organizations } = useMemo(() => {
+  const { currentOrg, organizations, effectiveOrgSlug } = useMemo(() => {
     const orgs = user?.organizations || [];
-    const current = orgSlug
-      ? orgs.find((org) => org.slug === orgSlug) || null
+
+    // Use orgSlug from URL, or fall back to default org for consistent display
+    const defaultOrg = getDefaultOrg();
+    const effectiveSlug = orgSlug || defaultOrg?.slug;
+
+    const current = effectiveSlug
+      ? orgs.find((org) => org.slug === effectiveSlug) || null
       : null;
 
     return {
       currentOrg: current,
       organizations: orgs,
+      effectiveOrgSlug: effectiveSlug,
     };
-  }, [user, orgSlug]);
+  }, [user, orgSlug, getDefaultOrg]);
 
   const handleOrgSelect = (org: Organization) => {
     if (org.slug !== orgSlug) {
@@ -76,23 +82,11 @@ export function OrgSwitcher() {
   };
 
   // Show loading state
-  if (isLoading) {
+  if (isLoading || !currentOrg) {
     return (
       <div className="flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         <span className="text-sm text-muted-foreground">Loading...</span>
-      </div>
-    );
-  }
-
-  // If no org selected (e.g., on admin pages), show platform view
-  if (!currentOrg) {
-    return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center justify-center w-8 h-8 rounded bg-primary text-primary-foreground">
-          <Building2 className="w-4 h-4" />
-        </div>
-        <span className="font-semibold text-lg">Z0 Auth</span>
       </div>
     );
   }
@@ -141,7 +135,7 @@ export function OrgSwitcher() {
                 </Badge>
               </div>
             </div>
-            {org.slug === orgSlug && (
+            {org.slug === effectiveOrgSlug && (
               <Check className="h-4 w-4 text-primary" />
             )}
           </DropdownMenuItem>
