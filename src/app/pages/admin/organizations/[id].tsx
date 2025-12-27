@@ -55,7 +55,6 @@ import {
   SelectValue,
 } from "@z0/components/ui/select";
 import { Input } from "@z0/components/ui/input";
-import { Textarea } from "@z0/components/ui/textarea";
 import {
   Form,
   FormControl,
@@ -78,6 +77,7 @@ import {
   AlertDialogTrigger,
 } from "@z0/components/ui/alert-dialog";
 import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
+import { useAuth } from "@z0/app/contexts/auth-context";
 
 // Schemas for member management
 const addMemberSchema = z.object({
@@ -106,7 +106,6 @@ const settingsSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   slug: z.string().min(2, "Slug must be at least 2 characters")
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes"),
-  description: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]),
   maxUsers: z.coerce.number().int().positive().optional().nullable(),
   maxApps: z.coerce.number().int().positive().optional().nullable(),
@@ -135,7 +134,6 @@ interface Organization {
   id: string;
   name: string;
   slug: string;
-  description?: string;
   status: string;
   isPlatformOrg: boolean;
   maxUsers?: number;
@@ -151,6 +149,7 @@ interface Organization {
 export default function OrganizationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isPlatformAdmin } = useAuth();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,7 +186,6 @@ export default function OrganizationDetail() {
     defaultValues: {
       name: "",
       slug: "",
-      description: "",
       status: "ACTIVE",
       maxUsers: null,
       maxApps: null,
@@ -211,7 +209,6 @@ export default function OrganizationDetail() {
       settingsForm.reset({
         name: organization.name,
         slug: organization.slug,
-        description: organization.description || "",
         status: organization.status as SettingsFormValues["status"],
         maxUsers: organization.maxUsers || null,
         maxApps: organization.maxApps || null,
@@ -358,7 +355,6 @@ export default function OrganizationDetail() {
         body: JSON.stringify({
           name: data.name,
           slug: data.slug,
-          description: data.description || undefined,
           maxUsers: data.maxUsers || undefined,
           maxApps: data.maxApps || undefined,
         }),
@@ -618,7 +614,6 @@ export default function OrganizationDetail() {
               </div>
               <p className="text-muted-foreground">
                 <code className="text-sm">{organization.slug}</code>
-                {organization.description && ` — ${organization.description}`}
               </p>
             </div>
           </div>
@@ -719,11 +714,6 @@ export default function OrganizationDetail() {
                 <div>
                   <p className="text-sm text-muted-foreground">Slug</p>
                   <code className="px-2 py-1 bg-muted rounded text-sm">{organization.slug}</code>
-                </div>
-                <Separator />
-                <div>
-                  <p className="text-sm text-muted-foreground">Description</p>
-                  <p className="font-medium">{organization.description || "No description"}</p>
                 </div>
                 <Separator />
                 <div>
@@ -843,7 +833,7 @@ export default function OrganizationDetail() {
                 <CardHeader>
                   <CardTitle>Basic Information</CardTitle>
                   <CardDescription>
-                    Update the organization's name, slug, and description
+                    Update the organization's name and slug
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -868,29 +858,12 @@ export default function OrganizationDetail() {
                       <FormItem>
                         <FormLabel>Slug</FormLabel>
                         <FormControl>
-                          <Input placeholder="acme-corp" {...field} />
+                          <Input placeholder="acme-corp" {...field} disabled={!isPlatformAdmin} />
                         </FormControl>
                         <FormDescription>
                           URL-friendly identifier. Lowercase letters, numbers, and dashes only.
+                          {!isPlatformAdmin && " (Platform admin only)"}
                         </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={settingsForm.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="A brief description of this organization..."
-                            className="resize-none"
-                            {...field}
-                          />
-                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -902,7 +875,7 @@ export default function OrganizationDetail() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!isPlatformAdmin}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select status" />
@@ -916,6 +889,7 @@ export default function OrganizationDetail() {
                         </Select>
                         <FormDescription>
                           Suspended organizations cannot access the platform.
+                          {!isPlatformAdmin && " (Platform admin only)"}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -924,7 +898,8 @@ export default function OrganizationDetail() {
                 </CardContent>
               </Card>
 
-              {/* Resource Limits */}
+              {/* Resource Limits - Platform Admin Only */}
+              {isPlatformAdmin && (
               <Card>
                 <CardHeader>
                   <CardTitle>Resource Limits</CardTitle>
@@ -947,9 +922,13 @@ export default function OrganizationDetail() {
                               {...field}
                               value={field.value || ""}
                               onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                              disabled={!isPlatformAdmin}
                             />
                           </FormControl>
-                          <FormDescription>Leave empty for unlimited</FormDescription>
+                          <FormDescription>
+                            Leave empty for unlimited
+                            {!isPlatformAdmin && " (Platform admin only)"}
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -968,9 +947,13 @@ export default function OrganizationDetail() {
                               {...field}
                               value={field.value || ""}
                               onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                              disabled={!isPlatformAdmin}
                             />
                           </FormControl>
-                          <FormDescription>Leave empty for unlimited</FormDescription>
+                          <FormDescription>
+                            Leave empty for unlimited
+                            {!isPlatformAdmin && " (Platform admin only)"}
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -978,6 +961,7 @@ export default function OrganizationDetail() {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Save Button */}
               <div className="flex justify-end">
@@ -989,7 +973,8 @@ export default function OrganizationDetail() {
             </form>
           </Form>
 
-          {/* Danger Zone */}
+          {/* Danger Zone - Platform Admin Only */}
+          {isPlatformAdmin && (
           <Card className="border-destructive">
             <CardHeader>
               <CardTitle className="text-destructive">Danger Zone</CardTitle>
@@ -1000,25 +985,25 @@ export default function OrganizationDetail() {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium">Delete Organization</p>
+                  <p className="font-medium">Deactivate Organization</p>
                   <p className="text-sm text-muted-foreground">
-                    Permanently delete this organization and all its data
+                    Deactivate this organization (can be reactivated later)
                   </p>
                 </div>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive" size="sm" disabled={organization.isPlatformOrg}>
                       <Trash2 className="mr-2 h-4 w-4" />
-                      Delete Organization
+                      Deactivate Organization
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the organization
-                        <strong> {organization.name}</strong> and remove all associated data including
-                        memberships, applications, and settings.
+                        This will deactivate the organization
+                        <strong> {organization.name}</strong> and all its members will lose access.
+                        You can reactivate it later by changing its status back to Active.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1029,7 +1014,7 @@ export default function OrganizationDetail() {
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                       >
                         {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Delete Organization
+                        Deactivate Organization
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -1037,11 +1022,12 @@ export default function OrganizationDetail() {
               </div>
               {organization.isPlatformOrg && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Platform organizations cannot be deleted.
+                  Platform organizations cannot be deactivated.
                 </p>
               )}
             </CardContent>
           </Card>
+          )}
         </TabsContent>
       </Tabs>
 

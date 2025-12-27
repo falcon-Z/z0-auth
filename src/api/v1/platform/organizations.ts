@@ -28,7 +28,6 @@ const createOrgSchema = z.object({
     .min(2)
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes"),
-  description: z.string().optional(),
 });
 
 // Schema for updating an organization
@@ -40,7 +39,6 @@ const updateOrgSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes")
     .optional(),
-  description: z.string().max(500).optional(),
   maxUsers: z.number().int().positive().optional(),
   maxApps: z.number().int().positive().optional(),
 });
@@ -124,7 +122,6 @@ platformOrgs.post(
         data: {
           name: data.name,
           slug: data.slug,
-          description: data.description,
         },
       });
 
@@ -280,7 +277,6 @@ platformOrgs.put(
         data: {
           ...(data.name && { name: data.name }),
           ...(data.slug && { slug: data.slug }),
-          ...(data.description !== undefined && { description: data.description }),
           ...(data.maxUsers && { maxUsers: data.maxUsers }),
           ...(data.maxApps && { maxApps: data.maxApps }),
         },

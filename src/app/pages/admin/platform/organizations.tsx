@@ -4,9 +4,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import {
   Loader2,
   Plus,
-  MoreHorizontal,
-  Eye,
-  Trash2,
   AlertCircle,
   Building2,
   Search,
@@ -29,14 +26,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@z0/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@z0/components/ui/dropdown-menu";
 import { Input } from "@z0/components/ui/input";
 import {
   Form,
@@ -58,7 +47,6 @@ const createOrgSchema = z.object({
     .string()
     .min(2, "Slug must be at least 2 characters")
     .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes"),
-  description: z.string().optional(),
 });
 
 type CreateOrgFormValues = z.infer<typeof createOrgSchema>;
@@ -67,11 +55,26 @@ interface Organization {
   id: string;
   name: string;
   slug: string;
-  description?: string;
   status: string;
   createdAt: string;
   memberCount: number;
   appCount: number;
+}
+
+/**
+ * Get status badge variant and color
+ */
+function getStatusBadge(status: string) {
+  switch (status) {
+    case "ACTIVE":
+      return { variant: "default" as const, className: "bg-green-500 hover:bg-green-500/80" };
+    case "SUSPENDED":
+      return { variant: "destructive" as const, className: "" };
+    case "INACTIVE":
+      return { variant: "secondary" as const, className: "bg-gray-400 hover:bg-gray-400/80" };
+    default:
+      return { variant: "outline" as const, className: "" };
+  }
 }
 
 /**
@@ -102,7 +105,6 @@ export default function PlatformOrganizations() {
     defaultValues: {
       name: "",
       slug: "",
-      description: "",
     },
   });
 
@@ -193,8 +195,7 @@ export default function PlatformOrganizations() {
     return organizations.filter(
       (org) =>
         org.name.toLowerCase().includes(query) ||
-        org.slug.toLowerCase().includes(query) ||
-        org.description?.toLowerCase().includes(query)
+        org.slug.toLowerCase().includes(query)
     );
   }, [organizations, searchQuery]);
 
@@ -210,14 +211,7 @@ export default function PlatformOrganizations() {
             <div className="flex items-center justify-center w-8 h-8 rounded bg-primary/10 text-primary font-semibold text-sm">
               {row.original.name.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <div className="font-medium">{row.original.name}</div>
-              {row.original.description && (
-                <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                  {row.original.description}
-                </div>
-              )}
-            </div>
+            <div className="font-medium">{row.original.name}</div>
           </div>
         ),
       },
@@ -239,16 +233,9 @@ export default function PlatformOrganizations() {
         ),
         cell: ({ row }) => {
           const status = row.original.status;
+          const { variant, className } = getStatusBadge(status);
           return (
-            <Badge
-              variant={
-                status === "ACTIVE"
-                  ? "default"
-                  : status === "SUSPENDED"
-                  ? "destructive"
-                  : "secondary"
-              }
-            >
+            <Badge variant={variant} className={className}>
               {status}
             </Badge>
           );
@@ -286,38 +273,8 @@ export default function PlatformOrganizations() {
           </div>
         ),
       },
-      {
-        id: "actions",
-        cell: ({ row }) => {
-          const org = row.original;
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() => navigate(`/admin/organizations/${org.id}`)}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  View Details
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        },
-      },
     ],
-    [navigate]
+    []
   );
 
   return (
@@ -378,23 +335,6 @@ export default function PlatformOrganizations() {
                           placeholder="acme-corp"
                           {...field}
                           onChange={(e) => handleSlugChange(e.target.value)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description (Optional)</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Organization description"
-                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
