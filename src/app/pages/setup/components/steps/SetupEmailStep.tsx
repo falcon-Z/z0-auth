@@ -9,7 +9,6 @@ import {
 import { Input } from "@z0/components/ui/input";
 import { Mail, CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 import type { UseFormReturn } from "react-hook-form";
-import { useEmailValidation } from "../../hooks/useSetupValidation";
 
 interface SetupFormValues {
   organization: string;
@@ -18,20 +17,26 @@ interface SetupFormValues {
   password: string;
 }
 
+interface EmailValidationState {
+  isValidating: boolean;
+  isValid: boolean | null;
+  message: string | null;
+  error: string | null;
+}
+
 interface SetupEmailStepProps {
   form: UseFormReturn<SetupFormValues>;
   disabled: boolean;
   onKeyPress: (e: React.KeyboardEvent) => void;
+  emailValidation: EmailValidationState;
 }
 
 export function SetupEmailStep({
   form,
   disabled,
   onKeyPress,
+  emailValidation,
 }: SetupEmailStepProps) {
-  const email = form.watch("email");
-  const emailValidation = useEmailValidation(email, !disabled);
-
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-5 duration-300">
       <div className="rounded-lg bg-muted/50 p-4 border">

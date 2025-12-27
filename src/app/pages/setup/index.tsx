@@ -25,6 +25,7 @@ import { SetupFooter } from "./components/SetupFooter";
 // Hooks
 import { useSetupForm } from "./hooks/useSetupForm";
 import { useSetupSubmit } from "./hooks/useSetupSubmit";
+import { useEmailValidation } from "./hooks/useSetupValidation";
 
 // Enhanced password validation schema with stronger requirements
 const setupSchema = z.object({
@@ -96,18 +97,60 @@ export default function Setup() {
     setSetupProgress,
   } = useSetupSubmit();
 
+  // Email validation for display feedback
+  const email = form.watch("email");
+  const emailValidation = useEmailValidation(email, loadingState === "idle");
+
   const {
     currentStep,
     setCurrentStep,
     isStepValid,
-    handleNextStep,
+    handleNextStep: baseHandleNextStep,
     handlePreviousStep,
-    handleKeyPress,
+    handleKeyPress: baseHandleKeyPress,
   } = useSetupForm({
     form,
     passwordValidation,
     steps: STEPS,
   });
+
+  // Wrapper to handle email validation on next step
+  const handleNextStep = useCallback(() => {
+    if (currentStep === "email") {
+      // Trigger validation if not already validated
+      if (emailValidation.isValid !== true) {
+        emailValidation.forceValidate(form.getValues("email"));
+        return; // Wait for validation result
+      }
+    }
+    baseHandleNextStep();
+  }, [currentStep, emailValidation, form, baseHandleNextStep]);
+
+  // Wrapper for keypress to use our handleNextStep
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent, onFinalSubmit: () => void) => {
+      if (e.key === "Enter" && isStepValid(currentStep)) {
+        e.preventDefault();
+        if (currentStep === "organization") {
+          onFinalSubmit();
+        } else {
+          handleNextStep();
+        }
+      }
+    },
+    [currentStep, isStepValid, handleNextStep]
+  );
+
+  // Auto-proceed when email validation succeeds (after user clicked Continue)
+  useEffect(() => {
+    if (
+      currentStep === "email" &&
+      emailValidation.isValid === true &&
+      isStepValid("email")
+    ) {
+      baseHandleNextStep();
+    }
+  }, [currentStep, emailValidation.isValid, isStepValid, baseHandleNextStep]);
 
   useEffect(() => {
     const checkInitialState = async () => {
@@ -338,6 +381,7 @@ export default function Setup() {
                         form={form}
                         disabled={loadingState !== "idle"}
                         onKeyPress={handleKeyPressWithSubmit}
+                        emailValidation={emailValidation}
                       />
                     )}
 

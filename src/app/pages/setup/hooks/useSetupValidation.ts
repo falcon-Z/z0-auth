@@ -24,8 +24,8 @@ export function useEmailValidation(email: string, enabled: boolean = true) {
   const debounceTimer = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastEmail = useRef<string>("");
 
-  const validate = useCallback(async (emailToValidate: string) => {
-    if (!emailToValidate || emailToValidate === lastEmail.current) {
+  const validate = useCallback(async (emailToValidate: string, force = false) => {
+    if (!emailToValidate || (!force && emailToValidate === lastEmail.current)) {
       return;
     }
 
@@ -93,7 +93,17 @@ export function useEmailValidation(email: string, enabled: boolean = true) {
     });
   }, []);
 
-  return { ...state, reset };
+  // Force validation - useful for autofill scenarios
+  const forceValidate = useCallback(
+    (emailToValidate: string) => {
+      if (emailToValidate && emailToValidate.length >= 5 && emailToValidate.includes("@")) {
+        validate(emailToValidate, true);
+      }
+    },
+    [validate]
+  );
+
+  return { ...state, reset, forceValidate };
 }
 
 export function useOrganizationValidation(

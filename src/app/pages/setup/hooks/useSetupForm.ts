@@ -24,6 +24,7 @@ export function useSetupForm({
 }: UseSetupFormProps) {
   const [currentStep, setCurrentStep] = useState<SetupStep>("email");
 
+  // Basic validation for form fields (not async validation)
   const isStepValid = useCallback(
     (step: SetupStep): boolean => {
       const values = form.getValues();
