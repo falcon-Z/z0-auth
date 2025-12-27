@@ -52,3 +52,4 @@ jwt-public.key
 .claude/plan.md
 .claude/plan-fe.md
 .claude/testing-checklist.md
+.claude/*
