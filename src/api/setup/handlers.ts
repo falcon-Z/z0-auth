@@ -411,13 +411,15 @@ export async function handleSetup(c: Context) {
 
       // Create everything in a transaction
       const result = await db.$transaction(async (tx) => {
-        // 1. Create the Organization first
+        // 1. Create the Platform Organization first
+        // This is the special organization that houses all platform-level roles
         const org = await tx.organization.create({
           data: {
             name: organization,
             slug: finalSlug,
-            description: "Default organization created during system setup",
+            description: "Platform organization - manages system-wide administration and platform roles",
             status: "ACTIVE",
+            isPlatformOrg: true, // Mark as the platform organization
           },
         });
 
@@ -433,16 +435,19 @@ export async function handleSetup(c: Context) {
         });
 
         // 3. Create Platform Membership (SUPER_ADMIN)
+        // Link the platform role to the platform organization
         await tx.platformMembership.create({
           data: {
             userId: newUser.id,
             roleType: "SUPER_ADMIN",
+            platformOrgId: org.id, // Link to platform organization
             scopes: ["*"],
             isActive: true,
           },
         });
 
         // 4. Create Organization Membership (ORG_OWNER)
+        // Super admin is also the owner of the platform organization
         await tx.organizationMembership.create({
           data: {
             userId: newUser.id,

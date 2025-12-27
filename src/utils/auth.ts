@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { existsSync } from "fs";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { join } from "path";
@@ -395,6 +396,7 @@ export async function verifyRefreshToken(token: string): Promise<TokenPayload> {
 
 /**
  * Hono middleware to verify access tokens
+ * Supports both Authorization header (Bearer token) and httpOnly cookies
  * @param c - Hono context
  * @param next - Next middleware function
  */
@@ -402,13 +404,23 @@ export async function verifyAccessTokenMiddleware(
   c: Context,
   next: () => Promise<void>
 ) {
-  const authHeader = c.req.header("Authorization");
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({ error: "Missing or invalid authorization header" }, 401);
+  // First, try to get token from Authorization header
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7); // Remove 'Bearer ' prefix
   }
 
-  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  // If no Authorization header, try to get token from httpOnly cookie
+  if (!token) {
+    token = getCookie(c, "access_token");
+  }
+
+  // If no token found in either location
+  if (!token) {
+    return c.json({ error: "Missing or invalid authorization" }, 401);
+  }
 
   try {
     const payload = await verifyAccessToken(token);
@@ -421,6 +433,7 @@ export async function verifyAccessTokenMiddleware(
 
 /**
  * Hono middleware to verify refresh tokens
+ * Supports both Authorization header (Bearer token) and httpOnly cookies
  * @param c - Hono context
  * @param next - Next middleware function
  */
@@ -428,13 +441,23 @@ export async function verifyRefreshTokenMiddleware(
   c: Context,
   next: () => Promise<void>
 ) {
-  const authHeader = c.req.header("Authorization");
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({ error: "Missing or invalid authorization header" }, 401);
+  // First, try to get token from Authorization header
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7); // Remove 'Bearer ' prefix
   }
 
-  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  // If no Authorization header, try to get token from httpOnly cookie
+  if (!token) {
+    token = getCookie(c, "refresh_token");
+  }
+
+  // If no token found in either location
+  if (!token) {
+    return c.json({ error: "Missing or invalid authorization" }, 401);
+  }
 
   try {
     const payload = await verifyRefreshToken(token);

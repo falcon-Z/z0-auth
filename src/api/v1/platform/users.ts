@@ -20,6 +20,10 @@ import { validatePassword } from "@z0/utils/password-validation";
 import { requireSuperAdmin } from "./middleware";
 import { PLATFORM_ROLE_SCOPES } from "@z0/utils/scopes";
 import { AuditLogger } from "@z0/utils/audit-logger";
+import {
+  getPlatformOrganization,
+  validatePlatformMembershipOrganization,
+} from "@z0/utils/platform-org";
 
 const platformUsers = new Hono();
 
@@ -219,6 +223,18 @@ platformUsers.post(
     const requestId = RequestContext.generateRequestId();
 
     try {
+      // Get platform organization (required for platform memberships)
+      const platformOrg = await getPlatformOrganization();
+      if (!platformOrg) {
+        return c.json(
+          ErrorResponseBuilder.system(
+            "Platform organization not found. System setup may be incomplete.",
+            "PLATFORM_ORG_MISSING"
+          ),
+          500
+        );
+      }
+
       // Check if user exists
       let user = await db.user.findUnique({
         where: { email: data.email },
@@ -240,12 +256,13 @@ platformUsers.post(
             );
           }
 
-          // Reactivate membership
+          // Reactivate membership (ensure it's in the platform org)
           const reactivated = await db.platformMembership.update({
             where: { id: existingMembership.id },
             data: {
               isActive: true,
               roleType: data.roleType,
+              platformOrgId: platformOrg.id, // Ensure it's linked to platform org
               scopes: data.scopes || PLATFORM_ROLE_SCOPES[data.roleType],
               grantedBy: currentUser.userId,
               grantedAt: new Date(),
@@ -311,11 +328,12 @@ platformUsers.post(
         });
       }
 
-      // Create platform membership
+      // Create platform membership (must belong to platform organization)
       const membership = await db.platformMembership.create({
         data: {
           userId: user.id,
           roleType: data.roleType,
+          platformOrgId: platformOrg.id, // Link to platform organization
           scopes: data.scopes || PLATFORM_ROLE_SCOPES[data.roleType],
           isActive: true,
           grantedBy: currentUser.userId,

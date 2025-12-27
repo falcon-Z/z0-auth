@@ -17,17 +17,15 @@ async function apiCall<T>(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<T> {
-  const token = localStorage.getItem("accessToken");
   const defaultHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  if (token) {
-    defaultHeaders["Authorization"] = `Bearer ${token}`;
-  }
-
+  // Authentication is handled via httpOnly cookies (access_token, refresh_token)
+  // which are automatically sent with credentials: "include"
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
+    credentials: "include", // Important: Include cookies for authentication
     headers: {
       ...defaultHeaders,
       ...options.headers,

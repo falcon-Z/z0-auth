@@ -185,20 +185,23 @@ model User {
 // =============================================================================
 
 model PlatformMembership {
-  id        String           @id @default(cuid())
-  userId    String           @unique
-  roleType  PlatformRoleType
-  scopes    String[]         // Override or additional scopes
-  isActive  Boolean          @default(true)
-  grantedAt DateTime         @default(now())
-  grantedBy String?
-  expiresAt DateTime?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  userId         String           @unique
+  roleType       PlatformRoleType
+  platformOrgId  String?          // Organization that this platform role belongs to (must be platform org) - nullable for migration
+  scopes         String[]         // Override or additional scopes
+  isActive       Boolean          @default(true)
+  grantedAt      DateTime         @default(now())
+  grantedBy      String?
+  expiresAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [platformOrgId], references: [id], onDelete: Restrict)
 
   @@index([roleType, isActive])
+  @@index([platformOrgId])
   @@map("platform_memberships")
 }
 
@@ -257,26 +260,29 @@ model AppMembership {
 // =============================================================================
 
 model Organization {
-  id          String             @id @default(cuid())
-  name        String
-  slug        String             @unique
-  description String?
-  status      OrganizationStatus @default(ACTIVE)
-  maxUsers    Int?
-  maxApps     Int?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id             String             @id @default(cuid())
+  name           String
+  slug           String             @unique
+  description    String?
+  status         OrganizationStatus @default(ACTIVE)
+  isPlatformOrg  Boolean            @default(false) // True for the platform organization (only one should exist)
+  maxUsers       Int?
+  maxApps        Int?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   // Relations
-  memberships       OrganizationMembership[]
-  apps              App[]
-  scopes            Scope[]
-  roles             Role[]
-  metadataSchemas   UserMetadataSchema[]
-  externalProviders OrganizationExternalProvider[]
-  webhooks          Webhook[]
-  invitations       Invitation[]
+  memberships         OrganizationMembership[]
+  platformMemberships PlatformMembership[]     // Platform roles belonging to this org
+  apps                App[]
+  scopes              Scope[]
+  roles               Role[]
+  metadataSchemas     UserMetadataSchema[]
+  externalProviders   OrganizationExternalProvider[]
+  webhooks            Webhook[]
+  invitations         Invitation[]
 
+  @@index([isPlatformOrg])
   @@map("organizations")
 }
 
