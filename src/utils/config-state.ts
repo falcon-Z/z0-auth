@@ -1,89 +1,132 @@
 /**
- * Configuration state management utilities
- * Handles dynamic updates to configuration state on the client side
+ * Configuration state management utilities (Frontend)
  *
- * Priority: config.json (server-updated) > localStorage (session persistence)
- * The server updates config.json on startup based on database state,
- * so it's the source of truth. localStorage is only used for in-session
- * persistence after setup completes.
+ * This module manages setup completion state on the client side.
+ * The server API is the source of truth, fetched once on app load.
+ *
+ * Architecture:
+ * - Server: In-memory cache + database (source of truth)
+ * - Server middleware: Blocks unauthorized access, redirects to /setup
+ * - Frontend: Calls API once on load, caches in React context
+ * - No file-based state (no config.json)
+ *
+ * Flow:
+ * 1. App loads → calls GET /api/setup/status
+ * 2. Stores result in memory/context
+ * 3. React Router uses result for conditional routing
+ * 4. Server middleware ensures no bypass possible
  */
 
-import configFile from "../config.json";
+import { getSetupStatus, type SetupStatusResponse } from "./api/setup";
 
 export interface AppConfig {
   SuperAdminConfigured: boolean;
 }
 
-const CONFIG_STORAGE_KEY = "z0_config_state";
+// In-memory cache for current session
+let cachedStatus: SetupStatusResponse | null = null;
+let lastFetch: number = 0;
+const CACHE_TTL = 60000; // 1 minute cache
 
-function getPersistedConfig(): Partial<AppConfig> {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return {};
+/**
+ * Fetch setup status from server
+ * Cached for 1 minute to avoid excessive API calls
+ */
+export async function fetchSetupStatus(): Promise<SetupStatusResponse> {
+  const now = Date.now();
+
+  // Return cached value if still valid
+  if (cachedStatus && now - lastFetch < CACHE_TTL) {
+    return cachedStatus;
   }
+
   try {
-    const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch {
-    // Ignore parse errors
+    const status = await getSetupStatus();
+    cachedStatus = status;
+    lastFetch = now;
+    return status;
+  } catch (error) {
+    console.error("Failed to fetch setup status:", error);
+    // On error, assume setup is required (safe default)
+    // This prevents access if API is down
+    return {
+      setupComplete: false,
+      requiresSetup: true,
+    };
   }
-  return {};
 }
 
-function persistConfig(config: AppConfig): void {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return;
-  }
-  try {
-    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
-  } catch {
-    // Ignore storage errors
-  }
+/**
+ * Check if super admin is configured
+ * Async version - fetches from server
+ */
+export async function checkSetupStatus(): Promise<boolean> {
+  const status = await fetchSetupStatus();
+  return status.setupComplete;
 }
 
-function initializeConfig(): AppConfig {
-  const persisted = getPersistedConfig();
+/**
+ * Get setup status synchronously from cache
+ * Returns null if not yet fetched
+ * Use this in React components after initial fetch
+ */
+export function getSetupStatusSync(): SetupStatusResponse | null {
+  return cachedStatus;
+}
 
-  if (configFile.SuperAdminConfigured) {
-    return { ...configFile };
-  }
+/**
+ * Check if super admin is configured (synchronous)
+ * Returns false if not yet fetched (safe default)
+ * Use this in React components after initial fetch
+ */
+export function isSuperAdminConfigured(): boolean {
+  return cachedStatus?.setupComplete ?? false;
+}
 
-  if (!configFile.SuperAdminConfigured && persisted.SuperAdminConfigured) {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.removeItem(CONFIG_STORAGE_KEY);
-    }
-    return { ...configFile };
-  }
+/**
+ * Mark setup as complete in cache
+ * Called after successful setup completion
+ */
+export function markSuperAdminConfigured(): void {
+  cachedStatus = {
+    setupComplete: true,
+    requiresSetup: false,
+    lastChecked: new Date().toISOString(),
+    superAdminCount: 1,
+  };
+  lastFetch = Date.now();
+}
 
+/**
+ * Clear cached status
+ * Forces next call to fetch from server
+ */
+export function clearCache(): void {
+  cachedStatus = null;
+  lastFetch = 0;
+}
+
+/**
+ * Legacy compatibility functions
+ * These maintain backward compatibility with existing code
+ */
+
+export function getConfig(): AppConfig {
   return {
-    ...configFile,
-    ...persisted,
+    SuperAdminConfigured: cachedStatus?.setupComplete ?? false,
   };
 }
 
-let currentConfig: AppConfig = initializeConfig();
-
-export function getConfig(): AppConfig {
-  return { ...currentConfig };
-}
-
 export function updateConfig(updates: Partial<AppConfig>): void {
-  currentConfig = { ...currentConfig, ...updates };
-  persistConfig(currentConfig);
-}
-
-export function isSuperAdminConfigured(): boolean {
-  return currentConfig.SuperAdminConfigured;
-}
-
-export function markSuperAdminConfigured(): void {
-  updateConfig({ SuperAdminConfigured: true });
+  if (updates.SuperAdminConfigured !== undefined) {
+    if (updates.SuperAdminConfigured) {
+      markSuperAdminConfigured();
+    } else {
+      clearCache();
+    }
+  }
 }
 
 export function resetConfig(): void {
-  currentConfig = { ...configFile };
-  if (typeof window !== "undefined" && window.localStorage) {
-    localStorage.removeItem(CONFIG_STORAGE_KEY);
-  }
+  clearCache();
 }

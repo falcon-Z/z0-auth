@@ -5,6 +5,7 @@ import {
   checkSetupEligibility,
   validateEmail,
   validateOrganization,
+  getSetupStatus,
 } from "./handlers";
 import {
   superAdminSetupSchema,
@@ -18,6 +19,13 @@ const setupAdmin = new Hono();
 // Apply rate limiting to setup endpoints
 const setupRateLimit = createRateLimit(rateLimitConfigs.strict);
 const validationRateLimit = createRateLimit(rateLimitConfigs.auth);
+
+/**
+ * GET /api/setup/status
+ * Get current setup status (setup complete or not)
+ * Public endpoint - no auth required
+ */
+setupAdmin.get("/status", getSetupStatus);
 
 /**
  * GET /api/setup/eligibility

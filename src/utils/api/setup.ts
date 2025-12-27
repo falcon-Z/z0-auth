@@ -3,6 +3,13 @@
  * Provides typed client-side functions to interact with the setup API
  */
 
+export interface SetupStatusResponse {
+  setupComplete: boolean;
+  requiresSetup: boolean;
+  lastChecked?: string;
+  superAdminCount?: number;
+}
+
 export interface SetupEligibilityResponse {
   eligible: boolean;
   configured: boolean;
@@ -45,6 +52,27 @@ export interface ApiError {
   }>;
   details?: any;
   requestId?: string;
+}
+
+/**
+ * Get current setup status from server
+ * This is the source of truth for setup completion state
+ */
+export async function getSetupStatus(): Promise<SetupStatusResponse> {
+  const response = await fetch("/api/setup/status", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Failed to fetch setup status");
+  }
+
+  return data;
 }
 
 /**

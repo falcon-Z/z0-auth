@@ -26,6 +26,26 @@ import {
   RequestContext,
   type FieldError,
 } from "@z0/utils/error-handling";
+import { isSetupComplete, getSetupState } from "@z0/utils/setup-state";
+
+/**
+ * Get current setup status
+ * Public endpoint - returns whether setup is complete
+ * This is used by the frontend to determine routing
+ */
+export async function getSetupStatus(c: Context) {
+  const setupComplete = isSetupComplete();
+  const state = getSetupState();
+
+  return c.json({
+    setupComplete,
+    requiresSetup: !setupComplete,
+    ...(state && {
+      lastChecked: state.lastChecked.toISOString(),
+      superAdminCount: state.superAdminCount,
+    }),
+  });
+}
 
 /**
  * Check if system is eligible for setup
@@ -41,23 +61,10 @@ export async function checkSetupEligibility(c: Context) {
   });
 
   try {
-    // Check config.json
-    const fs = await import("fs/promises");
-    const configPath = new URL("../../config.json", import.meta.url).pathname;
-    let configuredInFile = false;
+    // Check in-memory setup state (faster than DB query)
+    const setupComplete = isSetupComplete();
 
-    try {
-      const configRaw = await fs.readFile(configPath, "utf-8");
-      const config = JSON.parse(configRaw);
-      configuredInFile = config.SuperAdminConfigured === true;
-    } catch (err) {
-      Logger.warn("Failed to read config file", {
-        error: err.message,
-        requestId,
-      });
-    }
-
-    // Check database for existing platform membership with SUPER_ADMIN role
+    // Also verify with database for accuracy
     let existingAdmin;
     try {
       existingAdmin = await db.platformMembership.findFirst({
@@ -80,7 +87,7 @@ export async function checkSetupEligibility(c: Context) {
       return c.json({ ...errorResponse, requestId }, 500);
     }
 
-    const configured = configuredInFile || !!existingAdmin;
+    const configured = setupComplete || !!existingAdmin;
     const eligible = !configured;
 
     return c.json({
@@ -476,29 +483,11 @@ export async function handleSetup(c: Context) {
     }
 
     /**
-     * Update config.json to mark SuperAdminConfigured as true
+     * Mark setup as complete in memory
      */
-    const fs = await import("fs/promises");
-    const configPath = new URL("../../config.json", import.meta.url).pathname;
-    try {
-      const configRaw = await fs.readFile(configPath, "utf-8");
-      const config = JSON.parse(configRaw);
-      config.SuperAdminConfigured = true;
-      await fs.writeFile(configPath, JSON.stringify(config, null, 2));
-
-      Logger.info("Configuration file updated successfully", {
-        configPath,
-        requestId,
-      });
-    } catch (err) {
-      Logger.error("Failed to update configuration file", {
-        error: err.message,
-        configPath,
-        requestId,
-      });
-      // Don't fail the request if config update fails, but log the error
-      // The super admin was created successfully, so we can continue
-    }
+    const { markSetupComplete } = await import("@z0/utils/setup-state");
+    markSetupComplete();
+    Logger.info("Setup marked as complete", { requestId });
 
     /**
      * Log successful setup for security monitoring

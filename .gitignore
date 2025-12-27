@@ -47,6 +47,12 @@ keys/
 *.pub
 jwt-private.key
 jwt-public.key
+
+# Config files (if accidentally created)
+src/config.json
+config.json
+
+# Claude AI files
 .github/copilot-instructions.md
 .claude/claude.md
 .claude/plan.md

@@ -131,13 +131,22 @@ export default function Setup() {
 
   useEffect(() => {
     const checkInitialState = async () => {
-      if (isSuperAdminConfigured()) {
-        if (!success && loadingState === "idle") {
-          window.location.href = "/login";
-          return;
+      try {
+        // Fetch setup status from server
+        const { checkSetupStatus } = await import("@z0/utils/config-state");
+        const setupComplete = await checkSetupStatus();
+
+        if (setupComplete) {
+          if (!success && loadingState === "idle") {
+            window.location.href = "/login";
+            return;
+          }
         }
+      } catch (error) {
+        console.error("Failed to check setup status:", error);
+      } finally {
+        setIsCheckingEligibility(false);
       }
-      setIsCheckingEligibility(false);
     };
 
     checkInitialState();
