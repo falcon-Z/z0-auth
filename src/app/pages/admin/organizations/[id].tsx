@@ -78,6 +78,7 @@ import {
 } from "@z0/components/ui/alert-dialog";
 import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
 import { useAuth } from "@z0/app/contexts/auth-context";
+import { authFetch } from "@z0/utils/api/client";
 
 // Schemas for member management
 const addMemberSchema = z.object({
@@ -220,9 +221,7 @@ export default function OrganizationDetail() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`/api/v1/platform/organizations/${id}`, {
-        credentials: "include",
-      });
+      const response = await authFetch(`/api/v1/platform/organizations/${id}`);
 
       if (!response.ok) {
         throw new Error("Failed to load organization");
@@ -243,9 +242,8 @@ export default function OrganizationDetail() {
     try {
       setIsSubmitting(true);
       setMemberError(null);
-      const response = await fetch(`/api/v1/orgs/${organization.id}/members`, {
+      const response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
         method: "POST",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
@@ -271,11 +269,10 @@ export default function OrganizationDetail() {
     try {
       setIsSubmitting(true);
       setMemberError(null);
-      const response = await fetch(
+      const response = await authFetch(
         `/api/v1/orgs/${organization.id}/members/${selectedMember.userId}`,
         {
           method: "PATCH",
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         }
@@ -302,12 +299,9 @@ export default function OrganizationDetail() {
     try {
       setIsSubmitting(true);
       setMemberError(null);
-      const response = await fetch(
+      const response = await authFetch(
         `/api/v1/orgs/${organization.id}/members/${selectedMember.userId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
+        { method: "DELETE" }
       );
 
       const result = await response.json();
@@ -348,9 +342,8 @@ export default function OrganizationDetail() {
       setSettingsSuccess(null);
 
       // Update basic info
-      const response = await fetch(`/api/v1/platform/organizations/${id}`, {
+      const response = await authFetch(`/api/v1/platform/organizations/${id}`, {
         method: "PUT",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: data.name,
@@ -367,9 +360,8 @@ export default function OrganizationDetail() {
 
       // Update status separately if changed
       if (data.status !== organization.status) {
-        const statusResponse = await fetch(`/api/v1/platform/organizations/${id}/status`, {
+        const statusResponse = await authFetch(`/api/v1/platform/organizations/${id}/status`, {
           method: "PATCH",
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: data.status }),
         });
@@ -395,9 +387,8 @@ export default function OrganizationDetail() {
       setIsDeleting(true);
       setSettingsError(null);
 
-      const response = await fetch(`/api/v1/platform/organizations/${id}`, {
+      const response = await authFetch(`/api/v1/platform/organizations/${id}`, {
         method: "DELETE",
-        credentials: "include",
       });
 
       if (!response.ok) {

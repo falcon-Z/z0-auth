@@ -40,6 +40,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Badge } from "@z0/components/ui/badge";
 import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
+import { authFetch } from "@z0/utils/api/client";
 
 const createOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -139,9 +140,7 @@ export default function PlatformOrganizations() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/v1/platform/organizations", {
-        credentials: "include",
-      });
+      const response = await authFetch("/api/v1/platform/organizations");
 
       if (!response.ok) {
         throw new Error("Failed to load organizations");
@@ -159,9 +158,8 @@ export default function PlatformOrganizations() {
   const handleCreateOrganization = async (data: CreateOrgFormValues) => {
     try {
       setIsSubmitting(true);
-      const response = await fetch("/api/v1/platform/organizations", {
+      const response = await authFetch("/api/v1/platform/organizations", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },

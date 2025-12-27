@@ -11,12 +11,91 @@ interface FetchOptions {
   method?: string;
   headers?: Record<string, string>;
   body?: any;
+  skipRefresh?: boolean; // Skip token refresh for this request
+}
+
+// Token refresh state to prevent multiple simultaneous refresh attempts
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+/**
+ * Attempt to refresh the access token using the refresh token cookie.
+ * Returns true if refresh was successful, false otherwise.
+ */
+async function attemptTokenRefresh(): Promise<boolean> {
+  // If already refreshing, wait for that to complete
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (response.ok) {
+        return true;
+      }
+
+      // Refresh failed - user needs to log in again
+      return false;
+    } catch {
+      return false;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+/**
+ * Authenticated fetch wrapper that handles token refresh on 401 errors.
+ * Use this instead of raw fetch() for authenticated API calls.
+ *
+ * @example
+ * const response = await authFetch('/api/v1/users/profile');
+ * const data = await response.json();
+ */
+export async function authFetch(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const fetchWithCredentials = async () => {
+    return fetch(url, {
+      ...options,
+      credentials: "include",
+    });
+  };
+
+  const response = await fetchWithCredentials();
+
+  // Handle 401 - attempt token refresh and retry
+  if (response.status === 401) {
+    const refreshed = await attemptTokenRefresh();
+
+    if (refreshed) {
+      // Retry the original request with new token
+      return fetchWithCredentials();
+    }
+
+    // Refresh failed - clear user data (redirect handled by caller or auth context)
+    localStorage.removeItem("user");
+  }
+
+  return response;
 }
 
 async function apiCall<T>(
   endpoint: string,
   options: FetchOptions = {}
 ): Promise<T> {
+  const { skipRefresh, ...fetchOptions } = options;
   const defaultHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -24,14 +103,50 @@ async function apiCall<T>(
   // Authentication is handled via httpOnly cookies (access_token, refresh_token)
   // which are automatically sent with credentials: "include"
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
+    ...fetchOptions,
     credentials: "include", // Important: Include cookies for authentication
     headers: {
       ...defaultHeaders,
-      ...options.headers,
+      ...fetchOptions.headers,
     },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    body: fetchOptions.body ? JSON.stringify(fetchOptions.body) : undefined,
   });
+
+  // Handle 401 Unauthorized - attempt token refresh and retry
+  if (response.status === 401 && !skipRefresh) {
+    const refreshed = await attemptTokenRefresh();
+
+    if (refreshed) {
+      // Retry the original request with the new token
+      const retryResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...fetchOptions,
+        credentials: "include",
+        headers: {
+          ...defaultHeaders,
+          ...fetchOptions.headers,
+        },
+        body: fetchOptions.body ? JSON.stringify(fetchOptions.body) : undefined,
+      });
+
+      const retryData = await retryResponse.json();
+
+      if (!retryResponse.ok) {
+        throw new ApiError(
+          retryResponse.status,
+          retryData.code || "UNKNOWN_ERROR",
+          retryData.message || "An error occurred"
+        );
+      }
+
+      return retryData;
+    }
+
+    // Refresh failed - redirect to login
+    // Clear any stale user data and redirect
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+    throw new ApiError(401, "SESSION_EXPIRED", "Session expired. Please log in again.");
+  }
 
   const data = await response.json();
 
