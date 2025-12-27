@@ -229,10 +229,6 @@ export const router = createBrowserRouter([
                 element: <PlatformOrganizationDetail />,
               },
               {
-                path: "admin/organizations/:id/edit",
-                element: <PlatformOrganizationDetail />,
-              },
-              {
                 path: "admin/platform/organizations",
                 element: <PlatformOrganizations />,
               },

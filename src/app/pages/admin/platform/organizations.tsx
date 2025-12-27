@@ -6,7 +6,6 @@ import {
   Plus,
   MoreHorizontal,
   Eye,
-  Edit2,
   Trash2,
   AlertCircle,
   Building2,
@@ -75,6 +74,19 @@ interface Organization {
   appCount: number;
 }
 
+/**
+ * Generate a URL-friendly slug from a string
+ */
+function generateSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "") // Remove special characters
+    .replace(/\s+/g, "-") // Replace spaces with dashes
+    .replace(/-+/g, "-") // Replace multiple dashes with single dash
+    .replace(/^-|-$/g, ""); // Remove leading/trailing dashes
+}
+
 export default function PlatformOrganizations() {
   const navigate = useNavigate();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -83,6 +95,7 @@ export default function PlatformOrganizations() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
   const form = useForm<CreateOrgFormValues>({
     resolver: zodResolver(createOrgSchema),
@@ -92,6 +105,29 @@ export default function PlatformOrganizations() {
       description: "",
     },
   });
+
+  // Auto-generate slug from name
+  const handleNameChange = (value: string) => {
+    form.setValue("name", value);
+    if (!slugManuallyEdited) {
+      form.setValue("slug", generateSlug(value));
+    }
+  };
+
+  // Track if slug has been manually edited
+  const handleSlugChange = (value: string) => {
+    form.setValue("slug", value);
+    setSlugManuallyEdited(true);
+  };
+
+  // Reset manual edit flag when dialog closes
+  const handleDialogChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (!open) {
+      setSlugManuallyEdited(false);
+      form.reset();
+    }
+  };
 
   useEffect(() => {
     loadOrganizations();
@@ -270,12 +306,6 @@ export default function PlatformOrganizations() {
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => navigate(`/admin/organizations/${org.id}/edit`)}
-                >
-                  <Edit2 className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-red-600">
                   <Trash2 className="mr-2 h-4 w-4" />
@@ -300,7 +330,7 @@ export default function PlatformOrganizations() {
             Manage all organizations on the platform
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -326,7 +356,11 @@ export default function PlatformOrganizations() {
                     <FormItem>
                       <FormLabel>Organization Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Acme Corporation" {...field} />
+                        <Input
+                          placeholder="Acme Corporation"
+                          {...field}
+                          onChange={(e) => handleNameChange(e.target.value)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -340,7 +374,11 @@ export default function PlatformOrganizations() {
                     <FormItem>
                       <FormLabel>Slug</FormLabel>
                       <FormControl>
-                        <Input placeholder="acme-corp" {...field} />
+                        <Input
+                          placeholder="acme-corp"
+                          {...field}
+                          onChange={(e) => handleSlugChange(e.target.value)}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
