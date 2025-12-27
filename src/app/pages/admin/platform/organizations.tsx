@@ -1,12 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { ColumnDef } from "@tanstack/react-table";
 import {
   Loader2,
   Plus,
+  MoreHorizontal,
+  Eye,
   Edit2,
   Trash2,
   AlertCircle,
-  CheckCircle,
+  Building2,
+  Search,
 } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
@@ -19,14 +23,6 @@ import {
 } from "@z0/components/ui/card";
 import { Alert, AlertDescription } from "@z0/components/ui/alert";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@z0/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,8 +30,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@z0/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@z0/components/ui/dropdown-menu";
 import { Input } from "@z0/components/ui/input";
-import { Label } from "@z0/components/ui/label";
 import {
   Form,
   FormControl,
@@ -47,14 +50,8 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@z0/components/ui/breadcrumb";
 import { Badge } from "@z0/components/ui/badge";
+import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
 
 const createOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -85,6 +82,7 @@ export default function PlatformOrganizations() {
   const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const form = useForm<CreateOrgFormValues>({
     resolver: zodResolver(createOrgSchema),
@@ -136,15 +134,161 @@ export default function PlatformOrganizations() {
         throw new Error("Failed to create organization");
       }
 
+      const result = await response.json();
       setIsDialogOpen(false);
       form.reset();
-      await loadOrganizations();
+
+      // Navigate to the new organization's detail page
+      if (result.data?.id) {
+        navigate(`/admin/organizations/${result.data.id}`);
+      } else {
+        await loadOrganizations();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const filteredOrganizations = useMemo(() => {
+    if (!searchQuery) return organizations;
+    const query = searchQuery.toLowerCase();
+    return organizations.filter(
+      (org) =>
+        org.name.toLowerCase().includes(query) ||
+        org.slug.toLowerCase().includes(query) ||
+        org.description?.toLowerCase().includes(query)
+    );
+  }, [organizations, searchQuery]);
+
+  const columns: ColumnDef<Organization>[] = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Name" />
+        ),
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-8 h-8 rounded bg-primary/10 text-primary font-semibold text-sm">
+              {row.original.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="font-medium">{row.original.name}</div>
+              {row.original.description && (
+                <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                  {row.original.description}
+                </div>
+              )}
+            </div>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "slug",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Slug" />
+        ),
+        cell: ({ row }) => (
+          <code className="px-2 py-1 bg-muted rounded text-sm">
+            {row.original.slug}
+          </code>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
+        cell: ({ row }) => {
+          const status = row.original.status;
+          return (
+            <Badge
+              variant={
+                status === "ACTIVE"
+                  ? "default"
+                  : status === "SUSPENDED"
+                  ? "destructive"
+                  : "secondary"
+              }
+            >
+              {status}
+            </Badge>
+          );
+        },
+        filterFn: (row, id, value) => {
+          return value.includes(row.getValue(id));
+        },
+      },
+      {
+        accessorKey: "memberCount",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Members" />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center">{row.original.memberCount}</div>
+        ),
+      },
+      {
+        accessorKey: "appCount",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Apps" />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center">{row.original.appCount}</div>
+        ),
+      },
+      {
+        accessorKey: "createdAt",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Created" />
+        ),
+        cell: ({ row }) => (
+          <div className="text-sm text-muted-foreground">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </div>
+        ),
+      },
+      {
+        id: "actions",
+        cell: ({ row }) => {
+          const org = row.original;
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => navigate(`/admin/organizations/${org.id}`)}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Details
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => navigate(`/admin/organizations/${org.id}/edit`)}
+                >
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-red-600">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
+    ],
+    [navigate]
+  );
 
   return (
     <div className="space-y-6">
@@ -157,167 +301,131 @@ export default function PlatformOrganizations() {
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Organization
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Organization</DialogTitle>
+              <DialogDescription>
+                Add a new organization to the platform
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleCreateOrganization)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Acme Corporation" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="slug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Slug</FormLabel>
+                      <FormControl>
+                        <Input placeholder="acme-corp" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Organization description"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   Create Organization
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Organization</DialogTitle>
-                  <DialogDescription>
-                    Add a new organization to the platform
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(handleCreateOrganization)}
-                    className="space-y-4"
-                  >
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Organization Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Acme Corporation" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="slug"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Slug</FormLabel>
-                          <FormControl>
-                            <Input placeholder="acme-corp" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description (Optional)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Organization description"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting && (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      )}
-                      Create Organization
-                    </Button>
-                  </form>
-                </Form>
-              </DialogContent>
+              </form>
+            </Form>
+          </DialogContent>
         </Dialog>
       </div>
 
       {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>All Organizations</CardTitle>
-            <CardDescription>
-              Complete list of organizations on the platform
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin" />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>All Organizations</CardTitle>
+              <CardDescription>
+                {organizations.length} organization{organizations.length !== 1 ? "s" : ""} on the platform
+              </CardDescription>
+            </div>
+            <div className="relative w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search organizations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            columns={columns}
+            data={filteredOrganizations}
+            loading={isLoading}
+            onRowClick={(org) => navigate(`/admin/organizations/${org.id}`)}
+            emptyState={
+              <div className="flex flex-col items-center justify-center py-8">
+                <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">
+                  {searchQuery
+                    ? "No organizations match your search"
+                    : "No organizations found. Create one to get started."}
+                </p>
               </div>
-            ) : organizations.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No organizations found. Create one to get started.</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Slug</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Members</TableHead>
-                    <TableHead>Apps</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {organizations.map((org) => (
-                    <TableRow key={org.id}>
-                      <TableCell className="font-medium">{org.name}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {org.slug}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            org.status === "ACTIVE" ? "default" : "secondary"
-                          }
-                        >
-                          {org.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{org.memberCount}</TableCell>
-                      <TableCell>{org.appCount}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(org.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            navigate(`/admin/organizations/${org.id}`)
-                          }
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+            }
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }

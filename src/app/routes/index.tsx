@@ -30,6 +30,7 @@ import SettingsPage from "../pages/dashboard/settings";
 
 import AdminDashboard from "../pages/admin";
 import PlatformOrganizations from "../pages/admin/platform/organizations";
+import PlatformOrganizationDetail from "../pages/admin/organizations/[id]";
 import PlatformUsers from "../pages/admin/platform/users";
 import SMTPSettings from "../pages/admin/settings/smtp";
 import RequestTracesPage from "../pages/admin/request-traces";
@@ -222,6 +223,14 @@ export const router = createBrowserRouter([
               {
                 path: "admin/organizations",
                 element: <PlatformOrganizations />,
+              },
+              {
+                path: "admin/organizations/:id",
+                element: <PlatformOrganizationDetail />,
+              },
+              {
+                path: "admin/organizations/:id/edit",
+                element: <PlatformOrganizationDetail />,
               },
               {
                 path: "admin/platform/organizations",
