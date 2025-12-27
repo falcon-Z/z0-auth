@@ -29,6 +29,7 @@ const SETUP_ALLOWED_PATHS = [
   "/api/setup/validate/email",
   "/api/setup/validate/organization",
   "/api/setup",
+  "/api/setup/", // Allow trailing slash version
 ];
 
 /**
