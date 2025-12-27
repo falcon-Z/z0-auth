@@ -316,7 +316,7 @@ export default function Setup() {
   // Show loading state while checking eligibility
   if (isCheckingEligibility) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20">
+      <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-background via-background to-muted/20">
         <Card className="w-full max-w-md border-2 shadow-xl">
           <CardContent className="p-8">
             <div className="flex flex-col items-center gap-4">
@@ -333,7 +333,7 @@ export default function Setup() {
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/20 p-4 md:p-8">
+    <div className="min-h-screen w-full flex items-center justify-center bg-linear-to-br from-background via-background to-muted/20 p-4 md:p-8">
       <div className="w-full max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(400px,1fr)_minmax(500px,1.3fr)] gap-8 lg:gap-12">
           {/* Left side - Illustration */}
