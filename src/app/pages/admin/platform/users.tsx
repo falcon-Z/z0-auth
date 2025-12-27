@@ -110,11 +110,8 @@ export default function PlatformUsers() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/platform/users", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -133,12 +130,11 @@ export default function PlatformUsers() {
   const handleCreateUser = async (data: CreateUserFormValues) => {
     try {
       setIsSubmitting(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/platform/users", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });

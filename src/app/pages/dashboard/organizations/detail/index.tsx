@@ -139,11 +139,8 @@ export default function OrganizationDetail() {
 
   const loadOrganizationDetail = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(`/api/v1/orgs/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -161,11 +158,8 @@ export default function OrganizationDetail() {
 
   const loadApps = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(`/api/v1/orgs/${id}/apps`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -179,11 +173,8 @@ export default function OrganizationDetail() {
 
   const loadMembers = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(`/api/v1/orgs/${id}/members`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -198,12 +189,11 @@ export default function OrganizationDetail() {
   const handleCreateApp = async (data: CreateAppFormValues) => {
     try {
       setIsSubmitting(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(`/api/v1/orgs/${id}/apps`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           ...data,

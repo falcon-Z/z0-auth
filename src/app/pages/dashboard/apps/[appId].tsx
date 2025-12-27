@@ -63,11 +63,8 @@ export default function AppDetail() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(`/api/v1/orgs/${id}/apps/${appId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -96,14 +93,11 @@ export default function AppDetail() {
 
     try {
       setIsRegeneratingKey(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(
         `/api/v1/orgs/${id}/apps/${appId}/regenerate-key`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
         }
       );
 

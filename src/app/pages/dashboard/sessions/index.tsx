@@ -63,11 +63,8 @@ export default function SessionsPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/sessions", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -98,14 +95,11 @@ export default function SessionsPage() {
 
     try {
       setIsRevoking(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(
         `/api/v1/users/sessions/${sessionToRevoke.id}`,
         {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          credentials: "include",
         }
       );
 
@@ -130,12 +124,9 @@ export default function SessionsPage() {
   const confirmRevokeAllOther = async () => {
     try {
       setIsRevoking(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/sessions", {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {

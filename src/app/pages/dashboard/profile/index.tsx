@@ -113,11 +113,8 @@ export default function ProfilePage() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/profile", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -141,11 +138,8 @@ export default function ProfilePage() {
 
   const loadSessions = async () => {
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/sessions", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -160,12 +154,11 @@ export default function ProfilePage() {
   const handleUpdateProfile = async (data: UpdateProfileFormValues) => {
     try {
       setIsSaving(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/profile", {
         method: "PUT",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });
@@ -186,12 +179,11 @@ export default function ProfilePage() {
   const handleChangePassword = async (data: ChangePasswordFormValues) => {
     try {
       setIsChangingPassword(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/security/change-password", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           currentPassword: data.currentPassword,
@@ -214,12 +206,9 @@ export default function ProfilePage() {
 
   const handleLogoutSession = async (sessionId: string) => {
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch(`/api/v1/users/sessions/${sessionId}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -235,12 +224,9 @@ export default function ProfilePage() {
     if (!confirm("Are you sure? You'll be logged out everywhere.")) return;
 
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/users/sessions", {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (response.ok) {

@@ -74,10 +74,8 @@ interface Organization {
   description?: string;
   status: string;
   createdAt: string;
-  _count: {
-    users: number;
-    apps: number;
-  };
+  memberCount: number;
+  appCount: number;
 }
 
 export default function PlatformOrganizations() {
@@ -105,11 +103,8 @@ export default function PlatformOrganizations() {
     try {
       setIsLoading(true);
       setError(null);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/platform/organizations", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -128,12 +123,11 @@ export default function PlatformOrganizations() {
   const handleCreateOrganization = async (data: CreateOrgFormValues) => {
     try {
       setIsSubmitting(true);
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/v1/platform/organizations", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });
@@ -272,7 +266,7 @@ export default function PlatformOrganizations() {
                     <TableHead>Name</TableHead>
                     <TableHead>Slug</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Users</TableHead>
+                    <TableHead>Members</TableHead>
                     <TableHead>Apps</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -294,8 +288,8 @@ export default function PlatformOrganizations() {
                           {org.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{org._count.users}</TableCell>
-                      <TableCell>{org._count.apps}</TableCell>
+                      <TableCell>{org.memberCount}</TableCell>
+                      <TableCell>{org.appCount}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(org.createdAt).toLocaleDateString()}
                       </TableCell>
