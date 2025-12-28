@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { ColumnDef } from "@tanstack/react-table";
 import { useForm } from "react-hook-form";
@@ -18,6 +18,9 @@ import {
   Plus,
   Calendar,
   Shield,
+  CheckCircle2,
+  Mail,
+  UserCog,
 } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
@@ -83,7 +86,7 @@ import { authFetch } from "@z0/utils/api/client";
 // Schemas for member management
 const addMemberSchema = z.object({
   email: z.string().email("Invalid email address"),
-  name: z.string().min(1, "Name is required").max(100, "Name is too long"),
+  name: z.string().max(100, "Name is too long").optional(),
   password: z.string().min(8, "Password must be at least 8 characters").optional(),
   roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]),
 });
@@ -94,6 +97,20 @@ const changeRoleSchema = z.object({
 
 type AddMemberFormValues = z.infer<typeof addMemberSchema>;
 type ChangeRoleFormValues = z.infer<typeof changeRoleSchema>;
+
+// User lookup result type
+interface UserLookupResult {
+  exists: boolean;
+  data: {
+    id: string;
+    email: string;
+    name: string;
+    avatar?: string;
+    status: string;
+  } | null;
+  isMember: boolean;
+  membershipInactive: boolean;
+}
 
 const ROLE_OPTIONS = [
   { value: "ORG_OWNER", label: "Owner", description: "Full access to organization" },
@@ -163,6 +180,11 @@ export default function OrganizationDetail() {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
+
+  // User lookup state for add member
+  const [userLookup, setUserLookup] = useState<UserLookupResult | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [addMemberMode, setAddMemberMode] = useState<"invite" | "manual">("invite");
 
   // Forms
   const addMemberForm = useForm<AddMemberFormValues>({
@@ -236,26 +258,115 @@ export default function OrganizationDetail() {
     }
   };
 
+  // Lookup user by email
+  const lookupUserByEmail = useCallback(async (email: string) => {
+    if (!organization || !email) {
+      setUserLookup(null);
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setUserLookup(null);
+      return;
+    }
+
+    try {
+      setIsLookingUp(true);
+      const response = await authFetch(
+        `/api/v1/orgs/${organization.id}/members/lookup?email=${encodeURIComponent(email)}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserLookup(result);
+
+        // If user exists, populate name field
+        if (result.exists && result.data) {
+          addMemberForm.setValue("name", result.data.name);
+        }
+      }
+    } catch (err) {
+      console.error("User lookup failed:", err);
+    } finally {
+      setIsLookingUp(false);
+    }
+  }, [organization, addMemberForm]);
+
+  // Reset add member dialog state
+  const resetAddMemberDialog = useCallback(() => {
+    addMemberForm.reset();
+    setUserLookup(null);
+    setMemberError(null);
+    setAddMemberMode("invite");
+  }, [addMemberForm]);
+
   // Member management handlers
   const handleAddMember = async (data: AddMemberFormValues) => {
     if (!organization) return;
+
+    // Validate: if user doesn't exist and manual mode, require name and password
+    if (!userLookup?.exists && addMemberMode === "manual") {
+      if (!data.name || data.name.trim() === "") {
+        setMemberError("Name is required for new users");
+        return;
+      }
+      if (!data.password || data.password.length < 8) {
+        setMemberError("Password is required for new users (min 8 characters)");
+        return;
+      }
+    }
+
     try {
       setIsSubmitting(true);
       setMemberError(null);
-      const response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+
+      let response: Response;
+
+      if (userLookup?.exists) {
+        // User exists - add directly to organization
+        response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            name: userLookup.data?.name || data.name,
+            roleType: data.roleType,
+          }),
+        });
+      } else if (addMemberMode === "invite") {
+        // New user - send invitation
+        response = await authFetch(`/api/v1/orgs/${organization.id}/invitations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            roleType: data.roleType,
+          }),
+        });
+      } else {
+        // Manual mode - create user with password
+        response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            name: data.name,
+            password: data.password,
+            roleType: data.roleType,
+          }),
+        });
+      }
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || "Failed to add member");
+        throw new Error(result.message || result.error || "Failed to add member");
       }
 
       setIsAddMemberOpen(false);
-      addMemberForm.reset();
+      resetAddMemberDialog();
       await loadOrganization();
     } catch (err) {
       setMemberError(err instanceof Error ? err.message : "An error occurred");
@@ -748,8 +859,7 @@ export default function OrganizationDetail() {
                   </CardDescription>
                 </div>
                 <Button onClick={() => {
-                  addMemberForm.reset();
-                  setMemberError(null);
+                  resetAddMemberDialog();
                   setIsAddMemberOpen(true);
                 }}>
                   <UserPlus className="mr-2 h-4 w-4" />
@@ -1023,12 +1133,15 @@ export default function OrganizationDetail() {
       </Tabs>
 
       {/* Add Member Dialog */}
-      <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
+      <Dialog open={isAddMemberOpen} onOpenChange={(open) => {
+        setIsAddMemberOpen(open);
+        if (!open) resetAddMemberDialog();
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add Member</DialogTitle>
             <DialogDescription>
-              Add a new member to this organization. If the user doesn't exist, a new account will be created.
+              Add a member to this organization by email.
             </DialogDescription>
           </DialogHeader>
           <Form {...addMemberForm}>
@@ -1040,6 +1153,7 @@ export default function OrganizationDetail() {
                 </Alert>
               )}
 
+              {/* Email field with lookup */}
               <FormField
                 control={addMemberForm.control}
                 name="email"
@@ -1047,44 +1161,130 @@ export default function OrganizationDetail() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="user@example.com" type="email" {...field} />
+                      <div className="relative">
+                        <Input
+                          placeholder="user@example.com"
+                          type="email"
+                          {...field}
+                          onBlur={(e) => {
+                            field.onBlur();
+                            lookupUserByEmail(e.target.value);
+                          }}
+                        />
+                        {isLookingUp && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <FormField
-                control={addMemberForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* User lookup result */}
+              {userLookup && (
+                <div className="rounded-lg border p-3">
+                  {userLookup.exists && userLookup.data ? (
+                    userLookup.isMember ? (
+                      <div className="flex items-center gap-2 text-amber-600">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-sm">This user is already a member of this organization</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-sm font-medium">User found</span>
+                        </div>
+                        <div className="flex items-center gap-3 pl-6">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                            {userLookup.data.name?.charAt(0).toUpperCase() || "?"}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{userLookup.data.name}</p>
+                            <p className="text-xs text-muted-foreground">{userLookup.data.email}</p>
+                          </div>
+                        </div>
+                        {userLookup.membershipInactive && (
+                          <p className="text-xs text-muted-foreground pl-6">
+                            Previous membership will be reactivated
+                          </p>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Mail className="h-4 w-4" />
+                        <span className="text-sm">No existing user found with this email</span>
+                      </div>
+                      {/* Mode selection for new user */}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={addMemberMode === "invite" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setAddMemberMode("invite")}
+                        >
+                          <Mail className="mr-2 h-3 w-3" />
+                          Send Invite
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={addMemberMode === "manual" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setAddMemberMode("manual")}
+                        >
+                          <UserCog className="mr-2 h-3 w-3" />
+                          Create Manually
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-              <FormField
-                control={addMemberForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      Required only if user doesn't exist
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Name and password fields - only show for manual creation of new users */}
+              {userLookup && !userLookup.exists && addMemberMode === "manual" && (
+                <>
+                  <FormField
+                    control={addMemberForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="John Doe" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
+                  <FormField
+                    control={addMemberForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="••••••••" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Temporary password for the new user
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {/* Role selection */}
               <FormField
                 control={addMemberForm.control}
                 name="roleType"
@@ -1124,9 +1324,16 @@ export default function OrganizationDetail() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || (userLookup?.isMember ?? false)}
+                >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Add Member
+                  {userLookup?.exists
+                    ? "Add to Organization"
+                    : addMemberMode === "invite"
+                      ? "Send Invite"
+                      : "Create & Add"}
                 </Button>
               </DialogFooter>
             </form>

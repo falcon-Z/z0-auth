@@ -42,6 +42,86 @@ const updateMembershipSchema = z.object({
 });
 
 /**
+ * GET /:orgId/members/lookup
+ * Check if a user exists by email and get their info
+ * Used to determine if we should invite or add an existing user
+ */
+orgMembers.get(
+  "/:orgId/members/lookup",
+  verifyAccessTokenMiddleware,
+  requireOrgAccess(),
+  requireScope("org:members:manage"),
+  async (c) => {
+    const orgId = c.req.param("orgId");
+    const email = c.req.query("email");
+    const requestId = RequestContext.generateRequestId();
+
+    if (!email) {
+      return c.json(
+        ErrorResponseBuilder.validation("Email is required", [
+          { field: "email", message: "Email query parameter is required", code: "required" },
+        ]),
+        400
+      );
+    }
+
+    try {
+      // Check if user exists
+      const user = await db.user.findUnique({
+        where: { email: email.toLowerCase() },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatar: true,
+          status: true,
+        },
+      });
+
+      if (!user) {
+        return c.json({
+          success: true,
+          exists: false,
+          data: null,
+          requestId,
+        });
+      }
+
+      // Check if user is already a member of this org
+      const existingMembership = await db.organizationMembership.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: user.id,
+            organizationId: orgId,
+          },
+        },
+      });
+
+      return c.json({
+        success: true,
+        exists: true,
+        data: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          avatar: user.avatar,
+          status: user.status,
+        },
+        isMember: existingMembership?.isActive ?? false,
+        membershipInactive: existingMembership ? !existingMembership.isActive : false,
+        requestId,
+      });
+    } catch (error) {
+      Logger.error("Failed to lookup user", { email, error });
+      return c.json(
+        ErrorResponseBuilder.system("Failed to lookup user", "DB_ERROR"),
+        500
+      );
+    }
+  }
+);
+
+/**
  * GET /:orgId/members
  * List organization memberships
  */
