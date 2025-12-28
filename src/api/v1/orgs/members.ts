@@ -24,14 +24,24 @@ import { requireOrgAccess, requireScope } from "../../../middleware/require-scop
 import { validatePassword } from "@z0/utils/password-validation";
 import { AuditLogger } from "@z0/utils/audit-logger";
 import { checkUserQuota, isPlatformAdmin } from "@z0/utils/quota";
+import { randomBytes } from "crypto";
 
 const orgMembers = new Hono();
 
+/**
+ * Generate a secure temporary password
+ * 12 characters, URL-safe base64
+ */
+function generateTempPassword(): string {
+  const bytes = randomBytes(9);
+  return bytes.toString("base64url").slice(0, 12);
+}
+
 // Schema for inviting/adding a member
+// Password is always auto-generated server-side for new users
 const addMemberSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(100),
-  password: z.string().min(8).optional(), // Optional if user exists
   roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]).default("ORG_MEMBER"),
 });
 
@@ -297,29 +307,14 @@ orgMembers.post(
         }
       }
 
-      // If user doesn't exist, create them
+      // Track if we created a new user (for temp password handling)
+      let tempPassword: string | null = null;
+      let isNewUser = false;
+
+      // If user doesn't exist, create them with auto-generated password
       if (!user) {
-        if (!data.password) {
-          return c.json(
-            ErrorResponseBuilder.validation(
-              "Password required for new user creation",
-              [{ field: "password", message: "Password is required", code: "required" }]
-            ),
-            400
-          );
-        }
-
-        const pwdValidation = validatePassword(data.password);
-        if (!pwdValidation.isValid) {
-          return c.json(
-            ErrorResponseBuilder.validation("Password does not meet requirements", [], {
-              feedback: pwdValidation.feedback,
-            }),
-            400
-          );
-        }
-
-        const hashedPassword = await hashPassword(data.password);
+        tempPassword = generateTempPassword();
+        const hashedPassword = await hashPassword(tempPassword);
 
         user = await db.user.create({
           data: {
@@ -328,7 +323,15 @@ orgMembers.post(
             password: hashedPassword,
             status: "ACTIVE",
             emailVerified: false,
+            requiresPasswordChange: true, // Force password change on first login
           },
+        });
+        isNewUser = true;
+
+        Logger.info("New user created via member addition", {
+          userId: user.id,
+          email: user.email,
+          requiresPasswordChange: true,
         });
       }
 
@@ -368,17 +371,32 @@ orgMembers.post(
         requestId,
       });
 
+      // Build response - include temp password info for new users
+      const responseData: any = {
+        membershipId: membership.id,
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        roleType: membership.roleType,
+        isNewUser,
+      };
+
+      // For new users, include credentials info for admin to share
+      if (isNewUser && tempPassword) {
+        responseData.credentials = {
+          tempPassword,
+          requiresPasswordChange: true,
+          message: "User must change password on first login",
+        };
+      }
+
       return c.json(
         {
           success: true,
-          message: "Member added to organization",
-          data: {
-            membershipId: membership.id,
-            userId: user.id,
-            email: user.email,
-            name: user.name,
-            roleType: membership.roleType,
-          },
+          message: isNewUser
+            ? "New user created and added to organization"
+            : "Member added to organization",
+          data: responseData,
           requestId,
         },
         201

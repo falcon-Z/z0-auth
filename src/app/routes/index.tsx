@@ -35,6 +35,7 @@ import PlatformUsers from "../pages/admin/platform/users";
 import SMTPSettings from "../pages/admin/settings/smtp";
 import RequestTracesPage from "../pages/admin/request-traces";
 import AcceptInvite from "../pages/accept-invite";
+import FirstTimeSetup from "../pages/first-time-setup";
 
 /**
  * Guard that redirects to /setup if super admin is not configured
@@ -126,6 +127,12 @@ export const router = createBrowserRouter([
       {
         element: <AuthProviderWrapper />,
         children: [
+          // First-time setup is inside AuthProvider but outside AuthGuard
+          // This allows the auth context redirect to work properly
+          {
+            path: "first-time-setup",
+            element: <FirstTimeSetup />,
+          },
           {
             element: <AuthGuard />,
             children: [

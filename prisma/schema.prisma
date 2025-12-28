@@ -149,6 +149,7 @@ model User {
   deletedBy            String?
   deleteReason         String?
   isPermanentlyDeleted Boolean  @default(false)
+  requiresPasswordChange Boolean @default(false)
 
   // Memberships - User's access is determined by these
   platformMembership       PlatformMembership?

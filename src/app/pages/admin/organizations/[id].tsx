@@ -83,11 +83,21 @@ import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/
 import { useAuth } from "@z0/app/contexts/auth-context";
 import { authFetch } from "@z0/utils/api/client";
 
+// Debounce hook for email lookup
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 // Schemas for member management
+// Note: Password is auto-generated server-side for new users
 const addMemberSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().max(100, "Name is too long").optional(),
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
   roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]),
 });
 
@@ -186,13 +196,27 @@ export default function OrganizationDetail() {
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [addMemberMode, setAddMemberMode] = useState<"invite" | "manual">("invite");
 
+  // Invitation result for mailto fallback dialog
+  const [invitationResult, setInvitationResult] = useState<{
+    email: string;
+    inviteUrl: string;
+    emailSent: boolean;
+    emailContent?: { subject: string; body: string };
+  } | null>(null);
+
+  // Credentials result for new user creation
+  const [credentialsResult, setCredentialsResult] = useState<{
+    email: string;
+    name: string;
+    tempPassword: string;
+  } | null>(null);
+
   // Forms
   const addMemberForm = useForm<AddMemberFormValues>({
     resolver: zodResolver(addMemberSchema),
     defaultValues: {
       email: "",
       name: "",
-      password: "",
       roleType: "ORG_MEMBER",
     },
   });
@@ -282,9 +306,9 @@ export default function OrganizationDetail() {
         const result = await response.json();
         setUserLookup(result);
 
-        // If user exists, populate name field
+        // If user exists, populate name field and trigger validation
         if (result.exists && result.data) {
-          addMemberForm.setValue("name", result.data.name);
+          addMemberForm.setValue("name", result.data.name, { shouldValidate: true });
         }
       }
     } catch (err) {
@@ -300,20 +324,44 @@ export default function OrganizationDetail() {
     setUserLookup(null);
     setMemberError(null);
     setAddMemberMode("invite");
+    setInvitationResult(null);
+    setCredentialsResult(null);
   }, [addMemberForm]);
+
+  // Debounced email lookup on input
+  const emailValue = addMemberForm.watch("email");
+  const debouncedEmail = useDebounce(emailValue, 500);
+
+  useEffect(() => {
+    if (debouncedEmail && isAddMemberOpen) {
+      lookupUserByEmail(debouncedEmail);
+    } else if (!debouncedEmail) {
+      setUserLookup(null);
+    }
+  }, [debouncedEmail, isAddMemberOpen, lookupUserByEmail]);
+
+  // Compute button disabled state
+  const isAddButtonDisabled = useMemo(() => {
+    if (isSubmitting) return true;
+    if (isLookingUp) return true;
+    if (!userLookup) return true;
+    if (userLookup.isMember) return true;
+    // Manual mode only needs name now (no password)
+    if (!userLookup.exists && addMemberMode === "manual") {
+      const name = addMemberForm.getValues("name");
+      if (!name?.trim()) return true;
+    }
+    return false;
+  }, [isSubmitting, isLookingUp, userLookup, addMemberMode, addMemberForm]);
 
   // Member management handlers
   const handleAddMember = async (data: AddMemberFormValues) => {
     if (!organization) return;
 
-    // Validate: if user doesn't exist and manual mode, require name and password
+    // Validate: if user doesn't exist and manual mode, require name
     if (!userLookup?.exists && addMemberMode === "manual") {
       if (!data.name || data.name.trim() === "") {
         setMemberError("Name is required for new users");
-        return;
-      }
-      if (!data.password || data.password.length < 8) {
-        setMemberError("Password is required for new users (min 8 characters)");
         return;
       }
     }
@@ -346,14 +394,13 @@ export default function OrganizationDetail() {
           }),
         });
       } else {
-        // Manual mode - create user with password
+        // Manual mode - create user with auto-generated password
         response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             email: data.email,
             name: data.name,
-            password: data.password,
             roleType: data.roleType,
           }),
         });
@@ -363,6 +410,32 @@ export default function OrganizationDetail() {
 
       if (!response.ok) {
         throw new Error(result.message || result.error || "Failed to add member");
+      }
+
+      // Handle invitation result (for mailto fallback)
+      if (addMemberMode === "invite" && result.data) {
+        if (!result.data.emailSent && result.data.emailContent) {
+          setInvitationResult({
+            email: data.email,
+            inviteUrl: result.data.inviteUrl,
+            emailSent: false,
+            emailContent: result.data.emailContent,
+          });
+          setIsAddMemberOpen(false);
+          return; // Don't reset yet, show mailto dialog
+        }
+      }
+
+      // Handle manual creation result (show temp password)
+      if (addMemberMode === "manual" && result.data?.credentials) {
+        setCredentialsResult({
+          email: data.email,
+          name: data.name || "",
+          tempPassword: result.data.credentials.tempPassword,
+        });
+        setIsAddMemberOpen(false);
+        await loadOrganization();
+        return; // Don't reset yet, show credentials dialog
       }
 
       setIsAddMemberOpen(false);
@@ -1145,7 +1218,15 @@ export default function OrganizationDetail() {
             </DialogDescription>
           </DialogHeader>
           <Form {...addMemberForm}>
-            <form onSubmit={addMemberForm.handleSubmit(handleAddMember)} className="space-y-4">
+            <form
+              onSubmit={addMemberForm.handleSubmit(handleAddMember, (errors) => {
+                const firstError = Object.values(errors)[0];
+                if (firstError?.message) {
+                  setMemberError(firstError.message as string);
+                }
+              })}
+              className="space-y-4"
+            >
               {memberError && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -1166,10 +1247,6 @@ export default function OrganizationDetail() {
                           placeholder="user@example.com"
                           type="email"
                           {...field}
-                          onBlur={(e) => {
-                            field.onBlur();
-                            lookupUserByEmail(e.target.value);
-                          }}
                         />
                         {isLookingUp && (
                           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1182,6 +1259,13 @@ export default function OrganizationDetail() {
                   </FormItem>
                 )}
               />
+
+              {/* Initial state - before lookup */}
+              {!userLookup && !isLookingUp && emailValue && (
+                <div className="text-sm text-muted-foreground py-2">
+                  Enter a valid email address to check if the user exists
+                </div>
+              )}
 
               {/* User lookup result */}
               {userLookup && (
@@ -1248,40 +1332,24 @@ export default function OrganizationDetail() {
                 </div>
               )}
 
-              {/* Name and password fields - only show for manual creation of new users */}
+              {/* Name field - only show for manual creation of new users */}
               {userLookup && !userLookup.exists && addMemberMode === "manual" && (
-                <>
-                  <FormField
-                    control={addMemberForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="John Doe" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={addMemberForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="••••••••" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Temporary password for the new user
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
+                <FormField
+                  control={addMemberForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        A temporary password will be auto-generated. User must change it on first login.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
 
               {/* Role selection */}
@@ -1326,14 +1394,20 @@ export default function OrganizationDetail() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting || (userLookup?.isMember ?? false)}
+                  disabled={isAddButtonDisabled}
                 >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {userLookup?.exists
-                    ? "Add to Organization"
-                    : addMemberMode === "invite"
-                      ? "Send Invite"
-                      : "Create & Add"}
+                  {isLookingUp
+                    ? "Checking..."
+                    : !userLookup
+                      ? "Enter Email"
+                      : userLookup.isMember
+                        ? "Already a Member"
+                        : userLookup.exists
+                          ? "Add to Organization"
+                          : addMemberMode === "invite"
+                            ? "Send Invite"
+                            : "Create & Add"}
                 </Button>
               </DialogFooter>
             </form>
@@ -1445,6 +1519,144 @@ export default function OrganizationDetail() {
               Remove Member
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invitation Created Dialog (mailto fallback) */}
+      <Dialog
+        open={!!invitationResult}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInvitationResult(null);
+            resetAddMemberDialog();
+            loadOrganization();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invitation Created</DialogTitle>
+            <DialogDescription>
+              Email delivery is not configured. You can share the invitation manually.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border p-3 bg-muted/50">
+              <p className="text-sm font-medium mb-2">Share this invite link:</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-background p-2 rounded truncate">
+                  {invitationResult?.inviteUrl}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (invitationResult?.inviteUrl) {
+                      navigator.clipboard.writeText(invitationResult.inviteUrl);
+                    }
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (invitationResult?.emailContent) {
+                    const { subject, body } = invitationResult.emailContent;
+                    window.open(
+                      `mailto:${invitationResult.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                    );
+                  }
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Open Email Client
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setInvitationResult(null);
+                  resetAddMemberDialog();
+                  loadOrganization();
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Credentials Created Dialog (temp password) */}
+      <Dialog
+        open={!!credentialsResult}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCredentialsResult(null);
+            resetAddMemberDialog();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>User Created</DialogTitle>
+            <DialogDescription>
+              Share these credentials with the new user. They must change their password on first login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This password will only be shown once. Make sure to copy it now.
+              </AlertDescription>
+            </Alert>
+
+            <div className="rounded-lg border p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Email</p>
+                <p className="font-mono">{credentialsResult?.email}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Name</p>
+                <p>{credentialsResult?.name}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Temporary Password</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted p-2 rounded font-mono">
+                    {credentialsResult?.tempPassword}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (credentialsResult?.tempPassword) {
+                        navigator.clipboard.writeText(credentialsResult.tempPassword);
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setCredentialsResult(null);
+                  resetAddMemberDialog();
+                }}
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -30,6 +30,7 @@ export interface StoredUser {
   avatar?: string | null;
   hasPlatformAccess: boolean;
   platformRole?: string;
+  requiresPasswordChange?: boolean;
   organizations: Organization[];
 }
 
@@ -98,6 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
+
+  // Redirect to first-time setup if password change is required
+  useEffect(() => {
+    if (isLoading) return;
+
+    // If user requires password change and not already on the setup page, redirect
+    if (user?.requiresPasswordChange && location.pathname !== "/first-time-setup") {
+      navigate("/first-time-setup", { replace: true });
+    }
+  }, [user, isLoading, location.pathname, navigate]);
 
   const setUser = useCallback((newUser: StoredUser | null) => {
     if (newUser) {

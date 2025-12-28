@@ -289,6 +289,7 @@ export interface AuthUser {
   avatar?: string | null;
   hasPlatformAccess: boolean;
   platformRole?: PlatformRoleType;
+  requiresPasswordChange: boolean;
   organizations: Array<{
     id: string;
     name: string;
@@ -582,6 +583,7 @@ export function buildAuthUser(user: UserWithMemberships): AuthUser {
     platformRole: user.platformMembership?.isActive
       ? user.platformMembership.roleType
       : undefined,
+    requiresPasswordChange: user.requiresPasswordChange ?? false,
     organizations: user.organizationMemberships
       .filter(m => m.isActive)
       .map(m => ({

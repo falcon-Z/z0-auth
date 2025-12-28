@@ -22,6 +22,47 @@ import { checkUserQuota, isPlatformAdmin } from "@z0/utils/quota";
 const invitations = new Hono();
 
 const INVITATION_EXPIRY_DAYS = 7;
+const APP_URL = process.env.APP_URL || "http://localhost:5173";
+
+/**
+ * Check if email service is configured
+ */
+function isEmailConfigured(): boolean {
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER);
+}
+
+/**
+ * Generate email content for invitation
+ */
+function generateInvitationEmailContent(
+  orgName: string,
+  inviteUrl: string,
+  message?: string
+): { subject: string; body: string } {
+  const subject = `You've been invited to join ${orgName}`;
+
+  let body = `Hello,
+
+You've been invited to join ${orgName} on Z0.
+
+Click here to accept: ${inviteUrl}
+`;
+
+  if (message) {
+    body += `
+Message from the inviter:
+${message}
+`;
+  }
+
+  body += `
+This invitation expires in ${INVITATION_EXPIRY_DAYS} days.
+
+If you did not expect this invitation, you can ignore this email.
+`;
+
+  return { subject, body };
+}
 
 function generateInvitationToken(): string {
   const random = randomBytes(32).toString("base64url");
@@ -166,6 +207,16 @@ invitations.post(
     const data = c.req.valid("json");
 
     try {
+      // Get organization name for email content
+      const organization = await db.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true },
+      });
+
+      if (!organization) {
+        return c.json(ErrorResponseBuilder.notFound("Organization not found"), 404);
+      }
+
       const existingUser = await db.user.findUnique({
         where: { email: data.email },
         include: {
@@ -272,21 +323,39 @@ invitations.post(
         },
       });
 
-      Logger.info("Invitation sent", {
+      // Generate invite URL and email content
+      const inviteUrl = `${APP_URL}/accept-invite/${invitation.token}`;
+      const emailConfigured = isEmailConfigured();
+      const emailContent = generateInvitationEmailContent(
+        organization.name,
+        inviteUrl,
+        data.message
+      );
+
+      // TODO: If email is configured, send the email here
+      // For now, we just return the content for the frontend to handle
+
+      Logger.info("Invitation created", {
         invitationId: invitation.id,
         email: data.email,
         orgId,
         invitedBy: user.userId,
+        emailConfigured,
         requestId,
       });
 
       return c.json(
         {
           success: true,
-          message: `Invitation sent to ${data.email}`,
+          message: emailConfigured
+            ? `Invitation sent to ${data.email}`
+            : `Invitation created for ${data.email}`,
           data: {
             ...invitation,
-            inviteUrl: `/accept-invite/${invitation.token}`,
+            inviteUrl,
+            emailSent: emailConfigured,
+            // Include email content for frontend mailto fallback if email not configured
+            emailContent: !emailConfigured ? emailContent : undefined,
           },
           requestId,
         },
@@ -535,20 +604,39 @@ invitations.post(
         },
       });
 
+      // Get org name for email content
+      const org = await db.organization.findUnique({
+        where: { id: orgId },
+        select: { name: true },
+      });
+
+      const inviteUrl = `${APP_URL}/accept-invite/${updated.token}`;
+      const emailConfigured = isEmailConfigured();
+      const emailContent = generateInvitationEmailContent(
+        org?.name || "Organization",
+        inviteUrl,
+        invitation.message || undefined
+      );
+
       Logger.info("Invitation resent", {
         invitationId,
         email: invitation.email,
         orgId,
         resentBy: user.userId,
+        emailConfigured,
         requestId,
       });
 
       return c.json({
         success: true,
-        message: `Invitation resent to ${invitation.email}`,
+        message: emailConfigured
+          ? `Invitation resent to ${invitation.email}`
+          : `Invitation updated for ${invitation.email}`,
         data: {
           ...updated,
-          inviteUrl: `/accept-invite/${updated.token}`,
+          inviteUrl,
+          emailSent: emailConfigured,
+          emailContent: !emailConfigured ? emailContent : undefined,
         },
         requestId,
       });
