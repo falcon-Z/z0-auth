@@ -1,10 +1,14 @@
 import { Badge } from "@z0/components/ui/badge";
 import { cn } from "@z0/lib/utils";
 
-export type StatusType = "active" | "inactive" | "pending" | "suspended" | "expired" | "verified" | "unverified";
+// Lowercase status types (for display)
+export type StatusType = "active" | "inactive" | "pending" | "suspended" | "expired" | "verified" | "unverified" | "deleted" | "invited";
+
+// Also support uppercase status from API (ACTIVE, INACTIVE, etc.)
+export type StatusInput = StatusType | Uppercase<StatusType>;
 
 interface StatusBadgeProps {
-  status: StatusType;
+  status: StatusInput;
   className?: string;
 }
 
@@ -47,10 +51,31 @@ const statusConfig: Record<
     variant: "outline",
     className: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700",
   },
+  deleted: {
+    label: "Deleted",
+    variant: "destructive",
+    className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
+  },
+  invited: {
+    label: "Invited",
+    variant: "outline",
+    className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+  },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusConfig[status];
+  // Normalize status to lowercase for lookup
+  const normalizedStatus = status.toLowerCase() as StatusType;
+  const config = statusConfig[normalizedStatus];
+
+  if (!config) {
+    // Fallback for unknown status
+    return (
+      <Badge variant="outline" className={className}>
+        {status}
+      </Badge>
+    );
+  }
 
   return (
     <Badge variant={config.variant} className={cn(config.className, className)}>
