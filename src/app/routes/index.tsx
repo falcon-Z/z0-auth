@@ -89,6 +89,41 @@ function AuthGuard() {
 }
 
 /**
+ * Guard that ensures admin routes are only accessible when user is in default org
+ * Redirects to default org context if user is in a different org
+ */
+function AdminGuard() {
+  const location = useLocation();
+  const { orgSlug } = useParams<{ orgSlug: string }>();
+  const { user, isLoading, isPlatformAdmin, getDefaultOrg } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Check if user is platform admin
+  if (!isPlatformAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const defaultOrg = getDefaultOrg();
+
+  // If accessing admin routes, ensure user context is in default org
+  if (location.pathname.startsWith("/admin")) {
+    // If user has orgs but current org context is not default, switch to default org
+    if (orgSlug && defaultOrg && orgSlug !== defaultOrg.slug) {
+      return <Navigate to={`/org/${defaultOrg.slug}/dashboard`} replace />;
+    }
+  }
+
+  return <Outlet />;
+}
+
+/**
  * Wrapper that provides auth context to the router
  */
 function AuthProviderWrapper() {
@@ -222,46 +257,51 @@ export const router = createBrowserRouter([
                 ],
               },
 
-              // Platform admin routes (no org context)
+              // Platform admin routes (require admin guard)
               {
-                path: "admin",
-                element: <AdminDashboard />,
-              },
-              {
-                path: "admin/organizations",
-                element: <PlatformOrganizations />,
-              },
-              {
-                path: "admin/organizations/:id",
-                element: <PlatformOrganizationDetail />,
-              },
-              {
-                path: "admin/platform/organizations",
-                element: <PlatformOrganizations />,
-              },
-              {
-                path: "admin/users",
-                element: <PlatformUsers />,
-              },
-              {
-                path: "admin/platform/users",
-                element: <PlatformUsers />,
-              },
-              {
-                path: "admin/smtp",
-                element: <SMTPSettings />,
-              },
-              {
-                path: "admin/settings/smtp",
-                element: <SMTPSettings />,
-              },
-              {
-                path: "admin/request-traces",
-                element: <RequestTracesPage />,
-              },
-              {
-                path: "admin/audit-logs",
-                element: <div className="p-6"><h1 className="text-2xl font-semibold">Audit Logs</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                element: <AdminGuard />,
+                children: [
+                  {
+                    path: "admin",
+                    element: <AdminDashboard />,
+                  },
+                  {
+                    path: "admin/organizations",
+                    element: <PlatformOrganizations />,
+                  },
+                  {
+                    path: "admin/organizations/:id",
+                    element: <PlatformOrganizationDetail />,
+                  },
+                  {
+                    path: "admin/platform/organizations",
+                    element: <PlatformOrganizations />,
+                  },
+                  {
+                    path: "admin/users",
+                    element: <PlatformUsers />,
+                  },
+                  {
+                    path: "admin/platform/users",
+                    element: <PlatformUsers />,
+                  },
+                  {
+                    path: "admin/smtp",
+                    element: <SMTPSettings />,
+                  },
+                  {
+                    path: "admin/settings/smtp",
+                    element: <SMTPSettings />,
+                  },
+                  {
+                    path: "admin/request-traces",
+                    element: <RequestTracesPage />,
+                  },
+                  {
+                    path: "admin/audit-logs",
+                    element: <div className="p-6"><h1 className="text-2xl font-semibold">Audit Logs</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                  },
+                ],
               },
               {
                 path: "*",

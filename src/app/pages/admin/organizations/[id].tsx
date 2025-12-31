@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   Mail,
   UserCog,
+  RefreshCw,
 } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
@@ -142,13 +143,18 @@ const settingsSchema = z.object({
 type SettingsFormValues = z.infer<typeof settingsSchema>;
 
 interface Member {
-  membershipId: string;
-  userId: string;
-  name: string;
+  membershipId?: string;
+  invitationId?: string;
+  userId?: string;
+  name: string | null;
   email: string;
-  avatar?: string;
+  avatar?: string | null;
   roleType: string;
-  grantedAt: string;
+  memberStatus: "active" | "invited";
+  joinedAt?: string;
+  invitedAt?: string;
+  invitedBy?: { id: string; name: string; email: string };
+  expiresAt?: string;
 }
 
 interface App {
@@ -177,8 +183,9 @@ interface Organization {
 export default function OrganizationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isPlatformAdmin } = useAuth();
+  const { isPlatformAdmin, user, setUser } = useAuth();
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -247,6 +254,7 @@ export default function OrganizationDetail() {
   useEffect(() => {
     if (id) {
       loadOrganization();
+      loadMembers();
     }
   }, [id]);
 
@@ -279,6 +287,21 @@ export default function OrganizationDetail() {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMembers = async () => {
+    if (!id) return;
+    try {
+      // Use the org members API which includes pending invitations
+      const response = await authFetch(`/api/v1/orgs/${id}/members?includeInvited=true`);
+
+      if (response.ok) {
+        const result = await response.json();
+        setMembers(result.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load members:", err);
     }
   };
 
@@ -435,12 +458,33 @@ export default function OrganizationDetail() {
         });
         setIsAddMemberOpen(false);
         await loadOrganization();
+        await loadMembers();
         return; // Don't reset yet, show credentials dialog
+      }
+
+      // Check if we just added the current user - refresh auth context
+      if (user && data.email.toLowerCase() === user.email.toLowerCase() && organization) {
+        // Add the new org to user's organizations
+        const updatedUser = {
+          ...user,
+          organizations: [
+            ...user.organizations,
+            {
+              id: organization.id,
+              name: organization.name,
+              slug: organization.slug,
+              roleType: data.roleType as "ORG_OWNER" | "ORG_ADMIN" | "ORG_DEVELOPER" | "ORG_MEMBER",
+              isDefault: false,
+            },
+          ],
+        };
+        setUser(updatedUser);
       }
 
       setIsAddMemberOpen(false);
       resetAddMemberDialog();
       await loadOrganization();
+      await loadMembers();
     } catch (err) {
       setMemberError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -471,6 +515,7 @@ export default function OrganizationDetail() {
       setIsChangeRoleOpen(false);
       setSelectedMember(null);
       await loadOrganization();
+      await loadMembers();
     } catch (err) {
       setMemberError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -497,6 +542,7 @@ export default function OrganizationDetail() {
       setIsRemoveMemberOpen(false);
       setSelectedMember(null);
       await loadOrganization();
+      await loadMembers();
     } catch (err) {
       setMemberError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -587,7 +633,6 @@ export default function OrganizationDetail() {
     }
   };
 
-  const members = organization?.memberships || [];
   const apps = organization?.apps || [];
 
   const memberColumns: ColumnDef<Member>[] = useMemo(
@@ -597,17 +642,30 @@ export default function OrganizationDetail() {
         header: ({ column }) => (
           <DataTableColumnHeader column={column} title="Name" />
         ),
-        cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-              {row.original.name.charAt(0).toUpperCase()}
+        cell: ({ row }) => {
+          const isInvited = row.original.memberStatus === "invited";
+          const displayName = row.original.name || row.original.email.split("@")[0];
+          return (
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm ${
+                isInvited ? "bg-amber-100 text-amber-600" : "bg-primary/10 text-primary"
+              }`}>
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div className="font-medium flex items-center gap-2">
+                  {displayName}
+                  {isInvited && (
+                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                      Invited
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">{row.original.email}</div>
+              </div>
             </div>
-            <div>
-              <div className="font-medium">{row.original.name}</div>
-              <div className="text-xs text-muted-foreground">{row.original.email}</div>
-            </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         accessorKey: "roleType",
@@ -624,20 +682,105 @@ export default function OrganizationDetail() {
         },
       },
       {
-        accessorKey: "grantedAt",
+        accessorKey: "joinedAt",
         header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Joined" />
+          <DataTableColumnHeader column={column} title="Status" />
         ),
-        cell: ({ row }) => (
-          <div className="text-sm text-muted-foreground">
-            {new Date(row.original.grantedAt).toLocaleDateString()}
-          </div>
-        ),
+        cell: ({ row }) => {
+          const isInvited = row.original.memberStatus === "invited";
+          if (isInvited) {
+            return (
+              <div className="text-sm text-muted-foreground">
+                <span className="text-amber-600">Pending</span>
+                {row.original.invitedAt && (
+                  <span className="text-xs block">
+                    Invited {new Date(row.original.invitedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div className="text-sm text-muted-foreground">
+              <span className="text-green-600">Active</span>
+              {row.original.joinedAt && (
+                <span className="text-xs block">
+                  Joined {new Date(row.original.joinedAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: "actions",
         cell: ({ row }) => {
           const member = row.original;
+          const isInvited = member.memberStatus === "invited";
+
+          // For invited members, show different actions
+          if (isInvited) {
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      // Resend invitation
+                      try {
+                        const response = await authFetch(
+                          `/api/v1/orgs/${organization?.id}/invitations/${member.invitationId}/resend`,
+                          { method: "POST" }
+                        );
+                        const result = await response.json();
+                        if (response.ok) {
+                          // Check if email was sent or if we need mailto fallback
+                          if (!result.data?.emailSent && result.data?.emailContent) {
+                            const { subject, body } = result.data.emailContent;
+                            window.open(
+                              `mailto:${member.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                            );
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Failed to resend invitation:", err);
+                      }
+                    }}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Resend Invitation
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600"
+                    onClick={async () => {
+                      // Revoke invitation
+                      try {
+                        const response = await authFetch(
+                          `/api/v1/orgs/${organization?.id}/invitations/${member.invitationId}`,
+                          { method: "DELETE" }
+                        );
+                        if (response.ok) {
+                          await loadMembers();
+                        }
+                      } catch (err) {
+                        console.error("Failed to revoke invitation:", err);
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Revoke Invitation
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
+
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -665,7 +808,7 @@ export default function OrganizationDetail() {
         },
       },
     ],
-    [openChangeRoleDialog, openRemoveMemberDialog]
+    [openChangeRoleDialog, openRemoveMemberDialog, organization?.id, loadMembers]
   );
 
   const appColumns: ColumnDef<App>[] = useMemo(

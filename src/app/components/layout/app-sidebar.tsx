@@ -44,7 +44,7 @@ export function AppSidebar() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { user, isLoading, isPlatformAdmin, getDefaultOrg } = useAuth();
 
-  const { currentOrg, orgRole, effectiveOrgSlug } = useMemo(() => {
+  const { currentOrg, orgRole, effectiveOrgSlug, isDefaultOrg } = useMemo(() => {
     const orgs = user?.organizations || [];
 
     // Use orgSlug from URL, or fall back to default org for consistent navigation
@@ -59,6 +59,7 @@ export function AppSidebar() {
       currentOrg: currentOrganization,
       orgRole: currentOrganization?.roleType || null,
       effectiveOrgSlug: effectiveSlug,
+      isDefaultOrg: currentOrganization?.id === defaultOrg?.id,
     };
   }, [user, orgSlug, getDefaultOrg]);
 
@@ -162,8 +163,8 @@ export function AppSidebar() {
       }
     }
 
-    // Platform Admin section (visible to platform admins)
-    if (isPlatformAdmin) {
+    // Platform Admin section (visible to platform admins ONLY when in default org)
+    if (isPlatformAdmin && isDefaultOrg) {
       groups.push({
         title: "Admin",
         defaultOpen: location.pathname.startsWith("/admin"), // Open by default if on admin page
@@ -198,7 +199,7 @@ export function AppSidebar() {
     }
 
     return groups;
-  }, [effectiveOrgSlug, orgBasePath, isAdmin, isDeveloper, isPlatformAdmin, location.pathname]);
+  }, [effectiveOrgSlug, orgBasePath, isAdmin, isDeveloper, isPlatformAdmin, isDefaultOrg, location.pathname]);
 
   const isActive = (href: string) => {
     // Exact match for dashboard
