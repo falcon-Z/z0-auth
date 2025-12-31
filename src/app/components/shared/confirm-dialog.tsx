@@ -79,7 +79,7 @@ export function ConfirmDialog({
 }
 
 /**
- * DeleteConfirmDialog - Pre-configured for delete actions
+ * DeleteConfirmDialog - Pre-configured for delete/revoke actions
  */
 interface DeleteConfirmDialogProps {
   open: boolean;
@@ -90,6 +90,10 @@ interface DeleteConfirmDialogProps {
   itemName?: string;
   onConfirm: () => void | Promise<void>;
   isLoading?: boolean;
+  /** Custom description (overrides default) */
+  description?: string;
+  /** Custom confirm button label (default: "Delete") */
+  confirmLabel?: string;
 }
 
 export function DeleteConfirmDialog({
@@ -99,11 +103,15 @@ export function DeleteConfirmDialog({
   itemName,
   onConfirm,
   isLoading = false,
+  description: customDescription,
+  confirmLabel = "Delete",
 }: DeleteConfirmDialogProps) {
   const title = `Delete ${itemType}?`;
-  const description = itemName
-    ? `Are you sure you want to delete "${itemName}"? This action cannot be undone.`
-    : `Are you sure you want to delete this ${itemType}? This action cannot be undone.`;
+  const description = customDescription
+    ? customDescription
+    : itemName
+      ? `Are you sure you want to delete "${itemName}"? This action cannot be undone.`
+      : `Are you sure you want to delete this ${itemType}? This action cannot be undone.`;
 
   return (
     <ConfirmDialog
@@ -113,7 +121,7 @@ export function DeleteConfirmDialog({
       description={description}
       onConfirm={onConfirm}
       isLoading={isLoading}
-      confirmLabel="Delete"
+      confirmLabel={confirmLabel}
       variant="destructive"
     />
   );
