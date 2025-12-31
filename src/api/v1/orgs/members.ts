@@ -133,7 +133,7 @@ orgMembers.get(
 
 /**
  * GET /:orgId/members
- * List organization memberships
+ * List organization memberships (includes pending invitations)
  */
 orgMembers.get(
   "/:orgId/members",
@@ -142,8 +142,10 @@ orgMembers.get(
   async (c) => {
     const orgId = c.req.param("orgId");
     const requestId = RequestContext.generateRequestId();
+    const includeInvited = c.req.query("includeInvited") !== "false"; // Default true
 
     try {
+      // Get active memberships
       const memberships = await db.organizationMembership.findMany({
         where: {
           organizationId: orgId,
@@ -166,8 +168,8 @@ orgMembers.get(
         orderBy: { grantedAt: "desc" },
       });
 
-      // Transform to a cleaner response format
-      const members = memberships.map((m) => ({
+      // Transform active members
+      const members: any[] = memberships.map((m) => ({
         membershipId: m.id,
         userId: m.userId,
         email: m.user.email,
@@ -176,11 +178,58 @@ orgMembers.get(
         roleType: m.roleType,
         isDefault: m.isDefault,
         status: m.user.status,
+        memberStatus: "active",
         emailVerified: m.user.emailVerified,
         lastLoginAt: m.user.lastLoginAt,
         joinedAt: m.grantedAt,
         userCreatedAt: m.user.createdAt,
       }));
+
+      // Include pending invitations if requested
+      if (includeInvited) {
+        const pendingInvitations = await db.invitation.findMany({
+          where: {
+            organizationId: orgId,
+            acceptedAt: null,
+            declinedAt: null,
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          include: {
+            invitedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        // Add invited members to the list
+        for (const inv of pendingInvitations) {
+          // Skip if already a member (shouldn't happen, but safety check)
+          if (members.some((m) => m.email === inv.email)) continue;
+
+          members.push({
+            invitationId: inv.id,
+            email: inv.email,
+            name: null, // Invited users may not have a name yet
+            avatar: null,
+            roleType: inv.roleType,
+            isDefault: false,
+            status: "PENDING",
+            memberStatus: "invited",
+            emailVerified: false,
+            lastLoginAt: null,
+            joinedAt: null,
+            invitedAt: inv.createdAt,
+            invitedBy: inv.invitedBy,
+            expiresAt: inv.expiresAt,
+          });
+        }
+      }
 
       return c.json({
         success: true,

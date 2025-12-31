@@ -22,7 +22,7 @@ import { checkUserQuota, isPlatformAdmin } from "@z0/utils/quota";
 const invitations = new Hono();
 
 const INVITATION_EXPIRY_DAYS = 7;
-const APP_URL = process.env.APP_URL || "http://localhost:5173";
+const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 /**
  * Check if email service is configured
