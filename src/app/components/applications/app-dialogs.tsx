@@ -1,46 +1,41 @@
 /**
- * Organization dialogs
- * Create, edit, and delete dialogs for organizations
+ * Application dialogs
+ * Create, edit, and delete dialogs for applications
  */
 
-import { FormDialog, DeleteConfirmDialog } from "@z0/app/components/shared";
-import { OrganizationForm } from "./organization-form";
-import type { OrganizationWithCounts, CreateOrganizationInput, UpdateOrganizationInput } from "@z0/types";
+import { FormDialog, DeleteConfirmDialog, SingleSecretDialog } from "@z0/app/components/shared";
+import { AppForm } from "./app-form";
+import type { AppWithCounts, CreateAppResponse } from "@z0/types";
+import type { CreateAppFormInput } from "@z0/validation";
 
-interface CreateOrganizationDialogProps {
+interface CreateAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: CreateOrganizationInput) => void | Promise<void>;
+  onSubmit: (data: CreateAppFormInput) => void | Promise<void>;
   isSubmitting?: boolean;
 }
 
-export function CreateOrganizationDialog({
+export function CreateAppDialog({
   open,
   onOpenChange,
   onSubmit,
   isSubmitting = false,
-}: CreateOrganizationDialogProps) {
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // The form handles its own submission via form ID
-  };
-
+}: CreateAppDialogProps) {
   return (
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Create Organization"
-      description="Add a new organization to the platform."
-      onSubmit={handleSubmit}
+      title="Create Application"
+      description="Add a new application to your organization."
+      onSubmit={(e) => e.preventDefault()}
       isSubmitting={isSubmitting}
-      submitLabel="Create"
       hideFooter
     >
-      <OrganizationForm
+      <AppForm
         mode="create"
         onSubmit={onSubmit}
         isSubmitting={isSubmitting}
-        formId="create-org-form"
+        formId="create-app-form"
       />
       <div className="flex justify-end gap-2 pt-4">
         <button
@@ -53,7 +48,7 @@ export function CreateOrganizationDialog({
         </button>
         <button
           type="submit"
-          form="create-org-form"
+          form="create-app-form"
           className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
           disabled={isSubmitting}
         >
@@ -64,44 +59,39 @@ export function CreateOrganizationDialog({
   );
 }
 
-interface EditOrganizationDialogProps {
+interface EditAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organization: OrganizationWithCounts | null;
-  onSubmit: (data: UpdateOrganizationInput) => void | Promise<void>;
+  app: AppWithCounts | null;
+  onSubmit: (data: CreateAppFormInput) => void | Promise<void>;
   isSubmitting?: boolean;
 }
 
-export function EditOrganizationDialog({
+export function EditAppDialog({
   open,
   onOpenChange,
-  organization,
+  app,
   onSubmit,
   isSubmitting = false,
-}: EditOrganizationDialogProps) {
-  if (!organization) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-  };
+}: EditAppDialogProps) {
+  if (!app) return null;
 
   return (
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Edit Organization"
-      description={`Update settings for ${organization.name}`}
-      onSubmit={handleSubmit}
+      title="Edit Application"
+      description={`Update settings for ${app.name}`}
+      onSubmit={(e) => e.preventDefault()}
       isSubmitting={isSubmitting}
-      submitLabel="Save"
       hideFooter
     >
-      <OrganizationForm
+      <AppForm
         mode="edit"
-        initialValues={organization}
+        initialValues={app}
         onSubmit={onSubmit}
         isSubmitting={isSubmitting}
-        formId="edit-org-form"
+        formId="edit-app-form"
       />
       <div className="flex justify-end gap-2 pt-4">
         <button
@@ -114,7 +104,7 @@ export function EditOrganizationDialog({
         </button>
         <button
           type="submit"
-          form="edit-org-form"
+          form="edit-app-form"
           className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
           disabled={isSubmitting}
         >
@@ -125,35 +115,67 @@ export function EditOrganizationDialog({
   );
 }
 
-interface DeleteOrganizationDialogProps {
+interface DeleteAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organization: OrganizationWithCounts | null;
+  app: AppWithCounts | null;
   onConfirm: () => void | Promise<void>;
   isSubmitting?: boolean;
 }
 
-export function DeleteOrganizationDialog({
+export function DeleteAppDialog({
   open,
   onOpenChange,
-  organization,
+  app,
   onConfirm,
   isSubmitting = false,
-}: DeleteOrganizationDialogProps) {
+}: DeleteAppDialogProps) {
   return (
     <DeleteConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      itemType="organization"
-      itemName={organization?.name}
+      itemType="application"
+      itemName={app?.name}
       onConfirm={onConfirm}
       isLoading={isSubmitting}
     />
   );
 }
 
+interface AppSecretDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  appData: CreateAppResponse | null;
+}
+
+export function AppSecretDialog({
+  open,
+  onOpenChange,
+  appData,
+}: AppSecretDialogProps) {
+  return (
+    <SingleSecretDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Application Created"
+      description="Your application has been created. Save the API secret - it won't be shown again."
+      secretLabel="API Secret"
+      secretValue={appData?.apiSecret ?? ""}
+      additionalInfo={
+        appData
+          ? [
+              { label: "App Name", value: appData.app.name },
+              { label: "API Key", value: appData.apiKey },
+            ]
+          : undefined
+      }
+    />
+  );
+}
+
 export type {
-  CreateOrganizationDialogProps,
-  EditOrganizationDialogProps,
-  DeleteOrganizationDialogProps,
+  CreateAppDialogProps,
+  EditAppDialogProps,
+  DeleteAppDialogProps,
+  AppSecretDialogProps,
 };

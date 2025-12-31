@@ -5,7 +5,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormDialog, DeleteConfirmDialog } from "@z0/components/shared";
+import { FormDialog, DeleteConfirmDialog } from "@z0/app/components/shared";
 import { MemberInviteForm } from "./member-invite-form";
 import {
   Form,

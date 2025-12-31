@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ChevronsUpDown, Check, Building2, Plus, Loader2 } from "lucide-react";
+import { ChevronsUpDown, Check, Building2, Plus, Loader2, Shield } from "lucide-react";
 import { cn } from "@z0/lib/utils";
 import { Button } from "@z0/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@z0/components/ui/dropdown-menu";
 import { Badge } from "@z0/components/ui/badge";
 import { useAuth, type Organization } from "../../contexts/auth-context";
+import { authFetch } from "@z0/utils/api/client";
 
 /**
  * Get role display label
@@ -49,16 +50,74 @@ function getRoleBadgeVariant(
 }
 
 /**
+ * Extended org type for platform admin view (includes orgs they don't belong to)
+ */
+interface PlatformOrg {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  isMember: boolean;
+  roleType?: string;
+  isDefault?: boolean;
+}
+
+/**
  * Organization switcher dropdown component
  * Replaces the logo in the header and allows switching between organizations
+ * For platform admins, shows ALL organizations (not just their memberships)
  */
 export function OrgSwitcher() {
   const navigate = useNavigate();
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { user, isLoading, isPlatformAdmin, getDefaultOrg } = useAuth();
+  const [allOrgs, setAllOrgs] = useState<PlatformOrg[]>([]);
+  const [loadingAllOrgs, setLoadingAllOrgs] = useState(false);
+
+  // Fetch all organizations for platform admins
+  useEffect(() => {
+    if (!isPlatformAdmin || isLoading) return;
+
+    const fetchAllOrgs = async () => {
+      setLoadingAllOrgs(true);
+      try {
+        const response = await authFetch("/api/v1/platform/organizations");
+        if (response.ok) {
+          const result = await response.json();
+          const platformOrgs = (result.data || []).map((org: any) => ({
+            id: org.id,
+            name: org.name,
+            slug: org.slug,
+            status: org.status,
+            isMember: user?.organizations?.some((o) => o.id === org.id) ?? false,
+            roleType: user?.organizations?.find((o) => o.id === org.id)?.roleType,
+            isDefault: user?.organizations?.find((o) => o.id === org.id)?.isDefault,
+          }));
+          setAllOrgs(platformOrgs);
+        }
+      } catch (error) {
+        console.error("Failed to fetch all organizations:", error);
+      } finally {
+        setLoadingAllOrgs(false);
+      }
+    };
+
+    fetchAllOrgs();
+  }, [isPlatformAdmin, isLoading, user?.organizations]);
 
   const { currentOrg, organizations, effectiveOrgSlug } = useMemo(() => {
-    const orgs = user?.organizations || [];
+    // For platform admins, use all orgs; otherwise use user's memberships
+    const orgs: PlatformOrg[] = isPlatformAdmin && allOrgs.length > 0
+      ? allOrgs
+      : (user?.organizations || []).map((org) => ({
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          status: "ACTIVE",
+          isMember: true,
+          roleType: org.roleType,
+          isDefault: org.isDefault,
+        }));
 
     // Use orgSlug from URL, or fall back to default org for consistent display
     const defaultOrg = getDefaultOrg();
@@ -73,16 +132,16 @@ export function OrgSwitcher() {
       organizations: orgs,
       effectiveOrgSlug: effectiveSlug,
     };
-  }, [user, orgSlug, getDefaultOrg]);
+  }, [user, orgSlug, getDefaultOrg, isPlatformAdmin, allOrgs]);
 
-  const handleOrgSelect = (org: Organization) => {
+  const handleOrgSelect = (org: PlatformOrg) => {
     if (org.slug !== orgSlug) {
       navigate(`/org/${org.slug}/dashboard`);
     }
   };
 
   // Show loading state
-  if (isLoading || !currentOrg) {
+  if (isLoading || loadingAllOrgs || !currentOrg) {
     return (
       <div className="flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -127,12 +186,22 @@ export function OrgSwitcher() {
               </div>
               <div className="flex flex-col">
                 <span className="text-sm">{org.name}</span>
-                <Badge
-                  variant={getRoleBadgeVariant(org.roleType)}
-                  className="text-[10px] px-1 py-0 h-4 w-fit"
-                >
-                  {getRoleLabel(org.roleType)}
-                </Badge>
+                {org.isMember && org.roleType ? (
+                  <Badge
+                    variant={getRoleBadgeVariant(org.roleType)}
+                    className="text-[10px] px-1 py-0 h-4 w-fit"
+                  >
+                    {getRoleLabel(org.roleType)}
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1 py-0 h-4 w-fit text-muted-foreground"
+                  >
+                    <Shield className="h-2.5 w-2.5 mr-0.5" />
+                    Platform Access
+                  </Badge>
+                )}
               </div>
             </div>
             {org.slug === effectiveOrgSlug && (

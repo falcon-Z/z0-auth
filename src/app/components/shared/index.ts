@@ -2,7 +2,7 @@
  * Shared components barrel export
  *
  * Usage:
- * import { PageHeader, FormDialog, ConfirmDialog } from "@z0/components/shared";
+ * import { PageHeader, FormDialog, ConfirmDialog } from "@z0/app/components/shared";
  */
 
 export { PageHeader } from "./page-header";

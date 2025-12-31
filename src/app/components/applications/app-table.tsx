@@ -1,48 +1,52 @@
 /**
- * OrganizationTable component
- * DataTable wrapper for organizations with built-in actions
+ * AppTable component
+ * DataTable wrapper for applications with built-in actions
  */
 
 import { useMemo } from "react";
 import { DataTable } from "@z0/app/components/data-table/data-table";
-import { getOrganizationColumns } from "./organization-columns";
-import type { OrganizationWithCounts } from "@z0/types";
+import { getAppColumns } from "./app-columns";
+import type { AppWithCounts } from "@z0/types";
 
-interface OrganizationTableProps {
-  /** Organizations data */
-  data: OrganizationWithCounts[];
+interface AppTableProps {
+  /** Applications data */
+  data: AppWithCounts[];
   /** Loading state */
   loading?: boolean;
   /** Edit handler */
-  onEdit?: (org: OrganizationWithCounts) => void;
+  onEdit?: (app: AppWithCounts) => void;
   /** Delete handler */
-  onDelete?: (org: OrganizationWithCounts) => void;
+  onDelete?: (app: AppWithCounts) => void;
   /** View handler (row click or action) */
-  onView?: (org: OrganizationWithCounts) => void;
+  onView?: (app: AppWithCounts) => void;
+  /** Manage members handler */
+  onManageMembers?: (app: AppWithCounts) => void;
   /** Show action column */
   showActions?: boolean;
   /** Empty state message */
   emptyMessage?: string;
 }
 
-export function OrganizationTable({
+export function AppTable({
   data,
   loading = false,
   onEdit,
   onDelete,
   onView,
+  onManageMembers,
   showActions = true,
-  emptyMessage = "No organizations found.",
-}: OrganizationTableProps) {
+  emptyMessage = "No applications found.",
+}: AppTableProps) {
   const columns = useMemo(
     () =>
-      getOrganizationColumns({
+      getAppColumns({
         onEdit,
         onDelete,
         onView,
+        onManageMembers,
         showActions,
       }),
-    [onEdit, onDelete, onView, showActions]
+    [onEdit, onDelete, onView, onManageMembers, showActions]
   );
 
   return (
@@ -60,4 +64,4 @@ export function OrganizationTable({
   );
 }
 
-export type { OrganizationTableProps };
+export type { AppTableProps };

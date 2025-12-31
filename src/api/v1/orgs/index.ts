@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import orgCrud from "./crud";
 import orgApps from "./apps";
 import orgMembers from "./members";
 import appMembers from "./app-members";
@@ -17,8 +16,8 @@ import batch from "./batch";
 
 const orgRoutes = new Hono();
 
-// Mount CRUD routes first (handles GET /api/v1/orgs, POST /api/v1/orgs, etc.)
-orgRoutes.route("/", orgCrud);
+// Note: Organization CRUD operations moved to /api/v1/platform/organizations
+// This router handles org-scoped operations (/:orgId/...)
 
 // Mount sub-routers
 // Each router defines its own paths starting with /:orgId/...

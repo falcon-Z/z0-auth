@@ -1,10 +1,10 @@
 /**
- * Organization table column definitions
- * Reusable columns for organization DataTable
+ * Application table column definitions
+ * Reusable columns for application DataTable
  */
 
 import { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, Building2, Users, AppWindow } from "lucide-react";
+import { MoreHorizontal, AppWindow, Users } from "lucide-react";
 import { Button } from "@z0/components/ui/button";
 import {
   DropdownMenu,
@@ -16,37 +16,39 @@ import {
 } from "@z0/components/ui/dropdown-menu";
 import { DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
 import { StatusBadge } from "@z0/app/components/shared/status-badge";
-import type { OrganizationWithCounts } from "@z0/types";
+import type { AppWithCounts } from "@z0/types";
 
-interface OrganizationColumnsOptions {
-  onEdit?: (org: OrganizationWithCounts) => void;
-  onDelete?: (org: OrganizationWithCounts) => void;
-  onView?: (org: OrganizationWithCounts) => void;
+interface AppColumnsOptions {
+  onEdit?: (app: AppWithCounts) => void;
+  onDelete?: (app: AppWithCounts) => void;
+  onView?: (app: AppWithCounts) => void;
+  onManageMembers?: (app: AppWithCounts) => void;
   showActions?: boolean;
 }
 
-export function getOrganizationColumns({
+export function getAppColumns({
   onEdit,
   onDelete,
   onView,
+  onManageMembers,
   showActions = true,
-}: OrganizationColumnsOptions = {}): ColumnDef<OrganizationWithCounts>[] {
-  const columns: ColumnDef<OrganizationWithCounts>[] = [
+}: AppColumnsOptions = {}): ColumnDef<AppWithCounts>[] {
+  const columns: ColumnDef<AppWithCounts>[] = [
     {
       accessorKey: "name",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Name" />
       ),
       cell: ({ row }) => {
-        const org = row.original;
+        const app = row.original;
         return (
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <AppWindow className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <div className="font-medium">{org.name}</div>
-              <div className="text-sm text-muted-foreground">{org.slug}</div>
+              <div className="font-medium">{app.name}</div>
+              <div className="text-sm text-muted-foreground">{app.slug}</div>
             </div>
           </div>
         );
@@ -75,18 +77,6 @@ export function getOrganizationColumns({
       ),
     },
     {
-      accessorKey: "appCount",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Apps" />
-      ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <AppWindow className="h-4 w-4 text-muted-foreground" />
-          <span>{row.getValue("appCount")}</span>
-        </div>
-      ),
-    },
-    {
       accessorKey: "createdAt",
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Created" />
@@ -106,7 +96,7 @@ export function getOrganizationColumns({
     columns.push({
       id: "actions",
       cell: ({ row }) => {
-        const org = row.original;
+        const app = row.original;
 
         return (
           <DropdownMenu>
@@ -119,12 +109,17 @@ export function getOrganizationColumns({
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               {onView && (
-                <DropdownMenuItem onClick={() => onView(org)}>
+                <DropdownMenuItem onClick={() => onView(app)}>
                   View details
                 </DropdownMenuItem>
               )}
+              {onManageMembers && (
+                <DropdownMenuItem onClick={() => onManageMembers(app)}>
+                  Manage members
+                </DropdownMenuItem>
+              )}
               {onEdit && (
-                <DropdownMenuItem onClick={() => onEdit(org)}>
+                <DropdownMenuItem onClick={() => onEdit(app)}>
                   Edit
                 </DropdownMenuItem>
               )}
@@ -132,7 +127,7 @@ export function getOrganizationColumns({
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={() => onDelete(org)}
+                    onClick={() => onDelete(app)}
                     className="text-destructive focus:text-destructive"
                   >
                     Delete
@@ -149,4 +144,4 @@ export function getOrganizationColumns({
   return columns;
 }
 
-export type { OrganizationColumnsOptions };
+export type { AppColumnsOptions };

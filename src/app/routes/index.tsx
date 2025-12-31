@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouterProvider } from "react-router";
 import App from "../App";
 import { isSuperAdminConfigured } from "../../utils/config-state";
-import { Navigate, Outlet, useLocation } from "react-router";
+import { Navigate, Outlet, useLocation, useParams } from "react-router";
 import { ErrorBoundary } from "../components/shared/error-boundary";
 import { OrgLayout, DashboardRedirect } from "../components/layout/org-layout";
 import { AuthProvider, useAuth } from "../contexts/auth-context";

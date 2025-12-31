@@ -1,6 +1,6 @@
 /**
- * Member table column definitions
- * Reusable columns for organization member DataTable
+ * App member table column definitions
+ * Reusable columns for application member DataTable
  */
 
 import { ColumnDef } from "@tanstack/react-table";
@@ -16,15 +16,13 @@ import {
 } from "@z0/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@z0/components/ui/avatar";
 import { DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
-import { StatusBadge } from "@z0/app/components/shared/status-badge";
 import { Badge } from "@z0/components/ui/badge";
-import type { OrgMember } from "@z0/types";
-import { ORG_ROLE_LABELS } from "@z0/types";
+import type { AppMember } from "@z0/types";
+import { APP_ROLE_LABELS } from "@z0/types";
 
-interface MemberColumnsOptions {
-  onEditRole?: (member: OrgMember) => void;
-  onRemove?: (member: OrgMember) => void;
-  onResendInvite?: (member: OrgMember) => void;
+interface AppMemberColumnsOptions {
+  onEditRole?: (member: AppMember) => void;
+  onRemove?: (member: AppMember) => void;
   showActions?: boolean;
   currentUserId?: string;
 }
@@ -38,14 +36,13 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export function getMemberColumns({
+export function getAppMemberColumns({
   onEditRole,
   onRemove,
-  onResendInvite,
   showActions = true,
   currentUserId,
-}: MemberColumnsOptions = {}): ColumnDef<OrgMember>[] {
-  const columns: ColumnDef<OrgMember>[] = [
+}: AppMemberColumnsOptions = {}): ColumnDef<AppMember>[] {
+  const columns: ColumnDef<AppMember>[] = [
     {
       accessorKey: "name",
       header: ({ column }) => (
@@ -80,10 +77,10 @@ export function getMemberColumns({
         <DataTableColumnHeader column={column} title="Role" />
       ),
       cell: ({ row }) => {
-        const roleType = row.getValue("roleType") as OrgMember["roleType"];
+        const roleType = row.getValue("roleType") as AppMember["roleType"];
         return (
           <Badge variant="secondary">
-            {ORG_ROLE_LABELS[roleType] || roleType}
+            {APP_ROLE_LABELS[roleType] || roleType}
           </Badge>
         );
       },
@@ -92,22 +89,9 @@ export function getMemberColumns({
       },
     },
     {
-      accessorKey: "memberStatus",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Status" />
-      ),
-      cell: ({ row }) => {
-        const status = row.getValue("memberStatus") as string;
-        return <StatusBadge status={status} />;
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
-      },
-    },
-    {
       accessorKey: "grantedAt",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Joined" />
+        <DataTableColumnHeader column={column} title="Added" />
       ),
       cell: ({ row }) => {
         const date = row.getValue("grantedAt");
@@ -127,7 +111,6 @@ export function getMemberColumns({
       cell: ({ row }) => {
         const member = row.original;
         const isCurrentUser = member.userId === currentUserId;
-        const isInvited = member.memberStatus === "invited";
 
         return (
           <DropdownMenu>
@@ -139,12 +122,6 @@ export function getMemberColumns({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-
-              {isInvited && onResendInvite && (
-                <DropdownMenuItem onClick={() => onResendInvite(member)}>
-                  Resend invitation
-                </DropdownMenuItem>
-              )}
 
               {onEditRole && !isCurrentUser && (
                 <DropdownMenuItem onClick={() => onEditRole(member)}>
@@ -159,7 +136,7 @@ export function getMemberColumns({
                     onClick={() => onRemove(member)}
                     className="text-destructive focus:text-destructive"
                   >
-                    {isInvited ? "Cancel invitation" : "Remove member"}
+                    Remove member
                   </DropdownMenuItem>
                 </>
               )}
@@ -179,4 +156,4 @@ export function getMemberColumns({
   return columns;
 }
 
-export type { MemberColumnsOptions };
+export type { AppMemberColumnsOptions };

@@ -6,39 +6,19 @@ import {
   type ReactNode,
 } from "react";
 import { useParams, useNavigate } from "react-router";
+import type { UserOrganization, StoredUser } from "@z0/types";
 
-/**
- * Organization type matching backend AuthUser.organizations
- */
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  roleType: "ORG_OWNER" | "ORG_ADMIN" | "ORG_DEVELOPER" | "ORG_MEMBER";
-  isDefault: boolean;
-}
-
-/**
- * Stored user data from localStorage
- */
-interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string | null;
-  hasPlatformAccess: boolean;
-  platformRole?: string;
-  organizations: Organization[];
-}
+// Re-export types for backward compatibility
+export type { UserOrganization as Organization } from "@z0/types";
 
 /**
  * Organization context value
  */
 interface OrgContextValue {
   /** Current organization from URL slug */
-  currentOrg: Organization | null;
+  currentOrg: UserOrganization | null;
   /** All organizations the user belongs to */
-  organizations: Organization[];
+  organizations: UserOrganization[];
   /** User's role in current organization */
   currentRole: string | null;
   /** Whether user has platform admin access */
@@ -48,7 +28,7 @@ interface OrgContextValue {
   /** Navigate to a different organization */
   switchOrg: (orgSlug: string) => void;
   /** Get default organization */
-  getDefaultOrg: () => Organization | null;
+  getDefaultOrg: () => UserOrganization | null;
 }
 
 const OrgContext = createContext<OrgContextValue | null>(null);

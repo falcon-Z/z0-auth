@@ -1,24 +1,22 @@
 /**
- * MemberTable component
- * DataTable wrapper for organization members with built-in actions
+ * AppMemberTable component
+ * DataTable wrapper for application members with built-in actions
  */
 
 import { useMemo } from "react";
 import { DataTable } from "@z0/app/components/data-table/data-table";
-import { getMemberColumns } from "./member-columns";
-import type { OrgMember } from "@z0/types";
+import { getAppMemberColumns } from "./app-member-columns";
+import type { AppMember } from "@z0/types";
 
-interface MemberTableProps {
+interface AppMemberTableProps {
   /** Members data */
-  data: OrgMember[];
+  data: AppMember[];
   /** Loading state */
   loading?: boolean;
   /** Edit role handler */
-  onEditRole?: (member: OrgMember) => void;
+  onEditRole?: (member: AppMember) => void;
   /** Remove member handler */
-  onRemove?: (member: OrgMember) => void;
-  /** Resend invitation handler */
-  onResendInvite?: (member: OrgMember) => void;
+  onRemove?: (member: AppMember) => void;
   /** Show action column */
   showActions?: boolean;
   /** Current user ID (to mark "You" badge) */
@@ -27,26 +25,24 @@ interface MemberTableProps {
   emptyMessage?: string;
 }
 
-export function MemberTable({
+export function AppMemberTable({
   data,
   loading = false,
   onEditRole,
   onRemove,
-  onResendInvite,
   showActions = true,
   currentUserId,
   emptyMessage = "No members found.",
-}: MemberTableProps) {
+}: AppMemberTableProps) {
   const columns = useMemo(
     () =>
-      getMemberColumns({
+      getAppMemberColumns({
         onEditRole,
         onRemove,
-        onResendInvite,
         showActions,
         currentUserId,
       }),
-    [onEditRole, onRemove, onResendInvite, showActions, currentUserId]
+    [onEditRole, onRemove, showActions, currentUserId]
   );
 
   return (
@@ -63,4 +59,4 @@ export function MemberTable({
   );
 }
 
-export type { MemberTableProps };
+export type { AppMemberTableProps };

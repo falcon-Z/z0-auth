@@ -8,31 +8,10 @@ import {
   type ReactNode,
 } from "react";
 import { useNavigate, useLocation } from "react-router";
+import type { UserOrganization, StoredUser } from "@z0/types";
 
-/**
- * Organization type matching backend AuthUser.organizations
- */
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  roleType: "ORG_OWNER" | "ORG_ADMIN" | "ORG_DEVELOPER" | "ORG_MEMBER";
-  isDefault: boolean;
-}
-
-/**
- * Stored user data from localStorage
- */
-export interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  avatar?: string | null;
-  hasPlatformAccess: boolean;
-  platformRole?: string;
-  requiresPasswordChange?: boolean;
-  organizations: Organization[];
-}
+// Re-export types for backward compatibility
+export type { UserOrganization as Organization, StoredUser } from "@z0/types";
 
 /**
  * Auth context value
@@ -139,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(() => {
-    const getDefaultOrg = () => {
+    const getDefaultOrg = (): UserOrganization | null => {
       if (!user?.organizations?.length) return null;
       const defaultOrg = user.organizations.find((org) => org.isDefault);
       return defaultOrg || user.organizations[0] || null;

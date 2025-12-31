@@ -7,7 +7,7 @@
  *   OrganizationForm,
  *   MemberTable,
  *   CreateOrganizationDialog,
- * } from "@z0/components/organizations";
+ * } from "@z0/app/components/organizations";
  */
 
 // Tables
