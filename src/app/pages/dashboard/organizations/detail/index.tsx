@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   Loader2,
@@ -13,6 +13,9 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Shield,
+  RefreshCw,
+  UserPlus,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNow } from "date-fns";
@@ -63,6 +66,10 @@ import { StatusBadge } from "@z0/app/components/shared/status-badge";
 import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
 import { EmptyState } from "@z0/app/components/shared/empty-state";
 import { TableLoadingSkeleton } from "@z0/app/components/shared/loading-skeleton";
+import { AddMemberDialog, EditMemberRoleDialog, RemoveMemberDialog } from "@z0/app/components/organizations";
+import { Badge } from "@z0/components/ui/badge";
+import { authFetch } from "@z0/utils/api/client";
+import type { OrgMember, OrgRoleType } from "@z0/types";
 
 const createAppSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
@@ -98,13 +105,19 @@ interface App {
   createdAt: string;
 }
 
-interface OrgMember {
-  id: string;
-  userId: string;
+interface Member {
+  membershipId?: string;
+  invitationId?: string;
+  userId?: string;
+  name: string | null;
   email: string;
-  name: string;
-  role: string;
-  joinedAt: string;
+  avatar?: string | null;
+  roleType: OrgRoleType;
+  memberStatus: "active" | "invited";
+  joinedAt?: string;
+  invitedAt?: string;
+  invitedBy?: { id: string; name: string; email: string };
+  expiresAt?: string;
 }
 
 export default function OrganizationDetail() {
@@ -112,12 +125,20 @@ export default function OrganizationDetail() {
   const { id } = useParams<{ id: string }>();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [apps, setApps] = useState<App[]>([]);
-  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [visibleApiKeys, setVisibleApiKeys] = useState<Set<string>>(new Set());
+
+  // Member management state
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isChangeRoleOpen, setIsChangeRoleOpen] = useState(false);
+  const [isRemoveMemberOpen, setIsRemoveMemberOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [memberError, setMemberError] = useState<string | null>(null);
+  const [isMemberSubmitting, setIsMemberSubmitting] = useState(false);
 
   const form = useForm<CreateAppFormValues>({
     resolver: zodResolver(createAppSchema),
@@ -173,17 +194,109 @@ export default function OrganizationDetail() {
 
   const loadMembers = async () => {
     try {
-      const response = await fetch(`/api/v1/orgs/${id}/members`, {
-        credentials: "include",
-      });
+      const response = await authFetch(`/api/v1/orgs/${id}/members?includeInvited=true`);
 
       if (response.ok) {
         const result = await response.json();
-        setMembers(result.members || []);
+        setMembers(result.data || []);
       }
     } catch (err) {
       console.error("Failed to load members:", err);
     }
+  };
+
+  // Member management handlers
+  const handleChangeRole = async (data: { roleType: OrgRoleType }) => {
+    if (!id || !selectedMember?.userId) return;
+    try {
+      setIsMemberSubmitting(true);
+      setMemberError(null);
+      const response = await authFetch(
+        `/api/v1/orgs/${id}/members/${selectedMember.userId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to change role");
+      }
+
+      setIsChangeRoleOpen(false);
+      setSelectedMember(null);
+      await loadMembers();
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsMemberSubmitting(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!id || !selectedMember) return;
+    try {
+      setIsMemberSubmitting(true);
+      setMemberError(null);
+
+      const isInvited = selectedMember.memberStatus === "invited";
+      const endpoint = isInvited
+        ? `/api/v1/orgs/${id}/invitations/${selectedMember.invitationId}`
+        : `/api/v1/orgs/${id}/members/${selectedMember.userId}`;
+
+      const response = await authFetch(endpoint, { method: "DELETE" });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to remove member");
+      }
+
+      setIsRemoveMemberOpen(false);
+      setSelectedMember(null);
+      await loadMembers();
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsMemberSubmitting(false);
+    }
+  };
+
+  const handleResendInvitation = async (member: Member) => {
+    if (!id || !member.invitationId) return;
+    try {
+      const response = await authFetch(
+        `/api/v1/orgs/${id}/invitations/${member.invitationId}/resend`,
+        { method: "POST" }
+      );
+      const result = await response.json();
+      if (response.ok) {
+        // Check if email was sent or if we need mailto fallback
+        if (!result.data?.emailSent && result.data?.emailContent) {
+          const { subject, body } = result.data.emailContent;
+          window.open(
+            `mailto:${member.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Failed to resend invitation:", err);
+    }
+  };
+
+  const openChangeRoleDialog = (member: Member) => {
+    setSelectedMember(member);
+    setMemberError(null);
+    setIsChangeRoleOpen(true);
+  };
+
+  const openRemoveMemberDialog = (member: Member) => {
+    setSelectedMember(member);
+    setMemberError(null);
+    setIsRemoveMemberOpen(true);
   };
 
   const handleCreateApp = async (data: CreateAppFormValues) => {
@@ -345,83 +458,146 @@ export default function OrganizationDetail() {
   ];
 
   // Members table columns
-  const membersColumns: ColumnDef<OrgMember>[] = [
-    {
-      accessorKey: "name",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Name" />
-      ),
-      cell: ({ row }) => (
-        <div className="font-medium">{row.getValue("name")}</div>
-      ),
-    },
-    {
-      accessorKey: "email",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Email" />
-      ),
-      cell: ({ row }) => (
-        <div className="text-sm text-muted-foreground">
-          {row.getValue("email")}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "role",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Role" />
-      ),
-      cell: ({ row }) => {
-        const role = row.getValue("role") as string;
-        return (
-          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-            {role}
-          </span>
-        );
+  const membersColumns: ColumnDef<Member>[] = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Name" />
+        ),
+        cell: ({ row }) => {
+          const isInvited = row.original.memberStatus === "invited";
+          const displayName = row.original.name || row.original.email.split("@")[0];
+          return (
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm ${
+                isInvited ? "bg-amber-100 text-amber-600" : "bg-primary/10 text-primary"
+              }`}>
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div className="font-medium flex items-center gap-2">
+                  {displayName}
+                  {isInvited && (
+                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                      Invited
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">{row.original.email}</div>
+              </div>
+            </div>
+          );
+        },
       },
-    },
-    {
-      accessorKey: "joinedAt",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Joined" />
-      ),
-      cell: ({ row }) => {
-        const date = new Date(row.getValue("joinedAt"));
-        return (
-          <div className="text-sm text-muted-foreground">
-            {formatDistanceToNow(date, { addSuffix: true })}
-          </div>
-        );
+      {
+        accessorKey: "roleType",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Role" />
+        ),
+        cell: ({ row }) => {
+          const role = row.original.roleType;
+          return (
+            <Badge variant={role === "ORG_OWNER" ? "default" : "secondary"}>
+              {role.replace("ORG_", "")}
+            </Badge>
+          );
+        },
       },
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const member = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem>
-                <Edit2 className="mr-2 h-4 w-4" />
-                Change Role
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Remove Member
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
+      {
+        accessorKey: "joinedAt",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
+        cell: ({ row }) => {
+          const isInvited = row.original.memberStatus === "invited";
+          if (isInvited) {
+            return (
+              <div className="text-sm text-muted-foreground">
+                <span className="text-amber-600">Pending</span>
+                {row.original.invitedAt && (
+                  <span className="text-xs block">
+                    Invited {formatDistanceToNow(new Date(row.original.invitedAt), { addSuffix: true })}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div className="text-sm text-muted-foreground">
+              <span className="text-green-600">Active</span>
+              {row.original.joinedAt && (
+                <span className="text-xs block">
+                  Joined {formatDistanceToNow(new Date(row.original.joinedAt), { addSuffix: true })}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
-    },
-  ];
+      {
+        id: "actions",
+        cell: ({ row }) => {
+          const member = row.original;
+          const isInvited = member.memberStatus === "invited";
+
+          // For invited members, show different actions
+          if (isInvited) {
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleResendInvitation(member)}>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Resend Invitation
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600"
+                    onClick={() => openRemoveMemberDialog(member)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Revoke Invitation
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
+
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => openChangeRoleDialog(member)}>
+                  <Shield className="mr-2 h-4 w-4" />
+                  Change Role
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={() => openRemoveMemberDialog(member)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove Member
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
+    ],
+    [handleResendInvitation, openChangeRoleDialog, openRemoveMemberDialog]
+  );
 
   if (isLoading) {
     return (
@@ -629,8 +805,8 @@ export default function OrganizationDetail() {
         <TabsContent value="members" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">Organization Members</h3>
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
+            <Button size="sm" onClick={() => setIsAddMemberOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
               Add Member
             </Button>
           </div>
@@ -641,8 +817,8 @@ export default function OrganizationDetail() {
               title="No members"
               description="Invite someone to join this organization."
               action={
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
+                <Button onClick={() => setIsAddMemberOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
                   Add Member
                 </Button>
               }
@@ -677,6 +853,37 @@ export default function OrganizationDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add Member Dialog */}
+      {id && (
+        <AddMemberDialog
+          open={isAddMemberOpen}
+          onOpenChange={setIsAddMemberOpen}
+          organizationId={id}
+          onSuccess={() => {
+            loadMembers();
+            loadOrganizationDetail();
+          }}
+        />
+      )}
+
+      {/* Edit Role Dialog */}
+      <EditMemberRoleDialog
+        open={isChangeRoleOpen}
+        onOpenChange={setIsChangeRoleOpen}
+        member={selectedMember as OrgMember | null}
+        onSubmit={handleChangeRole}
+        isSubmitting={isMemberSubmitting}
+      />
+
+      {/* Remove Member Dialog */}
+      <RemoveMemberDialog
+        open={isRemoveMemberOpen}
+        onOpenChange={setIsRemoveMemberOpen}
+        member={selectedMember as OrgMember | null}
+        onConfirm={handleRemoveMember}
+        isSubmitting={isMemberSubmitting}
+      />
     </div>
   );
 }

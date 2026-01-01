@@ -53,3 +53,7 @@ export type {
   EditMemberRoleDialogProps,
   RemoveMemberDialogProps,
 } from "./member-dialogs";
+
+// Full-featured add member dialog with email lookup
+export { AddMemberDialog } from "./add-member-dialog";
+export type { AddMemberDialogProps } from "./add-member-dialog";
