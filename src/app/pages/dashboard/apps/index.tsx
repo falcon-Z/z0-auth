@@ -9,9 +9,6 @@ import {
   Settings,
   Trash2,
   RefreshCw,
-  Copy,
-  Check,
-  AlertTriangle,
 } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
@@ -23,16 +20,7 @@ import {
   CardDescription,
   CardFooter,
 } from "@z0/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@z0/components/ui/dialog";
+import { Alert, AlertDescription } from "@z0/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,64 +28,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@z0/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@z0/components/ui/alert-dialog";
-import { Input } from "@z0/components/ui/input";
-import { Textarea } from "@z0/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from "@z0/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Badge } from "@z0/components/ui/badge";
-import { useOrg, useOrgPermissions } from "../../../contexts/org-context";
-
-// Create app schema
-const createAppSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").max(100),
-  slug: z
-    .string()
-    .min(2, "Slug must be at least 2 characters")
-    .max(50)
-    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and dashes only"),
-  description: z.string().max(500).optional(),
-  allowedOrigins: z.string().optional(),
-});
-
-type CreateAppFormValues = z.infer<typeof createAppSchema>;
-
-interface App {
-  id: string;
-  name: string;
-  slug: string;
-  status: "ACTIVE" | "INACTIVE" | "SUSPENDED";
-  apiKey: string;
-  memberCount?: number;
-  createdAt: string;
-}
-
-interface CreatedAppResponse {
-  id: string;
-  name: string;
-  slug: string;
-  apiKey: string;
-  apiSecret: string;
-}
+import { useOrg, useOrgPermissions } from "@z0/app/contexts/org-context";
+import { authFetch } from "@z0/utils/api/client";
+import { toast } from "sonner";
+import {
+  CreateAppDialog,
+  DeleteAppDialog,
+  AppSecretDialog,
+} from "@z0/app/components/applications";
+import type { AppWithCounts, CreateAppResponse } from "@z0/types";
+import type { CreateAppFormInput } from "@z0/validation";
 
 const statusConfig: Record<
   string,
@@ -121,26 +62,17 @@ export default function ApplicationsPage() {
   const { currentOrg } = useOrg();
   const { canManageApps } = useOrgPermissions();
 
-  const [apps, setApps] = useState<App[]>([]);
+  const [apps, setApps] = useState<AppWithCounts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isSecretDialogOpen, setIsSecretDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedApp, setSelectedApp] = useState<App | null>(null);
-  const [createdApp, setCreatedApp] = useState<CreatedAppResponse | null>(null);
-  const [copiedSecret, setCopiedSecret] = useState(false);
-
-  const form = useForm<CreateAppFormValues>({
-    resolver: zodResolver(createAppSchema),
-    defaultValues: {
-      name: "",
-      slug: "",
-      description: "",
-      allowedOrigins: "",
-    },
-  });
+  const [selectedApp, setSelectedApp] = useState<AppWithCounts | null>(null);
+  const [createdAppData, setCreatedAppData] = useState<CreateAppResponse | null>(null);
 
   const loadApps = useCallback(async () => {
     if (!currentOrg) return;
@@ -149,9 +81,7 @@ export default function ApplicationsPage() {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/v1/orgs/${currentOrg.id}/apps`, {
-        credentials: "include",
-      });
+      const response = await authFetch(`/api/v1/orgs/${currentOrg.id}/apps`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -171,19 +101,7 @@ export default function ApplicationsPage() {
     loadApps();
   }, [loadApps]);
 
-  // Auto-generate slug from name
-  const watchName = form.watch("name");
-  useEffect(() => {
-    if (watchName && !form.getValues("slug")) {
-      const slug = watchName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-      form.setValue("slug", slug);
-    }
-  }, [watchName, form]);
-
-  const handleCreateApp = async (data: CreateAppFormValues) => {
+  const handleCreateApp = async (data: CreateAppFormInput) => {
     if (!currentOrg) return;
 
     try {
@@ -197,12 +115,9 @@ export default function ApplicationsPage() {
             .filter(Boolean)
         : [];
 
-      const response = await fetch(`/api/v1/orgs/${currentOrg.id}/apps`, {
+      const response = await authFetch(`/api/v1/orgs/${currentOrg.id}/apps`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: data.name,
           slug: data.slug,
@@ -211,19 +126,27 @@ export default function ApplicationsPage() {
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to create application");
+        throw new Error(result.message || "Failed to create application");
       }
 
-      const result = await response.json();
-      setCreatedApp(result.data);
+      // Store created app data for secret dialog
+      if (result.data?.apiSecret) {
+        setCreatedAppData({
+          app: result.data,
+          apiKey: result.data.apiKey,
+          apiSecret: result.data.apiSecret,
+        });
+      }
+
       setIsCreateDialogOpen(false);
       setIsSecretDialogOpen(true);
-      form.reset();
       await loadApps();
+      toast.success("Application created successfully");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -236,12 +159,9 @@ export default function ApplicationsPage() {
       setIsSubmitting(true);
       setError(null);
 
-      const response = await fetch(
+      const response = await authFetch(
         `/api/v1/orgs/${currentOrg.id}/apps/${selectedApp.id}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
+        { method: "DELETE" }
       );
 
       if (!response.ok) {
@@ -252,28 +172,15 @@ export default function ApplicationsPage() {
       setIsDeleteDialogOpen(false);
       setSelectedApp(null);
       await loadApps();
+      toast.success("Application deleted");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const copySecret = async () => {
-    if (createdApp?.apiSecret) {
-      await navigator.clipboard.writeText(createdApp.apiSecret);
-      setCopiedSecret(true);
-      setTimeout(() => setCopiedSecret(false), 2000);
-    }
-  };
-
-  const closeSecretDialog = () => {
-    setIsSecretDialogOpen(false);
-    setCreatedApp(null);
-    setCopiedSecret(false);
-  };
-
-  const openDeleteDialog = (app: App) => {
+  const openDeleteDialog = (app: AppWithCounts) => {
     setSelectedApp(app);
     setIsDeleteDialogOpen(true);
   };
@@ -302,114 +209,10 @@ export default function ApplicationsPage() {
             Refresh
           </Button>
           {canManageApps && (
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Application
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Create a new application</DialogTitle>
-                  <DialogDescription>
-                    Register a new application in {currentOrg.name}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                  <form
-                    onSubmit={form.handleSubmit(handleCreateApp)}
-                    className="space-y-4"
-                  >
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Application name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="My Application" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="slug"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Slug</FormLabel>
-                          <FormControl>
-                            <Input placeholder="my-application" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            Unique identifier for your application (lowercase, dashes)
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Description (optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Brief description of your application..."
-                              className="resize-none"
-                              rows={3}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="allowedOrigins"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Allowed origins (optional)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="https://example.com, https://app.example.com"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Comma-separated list of allowed CORS origins
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsCreateDialogOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Create Application
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Application
+            </Button>
           )}
         </div>
       </div>
@@ -503,74 +306,32 @@ export default function ApplicationsPage() {
         </div>
       )}
 
+      {/* Create App Dialog */}
+      <CreateAppDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        onSubmit={handleCreateApp}
+        isSubmitting={isSubmitting}
+      />
+
       {/* API Secret Dialog - One-time display */}
-      <Dialog open={isSecretDialogOpen} onOpenChange={closeSecretDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Application created successfully</DialogTitle>
-            <DialogDescription>
-              Copy your API secret now. It will not be shown again.
-            </DialogDescription>
-          </DialogHeader>
-          <Alert variant="destructive" className="mt-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Save this secret</AlertTitle>
-            <AlertDescription>
-              Store this API secret securely. If you lose it, you will need to
-              regenerate a new one.
-            </AlertDescription>
-          </Alert>
-          <div className="space-y-4 mt-4">
-            <div>
-              <label className="text-sm font-medium">API Key</label>
-              <div className="mt-1 p-3 bg-muted rounded-md font-mono text-sm break-all">
-                {createdApp?.apiKey}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium">API Secret</label>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="flex-1 p-3 bg-muted rounded-md font-mono text-sm break-all">
-                  {createdApp?.apiSecret}
-                </div>
-                <Button variant="outline" size="icon" onClick={copySecret}>
-                  {copiedSecret ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="mt-4">
-            <Button onClick={closeSecretDialog}>I've saved the secret</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppSecretDialog
+        open={isSecretDialogOpen}
+        onOpenChange={(open) => {
+          setIsSecretDialogOpen(open);
+          if (!open) setCreatedAppData(null);
+        }}
+        appData={createdAppData}
+      />
 
       {/* Delete Confirmation */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete application</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{selectedApp?.name}</strong>? This
-              will revoke all API keys and remove access for all users.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteApp}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Delete Application
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteAppDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        app={selectedApp}
+        onConfirm={handleDeleteApp}
+        isSubmitting={isSubmitting}
+      />
     </div>
   );
 }
