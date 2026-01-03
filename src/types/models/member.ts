@@ -7,17 +7,35 @@ import type { OrgRoleType, AppRoleType, InvitationStatus } from "./roles";
 
 /**
  * Organization member - active member with user info
+ * Matches the API response from GET /api/v1/orgs/:orgId/members
  */
 export interface OrgMember {
-  membershipId: string;
-  userId: string;
+  // Common fields
   email: string;
-  name: string;
+  name: string | null;
   avatar?: string | null;
   roleType: OrgRoleType;
   isDefault: boolean;
-  grantedAt: string;
+  status: string; // "ACTIVE", "INACTIVE", "PENDING" etc.
   memberStatus: "active" | "invited";
+  emailVerified: boolean;
+  lastLoginAt: string | null;
+
+  // Active member fields
+  membershipId?: string;
+  userId?: string;
+  joinedAt?: string;
+  userCreatedAt?: string;
+
+  // Invited member fields
+  invitationId?: string;
+  invitedAt?: string;
+  invitedBy?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  expiresAt?: string;
 }
 
 /**

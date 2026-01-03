@@ -105,17 +105,28 @@ export function getMemberColumns({
       },
     },
     {
-      accessorKey: "grantedAt",
+      id: "joinedAt",
+      accessorFn: (row) => row.joinedAt || row.invitedAt,
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Joined" />
       ),
       cell: ({ row }) => {
-        const date = row.getValue("grantedAt");
+        const member = row.original;
+        const date = member.joinedAt || member.invitedAt;
         if (!date) return <span className="text-muted-foreground">—</span>;
+
+        const parsedDate = new Date(date);
+        if (isNaN(parsedDate.getTime())) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+
         return (
-          <span className="text-muted-foreground">
-            {new Date(date as string).toLocaleDateString()}
-          </span>
+          <div className="text-muted-foreground">
+            <span>{parsedDate.toLocaleDateString()}</span>
+            {member.memberStatus === "invited" && (
+              <span className="block text-xs">Invited</span>
+            )}
+          </div>
         );
       },
     },

@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import {
-  Loader2,
-  Plus,
-  MoreHorizontal,
-  AlertCircle,
-  Mail,
-  UserMinus,
-  ShieldCheck,
-  RefreshCw,
-} from "lucide-react";
+import { Loader2, Plus, AlertCircle, RefreshCw, Users } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
 import {
@@ -19,145 +10,34 @@ import {
   CardDescription,
 } from "@z0/components/ui/card";
 import { Alert, AlertDescription } from "@z0/components/ui/alert";
+import { useOrg, useOrgPermissions } from "@z0/app/contexts/org-context";
+import { useAuth } from "@z0/app/contexts/auth-context";
+import { authFetch } from "@z0/utils/api/client";
+import { toast } from "sonner";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@z0/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@z0/components/ui/dialog";
-import { Input } from "@z0/components/ui/input";
-import { Textarea } from "@z0/components/ui/textarea";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from "@z0/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@z0/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@z0/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@z0/components/ui/alert-dialog";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Badge } from "@z0/components/ui/badge";
-import { useOrg, useOrgPermissions } from "../../../contexts/org-context";
-
-// Role types matching backend
-const ORG_ROLES = ["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"] as const;
-type OrgRoleType = (typeof ORG_ROLES)[number];
-
-// Invite form schema
-const inviteUserSchema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_MEMBER"]),
-  message: z.string().max(500, "Message must be 500 characters or less").optional(),
-});
-
-type InviteUserFormValues = z.infer<typeof inviteUserSchema>;
-
-// Update role schema
-const updateRoleSchema = z.object({
-  roleType: z.enum(ORG_ROLES),
-});
-
-type UpdateRoleFormValues = z.infer<typeof updateRoleSchema>;
-
-interface OrgMember {
-  membershipId: string;
-  userId: string;
-  email: string;
-  name: string;
-  avatar?: string | null;
-  roleType: OrgRoleType;
-  isActive: boolean;
-  isDefault: boolean;
-  grantedAt: string;
-}
-
-const roleLabels: Record<OrgRoleType, string> = {
-  ORG_OWNER: "Owner",
-  ORG_ADMIN: "Admin",
-  ORG_DEVELOPER: "Developer",
-  ORG_MEMBER: "Member",
-};
-
-const roleDescriptions: Record<string, string> = {
-  ORG_OWNER: "Full control over the organization",
-  ORG_ADMIN: "Manage members, apps, and settings",
-  ORG_MEMBER: "Basic access to organization resources",
-};
-
-function getRoleBadgeVariant(role: OrgRoleType): "default" | "secondary" | "outline" {
-  switch (role) {
-    case "ORG_OWNER":
-      return "default";
-    case "ORG_ADMIN":
-      return "secondary";
-    default:
-      return "outline";
-  }
-}
+  MemberTable,
+  InviteMemberDialog,
+  EditMemberRoleDialog,
+  RemoveMemberDialog,
+} from "@z0/app/components/organizations";
+import type { OrgMember } from "@z0/types";
+import type { InviteMemberInput, UpdateMemberRoleInput } from "@z0/validation";
 
 export default function OrgUserManagement() {
   const { currentOrg } = useOrg();
-  const { canManageMembers, isOwner } = useOrgPermissions();
+  const { canManageMembers } = useOrgPermissions();
+  const { user } = useAuth();
 
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Dialog states
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedMember, setSelectedMember] = useState<OrgMember | null>(null);
-
-  const inviteForm = useForm<InviteUserFormValues>({
-    resolver: zodResolver(inviteUserSchema),
-    defaultValues: {
-      email: "",
-      roleType: "ORG_MEMBER",
-      message: "",
-    },
-  });
-
-  const roleForm = useForm<UpdateRoleFormValues>({
-    resolver: zodResolver(updateRoleSchema),
-  });
 
   const loadMembers = useCallback(async () => {
     if (!currentOrg) return;
@@ -166,9 +46,7 @@ export default function OrgUserManagement() {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/v1/orgs/${currentOrg.id}/members`, {
-        credentials: "include",
-      });
+      const response = await authFetch(`/api/v1/orgs/${currentOrg.id}/members`);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -188,70 +66,64 @@ export default function OrgUserManagement() {
     loadMembers();
   }, [loadMembers]);
 
-  const handleInviteUser = async (data: InviteUserFormValues) => {
+  const handleInviteUser = async (data: InviteMemberInput) => {
     if (!currentOrg) return;
 
     try {
       setIsSubmitting(true);
-      setError(null);
 
-      const response = await fetch(`/api/v1/orgs/${currentOrg.id}/invitations`, {
+      const response = await authFetch(`/api/v1/orgs/${currentOrg.id}/invitations`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: data.email,
           roleType: data.roleType,
-          message: data.message || undefined,
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to send invitation");
+        throw new Error(result.message || "Failed to send invitation");
       }
 
       setIsInviteDialogOpen(false);
-      inviteForm.reset();
-      // Invitation sent - user will appear after they accept
+      await loadMembers();
+      toast.success("Invitation sent successfully");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleUpdateRole = async (data: UpdateRoleFormValues) => {
-    if (!currentOrg || !selectedMember) return;
+  const handleUpdateRole = async (data: UpdateMemberRoleInput) => {
+    if (!currentOrg || !selectedMember?.userId) return;
 
     try {
       setIsSubmitting(true);
-      setError(null);
 
-      const response = await fetch(
+      const response = await authFetch(
         `/api/v1/orgs/${currentOrg.id}/members/${selectedMember.userId}`,
         {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roleType: data.roleType }),
         }
       );
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to update role");
+        throw new Error(result.message || "Failed to update role");
       }
 
       setIsRoleDialogOpen(false);
       setSelectedMember(null);
       await loadMembers();
+      toast.success("Role updated");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -262,34 +134,74 @@ export default function OrgUserManagement() {
 
     try {
       setIsSubmitting(true);
-      setError(null);
 
-      const response = await fetch(
-        `/api/v1/orgs/${currentOrg.id}/members/${selectedMember.userId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
+      // Determine if this is an invitation or a member
+      const isInvited = selectedMember.memberStatus === "invited";
+
+      if (isInvited && selectedMember.invitationId) {
+        // Cancel invitation
+        const response = await authFetch(
+          `/api/v1/orgs/${currentOrg.id}/invitations/${selectedMember.invitationId}`,
+          { method: "DELETE" }
+        );
+
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.message || "Failed to cancel invitation");
         }
-      );
+        toast.success("Invitation cancelled");
+      } else if (selectedMember.userId) {
+        // Remove member
+        const response = await authFetch(
+          `/api/v1/orgs/${currentOrg.id}/members/${selectedMember.userId}`,
+          { method: "DELETE" }
+        );
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to remove member");
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}));
+          throw new Error(result.message || "Failed to remove member");
+        }
+        toast.success("Member removed");
       }
 
       setIsRemoveDialogOpen(false);
       setSelectedMember(null);
       await loadMembers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      toast.error(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleResendInvite = async (member: OrgMember) => {
+    if (!currentOrg || !member.invitationId) return;
+
+    try {
+      const response = await authFetch(
+        `/api/v1/orgs/${currentOrg.id}/invitations/${member.invitationId}/resend`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ extendExpiry: true }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to resend invitation");
+      }
+
+      await loadMembers();
+      toast.success("Invitation resent");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "An error occurred");
+    }
+  };
+
   const openRoleDialog = (member: OrgMember) => {
     setSelectedMember(member);
-    roleForm.reset({ roleType: member.roleType });
     setIsRoleDialogOpen(true);
   };
 
@@ -322,131 +234,10 @@ export default function OrgUserManagement() {
             Refresh
           </Button>
           {canManageMembers && (
-            <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Invite Member
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Invite a new member</DialogTitle>
-                  <DialogDescription>
-                    Send an invitation email to join {currentOrg.name}
-                  </DialogDescription>
-                </DialogHeader>
-                <Form {...inviteForm}>
-                  <form
-                    onSubmit={inviteForm.handleSubmit(handleInviteUser)}
-                    className="space-y-4"
-                  >
-                    <FormField
-                      control={inviteForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email address</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="email"
-                              placeholder="colleague@example.com"
-                              autoComplete="email"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={inviteForm.control}
-                      name="roleType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Role</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {isOwner && (
-                                <SelectItem value="ORG_OWNER">
-                                  <div className="flex flex-col">
-                                    <span>Owner</span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {roleDescriptions.ORG_OWNER}
-                                    </span>
-                                  </div>
-                                </SelectItem>
-                              )}
-                              <SelectItem value="ORG_ADMIN">
-                                <div className="flex flex-col">
-                                  <span>Admin</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {roleDescriptions.ORG_ADMIN}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                              <SelectItem value="ORG_MEMBER">
-                                <div className="flex flex-col">
-                                  <span>Member</span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {roleDescriptions.ORG_MEMBER}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={inviteForm.control}
-                      name="message"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Personal message (optional)</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Add a personal note to the invitation..."
-                              className="resize-none"
-                              rows={3}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            This message will be included in the invitation email
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <DialogFooter>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setIsInviteDialogOpen(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Send Invitation
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </Form>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={() => setIsInviteDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Invite Member
+            </Button>
           )}
         </div>
       </div>
@@ -460,7 +251,10 @@ export default function OrgUserManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Organization Members</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Organization Members
+          </CardTitle>
           <CardDescription>
             {members.length} {members.length === 1 ? "member" : "members"} in{" "}
             {currentOrg.name}
@@ -471,153 +265,46 @@ export default function OrgUserManagement() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : members.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No members yet. Invite someone to get started.</p>
-            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Joined</TableHead>
-                  {canManageMembers && (
-                    <TableHead className="text-right">Actions</TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((member) => (
-                  <TableRow key={member.membershipId}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{member.name}</span>
-                        <span className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Mail className="h-3 w-3" />
-                          {member.email}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getRoleBadgeVariant(member.roleType)}>
-                        {roleLabels[member.roleType]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(member.grantedAt).toLocaleDateString()}
-                    </TableCell>
-                    {canManageMembers && (
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                              <span className="sr-only">Open menu</span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openRoleDialog(member)}>
-                              <ShieldCheck className="mr-2 h-4 w-4" />
-                              Change role
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => openRemoveDialog(member)}
-                              disabled={member.roleType === "ORG_OWNER"}
-                            >
-                              <UserMinus className="mr-2 h-4 w-4" />
-                              Remove member
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <MemberTable
+              data={members}
+              loading={isLoading}
+              onEditRole={canManageMembers ? openRoleDialog : undefined}
+              onRemove={canManageMembers ? openRemoveDialog : undefined}
+              onResendInvite={canManageMembers ? handleResendInvite : undefined}
+              showActions={canManageMembers}
+              currentUserId={user?.id}
+              emptyMessage="No members yet. Invite someone to get started."
+            />
           )}
         </CardContent>
       </Card>
 
-      {/* Update Role Dialog */}
-      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change member role</DialogTitle>
-            <DialogDescription>
-              Update the role for {selectedMember?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...roleForm}>
-            <form onSubmit={roleForm.handleSubmit(handleUpdateRole)} className="space-y-4">
-              <FormField
-                control={roleForm.control}
-                name="roleType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>New role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {isOwner && (
-                          <SelectItem value="ORG_OWNER">Owner</SelectItem>
-                        )}
-                        <SelectItem value="ORG_ADMIN">Admin</SelectItem>
-                        <SelectItem value="ORG_DEVELOPER">Developer</SelectItem>
-                        <SelectItem value="ORG_MEMBER">Member</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsRoleDialogOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Update Role
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      {/* Invite Member Dialog */}
+      <InviteMemberDialog
+        open={isInviteDialogOpen}
+        onOpenChange={setIsInviteDialogOpen}
+        onSubmit={handleInviteUser}
+        isSubmitting={isSubmitting}
+      />
 
-      {/* Remove Member Confirmation */}
-      <AlertDialog open={isRemoveDialogOpen} onOpenChange={setIsRemoveDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove member</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove {selectedMember?.name} from{" "}
-              {currentOrg.name}? They will lose access to all organization resources.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemoveMember}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Remove Member
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Edit Role Dialog */}
+      <EditMemberRoleDialog
+        open={isRoleDialogOpen}
+        onOpenChange={setIsRoleDialogOpen}
+        member={selectedMember}
+        onSubmit={handleUpdateRole}
+        isSubmitting={isSubmitting}
+      />
+
+      {/* Remove Member Dialog */}
+      <RemoveMemberDialog
+        open={isRemoveDialogOpen}
+        onOpenChange={setIsRemoveDialogOpen}
+        member={selectedMember}
+        onConfirm={handleRemoveMember}
+        isSubmitting={isSubmitting}
+      />
     </div>
   );
 }
