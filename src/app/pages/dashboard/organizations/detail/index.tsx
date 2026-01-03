@@ -67,8 +67,10 @@ import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/
 import { EmptyState } from "@z0/app/components/shared/empty-state";
 import { TableLoadingSkeleton } from "@z0/app/components/shared/loading-skeleton";
 import { AddMemberDialog, EditMemberRoleDialog, RemoveMemberDialog } from "@z0/app/components/organizations";
+import { AppSecretDialog, DeleteAppDialog } from "@z0/app/components/applications";
 import { Badge } from "@z0/components/ui/badge";
 import { authFetch } from "@z0/utils/api/client";
+import { toast } from "sonner";
 import type { OrgMember, OrgRoleType } from "@z0/types";
 
 const createAppSchema = z.object({
@@ -139,6 +141,13 @@ export default function OrganizationDetail() {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [memberError, setMemberError] = useState<string | null>(null);
   const [isMemberSubmitting, setIsMemberSubmitting] = useState(false);
+
+  // App management state
+  const [createdAppSecret, setCreatedAppSecret] = useState<{ apiKey: string; apiSecret: string } | null>(null);
+  const [isSecretDialogOpen, setIsSecretDialogOpen] = useState(false);
+  const [isDeleteAppOpen, setIsDeleteAppOpen] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<App | null>(null);
+  const [isAppSubmitting, setIsAppSubmitting] = useState(false);
 
   const form = useForm<CreateAppFormValues>({
     resolver: zodResolver(createAppSchema),
@@ -302,31 +311,77 @@ export default function OrganizationDetail() {
   const handleCreateApp = async (data: CreateAppFormValues) => {
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/v1/orgs/${id}/apps`, {
+      const allowedOrigins = data.allowedOrigins
+        ? data.allowedOrigins.split(",").map((o) => o.trim()).filter(Boolean)
+        : [];
+
+      const response = await authFetch(`/api/v1/orgs/${id}/apps`, {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...data,
-          allowedOrigins:
-            data.allowedOrigins?.split(",").map((o) => o.trim()) || [],
+          name: data.name,
+          slug: data.slug,
+          description: data.description,
+          allowedOrigins,
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error("Failed to create application");
+        throw new Error(result.message || "Failed to create application");
       }
 
       setIsDialogOpen(false);
       form.reset();
+
+      // Show the secret dialog with the newly created app credentials
+      if (result.data?.apiSecret) {
+        setCreatedAppSecret({
+          apiKey: result.data.apiKey,
+          apiSecret: result.data.apiSecret,
+        });
+        setIsSecretDialogOpen(true);
+      }
+
       await loadApps();
+      await loadOrganizationDetail();
+      toast.success("Application created successfully");
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDeleteApp = async () => {
+    if (!selectedApp) return;
+    try {
+      setIsAppSubmitting(true);
+      const response = await authFetch(`/api/v1/orgs/${id}/apps/${selectedApp.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || "Failed to delete application");
+      }
+
+      setIsDeleteAppOpen(false);
+      setSelectedApp(null);
+      await loadApps();
+      await loadOrganizationDetail();
+      toast.success("Application deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsAppSubmitting(false);
+    }
+  };
+
+  const openDeleteAppDialog = (app: App) => {
+    setSelectedApp(app);
+    setIsDeleteAppOpen(true);
   };
 
   const toggleApiKeyVisibility = (appId: string) => {
@@ -446,7 +501,10 @@ export default function OrganizationDetail() {
                 View Details
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={() => openDeleteAppDialog(app)}
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Delete
               </DropdownMenuItem>
@@ -883,6 +941,26 @@ export default function OrganizationDetail() {
         member={selectedMember as OrgMember | null}
         onConfirm={handleRemoveMember}
         isSubmitting={isMemberSubmitting}
+      />
+
+      {/* App Secret Dialog - shown after app creation */}
+      <AppSecretDialog
+        open={isSecretDialogOpen}
+        onOpenChange={(open) => {
+          setIsSecretDialogOpen(open);
+          if (!open) setCreatedAppSecret(null);
+        }}
+        apiKey={createdAppSecret?.apiKey || ""}
+        apiSecret={createdAppSecret?.apiSecret || ""}
+      />
+
+      {/* Delete App Dialog */}
+      <DeleteAppDialog
+        open={isDeleteAppOpen}
+        onOpenChange={setIsDeleteAppOpen}
+        app={selectedApp}
+        onConfirm={handleDeleteApp}
+        isSubmitting={isAppSubmitting}
       />
     </div>
   );
