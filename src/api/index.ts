@@ -8,6 +8,7 @@ import SMTPAdminRoutes from "./admin/smtp";
 import LockoutAdminRoutes from "./admin/security/lockouts";
 import AuditLogsRoutes from "./admin/audit-logs";
 import RequestTracesRoutes from "./admin/request-traces";
+import PortalRoutes from "./portal";
 
 const API = new Hono();
 
@@ -20,5 +21,6 @@ API.route("/admin/smtp/", SMTPAdminRoutes);
 API.route("/admin/security/", LockoutAdminRoutes);
 API.route("/admin/audit-logs/", AuditLogsRoutes);
 API.route("/admin/request-traces/", RequestTracesRoutes);
+API.route("/portal/", PortalRoutes);
 
 export default API;

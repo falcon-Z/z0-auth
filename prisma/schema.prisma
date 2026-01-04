@@ -125,6 +125,12 @@ enum ExternalProvider {
   CUSTOM_OAUTH2
 }
 
+enum WebhookScope {
+  PLATFORM     // Receives ALL events across all orgs/apps
+  ORGANIZATION // Receives events for org and its apps
+  APP          // Receives events for specific app only
+}
+
 // =============================================================================
 // CORE MODELS - User (Central Entity)
 // =============================================================================
@@ -328,6 +334,11 @@ model App {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
+  // App User Portal Configuration
+  allowPublicRegistration Boolean  @default(false)  // Allow users to self-register
+  loginPageConfig         Json?                     // { logo, primaryColor, welcomeText, customCss }
+  enabledAuthMethods      String[] @default(["password"]) // ["password", "oauth", "magic_link"]
+
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   memberships    AppMembership[]
   scopes         AppScope[]
@@ -335,6 +346,7 @@ model App {
   apiKeys        ApiKey[]        // App-level API keys
   userApiKeys    UserApiKey[]    // User-owned API keys for this app
   allowedOrigins AllowedOrigin[]
+  webhooks       Webhook[]       // App-specific webhooks
 
   @@unique([organizationId, slug])
   @@unique([organizationId, name])
@@ -825,25 +837,30 @@ model UserMetadataHistory {
 }
 
 model Webhook {
-  id             String   @id @default(cuid())
-  organizationId String
+  id             String       @id @default(cuid())
+  organizationId String?      // Nullable for platform-level webhooks
+  appId          String?      // For app-specific webhooks
+  scope          WebhookScope @default(ORGANIZATION)
   name           String
   url            String
   secret         String
-  isActive       Boolean  @default(true)
+  isActive       Boolean      @default(true)
   eventTypes     String[]
   headers        Json?
-  timeout        Int      @default(5000)
+  timeout        Int          @default(5000)
   description    String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   createdBy      String?
 
-  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  app          App?          @relation(fields: [appId], references: [id], onDelete: Cascade)
   events       WebhookEvent[]
 
   @@unique([organizationId, url])
   @@index([organizationId, isActive])
+  @@index([appId, isActive])
+  @@index([scope, isActive])
   @@map("webhooks")
 }
 

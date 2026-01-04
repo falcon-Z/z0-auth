@@ -39,11 +39,11 @@ export const WEBHOOK_EVENT_LIST = Object.values(WEBHOOK_EVENTS);
 export interface WebhookPayload {
   event: WebhookEventType;
   timestamp: string;
-  organizationId: string;
+  organizationId?: string; // Optional for platform-wide events
+  appId?: string;            // Present for app-specific events
   data: Record<string, unknown>;
   metadata?: {
     userId?: string;
-    appId?: string;
     sessionId?: string;
     ipAddress?: string;
     userAgent?: string;

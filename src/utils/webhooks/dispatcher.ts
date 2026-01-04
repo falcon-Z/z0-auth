@@ -19,7 +19,8 @@ interface WebhookDeliveryResult {
 }
 
 interface DispatchOptions {
-  organizationId: string;
+  organizationId?: string;
+  appId?: string;
   eventType: WebhookEventType;
   data: Record<string, unknown>;
   metadata?: WebhookPayload["metadata"];
@@ -27,18 +28,33 @@ interface DispatchOptions {
 
 /**
  * Dispatch webhook to all configured endpoints for the event type
+ * Supports hierarchical webhook scopes:
+ * - PLATFORM webhooks receive ALL events
+ * - ORGANIZATION webhooks receive events for that org and its apps
+ * - APP webhooks receive events for that specific app only
+ *
  * Synchronous delivery - blocks until all webhooks are delivered
  */
 export async function dispatchWebhook(
   options: DispatchOptions
 ): Promise<WebhookDeliveryResult[]> {
-  const { organizationId, eventType, data, metadata } = options;
+  const { organizationId, appId, eventType, data, metadata } = options;
 
+  // Find all applicable webhooks based on scope hierarchy
   const webhooks = await db.webhook.findMany({
     where: {
-      organizationId,
       isActive: true,
       eventTypes: { has: eventType },
+      OR: [
+        // Platform webhooks receive ALL events
+        { scope: "PLATFORM" },
+        // Organization webhooks receive events for their org and its apps
+        ...(organizationId
+          ? [{ scope: "ORGANIZATION" as const, organizationId }]
+          : []),
+        // App webhooks receive only their app's events
+        ...(appId ? [{ scope: "APP" as const, appId }] : []),
+      ],
     },
   });
 
@@ -51,6 +67,7 @@ export async function dispatchWebhook(
     event: eventType,
     timestamp,
     organizationId,
+    appId,
     data,
     metadata,
   };
