@@ -12,6 +12,7 @@ import { verifyAccessTokenMiddleware, type TokenPayload } from "@z0/utils/auth";
 import { requireOrgAccess, requireScope } from "../../../middleware/require-scope";
 import { randomBytes } from "crypto";
 import { checkAppQuota, isPlatformAdmin } from "@z0/utils/quota";
+import appStatsRoutes from "./apps/stats";
 
 const orgApps = new Hono();
 
@@ -550,5 +551,8 @@ orgApps.post(
     }
   }
 );
+
+// Mount app stats routes
+orgApps.route("/:orgId/apps/:appId/stats", appStatsRoutes);
 
 export default orgApps;

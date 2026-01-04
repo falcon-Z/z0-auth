@@ -23,3 +23,6 @@ export type { StatusType, StatusInput } from "./status-badge";
 export { EmptyState } from "./empty-state";
 export { LoadingSkeleton } from "./loading-skeleton";
 export { ErrorBoundary } from "./error-boundary";
+
+export { StatCard } from "./stat-card";
+export type { StatCardProps } from "./stat-card";

@@ -13,6 +13,7 @@ import invitations from "./invitations";
 import metadataSchemas from "./metadata-schemas";
 import appScopes from "./app-scopes";
 import batch from "./batch";
+import orgStats from "./stats";
 
 const orgRoutes = new Hono();
 
@@ -49,5 +50,8 @@ orgRoutes.route("/", appScopes);
 
 // Batch operations
 orgRoutes.route("/", batch);
+
+// Statistics
+orgRoutes.route("/", orgStats);
 
 export default orgRoutes;
