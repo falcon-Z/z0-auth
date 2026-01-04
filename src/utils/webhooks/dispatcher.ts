@@ -212,7 +212,8 @@ export async function sendTestWebhook(
   const testPayload: WebhookPayload = {
     event: "settings.changed" as WebhookEventType,
     timestamp: new Date().toISOString(),
-    organizationId: webhook.organizationId,
+    organizationId: webhook.organizationId || undefined,
+    appId: webhook.appId || undefined,
     data: {
       test: true,
       message: "This is a test webhook event",
