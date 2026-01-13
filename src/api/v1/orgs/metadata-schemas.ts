@@ -18,6 +18,7 @@ import { z } from "zod";
 import { validator } from "hono/validator";
 import { AuditLogger } from "@z0/utils/audit-logger";
 import { requireOrgMembership, requireScope } from "@z0/utils/org-access";
+import { requireOrgAccess } from "@z0/middleware/require-scope";
 
 const metadataSchemas = new Hono();
 
