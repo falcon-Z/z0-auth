@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router";
+import { useEffect, useState } from "react";
 import {
   Building2,
   Users,
@@ -6,6 +7,8 @@ import {
   Zap,
   ArrowRight,
   Mail,
+  Activity,
+  TrendingUp,
 } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
@@ -22,9 +25,56 @@ import {
   TabsList,
   TabsTrigger,
 } from "@z0/components/ui/tabs";
+import { StatCard } from "@z0/app/components/shared";
+import { authFetch } from "@z0/utils/api/client";
+
+interface PlatformStats {
+  overview: {
+    totalOrganizations: number;
+    activeOrganizations: number;
+    totalUsers: number;
+    activeUsers: number;
+    totalApps: number;
+    activeApps: number;
+  };
+  today: {
+    activeSessions: number;
+    newUsers: number;
+    newOrganizations: number;
+  };
+  webhooks: {
+    deliveries24h: number;
+    failed24h: number;
+    successRate: number;
+  };
+  growth: {
+    users: number;
+    organizations: number;
+  };
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await authFetch("/api/v1/platform/stats");
+        const result = await response.json();
+        if (result.success) {
+          setStats(result.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch platform stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   const adminSections = [
     {
@@ -76,49 +126,68 @@ export default function AdminDashboard() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Orgs</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">—</div>
-            <p className="text-xs text-muted-foreground">Total organizations</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Organizations"
+          value={stats?.overview.totalOrganizations ?? 0}
+          icon={<Building2 className="h-4 w-4" />}
+          description={`${stats?.overview.activeOrganizations ?? 0} active`}
+          loading={loading}
+        />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Platform Admins</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">—</div>
-            <p className="text-xs text-muted-foreground">Total administrators</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Total Users"
+          value={stats?.overview.totalUsers ?? 0}
+          icon={<Users className="h-4 w-4" />}
+          description={`${stats?.overview.activeUsers ?? 0} active`}
+          loading={loading}
+        />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">—</div>
-            <p className="text-xs text-muted-foreground">Across all orgs</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Applications"
+          value={stats?.overview.totalApps ?? 0}
+          icon={<Zap className="h-4 w-4" />}
+          description={`${stats?.overview.activeApps ?? 0} active`}
+          loading={loading}
+        />
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Apps</CardTitle>
-            <Zap className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">—</div>
-            <p className="text-xs text-muted-foreground">Registered applications</p>
-          </CardContent>
-        </Card>
+        <StatCard
+          title="Sessions Today"
+          value={stats?.today.activeSessions ?? 0}
+          icon={<Activity className="h-4 w-4" />}
+          description="Active user sessions"
+          loading={loading}
+        />
+      </div>
+
+      {/* Activity Stats */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          title="New Users Today"
+          value={stats?.today.newUsers ?? 0}
+          icon={<TrendingUp className="h-4 w-4" />}
+          description="Registered today"
+          loading={loading}
+        />
+
+        <StatCard
+          title="New Orgs Today"
+          value={stats?.today.newOrganizations ?? 0}
+          icon={<Building2 className="h-4 w-4" />}
+          description="Created today"
+          loading={loading}
+        />
+
+        <StatCard
+          title="Webhook Success Rate"
+          value={
+            stats
+              ? `${Math.round(stats.webhooks.successRate)}%`
+              : "0%"
+          }
+          icon={<Shield className="h-4 w-4" />}
+          description={`${stats?.webhooks.deliveries24h ?? 0} deliveries (24h)`}
+          loading={loading}
+        />
       </div>
 
       {/* Admin Sections */}

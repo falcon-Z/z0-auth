@@ -45,6 +45,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@z0/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@z0/components/ui/select";
 
 const smtpConfigSchema = z.object({
   host: z.string().min(1, "SMTP host is required"),
@@ -57,6 +64,78 @@ const smtpConfigSchema = z.object({
 });
 
 type SMTPConfigFormValues = z.infer<typeof smtpConfigSchema>;
+
+// SMTP Provider presets
+interface SMTPProvider {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  note?: string;
+}
+
+const SMTP_PROVIDERS: SMTPProvider[] = [
+  {
+    id: "gmail",
+    name: "Gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    note: "Use App Password instead of account password",
+  },
+  {
+    id: "sendgrid",
+    name: "SendGrid",
+    host: "smtp.sendgrid.net",
+    port: 587,
+    secure: false,
+    note: "Use API key as password",
+  },
+  {
+    id: "mailgun",
+    name: "Mailgun",
+    host: "smtp.mailgun.org",
+    port: 587,
+    secure: false,
+  },
+  {
+    id: "ses",
+    name: "Amazon SES",
+    host: "email-smtp.us-east-1.amazonaws.com",
+    port: 587,
+    secure: false,
+    note: "Replace region with your AWS region",
+  },
+  {
+    id: "postmark",
+    name: "Postmark",
+    host: "smtp.postmarkapp.com",
+    port: 587,
+    secure: false,
+  },
+  {
+    id: "office365",
+    name: "Microsoft 365",
+    host: "smtp.office365.com",
+    port: 587,
+    secure: false,
+  },
+  {
+    id: "outlook",
+    name: "Outlook",
+    host: "smtp-mail.outlook.com",
+    port: 587,
+    secure: false,
+  },
+  {
+    id: "yahoo",
+    name: "Yahoo",
+    host: "smtp.mail.yahoo.com",
+    port: 587,
+    secure: false,
+  },
+];
 
 interface SMTPConfigResponse {
   configured: boolean;
@@ -83,6 +162,7 @@ export default function SMTPSettings() {
   const [testEmail, setTestEmail] = useState("");
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
 
   const [config, setConfig] = useState<SMTPConfigResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +188,20 @@ export default function SMTPSettings() {
   useEffect(() => {
     fetchConfig();
   }, []);
+
+  const handleProviderChange = (providerId: string) => {
+    setSelectedProvider(providerId);
+    if (providerId === "custom") {
+      return;
+    }
+
+    const provider = SMTP_PROVIDERS.find((p) => p.id === providerId);
+    if (provider) {
+      form.setValue("host", provider.host);
+      form.setValue("port", provider.port);
+      form.setValue("secure", provider.secure);
+    }
+  };
 
   const fetchConfig = async () => {
     setIsLoading(true);
@@ -252,67 +346,67 @@ export default function SMTPSettings() {
           password resets, and notifications.
         </p>
       </div>
-        {/* Status Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Connection Status</span>
-              {config?.configured ? (
-                <Badge className="bg-green-500">Configured</Badge>
-              ) : (
-                <Badge variant="secondary">Not Configured</Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+
+      {/* Status Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Connection Status</span>
             {config?.configured ? (
-              <div className="flex items-center gap-4">
-                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                <div>
-                  <p className="font-medium">SMTP is configured</p>
-                  <p className="text-sm text-muted-foreground">
-                    Server: {config.host}:{config.port}
-                  </p>
-                </div>
-              </div>
+              <Badge className="bg-green-500">Configured</Badge>
             ) : (
-              <div className="flex items-center gap-4">
-                <XCircle className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">SMTP is not configured</p>
-                  <p className="text-sm text-muted-foreground">
-                    Configure your SMTP server to enable email functionality.
-                  </p>
-                </div>
-              </div>
+              <Badge variant="secondary">Not Configured</Badge>
             )}
-          </CardContent>
-        </Card>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {config?.configured ? (
+            <div className="flex items-center gap-4">
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="font-medium">SMTP is configured</p>
+                <p className="text-sm text-muted-foreground">
+                  Server: {config.host}:{config.port}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <XCircle className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">SMTP is not configured</p>
+                <p className="text-sm text-muted-foreground">
+                  Configure your SMTP server to enable email functionality.
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Alerts */}
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <XCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      {/* Alerts */}
+      {error && (
+        <Alert variant="destructive">
+          <XCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {success && (
-          <Alert className="mb-6 bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              {success}
-            </AlertDescription>
-          </Alert>
-        )}
+      {success && (
+        <Alert className="bg-green-50 border-green-200">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            {success}
+          </AlertDescription>
+        </Alert>
+      )}
 
-        {/* Configuration Form */}
-        <Card>
+      {/* Configuration Form */}
+      <Card>
           <CardHeader>
             <CardTitle>SMTP Server Settings</CardTitle>
             <CardDescription>
-              Enter your SMTP server details. Common providers include Gmail,
-              SendGrid, Mailgun, and Amazon SES.
+              Select a provider or configure custom SMTP settings.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -321,6 +415,29 @@ export default function SMTPSettings() {
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-6"
               >
+                {/* Provider Selection */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email Provider</label>
+                  <Select value={selectedProvider} onValueChange={handleProviderChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a provider or configure custom settings" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SMTP_PROVIDERS.map((provider) => (
+                        <SelectItem key={provider.id} value={provider.id}>
+                          {provider.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="custom">Custom SMTP Server</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {selectedProvider && selectedProvider !== "custom" && (
+                    <p className="text-xs text-muted-foreground">
+                      {SMTP_PROVIDERS.find((p) => p.id === selectedProvider)?.note}
+                    </p>
+                  )}
+                </div>
+
                 {/* Server Settings */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
@@ -609,49 +726,6 @@ export default function SMTPSettings() {
                 </div>
               </form>
             </Form>
-          </CardContent>
-        </Card>
-
-        {/* Help Card */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-lg">Common SMTP Providers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              <div className="border rounded-lg p-3">
-                <p className="font-medium">Gmail</p>
-                <p className="text-muted-foreground">smtp.gmail.com:587</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use App Password
-                </p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="font-medium">SendGrid</p>
-                <p className="text-muted-foreground">smtp.sendgrid.net:587</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Use API key as password
-                </p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="font-medium">Mailgun</p>
-                <p className="text-muted-foreground">smtp.mailgun.org:587</p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="font-medium">Amazon SES</p>
-                <p className="text-muted-foreground">
-                  email-smtp.region.amazonaws.com:587
-                </p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="font-medium">Postmark</p>
-                <p className="text-muted-foreground">smtp.postmarkapp.com:587</p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="font-medium">Microsoft 365</p>
-                <p className="text-muted-foreground">smtp.office365.com:587</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
     </div>

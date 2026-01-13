@@ -5,7 +5,7 @@
  */
 
 import { Hono } from "hono";
-import { requireOrgAccess } from "@z0/utils/org-access";
+import { requireOrgAccess } from "@z0/middleware/require-scope";
 import { db } from "@z0/utils/db/client";
 import { ErrorResponseBuilder } from "@z0/utils/error-handling";
 

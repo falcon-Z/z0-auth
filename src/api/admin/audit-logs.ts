@@ -8,16 +8,22 @@ import { AuditLogger } from "@z0/utils/audit-logger";
 import { ErrorResponseBuilder } from "@z0/utils/error-handling";
 import { z } from "zod";
 import type { TokenPayload } from "@z0/utils/auth";
+import { verifyAccessTokenMiddleware } from "@z0/utils/auth";
 
 const auditLogsRoutes = new Hono();
+
+// Apply auth middleware to all audit log routes
+auditLogsRoutes.use("*", verifyAccessTokenMiddleware);
 
 // Query schema
 const querySchema = z.object({
   action: z.string().optional(),
   actorId: z.string().optional(),
+  actorType: z.enum(["user", "platform_manager", "system", "api"]).optional(),
   targetId: z.string().optional(),
   organizationId: z.string().optional(),
   severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+  status: z.enum(["success", "failure", "error"]).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   limit: z.string().optional(),
@@ -63,9 +69,11 @@ auditLogsRoutes.get("/", async (c) => {
     const filters: any = {
       action: parsed.data.action,
       actorId: parsed.data.actorId,
+      actorType: parsed.data.actorType,
       targetId: parsed.data.targetId,
       organizationId: parsed.data.organizationId,
       severity: parsed.data.severity,
+      status: parsed.data.status,
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : undefined,
       endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : undefined,
       limit: parsed.data.limit ? parseInt(parsed.data.limit) : undefined,
