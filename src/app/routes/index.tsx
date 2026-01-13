@@ -34,6 +34,7 @@ import PlatformOrganizationDetail from "../pages/admin/organizations/[id]";
 import PlatformUsers from "../pages/admin/platform/users";
 import SMTPSettings from "../pages/admin/settings/smtp";
 import RequestTracesPage from "../pages/admin/request-traces";
+import AuditLogsPage from "../pages/admin/audit-logs";
 import AcceptInvite from "../pages/accept-invite";
 import FirstTimeSetup from "../pages/first-time-setup";
 
@@ -299,7 +300,7 @@ export const router = createBrowserRouter([
                   },
                   {
                     path: "admin/audit-logs",
-                    element: <div className="p-6"><h1 className="text-2xl font-semibold">Audit Logs</h1><p className="text-muted-foreground mt-2">Coming soon...</p></div>,
+                    element: <AuditLogsPage />,
                   },
                 ],
               },
