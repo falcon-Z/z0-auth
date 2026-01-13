@@ -19,7 +19,7 @@ API.route("/health/", HealthRoutes);
 API.route("/admin/keys/", AdminKeyRoutes);
 API.route("/admin/smtp/", SMTPAdminRoutes);
 API.route("/admin/security/", LockoutAdminRoutes);
-API.route("/admin/audit-logs/", AuditLogsRoutes);
+API.route("/admin/audit-logs", AuditLogsRoutes);
 API.route("/admin/request-traces/", RequestTracesRoutes);
 API.route("/portal/", PortalRoutes);
 
