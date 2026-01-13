@@ -10,6 +10,7 @@ import { timeout } from "hono/timeout";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import API from "./api";
+import { requireSetupComplete } from "./middleware/require-setup";
 
 const app = new Hono();
 
@@ -79,6 +80,10 @@ app.use(requestId());
 app.use(etag());
 
 app.use(prettyJSON());
+
+// Setup protection middleware - blocks access when setup is required
+// Must be applied BEFORE API routes to intercept requests
+app.use("*", requireSetupComplete);
 
 app.route("/api/", API);
 

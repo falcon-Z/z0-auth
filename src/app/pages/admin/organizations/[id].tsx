@@ -1,0 +1,1807 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useParams, useNavigate } from "react-router";
+import { ColumnDef } from "@tanstack/react-table";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  ArrowLeft,
+  Users,
+  AppWindow,
+  Settings,
+  Loader2,
+  AlertCircle,
+  MoreHorizontal,
+  Eye,
+  Trash2,
+  UserPlus,
+  Plus,
+  Calendar,
+  Shield,
+  CheckCircle2,
+  Mail,
+  UserCog,
+  RefreshCw,
+} from "lucide-react";
+
+import { Button } from "@z0/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@z0/components/ui/card";
+import { Alert, AlertDescription } from "@z0/components/ui/alert";
+import { Badge } from "@z0/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@z0/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@z0/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@z0/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@z0/components/ui/select";
+import { Input } from "@z0/components/ui/input";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@z0/components/ui/form";
+import { Separator } from "@z0/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@z0/components/ui/alert-dialog";
+import { DataTable, DataTableColumnHeader } from "@z0/app/components/data-table/data-table";
+import { useAuth } from "@z0/app/contexts/auth-context";
+import { authFetch } from "@z0/utils/api/client";
+
+// Debounce hook for email lookup
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+// Schemas for member management
+// Note: Password is auto-generated server-side for new users
+const addMemberSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  name: z.string().max(100, "Name is too long").optional(),
+  roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]),
+});
+
+const changeRoleSchema = z.object({
+  roleType: z.enum(["ORG_OWNER", "ORG_ADMIN", "ORG_DEVELOPER", "ORG_MEMBER"]),
+});
+
+type AddMemberFormValues = z.infer<typeof addMemberSchema>;
+type ChangeRoleFormValues = z.infer<typeof changeRoleSchema>;
+
+// User lookup result type
+interface UserLookupResult {
+  exists: boolean;
+  data: {
+    id: string;
+    email: string;
+    name: string;
+    avatar?: string;
+    status: string;
+  } | null;
+  isMember: boolean;
+  membershipInactive: boolean;
+}
+
+const ROLE_OPTIONS = [
+  { value: "ORG_OWNER", label: "Owner", description: "Full access to organization" },
+  { value: "ORG_ADMIN", label: "Admin", description: "Manage members and settings" },
+  { value: "ORG_DEVELOPER", label: "Developer", description: "Access to apps and APIs" },
+  { value: "ORG_MEMBER", label: "Member", description: "Basic access only" },
+] as const;
+
+// Settings form schema
+const settingsSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  slug: z.string().min(2, "Slug must be at least 2 characters")
+    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes"),
+  status: z.enum(["ACTIVE", "INACTIVE", "SUSPENDED"]),
+  maxUsers: z.coerce.number().int().positive().optional().nullable(),
+  maxApps: z.coerce.number().int().positive().optional().nullable(),
+});
+
+type SettingsFormValues = z.infer<typeof settingsSchema>;
+
+interface Member {
+  membershipId?: string;
+  invitationId?: string;
+  userId?: string;
+  name: string | null;
+  email: string;
+  avatar?: string | null;
+  roleType: string;
+  memberStatus: "active" | "invited";
+  joinedAt?: string;
+  invitedAt?: string;
+  invitedBy?: { id: string; name: string; email: string };
+  expiresAt?: string;
+}
+
+interface App {
+  id: string;
+  name: string;
+  status: string;
+  createdAt: string;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  isPlatformOrg: boolean;
+  maxUsers?: number;
+  maxApps?: number;
+  createdAt: string;
+  updatedAt: string;
+  memberCount: number;
+  appCount: number;
+  memberships: Member[];
+  apps: App[];
+}
+
+export default function OrganizationDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { isPlatformAdmin, user, setUser } = useAuth();
+  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+
+  // Member management state
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [isChangeRoleOpen, setIsChangeRoleOpen] = useState(false);
+  const [isRemoveMemberOpen, setIsRemoveMemberOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
+
+  // User lookup state for add member
+  const [userLookup, setUserLookup] = useState<UserLookupResult | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [addMemberMode, setAddMemberMode] = useState<"invite" | "manual">("invite");
+
+  // Invitation result for mailto fallback dialog
+  const [invitationResult, setInvitationResult] = useState<{
+    email: string;
+    inviteUrl: string;
+    emailSent: boolean;
+    emailContent?: { subject: string; body: string };
+  } | null>(null);
+
+  // Credentials result for new user creation
+  const [credentialsResult, setCredentialsResult] = useState<{
+    email: string;
+    name: string;
+    tempPassword: string;
+  } | null>(null);
+
+  // Forms
+  const addMemberForm = useForm<AddMemberFormValues>({
+    resolver: zodResolver(addMemberSchema),
+    defaultValues: {
+      email: "",
+      name: "",
+      roleType: "ORG_MEMBER",
+    },
+  });
+
+  const changeRoleForm = useForm<ChangeRoleFormValues>({
+    resolver: zodResolver(changeRoleSchema),
+    defaultValues: {
+      roleType: "ORG_MEMBER",
+    },
+  });
+
+  const settingsForm = useForm<SettingsFormValues>({
+    resolver: zodResolver(settingsSchema),
+    defaultValues: {
+      name: "",
+      slug: "",
+      status: "ACTIVE",
+      maxUsers: null,
+      maxApps: null,
+    },
+  });
+
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      loadOrganization();
+      loadMembers();
+    }
+  }, [id]);
+
+  // Reset settings form when organization loads
+  useEffect(() => {
+    if (organization) {
+      settingsForm.reset({
+        name: organization.name,
+        slug: organization.slug,
+        status: organization.status as SettingsFormValues["status"],
+        maxUsers: organization.maxUsers || null,
+        maxApps: organization.maxApps || null,
+      });
+    }
+  }, [organization]);
+
+  const loadOrganization = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await authFetch(`/api/v1/platform/organizations/${id}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to load organization");
+      }
+
+      const result = await response.json();
+      setOrganization(result.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadMembers = async () => {
+    if (!id) return;
+    try {
+      // Use the org members API which includes pending invitations
+      const response = await authFetch(`/api/v1/orgs/${id}/members?includeInvited=true`);
+
+      if (response.ok) {
+        const result = await response.json();
+        setMembers(result.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load members:", err);
+    }
+  };
+
+  // Lookup user by email
+  const lookupUserByEmail = useCallback(async (email: string) => {
+    if (!organization || !email) {
+      setUserLookup(null);
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setUserLookup(null);
+      return;
+    }
+
+    try {
+      setIsLookingUp(true);
+      const response = await authFetch(
+        `/api/v1/orgs/${organization.id}/members/lookup?email=${encodeURIComponent(email)}`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        setUserLookup(result);
+
+        // If user exists, populate name field and trigger validation
+        if (result.exists && result.data) {
+          addMemberForm.setValue("name", result.data.name, { shouldValidate: true });
+        }
+      }
+    } catch (err) {
+      console.error("User lookup failed:", err);
+    } finally {
+      setIsLookingUp(false);
+    }
+  }, [organization, addMemberForm]);
+
+  // Reset add member dialog state
+  const resetAddMemberDialog = useCallback(() => {
+    addMemberForm.reset();
+    setUserLookup(null);
+    setMemberError(null);
+    setAddMemberMode("invite");
+    setInvitationResult(null);
+    setCredentialsResult(null);
+  }, [addMemberForm]);
+
+  // Debounced email lookup on input
+  const emailValue = addMemberForm.watch("email");
+  const debouncedEmail = useDebounce(emailValue, 500);
+
+  useEffect(() => {
+    if (debouncedEmail && isAddMemberOpen) {
+      lookupUserByEmail(debouncedEmail);
+    } else if (!debouncedEmail) {
+      setUserLookup(null);
+    }
+  }, [debouncedEmail, isAddMemberOpen, lookupUserByEmail]);
+
+  // Compute button disabled state
+  const isAddButtonDisabled = useMemo(() => {
+    if (isSubmitting) return true;
+    if (isLookingUp) return true;
+    if (!userLookup) return true;
+    if (userLookup.isMember) return true;
+    // Manual mode only needs name now (no password)
+    if (!userLookup.exists && addMemberMode === "manual") {
+      const name = addMemberForm.getValues("name");
+      if (!name?.trim()) return true;
+    }
+    return false;
+  }, [isSubmitting, isLookingUp, userLookup, addMemberMode, addMemberForm]);
+
+  // Member management handlers
+  const handleAddMember = async (data: AddMemberFormValues) => {
+    if (!organization) return;
+
+    // Validate: if user doesn't exist and manual mode, require name
+    if (!userLookup?.exists && addMemberMode === "manual") {
+      if (!data.name || data.name.trim() === "") {
+        setMemberError("Name is required for new users");
+        return;
+      }
+    }
+
+    try {
+      setIsSubmitting(true);
+      setMemberError(null);
+
+      let response: Response;
+
+      if (userLookup?.exists) {
+        // User exists - add directly to organization
+        response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            name: userLookup.data?.name || data.name,
+            roleType: data.roleType,
+          }),
+        });
+      } else if (addMemberMode === "invite") {
+        // New user - send invitation
+        response = await authFetch(`/api/v1/orgs/${organization.id}/invitations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            roleType: data.roleType,
+          }),
+        });
+      } else {
+        // Manual mode - create user with auto-generated password
+        response = await authFetch(`/api/v1/orgs/${organization.id}/members`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: data.email,
+            name: data.name,
+            roleType: data.roleType,
+          }),
+        });
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || "Failed to add member");
+      }
+
+      // Handle invitation result (for mailto fallback)
+      if (addMemberMode === "invite" && result.data) {
+        if (!result.data.emailSent && result.data.emailContent) {
+          setInvitationResult({
+            email: data.email,
+            inviteUrl: result.data.inviteUrl,
+            emailSent: false,
+            emailContent: result.data.emailContent,
+          });
+          setIsAddMemberOpen(false);
+          return; // Don't reset yet, show mailto dialog
+        }
+      }
+
+      // Handle manual creation result (show temp password)
+      if (addMemberMode === "manual" && result.data?.credentials) {
+        setCredentialsResult({
+          email: data.email,
+          name: data.name || "",
+          tempPassword: result.data.credentials.tempPassword,
+        });
+        setIsAddMemberOpen(false);
+        await loadOrganization();
+        await loadMembers();
+        return; // Don't reset yet, show credentials dialog
+      }
+
+      // Check if we just added the current user - refresh auth context
+      if (user && data.email.toLowerCase() === user.email.toLowerCase() && organization) {
+        // Add the new org to user's organizations
+        const updatedUser = {
+          ...user,
+          organizations: [
+            ...user.organizations,
+            {
+              id: organization.id,
+              name: organization.name,
+              slug: organization.slug,
+              roleType: data.roleType as "ORG_OWNER" | "ORG_ADMIN" | "ORG_DEVELOPER" | "ORG_MEMBER",
+              isDefault: false,
+            },
+          ],
+        };
+        setUser(updatedUser);
+      }
+
+      setIsAddMemberOpen(false);
+      resetAddMemberDialog();
+      await loadOrganization();
+      await loadMembers();
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChangeRole = async (data: ChangeRoleFormValues) => {
+    if (!organization || !selectedMember) return;
+    try {
+      setIsSubmitting(true);
+      setMemberError(null);
+      const response = await authFetch(
+        `/api/v1/orgs/${organization.id}/members/${selectedMember.userId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to change role");
+      }
+
+      setIsChangeRoleOpen(false);
+      setSelectedMember(null);
+      await loadOrganization();
+      await loadMembers();
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!organization || !selectedMember) return;
+    try {
+      setIsSubmitting(true);
+      setMemberError(null);
+      const response = await authFetch(
+        `/api/v1/orgs/${organization.id}/members/${selectedMember.userId}`,
+        { method: "DELETE" }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to remove member");
+      }
+
+      setIsRemoveMemberOpen(false);
+      setSelectedMember(null);
+      await loadOrganization();
+      await loadMembers();
+    } catch (err) {
+      setMemberError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openChangeRoleDialog = (member: Member) => {
+    setSelectedMember(member);
+    changeRoleForm.reset({ roleType: member.roleType as ChangeRoleFormValues["roleType"] });
+    setMemberError(null);
+    setIsChangeRoleOpen(true);
+  };
+
+  const openRemoveMemberDialog = (member: Member) => {
+    setSelectedMember(member);
+    setMemberError(null);
+    setIsRemoveMemberOpen(true);
+  };
+
+  // Settings handlers
+  const handleSaveSettings = async (data: SettingsFormValues) => {
+    if (!organization) return;
+    try {
+      setIsSavingSettings(true);
+      setSettingsError(null);
+      setSettingsSuccess(null);
+
+      // Update basic info
+      const response = await authFetch(`/api/v1/platform/organizations/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          slug: data.slug,
+          maxUsers: data.maxUsers || undefined,
+          maxApps: data.maxApps || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || result.message || "Failed to update organization");
+      }
+
+      // Update status separately if changed
+      if (data.status !== organization.status) {
+        const statusResponse = await authFetch(`/api/v1/platform/organizations/${id}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: data.status }),
+        });
+
+        if (!statusResponse.ok) {
+          const result = await statusResponse.json();
+          throw new Error(result.error || result.message || "Failed to update status");
+        }
+      }
+
+      setSettingsSuccess("Settings saved successfully");
+      await loadOrganization();
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleDeleteOrganization = async () => {
+    if (!organization) return;
+    try {
+      setIsDeleting(true);
+      setSettingsError(null);
+
+      const response = await authFetch(`/api/v1/platform/organizations/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || result.message || "Failed to delete organization");
+      }
+
+      navigate("/admin/organizations");
+    } catch (err) {
+      setSettingsError(err instanceof Error ? err.message : "An error occurred");
+      setIsDeleting(false);
+    }
+  };
+
+  const apps = organization?.apps || [];
+
+  const memberColumns: ColumnDef<Member>[] = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Name" />
+        ),
+        cell: ({ row }) => {
+          const isInvited = row.original.memberStatus === "invited";
+          const displayName = row.original.name || row.original.email.split("@")[0];
+          return (
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-sm ${
+                isInvited ? "bg-amber-100 text-amber-600" : "bg-primary/10 text-primary"
+              }`}>
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div className="font-medium flex items-center gap-2">
+                  {displayName}
+                  {isInvited && (
+                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                      Invited
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">{row.original.email}</div>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "roleType",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Role" />
+        ),
+        cell: ({ row }) => {
+          const role = row.original.roleType;
+          return (
+            <Badge variant={role === "ORG_OWNER" ? "default" : "secondary"}>
+              {role.replace("ORG_", "")}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "joinedAt",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
+        cell: ({ row }) => {
+          const isInvited = row.original.memberStatus === "invited";
+          if (isInvited) {
+            return (
+              <div className="text-sm text-muted-foreground">
+                <span className="text-amber-600">Pending</span>
+                {row.original.invitedAt && (
+                  <span className="text-xs block">
+                    Invited {new Date(row.original.invitedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div className="text-sm text-muted-foreground">
+              <span className="text-green-600">Active</span>
+              {row.original.joinedAt && (
+                <span className="text-xs block">
+                  Joined {new Date(row.original.joinedAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        cell: ({ row }) => {
+          const member = row.original;
+          const isInvited = member.memberStatus === "invited";
+
+          // For invited members, show different actions
+          if (isInvited) {
+            return (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      // Resend invitation
+                      try {
+                        const response = await authFetch(
+                          `/api/v1/orgs/${organization?.id}/invitations/${member.invitationId}/resend`,
+                          { method: "POST" }
+                        );
+                        const result = await response.json();
+                        if (response.ok) {
+                          // Check if email was sent or if we need mailto fallback
+                          if (!result.data?.emailSent && result.data?.emailContent) {
+                            const { subject, body } = result.data.emailContent;
+                            window.open(
+                              `mailto:${member.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                            );
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Failed to resend invitation:", err);
+                      }
+                    }}
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Resend Invitation
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600"
+                    onClick={async () => {
+                      // Revoke invitation
+                      try {
+                        const response = await authFetch(
+                          `/api/v1/orgs/${organization?.id}/invitations/${member.invitationId}`,
+                          { method: "DELETE" }
+                        );
+                        if (response.ok) {
+                          await loadMembers();
+                        }
+                      } catch (err) {
+                        console.error("Failed to revoke invitation:", err);
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Revoke Invitation
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
+
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => openChangeRoleDialog(member)}>
+                  <Shield className="mr-2 h-4 w-4" />
+                  Change Role
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={() => openRemoveMemberDialog(member)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove Member
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
+      },
+    ],
+    [openChangeRoleDialog, openRemoveMemberDialog, organization?.id, loadMembers]
+  );
+
+  const appColumns: ColumnDef<App>[] = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Name" />
+        ),
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-8 h-8 rounded bg-blue-100 text-blue-600">
+              <AppWindow className="h-4 w-4" />
+            </div>
+            <div className="font-medium">{row.original.name}</div>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Status" />
+        ),
+        cell: ({ row }) => (
+          <Badge variant={row.original.status === "ACTIVE" ? "default" : "secondary"}>
+            {row.original.status}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "createdAt",
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title="Created" />
+        ),
+        cell: ({ row }) => (
+          <div className="text-sm text-muted-foreground">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </div>
+        ),
+      },
+      {
+        id: "actions",
+        cell: () => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuItem>
+                <Eye className="mr-2 h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-red-600">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete App
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      },
+    ],
+    []
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !organization) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" onClick={() => navigate("/admin/organizations")}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Organizations
+        </Button>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error || "Organization not found"}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate("/admin/organizations")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-primary font-bold text-xl">
+              {organization.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">{organization.name}</h1>
+                {organization.isPlatformOrg && (
+                  <Badge variant="outline">Platform Org</Badge>
+                )}
+                <Badge
+                  variant={
+                    organization.status === "ACTIVE"
+                      ? "default"
+                      : organization.status === "SUSPENDED"
+                      ? "destructive"
+                      : "secondary"
+                  }
+                >
+                  {organization.status}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground">
+                <code className="text-sm">{organization.slug}</code>
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setActiveTab("settings")}>
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Members</p>
+                <p className="text-2xl font-bold">{organization.memberCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <AppWindow className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Applications</p>
+                <p className="text-2xl font-bold">{organization.appCount}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Calendar className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Created</p>
+                <p className="text-lg font-medium">
+                  {new Date(organization.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <Settings className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Limits</p>
+                <p className="text-sm font-medium">
+                  {organization.maxUsers || "∞"} users / {organization.maxApps || "∞"} apps
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="members">
+            Members ({organization.memberCount})
+          </TabsTrigger>
+          <TabsTrigger value="apps">
+            Applications ({organization.appCount})
+          </TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Organization Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Name</p>
+                  <p className="font-medium">{organization.name}</p>
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Slug</p>
+                  <code className="px-2 py-1 bg-muted rounded text-sm">{organization.slug}</code>
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <Badge
+                    variant={
+                      organization.status === "ACTIVE"
+                        ? "default"
+                        : organization.status === "SUSPENDED"
+                        ? "destructive"
+                        : "secondary"
+                    }
+                  >
+                    {organization.status}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Recent Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Activity log coming soon...</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="members">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Members</CardTitle>
+                  <CardDescription>
+                    Users who belong to this organization
+                  </CardDescription>
+                </div>
+                <Button onClick={() => {
+                  resetAddMemberDialog();
+                  setIsAddMemberOpen(true);
+                }}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Member
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={memberColumns}
+                data={members}
+                emptyState={
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Users className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">No members found</p>
+                  </div>
+                }
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="apps">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Applications</CardTitle>
+                  <CardDescription>
+                    Apps registered under this organization
+                  </CardDescription>
+                </div>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create App
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={appColumns}
+                data={apps}
+                emptyState={
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <AppWindow className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">No applications found</p>
+                  </div>
+                }
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-6">
+          {settingsError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{settingsError}</AlertDescription>
+            </Alert>
+          )}
+
+          {settingsSuccess && (
+            <Alert>
+              <AlertDescription>{settingsSuccess}</AlertDescription>
+            </Alert>
+          )}
+
+          <Form {...settingsForm}>
+            <form onSubmit={settingsForm.handleSubmit(handleSaveSettings)} className="space-y-6">
+              {/* Basic Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Basic Information</CardTitle>
+                  <CardDescription>
+                    Update the organization's name and slug
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <FormField
+                    control={settingsForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Organization Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Acme Corporation" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={settingsForm.control}
+                    name="slug"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Slug</FormLabel>
+                        <FormControl>
+                          <Input placeholder="acme-corp" {...field} disabled={!isPlatformAdmin} />
+                        </FormControl>
+                        <FormDescription>
+                          URL-friendly identifier. Lowercase letters, numbers, and dashes only.
+                          {!isPlatformAdmin && " (Platform admin only)"}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={settingsForm.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={!isPlatformAdmin}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="ACTIVE">Active</SelectItem>
+                            <SelectItem value="INACTIVE">Inactive</SelectItem>
+                            <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          Suspended organizations cannot access the platform.
+                          {!isPlatformAdmin && " (Platform admin only)"}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Resource Limits - Platform Admin Only */}
+              {isPlatformAdmin && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Resource Limits</CardTitle>
+                  <CardDescription>
+                    Set maximum allowed resources for this organization
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={settingsForm.control}
+                      name="maxUsers"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Max Users</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="Unlimited"
+                              {...field}
+                              value={field.value || ""}
+                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                              disabled={!isPlatformAdmin}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Leave empty for unlimited
+                            {!isPlatformAdmin && " (Platform admin only)"}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={settingsForm.control}
+                      name="maxApps"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Max Applications</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              placeholder="Unlimited"
+                              {...field}
+                              value={field.value || ""}
+                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                              disabled={!isPlatformAdmin}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Leave empty for unlimited
+                            {!isPlatformAdmin && " (Platform admin only)"}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+              )}
+
+              {/* Save Button */}
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSavingSettings}>
+                  {isSavingSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Settings
+                </Button>
+              </div>
+            </form>
+          </Form>
+
+          {/* Danger Zone - Platform Admin Only */}
+          {isPlatformAdmin && (
+          <Card className="border-destructive">
+            <CardHeader>
+              <CardTitle className="text-destructive">Danger Zone</CardTitle>
+              <CardDescription>
+                Irreversible actions that affect this organization
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Deactivate Organization</p>
+                  <p className="text-sm text-muted-foreground">
+                    Deactivate this organization (can be reactivated later)
+                  </p>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={organization.isPlatformOrg}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Deactivate Organization
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will deactivate the organization
+                        <strong> {organization.name}</strong> and all its members will lose access.
+                        You can reactivate it later by changing its status back to Active.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteOrganization}
+                        disabled={isDeleting}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Deactivate Organization
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              {organization.isPlatformOrg && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Platform organizations cannot be deactivated.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Add Member Dialog */}
+      <Dialog open={isAddMemberOpen} onOpenChange={(open) => {
+        setIsAddMemberOpen(open);
+        if (!open) resetAddMemberDialog();
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Member</DialogTitle>
+            <DialogDescription>
+              Add a member to this organization by email.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...addMemberForm}>
+            <form
+              onSubmit={addMemberForm.handleSubmit(handleAddMember, (errors) => {
+                const firstError = Object.values(errors)[0];
+                if (firstError?.message) {
+                  setMemberError(firstError.message as string);
+                }
+              })}
+              className="space-y-4"
+            >
+              {memberError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{memberError}</AlertDescription>
+                </Alert>
+              )}
+
+              {/* Email field with lookup */}
+              <FormField
+                control={addMemberForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          placeholder="user@example.com"
+                          type="email"
+                          {...field}
+                        />
+                        {isLookingUp && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Initial state - before lookup */}
+              {!userLookup && !isLookingUp && emailValue && (
+                <div className="text-sm text-muted-foreground py-2">
+                  Enter a valid email address to check if the user exists
+                </div>
+              )}
+
+              {/* User lookup result */}
+              {userLookup && (
+                <div className="rounded-lg border p-3">
+                  {userLookup.exists && userLookup.data ? (
+                    userLookup.isMember ? (
+                      <div className="flex items-center gap-2 text-amber-600">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-sm">This user is already a member of this organization</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-sm font-medium">User found</span>
+                        </div>
+                        <div className="flex items-center gap-3 pl-6">
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
+                            {userLookup.data.name?.charAt(0).toUpperCase() || "?"}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">{userLookup.data.name}</p>
+                            <p className="text-xs text-muted-foreground">{userLookup.data.email}</p>
+                          </div>
+                        </div>
+                        {userLookup.membershipInactive && (
+                          <p className="text-xs text-muted-foreground pl-6">
+                            Previous membership will be reactivated
+                          </p>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Mail className="h-4 w-4" />
+                        <span className="text-sm">No existing user found with this email</span>
+                      </div>
+                      {/* Mode selection for new user */}
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={addMemberMode === "invite" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setAddMemberMode("invite")}
+                        >
+                          <Mail className="mr-2 h-3 w-3" />
+                          Send Invite
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={addMemberMode === "manual" ? "default" : "outline"}
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => setAddMemberMode("manual")}
+                        >
+                          <UserCog className="mr-2 h-3 w-3" />
+                          Create Manually
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Name field - only show for manual creation of new users */}
+              {userLookup && !userLookup.exists && addMemberMode === "manual" && (
+                <FormField
+                  control={addMemberForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        A temporary password will be auto-generated. User must change it on first login.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Role selection */}
+              <FormField
+                control={addMemberForm.control}
+                name="roleType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            <div className="flex flex-col">
+                              <span>{role.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {role.description}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddMemberOpen(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isAddButtonDisabled}
+                >
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isLookingUp
+                    ? "Checking..."
+                    : !userLookup
+                      ? "Enter Email"
+                      : userLookup.isMember
+                        ? "Already a Member"
+                        : userLookup.exists
+                          ? "Add to Organization"
+                          : addMemberMode === "invite"
+                            ? "Send Invite"
+                            : "Create & Add"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change Role Dialog */}
+      <Dialog open={isChangeRoleOpen} onOpenChange={setIsChangeRoleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change Role</DialogTitle>
+            <DialogDescription>
+              Update the role for {selectedMember?.name || "this member"}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...changeRoleForm}>
+            <form onSubmit={changeRoleForm.handleSubmit(handleChangeRole)} className="space-y-4">
+              {memberError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{memberError}</AlertDescription>
+                </Alert>
+              )}
+
+              <FormField
+                control={changeRoleForm.control}
+                name="roleType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {ROLE_OPTIONS.map((role) => (
+                          <SelectItem key={role.value} value={role.value}>
+                            <div className="flex flex-col">
+                              <span>{role.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {role.description}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsChangeRoleOpen(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Member Dialog */}
+      <Dialog open={isRemoveMemberOpen} onOpenChange={setIsRemoveMemberOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove Member</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove {selectedMember?.name || "this member"} from the organization?
+              This action can be undone by re-adding them later.
+            </DialogDescription>
+          </DialogHeader>
+
+          {memberError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{memberError}</AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsRemoveMemberOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRemoveMember}
+              disabled={isSubmitting}
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Remove Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invitation Created Dialog (mailto fallback) */}
+      <Dialog
+        open={!!invitationResult}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInvitationResult(null);
+            resetAddMemberDialog();
+            loadOrganization();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invitation Created</DialogTitle>
+            <DialogDescription>
+              Email delivery is not configured. You can share the invitation manually.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border p-3 bg-muted/50">
+              <p className="text-sm font-medium mb-2">Share this invite link:</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-background p-2 rounded truncate">
+                  {invitationResult?.inviteUrl}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (invitationResult?.inviteUrl) {
+                      navigator.clipboard.writeText(invitationResult.inviteUrl);
+                    }
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (invitationResult?.emailContent) {
+                    const { subject, body } = invitationResult.emailContent;
+                    window.open(
+                      `mailto:${invitationResult.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+                    );
+                  }
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Open Email Client
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setInvitationResult(null);
+                  resetAddMemberDialog();
+                  loadOrganization();
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Credentials Created Dialog (temp password) */}
+      <Dialog
+        open={!!credentialsResult}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCredentialsResult(null);
+            resetAddMemberDialog();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>User Created</DialogTitle>
+            <DialogDescription>
+              Share these credentials with the new user. They must change their password on first login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This password will only be shown once. Make sure to copy it now.
+              </AlertDescription>
+            </Alert>
+
+            <div className="rounded-lg border p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Email</p>
+                <p className="font-mono">{credentialsResult?.email}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Name</p>
+                <p>{credentialsResult?.name}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Temporary Password</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted p-2 rounded font-mono">
+                    {credentialsResult?.tempPassword}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (credentialsResult?.tempPassword) {
+                        navigator.clipboard.writeText(credentialsResult.tempPassword);
+                      }
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  setCredentialsResult(null);
+                  resetAddMemberDialog();
+                }}
+              >
+                Done
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

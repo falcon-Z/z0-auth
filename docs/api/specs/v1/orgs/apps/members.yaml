@@ -1,0 +1,392 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - App Memberships API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - App Members
+      summary: List app members
+      description: |
+        List all members of an app.
+        Requires organization access.
+      operationId: listAppMembers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of app members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        membershipId:
+                          type: string
+                        userId:
+                          type: string
+                        email:
+                          type: string
+                        name:
+                          type: string
+                        avatar:
+                          type: string
+                          nullable: true
+                        roleType:
+                          type: string
+                          enum: [APP_OWNER, APP_MANAGER, APP_USER]
+                        externalId:
+                          type: string
+                          nullable: true
+                        customScopes:
+                          type: array
+                          items:
+                            type: string
+                        status:
+                          type: string
+                        joinedAt:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    post:
+      tags:
+        - App Members
+      summary: Add member to app
+      description: |
+        Add a user to an app. User must already be a member of the organization.
+        Requires app:users:manage scope.
+      operationId: addAppMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: cuid
+                roleType:
+                  type: string
+                  enum: [APP_OWNER, APP_MANAGER, APP_USER]
+                  default: APP_USER
+                externalId:
+                  type: string
+                  description: App's identifier for this user
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: App-specific user data
+                customScopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Custom scopes assigned by app manager
+            example:
+              userId: clxyz123abc
+              roleType: APP_USER
+              externalId: user_12345
+              customScopes:
+                - read:reports
+                - write:comments
+      responses:
+        '201':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      membershipId:
+                        type: string
+                      userId:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      roleType:
+                        type: string
+                  requestId:
+                    type: string
+        '400':
+          description: Validation error or user not in organization
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+        '409':
+          description: User is already a member of this app
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /{userId}:
+    get:
+      tags:
+        - App Members
+      summary: Get app member details
+      description: |
+        Get detailed information about a specific app member.
+      operationId: getAppMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      membershipId:
+                        type: string
+                      userId:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      avatar:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                      lastLoginAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      roleType:
+                        type: string
+                        enum: [APP_OWNER, APP_MANAGER, APP_USER]
+                      externalId:
+                        type: string
+                        nullable: true
+                      metadata:
+                        type: object
+                      customScopes:
+                        type: array
+                        items:
+                          type: string
+                      isActive:
+                        type: boolean
+                      joinedAt:
+                        type: string
+                        format: date-time
+                      grantedBy:
+                        type: string
+                        nullable: true
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - App Members
+      summary: Update app membership
+      description: |
+        Update a user's app membership (role, scopes, metadata).
+        Requires app:users:manage scope.
+      operationId: updateAppMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleType:
+                  type: string
+                  enum: [APP_OWNER, APP_MANAGER, APP_USER]
+                externalId:
+                  type: string
+                metadata:
+                  type: object
+                  additionalProperties: true
+                customScopes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Membership updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      membershipId:
+                        type: string
+                      userId:
+                        type: string
+                      roleType:
+                        type: string
+                      customScopes:
+                        type: array
+                        items:
+                          type: string
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          description: Cannot demote yourself if you're the only owner
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - App Members
+      summary: Remove member from app
+      description: |
+        Remove a user from an app (deactivates membership).
+        Cannot remove yourself or the last owner.
+        Requires app:users:manage scope.
+      operationId: removeAppMember
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          description: Cannot remove yourself or last owner
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+        '409':
+          description: User is already removed from this app
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'

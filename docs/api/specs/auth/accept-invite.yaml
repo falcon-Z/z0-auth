@@ -1,0 +1,216 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Accept Invitation API
+  version: 1.0.0
+
+paths:
+  /{token}:
+    get:
+      tags:
+        - Invitations
+      summary: Validate invitation token
+      description: |
+        Validate an invitation token and get invitation details.
+        This is a public endpoint - no authentication required.
+        Use this to display invitation details before the user accepts.
+      operationId: validateInvitationToken
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The invitation token from the email link
+      responses:
+        '200':
+          description: Valid invitation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                        format: email
+                      roleType:
+                        type: string
+                        enum: [ORG_OWNER, ORG_ADMIN, ORG_MEMBER]
+                      message:
+                        type: string
+                        nullable: true
+                      organization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          slug:
+                            type: string
+                      invitedBy:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          email:
+                            type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  requestId:
+                    type: string
+        '404':
+          description: Invalid or expired invitation
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Invitation already accepted, declined, or revoked
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '410':
+          description: Invitation expired or revoked
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Invitations
+      summary: Accept invitation
+      description: |
+        Accept an invitation to join an organization.
+        Requires authentication - the user must be logged in.
+        The logged-in user's email must match the invitation email.
+      operationId: acceptInvitation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The invitation token from the email link
+      responses:
+        '200':
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      organization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                          slug:
+                            type: string
+                      roleType:
+                        type: string
+                        enum: [ORG_OWNER, ORG_ADMIN, ORG_MEMBER]
+                  requestId:
+                    type: string
+        '400':
+          description: Organization capacity reached
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          description: Email mismatch - invitation sent to different email
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Invalid invitation or user not found
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Already a member or invitation already processed
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '410':
+          description: Invitation expired or revoked
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /decline/{token}:
+    post:
+      tags:
+        - Invitations
+      summary: Decline invitation
+      description: |
+        Decline an invitation to join an organization.
+        This is a public endpoint - no authentication required.
+        The invitation will be marked as declined and cannot be used.
+      operationId: declineInvitation
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The invitation token from the email link
+      responses:
+        '200':
+          description: Invitation declined
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+        '404':
+          description: Invalid invitation
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Invitation already accepted or declined
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+        '410':
+          description: Invitation revoked
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

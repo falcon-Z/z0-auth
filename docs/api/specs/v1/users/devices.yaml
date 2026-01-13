@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - User Devices API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Users
+      summary: List user devices
+      description: |
+        List all devices that have been used to access the account.
+      operationId: listUserDevices
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        '200':
+          description: List of devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '../../openapi.yaml#/components/schemas/Device'
+                  requestId:
+                    type: string
+              example:
+                success: true
+                data:
+                  - id: clx123abc
+                    userId: clx456def
+                    fingerprint: "abc123..."
+                    deviceType: DESKTOP
+                    deviceName: "Chrome on Windows"
+                    browserName: Chrome
+                    osName: Windows
+                    isTrusted: true
+                    status: ACTIVE
+                    lastLoginAt: "2024-01-15T10:00:00.000Z"
+                    createdAt: "2024-01-01T00:00:00.000Z"
+                requestId: req_abc123
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+
+  /{deviceId}:
+    get:
+      tags:
+        - Users
+      summary: Get device details
+      description: |
+        Get details about a specific device.
+      operationId: getDevice
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '../../openapi.yaml#/components/schemas/Device'
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Users
+      summary: Remove device
+      description: |
+        Remove a device from the account. This will also revoke any sessions from this device.
+      operationId: removeDevice
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: Device removed successfully
+                requestId: req_abc123
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+  /{deviceId}/trust:
+    patch:
+      tags:
+        - Users
+      summary: Mark device as trusted
+      description: |
+        Mark a device as trusted. Trusted devices may bypass some security checks.
+      operationId: trustDevice
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - trusted
+              properties:
+                trusted:
+                  type: boolean
+            example:
+              trusted: true
+      responses:
+        '200':
+          description: Device trust status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '../../openapi.yaml#/components/schemas/Device'
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+  /{deviceId}/block:
+    patch:
+      tags:
+        - Users
+      summary: Block device
+      description: |
+        Block a device from accessing the account. Blocked devices cannot log in.
+      operationId: blockDevice
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '../../openapi.yaml#/components/schemas/Device'
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: Device blocked successfully
+                requestId: req_abc123
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+  /{deviceId}/unblock:
+    patch:
+      tags:
+        - Users
+      summary: Unblock device
+      description: |
+        Unblock a previously blocked device.
+      operationId: unblockDevice
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device unblocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '../../openapi.yaml#/components/schemas/Device'
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: Device unblocked successfully
+                requestId: req_abc123
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'

@@ -1,0 +1,748 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Authentication API
+  version: 1.0.0
+
+paths:
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user
+      description: |
+        Register a new user account within an organization.
+        A verification email will be sent to confirm the email address.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+                - organizationId
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+                name:
+                  type: string
+                  minLength: 2
+                organizationId:
+                  type: string
+                  format: cuid
+                  description: Organization to join
+            example:
+              email: user@example.com
+              password: SecurePassword123!
+              name: John Doe
+              organizationId: clx123abc
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      roleType:
+                        type: string
+                      emailVerified:
+                        type: boolean
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: User registered successfully. Please check your email to verify your account.
+                data:
+                  id: clx789ghi
+                  email: user@example.com
+                  name: John Doe
+                  roleType: ORG_MEMBER
+                  emailVerified: false
+                requestId: req_abc123
+        '400':
+          $ref: './openapi.yaml#/components/responses/ValidationError'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  message: User with this email already exists
+                  code: CONFLICT
+
+  /login:
+    post:
+      tags:
+        - Auth
+      summary: User login
+      description: |
+        Authenticate a user with email and password.
+        Returns JWT tokens as HTTP-only cookies and in the response body.
+        If 2FA is enabled, returns a flag indicating 2FA is required.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                twoFactorToken:
+                  type: string
+                  description: 6-digit TOTP code or backup code
+                orgId:
+                  type: string
+                  description: Optional organization context
+            examples:
+              basicLogin:
+                summary: Basic login
+                value:
+                  email: user@example.com
+                  password: SecurePassword123!
+              with2FA:
+                summary: Login with 2FA
+                value:
+                  email: user@example.com
+                  password: SecurePassword123!
+                  twoFactorToken: "123456"
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              description: HTTP-only cookies containing access and refresh tokens
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          email:
+                            type: string
+                          name:
+                            type: string
+                          avatar:
+                            type: string
+                            nullable: true
+                          platformRole:
+                            type: string
+                            nullable: true
+                          organizations:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  type: string
+                                slug:
+                                  type: string
+                                roleType:
+                                  type: string
+                      redirect:
+                        type: string
+                        description: Recommended redirect path
+                  - type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: false
+                      requiresTwoFactor:
+                        type: boolean
+                        example: true
+                      message:
+                        type: string
+                      tempUserId:
+                        type: string
+              examples:
+                success:
+                  summary: Successful login
+                  value:
+                    success: true
+                    user:
+                      id: clx123abc
+                      email: user@example.com
+                      name: John Doe
+                      avatar: null
+                      platformRole: null
+                      organizations:
+                        - id: clx456def
+                          name: My Org
+                          slug: my-org
+                          roleType: ORG_MEMBER
+                    redirect: /dashboard
+                requires2FA:
+                  summary: 2FA required
+                  value:
+                    success: false
+                    requiresTwoFactor: true
+                    message: Two-factor authentication required
+                    tempUserId: clx123abc
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  message: Invalid email or password
+                  code: INVALID_CREDENTIALS
+        '423':
+          description: Account locked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                      code:
+                        type: string
+                      lockoutUntil:
+                        type: string
+                        format: date-time
+                      remainingMs:
+                        type: integer
+              example:
+                success: false
+                error:
+                  message: Account is locked due to too many failed attempts. Try again in 30 minutes.
+                  code: ACCOUNT_LOCKED
+                  lockoutUntil: "2024-01-15T11:00:00.000Z"
+                  remainingMs: 1800000
+
+  /logout:
+    post:
+      tags:
+        - Auth
+      summary: User logout
+      description: |
+        Logout the current user by clearing authentication cookies.
+      operationId: logoutUser
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: Logged out successfully
+
+  /refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: |
+        Refresh the access token using the refresh token cookie.
+        Returns new access and refresh tokens.
+      operationId: refreshToken
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Tokens refreshed successfully
+          headers:
+            Set-Cookie:
+              description: New HTTP-only cookies containing access and refresh tokens
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  accessToken:
+                    type: string
+                  user:
+                    $ref: './openapi.yaml#/components/schemas/User'
+                  requestId:
+                    type: string
+              example:
+                success: true
+                message: Token refreshed
+                accessToken: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+                requestId: req_abc123
+        '401':
+          description: Invalid or expired refresh token
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  message: Invalid or expired refresh token
+                  code: REFRESH_TOKEN_INVALID
+
+  /me:
+    get:
+      tags:
+        - Auth
+      summary: Get current user session
+      description: |
+        Get information about the currently authenticated user session.
+      operationId: getCurrentSession
+      security:
+        - CookieAuth: []
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current session info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                authenticated: true
+                message: Use middleware for full details
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+              example:
+                authenticated: false
+
+  /verify-email:
+    get:
+      tags:
+        - Auth
+      summary: Verify email address
+      description: |
+        Verify a user's email address using the token sent via email.
+      operationId: verifyEmail
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Verification token from email
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: Email verified successfully
+        '400':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+
+  /resend-verification:
+    post:
+      tags:
+        - Auth
+      summary: Resend verification email
+      description: |
+        Resend the email verification link to the user's email address.
+      operationId: resendVerification
+      security:
+        - CookieAuth: []
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: Verification email sent
+
+  /forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: Request password reset
+      description: |
+        Request a password reset email. Rate limited to prevent abuse.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+            example:
+              email: user@example.com
+      responses:
+        '200':
+          description: Password reset email sent (always returns success for security)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: If an account exists with this email, a password reset link has been sent
+
+  /reset-password:
+    post:
+      tags:
+        - Auth
+      summary: Reset password with token
+      description: |
+        Reset the user's password using the token from the reset email.
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - password
+              properties:
+                token:
+                  type: string
+                  description: Reset token from email
+                password:
+                  type: string
+                  minLength: 8
+                  description: New password
+            example:
+              token: abc123def456
+              password: NewSecurePassword123!
+      responses:
+        '200':
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: Password reset successful. You can now log in with your new password.
+        '400':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+
+  /2fa/setup:
+    post:
+      tags:
+        - Auth
+      summary: Setup two-factor authentication
+      description: |
+        Generate a TOTP secret and QR code for 2FA setup.
+      operationId: setup2FA
+      security:
+        - CookieAuth: []
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 2FA setup data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  secret:
+                    type: string
+                    description: Base32 encoded TOTP secret
+                  qrCodeUrl:
+                    type: string
+                    description: URL for QR code generation
+                  manualEntry:
+                    type: string
+                    description: Secret for manual entry in authenticator app
+              example:
+                success: true
+                secret: JBSWY3DPEHPK3PXP
+                qrCodeUrl: otpauth://totp/Z0Auth:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Z0Auth
+                manualEntry: JBSW Y3DP EHPK 3PXP
+
+  /2fa/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify and enable 2FA
+      description: |
+        Verify the TOTP code and enable 2FA for the account.
+        Returns backup codes on success.
+      operationId: verify2FA
+      security:
+        - CookieAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  pattern: '^\d{6}$'
+                  description: 6-digit TOTP code
+            example:
+              token: "123456"
+      responses:
+        '200':
+          description: 2FA enabled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  backupCodes:
+                    type: array
+                    items:
+                      type: string
+                    description: One-time use backup codes
+              example:
+                success: true
+                message: Two-factor authentication enabled
+                backupCodes:
+                  - "ABCD-1234"
+                  - "EFGH-5678"
+                  - "IJKL-9012"
+        '400':
+          description: Invalid TOTP code
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+
+  /2fa/disable:
+    post:
+      tags:
+        - Auth
+      summary: Disable two-factor authentication
+      description: |
+        Disable 2FA for the account. Requires password confirmation.
+      operationId: disable2FA
+      security:
+        - CookieAuth: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  description: Current password for verification
+            example:
+              password: CurrentPassword123!
+      responses:
+        '200':
+          description: 2FA disabled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+              example:
+                success: true
+                message: Two-factor authentication disabled
+        '401':
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'
+
+  /oauth/{provider}/authorize:
+    get:
+      tags:
+        - Auth
+      summary: Initiate OAuth flow
+      description: |
+        Redirect to the OAuth provider's authorization page.
+      operationId: initiateOAuth
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft, discord, slack]
+        - name: orgId
+          in: query
+          schema:
+            type: string
+          description: Organization context for login
+        - name: returnUrl
+          in: query
+          schema:
+            type: string
+          description: URL to redirect after authentication
+      responses:
+        '302':
+          description: Redirect to OAuth provider
+          headers:
+            Location:
+              schema:
+                type: string
+              description: OAuth provider authorization URL
+
+  /oauth/{provider}/callback:
+    get:
+      tags:
+        - Auth
+      summary: OAuth callback
+      description: |
+        Handle OAuth provider callback and complete authentication.
+      operationId: handleOAuthCallback
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft, discord, slack]
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from provider
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: State parameter for CSRF protection
+      responses:
+        '302':
+          description: Redirect to application with session established
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              description: Authentication cookies
+              schema:
+                type: string
+        '400':
+          description: OAuth error
+          content:
+            application/json:
+              schema:
+                $ref: './openapi.yaml#/components/schemas/ErrorResponse'

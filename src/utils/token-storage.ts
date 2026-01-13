@@ -5,7 +5,7 @@
 
 export interface StoredTokens {
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string; // optional in secure cookie approach
   user: {
     id: string;
     email: string;
@@ -15,9 +15,9 @@ export interface StoredTokens {
   };
 }
 
-const ACCESS_TOKEN_KEY = 'auth_access_token';
-const REFRESH_TOKEN_KEY = 'auth_refresh_token';
-const USER_DATA_KEY = 'auth_user_data';
+const ACCESS_TOKEN_KEY = "auth_access_token";
+const REFRESH_TOKEN_KEY = "auth_refresh_token";
+const USER_DATA_KEY = "auth_user_data";
 
 /**
  * Store authentication tokens and user data in localStorage
@@ -26,11 +26,15 @@ const USER_DATA_KEY = 'auth_user_data';
 export function storeTokens(tokens: StoredTokens): void {
   try {
     localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    if (tokens.refreshToken) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    } else {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+    }
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(tokens.user));
   } catch (error) {
-    console.error('Failed to store authentication tokens:', error);
-    throw new Error('Failed to store authentication tokens');
+    console.error("Failed to store authentication tokens:", error);
+    throw new Error("Failed to store authentication tokens");
   }
 }
 
@@ -41,10 +45,10 @@ export function storeTokens(tokens: StoredTokens): void {
 export function getStoredTokens(): StoredTokens | null {
   try {
     const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || undefined;
     const userDataStr = localStorage.getItem(USER_DATA_KEY);
 
-    if (!accessToken || !refreshToken || !userDataStr) {
+    if (!accessToken || !userDataStr) {
       return null;
     }
 
@@ -55,7 +59,7 @@ export function getStoredTokens(): StoredTokens | null {
       user,
     };
   } catch (error) {
-    console.error('Failed to retrieve stored tokens:', error);
+    console.error("Failed to retrieve stored tokens:", error);
     return null;
   }
 }
@@ -68,7 +72,7 @@ export function getAccessToken(): string | null {
   try {
     return localStorage.getItem(ACCESS_TOKEN_KEY);
   } catch (error) {
-    console.error('Failed to retrieve access token:', error);
+    console.error("Failed to retrieve access token:", error);
     return null;
   }
 }
@@ -81,7 +85,7 @@ export function getRefreshToken(): string | null {
   try {
     return localStorage.getItem(REFRESH_TOKEN_KEY);
   } catch (error) {
-    console.error('Failed to retrieve refresh token:', error);
+    console.error("Failed to retrieve refresh token:", error);
     return null;
   }
 }
@@ -90,7 +94,7 @@ export function getRefreshToken(): string | null {
  * Get stored user data
  * @returns object | null - User data or null if not found
  */
-export function getStoredUser(): StoredTokens['user'] | null {
+export function getStoredUser(): StoredTokens["user"] | null {
   try {
     const userDataStr = localStorage.getItem(USER_DATA_KEY);
     if (!userDataStr) {
@@ -98,7 +102,7 @@ export function getStoredUser(): StoredTokens['user'] | null {
     }
     return JSON.parse(userDataStr);
   } catch (error) {
-    console.error('Failed to retrieve user data:', error);
+    console.error("Failed to retrieve user data:", error);
     return null;
   }
 }
@@ -112,7 +116,7 @@ export function clearStoredTokens(): void {
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_DATA_KEY);
   } catch (error) {
-    console.error('Failed to clear stored tokens:', error);
+    console.error("Failed to clear stored tokens:", error);
   }
 }
 
@@ -133,7 +137,7 @@ export function updateAccessToken(accessToken: string): void {
   try {
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   } catch (error) {
-    console.error('Failed to update access token:', error);
-    throw new Error('Failed to update access token');
+    console.error("Failed to update access token:", error);
+    throw new Error("Failed to update access token");
   }
 }

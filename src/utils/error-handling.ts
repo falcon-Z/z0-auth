@@ -231,6 +231,34 @@ export class ErrorResponseBuilder {
       timestamp: new Date().toISOString(),
     };
   }
+
+  static authorization(message: string, details?: any): ErrorResponse {
+    return {
+      error: message,
+      type: ErrorType.AUTHORIZATION,
+      code: "AUTHORIZATION_FAILED",
+      details,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  static notFound(message: string, code: string = "RESOURCE_NOT_FOUND"): ErrorResponse {
+    return {
+      error: message,
+      type: ErrorType.VALIDATION, // or a new type NOT_FOUND
+      code,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  static conflict(message: string, code: string = "RESOURCE_CONFLICT"): ErrorResponse {
+    return {
+      error: message,
+      type: ErrorType.VALIDATION,
+      code,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
 
 /**

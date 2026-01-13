@@ -1,0 +1,340 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Organization Roles API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Organizations
+      summary: List organization roles
+      description: |
+        List all roles in the organization including system and custom roles.
+        Requires org:roles:read scope.
+      operationId: listOrganizationRoles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: includeSystem
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Include system roles in response
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        description:
+                          type: string
+                          nullable: true
+                        isSystem:
+                          type: boolean
+                        builtInRole:
+                          type: string
+                          nullable: true
+                        level:
+                          type: integer
+                          description: Role hierarchy level
+                        inheritsFromId:
+                          type: string
+                          nullable: true
+                        memberCount:
+                          type: integer
+                        createdAt:
+                          type: string
+                          format: date-time
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Organizations
+      summary: Create custom role
+      description: |
+        Create a new custom role in the organization.
+        Requires org:roles:write scope.
+      operationId: createOrganizationRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+                description:
+                  type: string
+                  maxLength: 200
+                level:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 50
+                inheritsFromId:
+                  type: string
+                  description: ID of role to inherit permissions from
+            example:
+              name: Custom Developer
+              description: Custom role with specific permissions
+              level: 60
+              inheritsFromId: clx123abc
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      description:
+                        type: string
+                      isSystem:
+                        type: boolean
+                      level:
+                        type: integer
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '409':
+          description: Role with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /{roleId}:
+    get:
+      tags:
+        - Organizations
+      summary: Get role details
+      description: |
+        Get details about a specific role including its scopes.
+      operationId: getOrganizationRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      description:
+                        type: string
+                      isSystem:
+                        type: boolean
+                      builtInRole:
+                        type: string
+                      level:
+                        type: integer
+                      inheritsFrom:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: string
+                          name:
+                            type: string
+                      scopes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            scopeId:
+                              type: string
+                            scopeName:
+                              type: string
+                            canRead:
+                              type: boolean
+                            canWrite:
+                              type: boolean
+                            canDelete:
+                              type: boolean
+                            canManage:
+                              type: boolean
+                      memberCount:
+                        type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Organizations
+      summary: Update role
+      description: |
+        Update a custom role. System roles cannot be modified.
+        Requires org:roles:write scope.
+      operationId: updateOrganizationRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 50
+                description:
+                  type: string
+                  maxLength: 200
+                level:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                inheritsFromId:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                  requestId:
+                    type: string
+        '400':
+          description: Cannot modify system role
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Organizations
+      summary: Delete role
+      description: |
+        Delete a custom role. System roles cannot be deleted.
+        Roles with members cannot be deleted.
+        Requires org:roles:delete scope.
+      operationId: deleteOrganizationRole
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../../openapi.yaml#/components/parameters/OrgId'
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Role deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+        '400':
+          description: Cannot delete (system role or has members)
+          content:
+            application/json:
+              schema:
+                $ref: '../../openapi.yaml#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '../../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../../openapi.yaml#/components/responses/NotFound'

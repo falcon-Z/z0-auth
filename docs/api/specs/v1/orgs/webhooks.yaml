@@ -1,0 +1,580 @@
+openapi: 3.0.3
+info:
+  title: Z0 Auth - Organization Webhooks API
+  version: 1.0.0
+
+paths:
+  /:
+    get:
+      tags:
+        - Webhooks
+      summary: List webhooks
+      description: |
+        List all configured webhooks for an organization.
+      operationId: listWebhooks
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookSummary'
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Webhooks
+      summary: Create webhook
+      description: |
+        Create a new webhook for the organization.
+        Returns the webhook secret - save it securely as it won't be shown again.
+        Requires org:settings:write scope.
+      operationId: createWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhook'
+            example:
+              name: Production Events
+              url: https://api.example.com/webhooks
+              eventTypes:
+                - user.created
+                - user.login
+                - member.added
+              timeout: 5000
+              description: Webhook for production user events
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/WebhookSummary'
+                      - type: object
+                        properties:
+                          secret:
+                            type: string
+                            description: Webhook secret for signature verification - only shown once
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '409':
+          description: Webhook with this URL already exists
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+  /events:
+    get:
+      tags:
+        - Webhooks
+      summary: List available event types
+      description: |
+        List all available webhook event types that can be subscribed to.
+      operationId: listWebhookEventTypes
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: List of event types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - user.created
+                      - user.updated
+                      - user.deleted
+                      - user.login
+                      - user.logout
+                      - member.added
+                      - member.removed
+                      - app.created
+                      - session.created
+                      - security.lockout
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+
+  /{webhookId}:
+    get:
+      tags:
+        - Webhooks
+      summary: Get webhook details
+      description: |
+        Get detailed information about a specific webhook.
+      operationId: getWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/WebhookDetail'
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Webhooks
+      summary: Update webhook
+      description: |
+        Update webhook configuration.
+        Requires org:settings:write scope.
+      operationId: updateWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhook'
+      responses:
+        '200':
+          description: Webhook updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/WebhookSummary'
+                  requestId:
+                    type: string
+        '400':
+          $ref: '../openapi.yaml#/components/responses/ValidationError'
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+        '409':
+          description: Webhook with this URL already exists
+          content:
+            application/json:
+              schema:
+                $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Webhooks
+      summary: Delete webhook
+      description: |
+        Delete a webhook and all its event history.
+        Requires org:settings:delete scope.
+      operationId: deleteWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+  /{webhookId}/events:
+    get:
+      tags:
+        - Webhooks
+      summary: List webhook delivery events
+      description: |
+        List the delivery history for a webhook with status and response info.
+      operationId: listWebhookDeliveryEvents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, delivered, failed]
+      responses:
+        '200':
+          description: Webhook delivery events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WebhookDeliveryEvent'
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+                      totalPages:
+                        type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+  /{webhookId}/test:
+    post:
+      tags:
+        - Webhooks
+      summary: Send test webhook
+      description: |
+        Send a test event to the webhook endpoint to verify configuration.
+        Requires org:settings:write scope.
+      operationId: testWebhook
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      delivered:
+                        type: boolean
+                      statusCode:
+                        type: integer
+                      errorMessage:
+                        type: string
+                      durationMs:
+                        type: integer
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+  /{webhookId}/regenerate-secret:
+    post:
+      tags:
+        - Webhooks
+      summary: Regenerate webhook secret
+      description: |
+        Generate a new webhook secret. The old secret will be invalidated.
+        Update your endpoint with the new secret immediately.
+        Requires org:settings:write scope.
+      operationId: regenerateWebhookSecret
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '../openapi.yaml#/components/parameters/OrgId'
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Secret regenerated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      secret:
+                        type: string
+                        description: New webhook secret - save securely
+                  requestId:
+                    type: string
+        '401':
+          $ref: '../openapi.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: '../openapi.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../openapi.yaml#/components/responses/NotFound'
+
+components:
+  schemas:
+    WebhookSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+        isActive:
+          type: boolean
+        eventTypes:
+          type: array
+          items:
+            type: string
+        timeout:
+          type: integer
+          description: Request timeout in milliseconds
+        description:
+          type: string
+          nullable: true
+        eventCount:
+          type: integer
+          description: Total delivery events
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    WebhookDetail:
+      allOf:
+        - $ref: '#/components/schemas/WebhookSummary'
+        - type: object
+          properties:
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+              nullable: true
+              description: Custom headers to include in webhook requests
+            createdBy:
+              type: string
+              nullable: true
+
+    CreateWebhook:
+      type: object
+      required:
+        - name
+        - url
+        - eventTypes
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        url:
+          type: string
+          format: uri
+        eventTypes:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: List of event types to subscribe to
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Custom headers to include in webhook requests
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 30000
+          default: 5000
+          description: Request timeout in milliseconds
+        description:
+          type: string
+          maxLength: 500
+        isActive:
+          type: boolean
+          default: true
+
+    UpdateWebhook:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        url:
+          type: string
+          format: uri
+        eventTypes:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        timeout:
+          type: integer
+          minimum: 1000
+          maximum: 30000
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+        isActive:
+          type: boolean
+
+    WebhookDeliveryEvent:
+      type: object
+      properties:
+        id:
+          type: string
+        eventType:
+          type: string
+        status:
+          type: string
+          enum: [pending, delivered, failed]
+        statusCode:
+          type: integer
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+        durationMs:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time

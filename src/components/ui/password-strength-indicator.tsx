@@ -3,15 +3,15 @@
  * Provides real-time visual feedback for password strength
  */
 
-import React from 'react';
-import { Check, X } from 'lucide-react';
-import { cn } from '@z0/lib/utils';
+import React from "react";
+import { Check, X } from "lucide-react";
+import { cn } from "@z0/lib/utils";
 import {
   type PasswordValidationResult,
   getStrengthColor,
   getStrengthBgColor,
   getProgressWidth,
-} from '@z0/utils/password-validation';
+} from "@z0/utils/password-validation";
 
 interface PasswordStrengthIndicatorProps {
   validation: PasswordValidationResult;
@@ -30,21 +30,26 @@ export function PasswordStrengthIndicator({
   const strengthBgColor = getStrengthBgColor(strength);
 
   return (
-    <div className={cn('space-y-3', className)}>
+    <div className={cn("space-y-3", className)}>
       {/* Strength Bar */}
       <div className="space-y-2">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium text-gray-700">
             Password Strength
           </span>
-          <span className={cn('text-sm font-semibold capitalize', strengthColor)}>
+          <span
+            className={cn("text-sm font-semibold capitalize", strengthColor)}
+          >
             {strength} ({score}/100)
           </span>
         </div>
-        
+
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
-            className={cn('h-2 rounded-full transition-all duration-300', strengthBgColor)}
+            className={cn(
+              "h-2 rounded-full transition-all duration-300",
+              strengthBgColor
+            )}
             style={{ width: `${progressWidth}%` }}
           />
         </div>
@@ -83,33 +88,12 @@ export function PasswordStrengthIndicator({
             </div>
           </div>
 
-          {/* Feedback Messages */}
+          {/* Only show critical feedback, skip hints to prevent layout jumps */}
           {feedback.length > 0 && (
             <div className="space-y-1">
-              <h4 className="text-sm font-medium text-red-600">Improvements needed:</h4>
-              <ul className="text-sm text-red-600 space-y-1">
-                {feedback.map((message, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-red-500 mt-0.5">•</span>
-                    <span>{message}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Helpful Hints */}
-          {hints.length > 0 && (
-            <div className="space-y-1">
-              <h4 className="text-sm font-medium text-blue-600">Tips:</h4>
-              <ul className="text-sm text-blue-600 space-y-1">
-                {hints.map((hint, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-blue-500 mt-0.5">💡</span>
-                    <span>{hint}</span>
-                  </li>
-                ))}
-              </ul>
+              <p className="text-xs text-muted-foreground italic">
+                {feedback[0]}
+              </p>
             </div>
           )}
         </>
@@ -131,10 +115,7 @@ function RequirementItem({ met, text }: RequirementItemProps) {
       ) : (
         <X className="h-4 w-4 text-red-500 flex-shrink-0" />
       )}
-      <span className={cn(
-        'text-sm',
-        met ? 'text-green-700' : 'text-gray-600'
-      )}>
+      <span className={cn("text-sm", met ? "text-green-700" : "text-gray-600")}>
         {text}
       </span>
     </div>

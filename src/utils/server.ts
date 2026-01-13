@@ -3,6 +3,7 @@ import { db } from "./db/client";
 import { ensureSuperAdminExists } from "./setup";
 import { ensureJWTKeypair } from "./auth";
 import { Logger, DatabaseErrorHandler } from "./error-handling";
+import { initializeSetupState } from "./setup-state";
 
 const env = process.env.NODE_ENV || "Development";
 
@@ -57,15 +58,20 @@ export async function postStartupChecks() {
   }
   
   Logger.info(`🚀 Server running at ${server.url}`);
-  
+
   if (dbConnected) {
     try {
+      // Initialize setup state from database
+      await initializeSetupState();
+      Logger.info('Setup state initialized from database');
+
+      // Check if super admin exists and show setup URL if needed
       await ensureSuperAdminExists(server.url.toString());
     } catch (error) {
-      Logger.error('Super admin check failed', { error: error.message });
+      Logger.error('Setup state initialization failed', { error: error.message });
     }
   } else {
-    Logger.warn('Skipping super admin check due to database connection issues');
+    Logger.warn('Skipping setup state initialization due to database connection issues');
   }
 }
 

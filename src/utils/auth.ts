@@ -1,7 +1,9 @@
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { existsSync } from "fs";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import type { PlatformRoleType, OrgRoleType, AppRoleType } from '@prisma/client';
 
 /**
  * Lazy load Hono's JWT utilities to avoid import issues
@@ -38,7 +40,7 @@ const PUBLIC_KEY_PATH = join(KEYS_DIR, "jwt-public.key");
  * @param timeStr - Time string like '15m', '7d', '1h'
  * @returns number - Time in seconds
  */
-function parseTimeToSeconds(timeStr: string): number {
+export function parseTimeToSeconds(timeStr: string): number {
   const unit = timeStr.slice(-1);
   const value = parseInt(timeStr.slice(0, -1));
 
@@ -201,7 +203,7 @@ export async function hashPassword(password: string): Promise<string> {
     const hashedPassword = await Bun.password.hash(password, {
       algorithm: "argon2id",
       memoryCost: 65536, // 64 MB
-      timeCost: 2, 
+      timeCost: 2,
     });
     return hashedPassword;
   } catch (error) {
@@ -228,30 +230,83 @@ export async function verifyPassword(
 }
 
 /**
- * JWT Token payload interface
+ * Organization context in token
+ */
+export interface OrgContext {
+  orgId: string;
+  orgSlug: string;
+  roleType: OrgRoleType;
+}
+
+/**
+ * App context in token
+ */
+export interface AppContext {
+  appId: string;
+  appSlug?: string;
+  roleType: AppRoleType;
+}
+
+/**
+ * JWT Token payload interface (User-Centric Model)
+ *
+ * The user is at the center - their access is determined by memberships.
  */
 export interface TokenPayload {
+  // User identity
   userId: string;
   email: string;
-  roleType: string;
-  scopes: string[];
+  name: string;
+
+  // Platform-level access (if user has platform membership)
+  platformRole?: PlatformRoleType;
+
+  // Current organization context (if user is operating within an org)
+  orgContext?: OrgContext;
+
+  // Current app context (if user is operating within an app)
+  appContext?: AppContext;
+
+  // Computed effective scopes for the current context
+  // This is what middleware uses for permission checks
+  effectiveScopes: string[];
+
+  // User has organizations (for UI navigation)
+  hasOrganizations?: boolean;
+
+  // Token metadata
   iat?: number;
   exp?: number;
+}
+
+/**
+ * User info for auth responses
+ */
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string | null;
+  hasPlatformAccess: boolean;
+  platformRole?: PlatformRoleType;
+  requiresPasswordChange: boolean;
+  organizations: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    roleType: OrgRoleType;
+    isDefault: boolean;
+  }>;
 }
 
 /**
  * Authentication response interface
  */
 export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    roleType: string;
-    scopes: string[];
-  };
+  success: boolean;
+  user: AuthUser;
+  redirect: string;
+  requiresTwoFactor?: boolean;
 }
 
 /**
@@ -342,6 +397,7 @@ export async function verifyRefreshToken(token: string): Promise<TokenPayload> {
 
 /**
  * Hono middleware to verify access tokens
+ * Supports both Authorization header (Bearer token) and httpOnly cookies
  * @param c - Hono context
  * @param next - Next middleware function
  */
@@ -349,13 +405,23 @@ export async function verifyAccessTokenMiddleware(
   c: Context,
   next: () => Promise<void>
 ) {
-  const authHeader = c.req.header("Authorization");
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({ error: "Missing or invalid authorization header" }, 401);
+  // First, try to get token from Authorization header
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7); // Remove 'Bearer ' prefix
   }
 
-  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  // If no Authorization header, try to get token from httpOnly cookie
+  if (!token) {
+    token = getCookie(c, "access_token");
+  }
+
+  // If no token found in either location
+  if (!token) {
+    return c.json({ error: "Missing or invalid authorization" }, 401);
+  }
 
   try {
     const payload = await verifyAccessToken(token);
@@ -368,6 +434,7 @@ export async function verifyAccessTokenMiddleware(
 
 /**
  * Hono middleware to verify refresh tokens
+ * Supports both Authorization header (Bearer token) and httpOnly cookies
  * @param c - Hono context
  * @param next - Next middleware function
  */
@@ -375,13 +442,23 @@ export async function verifyRefreshTokenMiddleware(
   c: Context,
   next: () => Promise<void>
 ) {
-  const authHeader = c.req.header("Authorization");
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({ error: "Missing or invalid authorization header" }, 401);
+  // First, try to get token from Authorization header
+  const authHeader = c.req.header("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7); // Remove 'Bearer ' prefix
   }
 
-  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  // If no Authorization header, try to get token from httpOnly cookie
+  if (!token) {
+    token = getCookie(c, "refresh_token");
+  }
+
+  // If no token found in either location
+  if (!token) {
+    return c.json({ error: "Missing or invalid authorization" }, 401);
+  }
 
   try {
     const payload = await verifyRefreshToken(token);
@@ -390,4 +467,156 @@ export async function verifyRefreshTokenMiddleware(
   } catch (error) {
     return c.json({ error: "Invalid or expired refresh token" }, 401);
   }
+}
+
+// =============================================================================
+// Token Builder Utilities
+// =============================================================================
+
+import { buildEffectiveScopes, type MembershipContext } from './scopes';
+import type {
+  User,
+  PlatformMembership,
+  OrganizationMembership,
+  AppMembership,
+  Organization,
+} from '@prisma/client';
+
+/**
+ * User with memberships loaded
+ */
+export interface UserWithMemberships extends User {
+  platformMembership: PlatformMembership | null;
+  organizationMemberships: (OrganizationMembership & {
+    organization: Organization;
+  })[];
+  appMemberships?: AppMembership[];
+}
+
+/**
+ * Context for building token payload
+ */
+export interface TokenBuildContext {
+  /** Current organization ID (if user is in org context) */
+  orgId?: string;
+  /** Current app ID (if user is in app context) */
+  appId?: string;
+  /** Whether the current app allows user API keys */
+  allowUserApiKeys?: boolean;
+}
+
+/**
+ * Build token payload for a user based on their memberships
+ *
+ * @param user - User with memberships loaded
+ * @param context - Optional context for org/app specific tokens
+ * @returns TokenPayload ready for signing
+ */
+export function buildTokenPayload(
+  user: UserWithMemberships,
+  context: TokenBuildContext = {}
+): Omit<TokenPayload, 'iat' | 'exp'> {
+  // Find current org membership if orgId specified
+  const currentOrgMembership = context.orgId
+    ? user.organizationMemberships.find(m => m.organizationId === context.orgId && m.isActive)
+    : user.organizationMemberships.find(m => m.isDefault && m.isActive) ||
+      user.organizationMemberships.find(m => m.isActive);
+
+  // Find current app membership if appId specified
+  const currentAppMembership = context.appId && user.appMemberships
+    ? user.appMemberships.find(m => m.appId === context.appId && m.isActive)
+    : undefined;
+
+  // Build org context
+  const orgContext: OrgContext | undefined = currentOrgMembership
+    ? {
+        orgId: currentOrgMembership.organizationId,
+        orgSlug: currentOrgMembership.organization.slug,
+        roleType: currentOrgMembership.roleType,
+      }
+    : undefined;
+
+  // Build app context
+  const appContext: AppContext | undefined = currentAppMembership
+    ? {
+        appId: currentAppMembership.appId,
+        roleType: currentAppMembership.roleType,
+      }
+    : undefined;
+
+  // Build effective scopes
+  const membershipContext: MembershipContext = {
+    platformMembership: user.platformMembership,
+    organizationMemberships: user.organizationMemberships,
+    appMemberships: user.appMemberships,
+    currentOrgId: context.orgId || currentOrgMembership?.organizationId,
+    currentAppId: context.appId,
+    allowUserApiKeys: context.allowUserApiKeys,
+  };
+
+  const effectiveScopes = buildEffectiveScopes(membershipContext);
+
+  return {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    platformRole: user.platformMembership?.isActive
+      ? user.platformMembership.roleType
+      : undefined,
+    orgContext,
+    appContext,
+    effectiveScopes,
+    hasOrganizations: user.organizationMemberships.length > 0,
+  };
+}
+
+/**
+ * Build auth user object for response
+ */
+export function buildAuthUser(user: UserWithMemberships): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatar: user.avatar,
+    hasPlatformAccess: user.platformMembership?.isActive ?? false,
+    platformRole: user.platformMembership?.isActive
+      ? user.platformMembership.roleType
+      : undefined,
+    requiresPasswordChange: user.requiresPasswordChange ?? false,
+    organizations: user.organizationMemberships
+      .filter(m => m.isActive)
+      .map(m => ({
+        id: m.organizationId,
+        name: m.organization.name,
+        slug: m.organization.slug,
+        roleType: m.roleType,
+        isDefault: m.isDefault,
+      })),
+  };
+}
+
+/**
+ * Determine redirect URL after login based on user's memberships
+ */
+export function determineLoginRedirect(user: UserWithMemberships): string {
+  // Platform admin with no orgs goes to admin dashboard
+  if (user.platformMembership?.isActive && user.organizationMemberships.length === 0) {
+    return '/admin';
+  }
+
+  // User with orgs goes to their default org or first org
+  const defaultOrg = user.organizationMemberships.find(m => m.isDefault && m.isActive);
+  if (defaultOrg) {
+    return `/org/${defaultOrg.organization.slug}/dashboard`;
+  }
+
+  const firstOrg = user.organizationMemberships.find(m => m.isActive);
+  if (firstOrg) {
+    return `/org/${firstOrg.organization.slug}/dashboard`;
+  }
+
+  // App-only user - try to redirect to an org if they have one
+  // The frontend will handle any additional logic
+  return '/dashboard';
 }
