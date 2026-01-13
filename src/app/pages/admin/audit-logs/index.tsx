@@ -71,19 +71,11 @@ interface AuditLogEntry {
 }
 
 interface Stats {
-  total: number;
-  bySeverity: {
-    LOW: number;
-    MEDIUM: number;
-    HIGH: number;
-    CRITICAL: number;
-  };
-  byStatus: {
-    success: number;
-    failure: number;
-    error: number;
-  };
-  byAction: Record<string, number>;
+  totalLogs: number;
+  criticalEvents: number;
+  byAction: Array<{ action: string; _count: { action: number } }>;
+  bySeverity: Array<{ severity: string; _count: { severity: number } }>;
+  byStatus: Array<{ status: string; _count: { status: number } }>;
 }
 
 function formatDate(dateString: string): string {
@@ -178,7 +170,7 @@ export default function AuditLogsPage() {
       }
 
       const result = await response.json();
-      setLogs(result.data?.logs || []);
+      setLogs(result.logs || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -195,7 +187,7 @@ export default function AuditLogsPage() {
 
       if (response.ok) {
         const result = await response.json();
-        setStats(result.data);
+        setStats(result.statistics);
       }
     } catch (err) {
       console.error("Failed to load stats:", err);
@@ -223,7 +215,7 @@ export default function AuditLogsPage() {
       if (!response.ok) throw new Error("Export failed");
 
       const result = await response.json();
-      const blob = new Blob([JSON.stringify(result.data?.logs || [], null, 2)], {
+      const blob = new Blob([JSON.stringify(result.logs || [], null, 2)], {
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
@@ -287,19 +279,19 @@ export default function AuditLogsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.total.toLocaleString()}</div>
+              <div className="text-2xl font-bold">{stats.totalLogs.toLocaleString()}</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Critical/High Severity
+                Critical Events
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
-                {(stats.bySeverity.CRITICAL + stats.bySeverity.HIGH).toLocaleString()}
+                {stats.criticalEvents.toLocaleString()}
               </div>
             </CardContent>
           </Card>
@@ -311,9 +303,12 @@ export default function AuditLogsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {stats.total > 0
-                  ? `${((stats.byStatus.success / stats.total) * 100).toFixed(1)}%`
-                  : "0%"}
+                {(() => {
+                  const successCount = stats.byStatus.find(s => s.status === 'success')?._count.status || 0;
+                  return stats.totalLogs > 0
+                    ? `${((successCount / stats.totalLogs) * 100).toFixed(1)}%`
+                    : "0%";
+                })()}
               </div>
             </CardContent>
           </Card>
@@ -326,7 +321,11 @@ export default function AuditLogsPage() {
             <CardContent>
               <div className="text-2xl font-bold flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-red-600" />
-                {(stats.byStatus.failure + stats.byStatus.error).toLocaleString()}
+                {(() => {
+                  const failureCount = stats.byStatus.find(s => s.status === 'failure')?._count.status || 0;
+                  const errorCount = stats.byStatus.find(s => s.status === 'error')?._count.status || 0;
+                  return (failureCount + errorCount).toLocaleString();
+                })()}
               </div>
             </CardContent>
           </Card>
