@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+bun.lockb
+
+# Build output
+dist/
+
+# Development
+.git/
+.github/
+.vscode/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+tests/
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.env
+
+# Generated files
+generated/
+
+# Database
+prisma/*.db
+prisma/*.db-journal
+
+# Keys (should be mounted or injected)
+keys/*
+
+# Documentation
+docs/
+README.md
+LICENSE
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Build scripts
+build.ts
+
+# IDE
+*.swp
+*.swo
+*~
+.DS_Store
