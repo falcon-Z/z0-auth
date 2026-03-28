@@ -37,9 +37,6 @@ keys/
 jwt-private.key
 jwt-public.key
 
-# Prisma migration lock (not needed in image)
-prisma/migrations/migration_lock.toml
-
 # Docs & assets not needed at runtime
 docs
 README.md

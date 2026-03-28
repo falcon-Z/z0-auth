@@ -34,10 +34,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 /generated/prisma
-prisma/migrations/migration_lock.toml
-prisma/migrations/20250715004130_initial/migration.sql
-
-prisma/migrations/*
 .vscode/settings.json
 .kiro/*
 

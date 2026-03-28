@@ -53,10 +53,7 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 # Expose the default Bun serve port
 EXPOSE 3000
 
-# Run Prisma schema sync then start the server.
-# NOTE: `prisma db push` (without --accept-data-loss) is safe for initial
-# deployments and additive changes; it will refuse destructive changes.
-# Switch to `bunx prisma migrate deploy` once migration files are committed
-# to source control and tested – migrations are the recommended approach for
-# production databases.
-CMD ["sh", "-c", "bunx prisma db push && bun src/server.ts"]
+# Apply pending migrations then start the server.
+# Migration files are committed to source control (prisma/migrations/).
+# SIGTERM / SIGINT are forwarded by sh and handled by the app for graceful shutdown.
+CMD ["sh", "-c", "bunx prisma migrate deploy && bun src/server.ts"]

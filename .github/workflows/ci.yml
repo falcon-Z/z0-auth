@@ -1,23 +1,27 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Z0 Auth – Continuous Integration
 #
-# Runs on every push to any branch and on pull requests targeting
-# `development` or `master`.
+# Trigger
+# ───────
+# • push to master or development   → type-check + tests + Docker build & push
+# • pull_request → master / development → type-check + tests only (status checks)
 #
 # Jobs
 # ────
 # type-check   TypeScript strict type check (no emit)
 # test         Bun test suite backed by a real PostgreSQL service container
-# docker       Build Docker image; push to ghcr.io when landing on
-#              `development` or `master` (i.e. after a PR is merged)
+# docker       Build and push Docker image to ghcr.io
+#              Runs ONLY on direct push (i.e. after a PR is merged).
 #
-# Required GitHub Secrets
-# ───────────────────────
-# DATABASE_URL  – overrides the service-container URL if you need a different
-#                 value in CI (optional; the workflow provides a default)
-# APP_SECRET    – at least 32-char random string  (openssl rand -hex 32)
-# JWT_SECRET    – at least 32-char random string  (openssl rand -hex 32)
-# SMTP_ENCRYPTION_KEY – at least 32-char random string (can be dummy in CI)
+# Required GitHub Secrets (Settings → Secrets and variables → Actions)
+# ─────────────────────────────────────────────────────────────────────
+# DATABASE_URL        – PostgreSQL URL (optional; CI uses the service container)
+# APP_SECRET          – 64-char hex string (openssl rand -hex 32)
+# JWT_SECRET          – 64-char hex string (openssl rand -hex 32)
+# SMTP_ENCRYPTION_KEY – 64-char hex string (openssl rand -hex 32)
+#
+# If a secret is absent in CI, a fresh random value is generated at runtime
+# so no predictable test key is ever stored in this file.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -25,14 +29,15 @@ name: CI
 on:
   push:
     branches:
-      - "**"
+      - master
+      - development
   pull_request:
     branches:
       - master
       - development
   workflow_dispatch:
 
-# Cancel in-progress runs for the same ref so we don't waste runner minutes.
+# Cancel in-progress runs for the same ref to avoid wasting runner minutes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -91,11 +96,10 @@ jobs:
           - 5432:5432
 
     env:
+      # DATABASE_URL: use the configured secret when present; otherwise point
+      # at the ephemeral service container spun up above.
       DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://z0auth:z0auth@localhost:5432/z0auth' }}
       NODE_ENV: test
-      APP_SECRET: ${{ secrets.APP_SECRET || '63692d6170702d7365637265742d6b65792d666f722d63692d74657374696e67' }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET || '63692d6a77742d7365637265742d6b65792d666f722d63692d74657374696e67' }}
-      SMTP_ENCRYPTION_KEY: ${{ secrets.SMTP_ENCRYPTION_KEY || '63692d736d74702d656e635f6b65792d666f722d63692d74657374696e67006f' }}
       APP_URL: http://localhost:3000
       APP_NAME: "Z0 Auth CI"
 
@@ -111,23 +115,44 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Resolve APP_SECRET / JWT_SECRET / SMTP_ENCRYPTION_KEY.
+      # Priority: configured GitHub secret → freshly generated random value.
+      # No hardcoded fallback values are stored in this file.
+      #
+      # Why the two-step (_VAR → VAR) approach:
+      # Interpolating ${{ secrets.X }} directly inside a `run:` shell script is
+      # safe for simple values but can break if the secret contains shell-special
+      # characters.  Injecting via step-level `env:` passes secrets as OS
+      # environment variables (GitHub Actions masks them in logs automatically),
+      # and the shell then uses ${_VAR:-fallback} safely without any parsing risk.
+      - name: Resolve CI secrets
+        env:
+          _APP_SECRET: ${{ secrets.APP_SECRET }}
+          _JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          _SMTP_ENCRYPTION_KEY: ${{ secrets.SMTP_ENCRYPTION_KEY }}
+        run: |
+          echo "APP_SECRET=${_APP_SECRET:-$(openssl rand -hex 32)}" >> "$GITHUB_ENV"
+          echo "JWT_SECRET=${_JWT_SECRET:-$(openssl rand -hex 32)}" >> "$GITHUB_ENV"
+          echo "SMTP_ENCRYPTION_KEY=${_SMTP_ENCRYPTION_KEY:-$(openssl rand -hex 32)}" >> "$GITHUB_ENV"
+
       - name: Generate Prisma client
         run: bunx prisma generate
 
-      - name: Sync database schema
-        # No migration files are committed to the repo yet.
-        # prisma db push syncs schema.prisma directly to the database.
-        # Switch to `prisma migrate deploy` once migration files are committed.
-        run: bunx prisma db push --accept-data-loss
+      - name: Apply database migrations
+        run: bunx prisma migrate deploy
 
       - name: Run tests
         run: bun test --timeout 30000
 
   # ── 3. Docker build & push ────────────────────────────────────────────────
+  # Runs only on direct push events (master / development), i.e. after a PR
+  # has been reviewed and merged.  Pull request runs only execute jobs 1 & 2
+  # above to provide status checks without building or publishing images.
   docker:
     name: Docker Build & Push
     runs-on: ubuntu-latest
     needs: [type-check, test]
+    if: github.event_name == 'push'
 
     permissions:
       contents: read
@@ -140,11 +165,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Log in to ghcr.io only when we intend to push (not on PRs).
       - name: Log in to GitHub Container Registry
-        if: |
-          github.event_name == 'push' &&
-          (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/development')
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -169,14 +190,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          # Push only when code lands on master or development.
-          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/development') }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # GitHub Actions cache to speed up subsequent builds.
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Build arguments (no secrets injected into the image layer)
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             BUILD_SHA=${{ github.sha }}
+
