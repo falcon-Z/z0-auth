@@ -1,0 +1,57 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Dependencies (reinstalled inside the image)
+node_modules
+
+# Build artefacts
+dist
+out
+build
+coverage
+*.lcov
+*.tsbuildinfo
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+logs
+*.log
+
+# OS / editor artefacts
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+
+# JWT key files (injected at runtime via secrets)
+keys/
+*.key
+*.pub
+jwt-private.key
+jwt-public.key
+
+# Prisma migration lock (not needed in image)
+prisma/migrations/migration_lock.toml
+
+# Docs & assets not needed at runtime
+docs
+README.md
+LICENSE
+
+# Test files
+tests
+**/*.test.ts
+
+# CI/CD
+.github
+
+# Kiro / Claude agent files
+.kiro
+.claude
