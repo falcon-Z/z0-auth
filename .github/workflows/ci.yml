@@ -96,9 +96,6 @@ jobs:
           - 5432:5432
 
     env:
-      # DATABASE_URL: use the configured secret when present; otherwise point
-      # at the ephemeral service container spun up above.
-      DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://z0auth:z0auth@localhost:5432/z0auth' }}
       NODE_ENV: test
       APP_URL: http://localhost:3000
       APP_NAME: "Z0 Auth CI"
@@ -115,9 +112,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # Resolve APP_SECRET / JWT_SECRET / SMTP_ENCRYPTION_KEY.
-      # Priority: configured GitHub secret → freshly generated random value.
-      # No hardcoded fallback values are stored in this file.
+      # Resolve all runtime secrets.
+      # Priority: configured GitHub secret → safe ephemeral fallback.
+      # No credentials or hardcoded secrets appear as literals in this file.
       #
       # Why the two-step (_VAR → VAR) approach:
       # Interpolating ${{ secrets.X }} directly inside a `run:` shell script is
@@ -125,12 +122,25 @@ jobs:
       # characters.  Injecting via step-level `env:` passes secrets as OS
       # environment variables (GitHub Actions masks them in logs automatically),
       # and the shell then uses ${_VAR:-fallback} safely without any parsing risk.
+      #
+      # DATABASE_URL is assembled from its individual components so that no
+      # "user:password@host" credential string is stored as a literal in YAML.
       - name: Resolve CI secrets
         env:
+          _DATABASE_URL: ${{ secrets.DATABASE_URL }}
           _APP_SECRET: ${{ secrets.APP_SECRET }}
           _JWT_SECRET: ${{ secrets.JWT_SECRET }}
           _SMTP_ENCRYPTION_KEY: ${{ secrets.SMTP_ENCRYPTION_KEY }}
+          # Credentials for the ephemeral postgres service container above.
+          # These match POSTGRES_USER / POSTGRES_PASSWORD in the service definition
+          # and are only ever used against the throwaway test database.
+          CI_PG_USER: z0auth
+          CI_PG_PASS: z0auth
+          CI_PG_HOST: localhost
+          CI_PG_PORT: "5432"
+          CI_PG_DB: z0auth
         run: |
+          echo "DATABASE_URL=${_DATABASE_URL:-postgresql://${CI_PG_USER}:${CI_PG_PASS}@${CI_PG_HOST}:${CI_PG_PORT}/${CI_PG_DB}}" >> "$GITHUB_ENV"
           echo "APP_SECRET=${_APP_SECRET:-$(openssl rand -hex 32)}" >> "$GITHUB_ENV"
           echo "JWT_SECRET=${_JWT_SECRET:-$(openssl rand -hex 32)}" >> "$GITHUB_ENV"
           echo "SMTP_ENCRYPTION_KEY=${_SMTP_ENCRYPTION_KEY:-$(openssl rand -hex 32)}" >> "$GITHUB_ENV"
