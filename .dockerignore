@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.gitignore
+.dockerignore
+.env
+.env.*
+.claude
+.vscode
+coverage
+*.log
+Dockerfile*
+keys
+README.md
+LICENSE
+docs
+tests
