@@ -12,6 +12,8 @@ RUN bun install --frozen-lockfile --production
 FROM install AS build
 COPY . .
 ENV NODE_ENV=production
+ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/z0auth?schema=public
+ENV DATABASE_URL=${DATABASE_URL}
 RUN bun run prisma:generate && bun run build
 
 FROM base AS release
