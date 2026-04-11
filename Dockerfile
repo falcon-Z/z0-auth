@@ -36,4 +36,4 @@ COPY --from=build /app/assets ./assets
 RUN mkdir -p /app/keys && chown -R bun:bun /app
 USER bun
 EXPOSE 3000
-CMD ["bun", "run", "start"]
+CMD ["sh", "-c", "bun run prisma:deploy && bun run start"]
