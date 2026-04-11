@@ -12,7 +12,7 @@ RUN bun install --frozen-lockfile --production
 FROM install AS build
 COPY . .
 ENV NODE_ENV=production
-RUN bun run build
+RUN bun run prisma:generate && bun run build
 
 FROM base AS release
 WORKDIR /app
