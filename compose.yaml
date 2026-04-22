@@ -1,0 +1,29 @@
+services:
+  z0-auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: z0-auth:local
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      BIND_HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in your shell or .env}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-30000}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health/live').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped

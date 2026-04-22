@@ -1,55 +1,17 @@
-# Dependencies
-node_modules/
-bun.lockb
-
-# Build output
-dist/
-
-# Development
-.git/
-.github/
-.vscode/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Testing
-coverage/
-.nyc_output/
-tests/
-
-# Environment
+node_modules
+dist
+.git
+.gitignore
+.dockerignore
 .env
-.env.local
-.env.*.local
-*.env
-
-# Generated files
-generated/
-
-# Database
-prisma/*.db
-prisma/*.db-journal
-
-# Keys (should be mounted or injected)
-keys/*
-
-# Documentation
-docs/
+.env.*
+.claude
+.vscode
+coverage
+*.log
+Dockerfile*
+keys
 README.md
 LICENSE
-
-# Docker
-Dockerfile
-.dockerignore
-docker-compose.yml
-
-# Build scripts
-build.ts
-
-# IDE
-*.swp
-*.swo
-*~
-.DS_Store
+docs
+tests

@@ -9,6 +9,7 @@
  * 1. Check if setup is complete (in-memory cached state)
  * 2. If setup required, allow only:
  *    - /api/setup/* endpoints
+ *    - /api/health and /api/health/* endpoints for container and load balancer checks
  *    - /setup page (frontend route)
  *    - Static assets
  * 3. For all other routes:
@@ -38,6 +39,11 @@ const SETUP_ALLOWED_PATHS = [
 function isPathAllowedDuringSetup(path: string): boolean {
   // Allow exact matches for setup endpoints
   if (SETUP_ALLOWED_PATHS.includes(path)) {
+    return true;
+  }
+
+  // Allow health checks before setup for container platforms
+  if (path === "/api/health" || path.startsWith("/api/health/")) {
     return true;
   }
 

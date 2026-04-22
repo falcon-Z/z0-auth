@@ -1,46 +1,39 @@
-# Use official Bun image
-FROM oven/bun:1.2.15-alpine AS base
+FROM oven/bun:1.3.5-alpine AS base
 WORKDIR /app
 
-# Install dependencies stage
-FROM base AS dependencies
-COPY package.json bun.lockb ./
+FROM base AS install
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+FROM base AS install-prod
+COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
-# Build stage
-FROM base AS build
-COPY package.json bun.lockb ./
-RUN bun install --frozen-lockfile
+FROM install AS build
 COPY . .
-RUN bun run prisma:generate
-RUN bun run build
-
-# Production stage
-FROM base AS production
 ENV NODE_ENV=production
+ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/z0auth?schema=public
+ENV DATABASE_URL=${DATABASE_URL}
+RUN bun run prisma:generate && bun run build
 
-# Copy dependencies
-COPY --from=dependencies /app/node_modules ./node_modules
-
-# Copy Prisma client
+FROM base AS release
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV BIND_HOST=0.0.0.0
+COPY --from=install-prod /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/bunfig.toml ./bunfig.toml
+COPY --from=build /app/tsconfig.json ./tsconfig.json
+COPY --from=build /app/build.ts ./build.ts
+COPY --from=build /app/bun-env.d.ts ./bun-env.d.ts
+COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 COPY --from=build /app/generated ./generated
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-
-# Copy source code
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/src ./src
 COPY --from=build /app/prisma ./prisma
-COPY package.json ./
-
-# Create keys directory for JWT keys
-RUN mkdir -p /app/keys
-
-# Expose port
+COPY --from=build /app/src ./src
+COPY --from=build /app/styles ./styles
+COPY --from=build /app/assets ./assets
+RUN mkdir -p /app/keys && chown -R bun:bun /app
+USER bun
 EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD bun run -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1))"
-
-# Start the application
-CMD ["bun", "run", "start"]
+CMD ["sh", "-c", "bun run prisma:deploy && bun run start"]
