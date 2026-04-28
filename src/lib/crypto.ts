@@ -3,12 +3,8 @@
  * 
  * Argon2id for password/API key hashing (Phase 0 decision)
  * HMAC-SHA256 for signing and verification
- * Uses Bun's built-in crypto module
+ * Uses Bun's built-in crypto module (available globally)
  */
-
-import { BunCrypto } from 'bun';
-
-const crypto = new BunCrypto();
 
 // Argon2id parameters (Phase 0: Argon2id selected)
 const ARGON2_OPTIONS = {

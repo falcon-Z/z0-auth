@@ -46,6 +46,62 @@ export async function pingDatabase(db: DatabaseClient): Promise<void> {
   await db.unsafe('SELECT 1 AS connection_ok');
 }
 
+export interface DatabaseReadinessStatus {
+  connected: boolean;
+  migrations: {
+    applied: number;
+    total: number;
+    pending: number;
+  };
+}
+
+/**
+ * Check database readiness without making changes
+ * Used by readiness endpoint to report current DB state
+ */
+export async function checkDatabaseReadiness(
+  dependencies: DatabaseStartupDependencies = {}
+): Promise<DatabaseReadinessStatus> {
+  const resolveUrl = dependencies.resolveDatabaseUrl ?? resolveDatabaseUrl;
+  const clientFactory = dependencies.createClient ?? createDatabaseClient;
+  const load = dependencies.loadMigrations ?? loadMigrations;
+  const ensureTable = dependencies.ensureMigrationsTable ?? ensureMigrationsTable;
+  const getApplied = dependencies.getAppliedMigrations ?? getAppliedMigrations;
+  const migrationsDir = dependencies.migrationsDir ?? DEFAULT_MIGRATIONS_DIR;
+
+  const databaseUrl = resolveUrl();
+  const db = clientFactory(databaseUrl);
+
+  try {
+    await pingDatabase(db);
+    const migrations = await load(migrationsDir);
+    await ensureTable(db);
+    const applied = await getApplied(db);
+
+    const pending = migrations.length - applied.length;
+
+    return {
+      connected: true,
+      migrations: {
+        applied: applied.length,
+        total: migrations.length,
+        pending,
+      },
+    };
+  } catch (_error) {
+    return {
+      connected: false,
+      migrations: {
+        applied: 0,
+        total: 0,
+        pending: 0,
+      },
+    };
+  } finally {
+    await db.close();
+  }
+}
+
 export async function ensureDatabaseReady(
   dependencies: DatabaseStartupDependencies = {}
 ): Promise<DatabaseStartupResult> {

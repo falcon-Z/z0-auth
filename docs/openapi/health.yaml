@@ -1,0 +1,142 @@
+openapi: 3.1.0
+info:
+  title: Z0 Auth Health API
+  version: 0.1.0
+  description: Health probe endpoints for liveness and readiness checks.
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+paths:
+  /health:
+    get:
+      summary: Legacy liveness endpoint
+      description: Backward-compatible alias of /health/live.
+      operationId: getHealthLegacy
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Server process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LivenessResponse"
+  /health/live:
+    get:
+      summary: Liveness probe
+      description: Returns process liveness without checking dependencies.
+      operationId: getHealthLive
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Server process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LivenessResponse"
+  /health/ready:
+    get:
+      summary: Readiness probe
+      description: Returns readiness based on database connectivity and pending migration state.
+      operationId: getHealthReady
+      tags:
+        - Health
+      responses:
+        "200":
+          description: Service is ready for traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              examples:
+                ready:
+                  value:
+                    status: ready
+                    database:
+                      connected: true
+                      migrations:
+                        applied: 11
+                        total: 11
+                        pending: 0
+                    timestamp: 2026-04-28T16:00:00.000Z
+        "503":
+          description: Service is not ready for traffic.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              examples:
+                not_ready:
+                  value:
+                    status: not_ready
+                    database:
+                      connected: false
+                      migrations:
+                        applied: 10
+                        total: 11
+                        pending: 1
+                    timestamp: 2026-04-28T16:00:00.000Z
+components:
+  schemas:
+    LivenessResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - timestamp
+        - uptime
+      properties:
+        status:
+          type: string
+          const: ok
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: number
+          minimum: 0
+    MigrationStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - applied
+        - total
+        - pending
+      properties:
+        applied:
+          type: integer
+          minimum: 0
+        total:
+          type: integer
+          minimum: 0
+        pending:
+          type: integer
+          minimum: 0
+    DatabaseReadiness:
+      type: object
+      additionalProperties: false
+      required:
+        - connected
+        - migrations
+      properties:
+        connected:
+          type: boolean
+        migrations:
+          $ref: "#/components/schemas/MigrationStatus"
+    ReadinessResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - database
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+            - not_ready
+        database:
+          $ref: "#/components/schemas/DatabaseReadiness"
+        timestamp:
+          type: string
+          format: date-time

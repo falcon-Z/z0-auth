@@ -40,10 +40,23 @@ Examples:
 
 ## 5) OpenAPI Is Mandatory
 
-- Every API endpoint must have an OpenAPI specification in `docs/`.
+- Every API endpoint must have an OpenAPI specification in `docs/openapi/` as YAML (`*.yaml`).
+- OpenAPI specs must use the latest stable OpenAPI standard (currently OpenAPI 3.1.x).
+- Specs must be compatible with tooling import workflows (for example Postman OpenAPI import).
+- Keep a consolidated root spec (for example `docs/openapi/openapi.yaml`) that references or includes all implemented endpoints.
 - Any API change, even small, must include corresponding OpenAPI updates in the same change.
 - OpenAPI specs must stay in sync with implemented behavior, schemas, status codes, and errors.
 - Follow proper REST API design guidelines in endpoint and schema definitions.
+
+### Human-Readable API Docs
+
+- Markdown files under `docs/openapi/` are human-readable usage guides only.
+- Each API Markdown guide must include:
+	- a short "when to use" section,
+	- authentication/context requirements,
+	- request/response examples,
+	- copy-pastable `curl` examples for common and failure flows.
+- Do not treat Markdown usage docs as the machine-consumable API contract; YAML OpenAPI is the source of truth.
 
 ## 6) Documentation Placement
 
@@ -59,4 +72,6 @@ Before considering a task complete, confirm:
 - Frontend/backend boundaries respected (`src/app` vs `src/api`).
 - Abstractions in correct folders (`src/lib`, `database`, etc.).
 - OpenAPI updated in `docs/` for every API change.
+- OpenAPI YAML updated in `docs/openapi/*.yaml` for every API change.
+- Human-readable API docs updated with usage notes and `curl` examples.
 - Documentation and implementation are synchronized.

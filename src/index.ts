@@ -11,6 +11,8 @@
 
 import { logger, generateRequestId, CORS_POLICIES, generateCORSHeaders } from './lib';
 import { ensureServerStartupReadiness } from './server-startup';
+import { handleLivenessCheck, handleReadinessCheck } from './api/health';
+import { handleBootstrapStatus, handleBootstrapInitialize } from './api/bootstrap';
 import type { RequestContext } from './lib';
 
 // ============================================================================
@@ -96,27 +98,7 @@ async function bootstrapMiddleware(req: Request, _ctx: RequestContext, next: Mid
   return next();
 }
 
-// ============================================================================
-// Health Check Endpoint
-// ============================================================================
-
-/**
- * Health check for load balancers and monitoring
- */
-async function healthHandler(req: Request): Promise<Response> {
-  if (req.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  return Response.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    version: '0.1.0',
-  });
-}
+// Health Check Endpoints are now in src/api/health.ts
 
 // ============================================================================
 // OpenAPI Discovery Endpoint
@@ -133,15 +115,272 @@ async function openApiHandler(req: Request): Promise<Response> {
     });
   }
 
-  // TODO: Load from docs/openapi.json in Phase 8
   return Response.json({
-    openapi: '3.0.0',
+    openapi: '3.1.0',
+    jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     info: {
       title: 'Z0 Auth API',
-      version: '0.1.0-alpha',
+      version: '0.1.0',
       description: 'Self-hostable authentication and IAM service',
     },
-    paths: {},
+    servers: [
+      {
+        url: 'http://localhost:3000',
+        description: 'Local development',
+      },
+    ],
+    tags: [
+      { name: 'Health', description: 'Service liveness and readiness endpoints' },
+      { name: 'Bootstrap', description: 'One-time initialization endpoints' },
+    ],
+    paths: {
+      '/health': {
+        get: {
+          tags: ['Health'],
+          summary: 'Legacy liveness endpoint',
+          operationId: 'getHealthLegacy',
+          responses: {
+            '200': {
+              description: 'Server process is alive.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/LivenessResponse' },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/health/live': {
+        get: {
+          tags: ['Health'],
+          summary: 'Liveness probe',
+          operationId: 'getHealthLive',
+          responses: {
+            '200': {
+              description: 'Server process is alive.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/LivenessResponse' },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/health/ready': {
+        get: {
+          tags: ['Health'],
+          summary: 'Readiness probe',
+          operationId: 'getHealthReady',
+          responses: {
+            '200': {
+              description: 'Service is ready for traffic.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ReadinessResponse' },
+                },
+              },
+            },
+            '503': {
+              description: 'Service is not ready for traffic.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ReadinessResponse' },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/v1/bootstrap/status': {
+        get: {
+          tags: ['Bootstrap'],
+          summary: 'Get bootstrap status',
+          operationId: 'getBootstrapStatus',
+          responses: {
+            '200': {
+              description: 'Bootstrap status returned.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/BootstrapStatusResponse' },
+                },
+              },
+            },
+            '500': {
+              description: 'Failed to query bootstrap status.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ErrorResponse' },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/api/v1/bootstrap/initialize': {
+        post: {
+          tags: ['Bootstrap'],
+          summary: 'Initialize platform bootstrap',
+          operationId: 'postBootstrapInitialize',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/BootstrapInitializeRequest' },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Platform initialized successfully.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/BootstrapInitializeResponse' },
+                },
+              },
+            },
+            '400': {
+              description: 'Invalid request body or validation error.',
+              content: {
+                'application/json': {
+                  schema: {
+                    oneOf: [
+                      { $ref: '#/components/schemas/ErrorResponse' },
+                      { $ref: '#/components/schemas/ValidationErrorResponse' },
+                    ],
+                  },
+                },
+              },
+            },
+            '405': {
+              description: 'Method not allowed.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ErrorResponse' },
+                },
+              },
+            },
+            '409': {
+              description: 'Platform already initialized.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ErrorResponse' },
+                },
+              },
+            },
+            '500': {
+              description: 'Internal bootstrap failure.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ErrorResponse' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    components: {
+      schemas: {
+        LivenessResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['status', 'timestamp', 'uptime'],
+          properties: {
+            status: { type: 'string', const: 'ok' },
+            timestamp: { type: 'string', format: 'date-time' },
+            uptime: { type: 'number', minimum: 0 },
+          },
+        },
+        MigrationStatus: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['applied', 'total', 'pending'],
+          properties: {
+            applied: { type: 'integer', minimum: 0 },
+            total: { type: 'integer', minimum: 0 },
+            pending: { type: 'integer', minimum: 0 },
+          },
+        },
+        DatabaseReadiness: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['connected', 'migrations'],
+          properties: {
+            connected: { type: 'boolean' },
+            migrations: { $ref: '#/components/schemas/MigrationStatus' },
+          },
+        },
+        ReadinessResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['status', 'database', 'timestamp'],
+          properties: {
+            status: { type: 'string', enum: ['ready', 'not_ready'] },
+            database: { $ref: '#/components/schemas/DatabaseReadiness' },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        BootstrapStatusResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['bootstrapped', 'requires_setup', 'timestamp'],
+          properties: {
+            bootstrapped: { type: 'boolean' },
+            requires_setup: { type: 'boolean' },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        BootstrapInitializeRequest: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['platform_name', 'admin_email', 'admin_password', 'confirm_password'],
+          properties: {
+            platform_name: { type: 'string', minLength: 3, maxLength: 255 },
+            admin_email: { type: 'string', format: 'email' },
+            admin_password: {
+              type: 'string',
+              minLength: 12,
+              pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{12,}$',
+            },
+            confirm_password: { type: 'string', minLength: 12 },
+          },
+        },
+        BootstrapInitializeResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['platform_id', 'bootstrap_token', 'admin_email', 'setup_complete', 'timestamp'],
+          properties: {
+            platform_id: { type: 'string', format: 'uuid' },
+            bootstrap_token: { type: 'string' },
+            admin_email: { type: 'string', format: 'email' },
+            setup_complete: { type: 'boolean', const: true },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ErrorResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['error'],
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+        ValidationErrorResponse: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['error', 'details'],
+          properties: {
+            error: { type: 'string', const: 'Validation failed' },
+            details: {
+              type: 'object',
+              additionalProperties: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
   });
 }
 
@@ -200,13 +439,23 @@ interface Route {
 }
 
 const routes: Route[] = [
-  // Health check
-  { pattern: '/health', method: 'GET', handler: healthHandler },
+  // Health checks (split liveness and readiness)
+  { pattern: '/health/live', method: 'GET', handler: handleLivenessCheck },
+  { pattern: '/health/ready', method: 'GET', handler: handleReadinessCheck },
+  
+  // Legacy health endpoint (redirect to liveness for backward compat)
+  { pattern: '/health', method: 'GET', handler: handleLivenessCheck },
+  
+  // OpenAPI discovery
   { pattern: '/.well-known/openapi.json', method: 'GET', handler: openApiHandler },
   
-  // Bootstrap
+  // Bootstrap API endpoints
+  { pattern: '/api/v1/bootstrap/status', method: 'GET', handler: handleBootstrapStatus },
+  { pattern: '/api/v1/bootstrap/initialize', method: 'POST', handler: handleBootstrapInitialize },
+  
+  // Bootstrap UI (wizard)
   { pattern: '/', method: 'GET', handler: bootstrapHandler },
-  { pattern: /^\/bootstrap/, method: 'GET', handler: bootstrapHandler },
+  { pattern: /^\/bootstrap\/?$/, method: 'GET', handler: bootstrapHandler },
 ];
 
 /**
