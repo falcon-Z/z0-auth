@@ -1,109 +1,41 @@
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { logger } from "hono/logger";
-import { prettyJSON } from "hono/pretty-json";
-import { secureHeaders } from "hono/secure-headers";
-import { timing } from "hono/timing";
-import { etag } from "hono/etag";
-import { requestId } from "hono/request-id";
-import { timeout } from "hono/timeout";
-import { bodyLimit } from "hono/body-limit";
-import { HTTPException } from "hono/http-exception";
-import API from "./api";
-import { requireSetupComplete } from "./middleware/require-setup";
+import { serve } from "bun";
+import index from "./index.html";
 
-const app = new Hono();
+const server = serve({
+  routes: {
+    // Serve index.html for all unmatched routes.
+    "/*": index,
 
-const isDevelopment = process.env.NODE_ENV !== "production";
-const isProduction = process.env.NODE_ENV === "production";
-
-app.use(
-  cors({
-    origin: (origin) => {
-      if (isDevelopment) {
-        return origin;
-      }
-
-      const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [
-        "https://localhost:3000",
-      ];
-      return allowedOrigins.includes(origin) ? origin : null;
+    "/api/hello": {
+      async GET(req) {
+        return Response.json({
+          message: "Hello, world!",
+          method: "GET",
+        });
+      },
+      async PUT(req) {
+        return Response.json({
+          message: "Hello, world!",
+          method: "PUT",
+        });
+      },
     },
-    credentials: true,
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "X-Request-ID",
-    ],
-  })
-);
 
-app.use(
-  secureHeaders({
-    contentSecurityPolicy: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        isDevelopment ? "'unsafe-eval'" : "",
-      ],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", isDevelopment ? "ws://localhost:*" : ""],
-      fontSrc: ["'self'", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+    "/api/hello/:name": async req => {
+      const name = req.params.name;
+      return Response.json({
+        message: `Hello, ${name}!`,
+      });
     },
-    crossOriginEmbedderPolicy: false, // Disable for development compatibility
-    strictTransportSecurity: isProduction
-      ? "max-age=31536000; includeSubDomains"
-      : false,
-  })
-);
+  },
 
-app.use(
-  bodyLimit({
-    maxSize: 50 * 1024 * 1024,
-    onError: (c) => {
-      return c.json({ error: "Request body too large", maxSize: "50MB" }, 413);
-    },
-  })
-);
+  development: process.env.NODE_ENV !== "production" && {
+    // Enable browser hot reloading in development
+    hmr: true,
 
-app.use(logger());
-app.use(timing());
-app.use(requestId());
+    // Echo console logs from the browser to the server
+    console: true,
+  },
+});
 
-app.use(etag());
-
-app.use(prettyJSON());
-
-// Setup protection middleware - blocks access when setup is required
-// Must be applied BEFORE API routes to intercept requests
-app.use("*", requireSetupComplete);
-
-app.route("/api/", API);
-
-app.notFound((c) =>
-  c.json(
-    {
-      error: "Bad Request",
-      message:
-        "The requested endpoint does not exist or the request could not be understood by the server. Please check your URL and request method.",
-    },
-    400
-  )
-);
-
-app.use(
-  timeout(parseInt(process.env.REQUEST_TIMEOUT || "30000"), (c) => {
-    throw new HTTPException(504, {
-      res: c.json({ error: "Request timeout", timeout: "30s" }, 504),
-    });
-  })
-);
-
-export default app;
+console.log(`🚀 Server running at ${server.url}`);
