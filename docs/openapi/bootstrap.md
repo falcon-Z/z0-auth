@@ -4,6 +4,18 @@ Machine-readable contract: see bootstrap.yaml and openapi.yaml in this folder.
 
 This page explains how to perform first-time setup and verify bootstrap state.
 
+## When to Use
+
+- Use GET /api/v1/bootstrap/status before showing setup UI to determine whether initialization is required.
+- Use POST /api/v1/bootstrap/initialize exactly once during first-time deployment setup.
+- Use status again after initialization to confirm the deployment transitioned to bootstrapped state.
+
+## Authentication and Context Requirements
+
+- No bearer token is required for these endpoints.
+- These routes are intended only for a freshly deployed, not-yet-configured environment.
+- POST /api/v1/bootstrap/initialize is a one-time control-plane operation and should be restricted by network and deployment controls.
+
 ## Bootstrap Workflow
 
 1. Check bootstrap status.
@@ -85,6 +97,14 @@ Success response (201):
 ```
 
 ### Common Failure Flows
+
+Method not allowed (405 with Allow header):
+
+```bash
+curl -i -X POST http://localhost:3000/api/v1/bootstrap/status
+```
+
+Expected response includes `Allow: GET`.
 
 Validation error (400):
 

@@ -19,6 +19,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LivenessResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /health/live:
     get:
       summary: Liveness probe
@@ -33,6 +45,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LivenessResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /health/ready:
     get:
       summary: Readiness probe
@@ -75,6 +99,18 @@ paths:
                         total: 11
                         pending: 1
                     timestamp: 2026-04-28T16:00:00.000Z
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     LivenessResponse:
@@ -140,3 +176,11 @@ components:
         timestamp:
           type: string
           format: date-time
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: string

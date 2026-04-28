@@ -12,6 +12,7 @@ interface SetupFormData {
 
 function SetupWizard() {
   const [step, setStep] = useState<SetupStep>('check');
+  const isConsoleRoute = window.location.pathname === '/console' || window.location.pathname === '/console/';
   const [formData, setFormData] = useState<SetupFormData>({
     platformName: '',
     adminEmail: '',
@@ -24,19 +25,58 @@ function SetupWizard() {
   useEffect(() => {
     const checkBootstrapState = async () => {
       try {
-        const response = await fetch('/health');
-        if (response.ok) {
-          // Already bootstrapped, redirect to console
-          window.location.href = '/console';
+        const response = await fetch('/api/v1/bootstrap/status');
+        if (!response.ok) {
+          setStep('form');
+          return;
+        }
+
+        const data = await response.json() as { requires_setup?: boolean };
+        if (data.requires_setup === false) {
+          if (isConsoleRoute) {
+            setStep('success');
+          } else {
+            // Already bootstrapped, redirect to console
+            window.location.href = '/console';
+          }
+        } else {
+          if (isConsoleRoute) {
+            window.location.href = '/';
+          } else {
+            setStep('form');
+          }
         }
       } catch {
         // Not yet bootstrapped, show setup form
-        setStep('form');
+        if (isConsoleRoute) {
+          window.location.href = '/';
+        } else {
+          setStep('form');
+        }
       }
     };
 
     checkBootstrapState();
   }, []);
+
+  if (isConsoleRoute && step === 'success') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-lg bg-slate-800 rounded-lg shadow-2xl p-8 border border-slate-700 text-slate-100">
+          <h1 className="text-2xl font-bold mb-3">Console Stub</h1>
+          <p className="text-slate-300 mb-6">
+            Bootstrap is complete. Full operator console UI will be added in a later phase.
+          </p>
+          <a
+            href="/.well-known/openapi.json"
+            className="inline-flex items-center rounded-md bg-slate-100 px-4 py-2 text-slate-900 font-medium hover:bg-white transition-colors"
+          >
+            View OpenAPI JSON
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -92,13 +132,14 @@ function SetupWizard() {
     setStep('loading');
 
     try {
-      const response = await fetch('/bootstrap', {
+      const response = await fetch('/api/v1/bootstrap/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           platform_name: formData.platformName,
           admin_email: formData.adminEmail,
           admin_password: formData.adminPassword,
+          confirm_password: formData.confirmPassword,
         }),
       });
 
@@ -108,8 +149,15 @@ function SetupWizard() {
           window.location.href = '/console';
         }, 2000);
       } else {
-        const data = await response.json();
-        setError(data.error?.message || 'Setup failed. Please try again.');
+        const data = await response.json() as { error?: string; details?: Record<string, string> };
+        if (typeof data.error === 'string') {
+          setError(data.error);
+        } else if (data.details && typeof data.details === 'object') {
+          const firstDetail = Object.values(data.details)[0];
+          setError(typeof firstDetail === 'string' ? firstDetail : 'Setup failed. Please try again.');
+        } else {
+          setError('Setup failed. Please try again.');
+        }
         setStep('form');
       }
     } catch (err) {

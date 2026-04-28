@@ -117,9 +117,9 @@ src/
 ### Bootstrap Flow
 1. User navigates to `/` or `/bootstrap`
 2. React loads `SetupWizard` component
-3. Component checks `/health` endpoint for bootstrap state
+3. Component checks `GET /api/v1/bootstrap/status` for bootstrap state
 4. If not bootstrapped: show form
-5. On success: POST to `/bootstrap` endpoint (Phase 3 backend)
+5. On submit: call `POST /api/v1/bootstrap/initialize`
 6. Redirect to `/console` (stub for now, full impl in Phase 1.x)
 
 ---
@@ -128,40 +128,48 @@ src/
 
 ### Bootstrap Status Endpoint
 ```
-GET /health
-200 OK: {"status": "ok", "bootstrapped": true}
-200 OK: {"status": "ok", "bootstrapped": false}
+GET /api/v1/bootstrap/status
+200 OK: {
+  "bootstrapped": true,
+  "requires_setup": false,
+  "timestamp": "2026-04-28T12:34:56.000Z"
+}
+
+200 OK: {
+  "bootstrapped": false,
+  "requires_setup": true,
+  "timestamp": "2026-04-28T12:34:56.000Z"
+}
 ```
 
 ### Bootstrap Initialization Endpoint
 ```
-POST /bootstrap
+POST /api/v1/bootstrap/initialize
 Content-Type: application/json
 {
   "platform_name": "My Company",
   "admin_email": "admin@example.com",
-  "admin_password": "SecurePassword123!"
+  "admin_password": "SecurePassword123!",
+  "confirm_password": "SecurePassword123!"
 }
 
-200 OK: {
-  "success": true,
+201 Created: {
   "platform_id": "uuid",
-  "admin_id": "uuid",
-  "message": "Platform initialized"
+  "bootstrap_token": "bootstrap_token_value",
+  "admin_email": "admin@example.com",
+  "setup_complete": true,
+  "timestamp": "2026-04-28T12:34:56.000Z"
 }
 
 400 Bad Request: {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Platform name is required"
+  "error": "Validation failed",
+  "details": {
+    "confirm_password": "Passwords do not match"
   }
 }
 
 409 Conflict: {
-  "error": {
-    "code": "ALREADY_BOOTSTRAPPED",
-    "message": "Platform is already initialized"
-  }
+  "error": "Platform is already initialized"
 }
 ```
 

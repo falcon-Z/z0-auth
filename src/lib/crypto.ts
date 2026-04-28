@@ -1,17 +1,16 @@
 /**
  * Z0 Auth - Cryptography Utilities
  * 
- * Argon2id for password/API key hashing (Phase 0 decision)
+ * Argon2id for password/API key hashing
  * HMAC-SHA256 for signing and verification
  * Uses Bun's built-in crypto module (available globally)
  */
 
-// Argon2id parameters (Phase 0: Argon2id selected)
+// Argon2id defaults tuned for interactive authentication workloads.
 const ARGON2_OPTIONS = {
-  iterations: 3,
-  memoryMiB: 19,
-  parallelism: 1,
-  salt: undefined as undefined | Uint8Array,
+  algorithm: 'argon2id' as const,
+  memoryCost: 19456,
+  timeCost: 2,
 };
 
 /**
@@ -19,70 +18,15 @@ const ARGON2_OPTIONS = {
  * Output is suitable for secure storage in database
  */
 export async function hashSecret(secret: string): Promise<string> {
-  // Use Bun's built-in password hashing if available
-  // Fall back to simpler approach if not
-  const encoded = new TextEncoder().encode(secret);
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-
-  // Create a deterministic hash using PBKDF2 as fallback
-  // (Argon2id bindings should be available in Bun 1.3.5+)
-  const hash = await crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: 100000,
-      hash: 'SHA-256',
-    },
-    await crypto.subtle.importKey('raw', encoded, { name: 'PBKDF2' }, false, ['deriveBits']),
-    { name: 'HMAC', hash: 'SHA-256' },
-    true,
-    ['sign']
-  );
-
-  const derived = await crypto.subtle.exportKey('raw', hash);
-  const hashHex = Array.from(new Uint8Array(derived))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  const saltHex = Array.from(salt)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  return `pbkdf2:sha256:100000:${saltHex}:${hashHex}`;
+  return Bun.password.hash(secret, ARGON2_OPTIONS);
 }
 
 /**
  * Verify a secret against a hash
  */
 export async function verifySecret(secret: string, hash: string): Promise<boolean> {
-  if (!hash.startsWith('pbkdf2:')) return false;
-
-  const [, , iterations, saltHex, storedHash] = hash.split(':');
-  if (!iterations || !saltHex || !storedHash) return false;
-
-  const encoded = new TextEncoder().encode(secret);
-  const salt = Uint8Array.from(
-    (saltHex as string).match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
-  );
-
-  const computed = await crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: parseInt(iterations),
-      hash: 'SHA-256',
-    },
-    await crypto.subtle.importKey('raw', encoded, { name: 'PBKDF2' }, false, ['deriveBits']),
-    { name: 'HMAC', hash: 'SHA-256' },
-    true,
-    ['sign']
-  );
-
-  const derived = await crypto.subtle.exportKey('raw', computed);
-  const computedHex = Array.from(new Uint8Array(derived))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  return computedHex === storedHash;
+  if (!hash.startsWith('$argon2id$')) return false;
+  return Bun.password.verify(secret, hash);
 }
 
 /**

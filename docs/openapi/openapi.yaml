@@ -21,7 +21,70 @@ tags:
     description: Service liveness and readiness endpoints.
   - name: Bootstrap
     description: One-time initialization endpoints for fresh deployments.
+  - name: Discovery
+    description: Machine-readable API contract discovery endpoints.
 paths:
+  /.well-known/openapi.json:
+    get:
+      tags: [Discovery]
+      summary: Get OpenAPI spec as JSON
+      operationId: getOpenApiJson
+      responses:
+        "200":
+          description: OpenAPI specification returned as JSON.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to load OpenAPI specification.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /.well-known/openapi.yaml:
+    get:
+      tags: [Discovery]
+      summary: Get canonical OpenAPI spec as YAML
+      operationId: getOpenApiYaml
+      responses:
+        "200":
+          description: Canonical OpenAPI specification returned as YAML.
+          content:
+            application/yaml:
+              schema:
+                type: string
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to load OpenAPI specification.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /health:
     get:
       tags: [Health]
@@ -34,6 +97,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LivenessResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /health/live:
     get:
       tags: [Health]
@@ -46,6 +121,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LivenessResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /health/ready:
     get:
       tags: [Health]
@@ -64,6 +151,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReadinessResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/bootstrap/status:
     get:
       tags: [Bootstrap]
@@ -78,6 +177,18 @@ paths:
                 $ref: "#/components/schemas/BootstrapStatusResponse"
         "500":
           description: Failed to query bootstrap status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
           content:
             application/json:
               schema:
@@ -110,6 +221,12 @@ paths:
                   - $ref: "#/components/schemas/ValidationErrorResponse"
         "405":
           description: Method not allowed.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: POST
           content:
             application/json:
               schema:

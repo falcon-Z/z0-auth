@@ -25,6 +25,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "405":
+          description: Method not allowed for this route.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: GET
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/bootstrap/initialize:
     post:
       summary: Initialize platform bootstrap
@@ -57,6 +69,12 @@ paths:
                   - $ref: "#/components/schemas/ValidationErrorResponse"
         "405":
           description: Method not allowed.
+          headers:
+            Allow:
+              description: Comma-separated list of supported HTTP methods for the route.
+              schema:
+                type: string
+                example: POST
           content:
             application/json:
               schema:

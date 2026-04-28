@@ -6,6 +6,7 @@
  */
 
 import { checkDatabaseReadiness } from '../../database/runtime';
+import { logger } from '../lib';
 
 export interface LivenessResponse {
   status: 'ok';
@@ -27,6 +28,10 @@ export interface ReadinessResponse {
 }
 
 const serverStartTime = Date.now();
+
+export interface ReadinessDependencies {
+  checkDatabaseReadiness: typeof checkDatabaseReadiness;
+}
 
 /**
  * GET /health/live
@@ -55,18 +60,41 @@ export async function handleLivenessCheck(_req: Request): Promise<Response> {
  * Checks database connectivity and migration status.
  * Returns 503 if migrations are pending or database is unreachable.
  */
-export async function handleReadinessCheck(_req: Request): Promise<Response> {
-  const readiness = await checkDatabaseReadiness();
+export async function handleReadinessCheck(
+  _req: Request,
+  deps: ReadinessDependencies = { checkDatabaseReadiness }
+): Promise<Response> {
+  try {
+    const readiness = await deps.checkDatabaseReadiness();
 
-  const isReady = readiness.connected && readiness.migrations.pending === 0;
+    const isReady = readiness.connected && readiness.migrations.pending === 0;
 
-  const response: ReadinessResponse = {
-    status: isReady ? 'ready' : 'not_ready',
-    database: readiness,
-    timestamp: new Date().toISOString(),
-  };
+    const response: ReadinessResponse = {
+      status: isReady ? 'ready' : 'not_ready',
+      database: readiness,
+      timestamp: new Date().toISOString(),
+    };
 
-  return Response.json(response, {
-    status: isReady ? 200 : 503,
-  });
+    return Response.json(response, {
+      status: isReady ? 200 : 503,
+    });
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    logger.error('Readiness dependency check failed', normalizedError);
+
+    const response: ReadinessResponse = {
+      status: 'not_ready',
+      database: {
+        connected: false,
+        migrations: {
+          applied: 0,
+          total: 1,
+          pending: 1,
+        },
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    return Response.json(response, { status: 503 });
+  }
 }

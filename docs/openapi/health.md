@@ -4,11 +4,17 @@ Machine-readable contract: see health.yaml and openapi.yaml in this folder.
 
 This page explains how to use health endpoints operationally.
 
-## When to Use Which Endpoint
+## When to Use
 
 - Use GET /health/live for process liveness checks.
 - Use GET /health/ready for traffic readiness checks.
 - Use GET /health only as a backward-compatible alias of /health/live.
+
+## Authentication and Context Requirements
+
+- No authentication is required for health probes.
+- These endpoints are intended for load balancers, orchestrators, uptime checks, and operator diagnostics.
+- GET /health/live verifies process health only; use GET /health/ready for dependency-aware traffic gating.
 
 ## Endpoint Behavior
 
@@ -94,6 +100,14 @@ curl -sS http://localhost:3000/health | jq
 ```
 
 ## Common Operational Checks
+
+Method-not-allowed example (405 with Allow header):
+
+```bash
+curl -i -X POST http://localhost:3000/health/live
+```
+
+Expected response includes `Allow: GET`.
 
 Readiness loop during startup:
 

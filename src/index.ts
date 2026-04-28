@@ -15,12 +15,41 @@ import { handleLivenessCheck, handleReadinessCheck } from './api/health';
 import { handleBootstrapStatus, handleBootstrapInitialize } from './api/bootstrap';
 import type { RequestContext } from './lib';
 
+const CANONICAL_OPENAPI_SPEC_PATH = new URL('../docs/openapi/openapi.yaml', import.meta.url);
+
 // ============================================================================
 // Middleware Pipeline Types
 // ============================================================================
 
 export type MiddlewareNext = () => Promise<Response>;
 export type Middleware = (req: Request, context: RequestContext, next: MiddlewareNext) => Promise<Response>;
+
+function resolveEndpointClass(path: string): 'public' | 'browser' | 'server' | 'admin' {
+  if (path.startsWith('/.well-known')) {
+    return 'public';
+  }
+
+  if (path.startsWith('/auth') || path.startsWith('/login')) {
+    return 'browser';
+  }
+
+  if (path.startsWith('/api/admin')) {
+    return 'admin';
+  }
+
+  if (path.startsWith('/api')) {
+    return 'server';
+  }
+
+  return 'public';
+}
+
+function getCorsHeadersForRequest(req: Request): Record<string, string> {
+  const path = new URL(req.url).pathname;
+  const endpointClass = resolveEndpointClass(path);
+  const policy = CORS_POLICIES[endpointClass];
+  return generateCORSHeaders(policy, req.headers.get('origin') || undefined);
+}
 
 // ============================================================================
 // Request Context Middleware
@@ -29,11 +58,12 @@ export type Middleware = (req: Request, context: RequestContext, next: Middlewar
 /**
  * Initialize request context with ID, timestamp, and actor information
  */
-async function requestContextMiddleware(req: Request, _ctx: RequestContext, next: MiddlewareNext): Promise<Response> {
-  const requestId = generateRequestId();
-  const timestamp = new Date();
-  
-  logger.info(`${req.method} ${new URL(req.url).pathname}`, { requestId }, requestId);
+async function requestContextMiddleware(req: Request, ctx: RequestContext, next: MiddlewareNext): Promise<Response> {
+  // Ensure the shared per-request context is fully initialized once.
+  ctx.requestId = ctx.requestId || generateRequestId();
+  ctx.timestamp = ctx.timestamp || new Date();
+
+  logger.info(`${req.method} ${new URL(req.url).pathname}`, { requestId: ctx.requestId }, ctx.requestId);
   
   return next();
 }
@@ -46,24 +76,7 @@ async function requestContextMiddleware(req: Request, _ctx: RequestContext, next
  * Apply CORS headers based on endpoint class
  */
 async function corsMiddleware(req: Request, _ctx: RequestContext, next: MiddlewareNext): Promise<Response> {
-  // Determine endpoint class from path
-  const url = new URL(req.url);
-  const path = url.pathname;
-  
-  let endpointClass: 'public' | 'browser' | 'server' | 'admin' = 'public';
-  
-  if (path.startsWith('/.well-known')) {
-    endpointClass = 'public';
-  } else if (path.startsWith('/auth') || path.startsWith('/login')) {
-    endpointClass = 'browser';
-  } else if (path.startsWith('/api/admin')) {
-    endpointClass = 'admin';
-  } else if (path.startsWith('/api')) {
-    endpointClass = 'server';
-  }
-
-  const policy = CORS_POLICIES[endpointClass];
-  const corsHeaders = generateCORSHeaders(policy, req.headers.get('origin') || undefined);
+  const corsHeaders = getCorsHeadersForRequest(req);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -111,277 +124,44 @@ async function openApiHandler(req: Request): Promise<Response> {
   if (req.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Allow: 'GET',
+      },
     });
   }
 
-  return Response.json({
-    openapi: '3.1.0',
-    jsonSchemaDialect: 'https://json-schema.org/draft/2020-12/schema',
-    info: {
-      title: 'Z0 Auth API',
-      version: '0.1.0',
-      description: 'Self-hostable authentication and IAM service',
-    },
-    servers: [
+  try {
+    const path = new URL(req.url).pathname;
+    const yamlSpec = await Bun.file(CANONICAL_OPENAPI_SPEC_PATH).text();
+
+    if (path.endsWith('.json')) {
+      const parsedSpec = Bun.YAML.parse(yamlSpec);
+
+      return Response.json(parsedSpec, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+      });
+    }
+
+    return new Response(yamlSpec, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/yaml; charset=utf-8',
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to load canonical OpenAPI spec', error instanceof Error ? error : new Error(String(error)));
+
+    return Response.json(
       {
-        url: 'http://localhost:3000',
-        description: 'Local development',
+        error: 'Failed to load OpenAPI specification',
       },
-    ],
-    tags: [
-      { name: 'Health', description: 'Service liveness and readiness endpoints' },
-      { name: 'Bootstrap', description: 'One-time initialization endpoints' },
-    ],
-    paths: {
-      '/health': {
-        get: {
-          tags: ['Health'],
-          summary: 'Legacy liveness endpoint',
-          operationId: 'getHealthLegacy',
-          responses: {
-            '200': {
-              description: 'Server process is alive.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/LivenessResponse' },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/health/live': {
-        get: {
-          tags: ['Health'],
-          summary: 'Liveness probe',
-          operationId: 'getHealthLive',
-          responses: {
-            '200': {
-              description: 'Server process is alive.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/LivenessResponse' },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/health/ready': {
-        get: {
-          tags: ['Health'],
-          summary: 'Readiness probe',
-          operationId: 'getHealthReady',
-          responses: {
-            '200': {
-              description: 'Service is ready for traffic.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReadinessResponse' },
-                },
-              },
-            },
-            '503': {
-              description: 'Service is not ready for traffic.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ReadinessResponse' },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/api/v1/bootstrap/status': {
-        get: {
-          tags: ['Bootstrap'],
-          summary: 'Get bootstrap status',
-          operationId: 'getBootstrapStatus',
-          responses: {
-            '200': {
-              description: 'Bootstrap status returned.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/BootstrapStatusResponse' },
-                },
-              },
-            },
-            '500': {
-              description: 'Failed to query bootstrap status.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ErrorResponse' },
-                },
-              },
-            },
-          },
-        },
-      },
-      '/api/v1/bootstrap/initialize': {
-        post: {
-          tags: ['Bootstrap'],
-          summary: 'Initialize platform bootstrap',
-          operationId: 'postBootstrapInitialize',
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/BootstrapInitializeRequest' },
-              },
-            },
-          },
-          responses: {
-            '201': {
-              description: 'Platform initialized successfully.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/BootstrapInitializeResponse' },
-                },
-              },
-            },
-            '400': {
-              description: 'Invalid request body or validation error.',
-              content: {
-                'application/json': {
-                  schema: {
-                    oneOf: [
-                      { $ref: '#/components/schemas/ErrorResponse' },
-                      { $ref: '#/components/schemas/ValidationErrorResponse' },
-                    ],
-                  },
-                },
-              },
-            },
-            '405': {
-              description: 'Method not allowed.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ErrorResponse' },
-                },
-              },
-            },
-            '409': {
-              description: 'Platform already initialized.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ErrorResponse' },
-                },
-              },
-            },
-            '500': {
-              description: 'Internal bootstrap failure.',
-              content: {
-                'application/json': {
-                  schema: { $ref: '#/components/schemas/ErrorResponse' },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    components: {
-      schemas: {
-        LivenessResponse: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['status', 'timestamp', 'uptime'],
-          properties: {
-            status: { type: 'string', const: 'ok' },
-            timestamp: { type: 'string', format: 'date-time' },
-            uptime: { type: 'number', minimum: 0 },
-          },
-        },
-        MigrationStatus: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['applied', 'total', 'pending'],
-          properties: {
-            applied: { type: 'integer', minimum: 0 },
-            total: { type: 'integer', minimum: 0 },
-            pending: { type: 'integer', minimum: 0 },
-          },
-        },
-        DatabaseReadiness: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['connected', 'migrations'],
-          properties: {
-            connected: { type: 'boolean' },
-            migrations: { $ref: '#/components/schemas/MigrationStatus' },
-          },
-        },
-        ReadinessResponse: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['status', 'database', 'timestamp'],
-          properties: {
-            status: { type: 'string', enum: ['ready', 'not_ready'] },
-            database: { $ref: '#/components/schemas/DatabaseReadiness' },
-            timestamp: { type: 'string', format: 'date-time' },
-          },
-        },
-        BootstrapStatusResponse: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['bootstrapped', 'requires_setup', 'timestamp'],
-          properties: {
-            bootstrapped: { type: 'boolean' },
-            requires_setup: { type: 'boolean' },
-            timestamp: { type: 'string', format: 'date-time' },
-          },
-        },
-        BootstrapInitializeRequest: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['platform_name', 'admin_email', 'admin_password', 'confirm_password'],
-          properties: {
-            platform_name: { type: 'string', minLength: 3, maxLength: 255 },
-            admin_email: { type: 'string', format: 'email' },
-            admin_password: {
-              type: 'string',
-              minLength: 12,
-              pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{12,}$',
-            },
-            confirm_password: { type: 'string', minLength: 12 },
-          },
-        },
-        BootstrapInitializeResponse: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['platform_id', 'bootstrap_token', 'admin_email', 'setup_complete', 'timestamp'],
-          properties: {
-            platform_id: { type: 'string', format: 'uuid' },
-            bootstrap_token: { type: 'string' },
-            admin_email: { type: 'string', format: 'email' },
-            setup_complete: { type: 'boolean', const: true },
-            timestamp: { type: 'string', format: 'date-time' },
-          },
-        },
-        ErrorResponse: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['error'],
-          properties: {
-            error: { type: 'string' },
-          },
-        },
-        ValidationErrorResponse: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['error', 'details'],
-          properties: {
-            error: { type: 'string', const: 'Validation failed' },
-            details: {
-              type: 'object',
-              additionalProperties: { type: 'string' },
-            },
-          },
-        },
-      },
-    },
-  });
+      { status: 500 }
+    );
+  }
 }
 
 // ============================================================================
@@ -404,7 +184,7 @@ async function bootstrapHandler(req: Request): Promise<Response> {
       </head>
       <body>
         <div id="root"></div>
-        <script type="module" src="/frontend.tsx"></script>
+        <script type="module" src="/src/frontend.tsx"></script>
       </body>
     </html>
   `, {
@@ -435,7 +215,7 @@ async function notFoundHandler(): Promise<Response> {
 interface Route {
   pattern: string | RegExp;
   method: string;
-  handler: (req: Request) => Promise<Response> | Response;
+  handler: (req: Request, context?: RequestContext) => Promise<Response> | Response;
 }
 
 const routes: Route[] = [
@@ -448,6 +228,7 @@ const routes: Route[] = [
   
   // OpenAPI discovery
   { pattern: '/.well-known/openapi.json', method: 'GET', handler: openApiHandler },
+  { pattern: '/.well-known/openapi.yaml', method: 'GET', handler: openApiHandler },
   
   // Bootstrap API endpoints
   { pattern: '/api/v1/bootstrap/status', method: 'GET', handler: handleBootstrapStatus },
@@ -456,6 +237,7 @@ const routes: Route[] = [
   // Bootstrap UI (wizard)
   { pattern: '/', method: 'GET', handler: bootstrapHandler },
   { pattern: /^\/bootstrap\/?$/, method: 'GET', handler: bootstrapHandler },
+  { pattern: /^\/console\/?$/, method: 'GET', handler: bootstrapHandler },
 ];
 
 /**
@@ -474,6 +256,26 @@ function matchRoute(method: string, path: string): Route | null {
   return null;
 }
 
+/**
+ * Get supported HTTP methods for a matching route path pattern.
+ */
+function getAllowedMethodsForPath(path: string): string[] {
+  const methods: string[] = [];
+
+  for (const route of routes) {
+    const matchesPath = typeof route.pattern === 'string'
+      ? path === route.pattern
+      : route.pattern.test(path);
+
+    if (!matchesPath) continue;
+    if (!methods.includes(route.method)) {
+      methods.push(route.method);
+    }
+  }
+
+  return methods;
+}
+
 // ============================================================================
 // Middleware Chain Executor
 // ============================================================================
@@ -481,27 +283,27 @@ function matchRoute(method: string, path: string): Route | null {
 /**
  * Execute middleware chain with proper error handling
  */
-async function executeMiddlewareChain(
+export async function executeMiddlewareChain(
   req: Request,
   middlewares: Middleware[],
-  handler: (req: Request) => Promise<Response> | Response
+  handler: (req: Request, context: RequestContext) => Promise<Response> | Response
 ): Promise<Response> {
   let index = -1;
+
+  // Create one shared context per request and pass it across all middleware/handler calls.
+  const context: RequestContext = {
+    requestId: generateRequestId(),
+    timestamp: new Date(),
+    actor: { type: 'system', id: 'bootstrap' },
+    authLevel: 'unauthenticated',
+  };
 
   const dispatch = async (i: number): Promise<Response> => {
     if (i <= index) return new Response('Multiple next() calls', { status: 500 });
     index = i;
 
-    // Initialize context (will be populated by middleware)
-    const context: RequestContext = {
-      requestId: generateRequestId(),
-      timestamp: new Date(),
-      actor: { type: 'system', id: 'bootstrap' },
-      authLevel: 'unauthenticated',
-    };
-
     if (i === middlewares.length) {
-      return handler(req);
+      return handler(req, context);
     }
 
     const middleware = middlewares[i];
@@ -515,14 +317,37 @@ async function executeMiddlewareChain(
 // Main Request Handler
 // ============================================================================
 
-async function handleRequest(req: Request): Promise<Response> {
+export async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const route = matchRoute(req.method, url.pathname);
 
   const middlewares: Middleware[] = [requestContextMiddleware, corsMiddleware, bootstrapMiddleware];
 
   try {
+    if (req.method === 'OPTIONS') {
+      return await executeMiddlewareChain(req, middlewares, () => new Response(null, { status: 204 }));
+    }
+
+    const route = matchRoute(req.method, url.pathname);
+    const allowedMethods = route ? [] : getAllowedMethodsForPath(url.pathname);
+
     if (!route) {
+      if (allowedMethods.length > 0) {
+        const corsHeaders = getCorsHeadersForRequest(req);
+        return new Response(
+          JSON.stringify({ error: 'Method not allowed' }),
+          {
+            status: 405,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+              Allow: allowedMethods.join(', '),
+            },
+          }
+        );
+      }
+
+      const corsHeaders = getCorsHeadersForRequest(req);
+
       return new Response(
         JSON.stringify({
           error: {
@@ -530,11 +355,17 @@ async function handleRequest(req: Request): Promise<Response> {
             message: 'Endpoint not found',
           },
         }),
-        { status: 404, headers: { 'Content-Type': 'application/json' } }
+        {
+          status: 404,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
       );
     }
 
-    return await executeMiddlewareChain(req, middlewares, () => route.handler(req));
+    return await executeMiddlewareChain(req, middlewares, route.handler);
   } catch (error) {
     logger.error('Request handling error', error instanceof Error ? error : new Error(String(error)));
     return Response.json(
@@ -553,23 +384,24 @@ async function handleRequest(req: Request): Promise<Response> {
 // Server Initialization
 // ============================================================================
 
-const isDevelopment = process.env.NODE_ENV !== 'production';
-const port = parseInt(process.env.PORT || '3000');
-const hostname = process.env.HOSTNAME || 'localhost';
+if (import.meta.main) {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const port = parseInt(process.env.PORT || '3000');
+  const hostname = process.env.HOSTNAME || 'localhost';
 
-await ensureServerStartupReadiness();
+  await ensureServerStartupReadiness();
 
-const server = await Bun.serve({
-  port,
-  hostname,
-  fetch: handleRequest,
-  development: isDevelopment && {
-    hmr: true,
-    console: true,
-  },
-});
+  const server = await Bun.serve({
+    port,
+    hostname,
+    fetch: handleRequest,
+    development: isDevelopment && {
+      hmr: true,
+      console: true,
+    },
+  });
 
-console.log(`
+  console.log(`
 ╔═════════════════════════════════════════════════════════════╗
 ║                    Z0 Auth Server                           ║
 ║                    Phase 1 - Foundation                     ║
@@ -581,8 +413,10 @@ console.log(`
 ╚═════════════════════════════════════════════════════════════╝
 `);
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  process.exit(0);
-});
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    server.stop();
+    process.exit(0);
+  });
+}
