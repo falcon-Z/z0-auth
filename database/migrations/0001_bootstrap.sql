@@ -1,0 +1,33 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS platforms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL UNIQUE,
+  display_name VARCHAR(255),
+  config JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS platform_admins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform_id UUID NOT NULL REFERENCES platforms(id),
+  email VARCHAR(254) NOT NULL,
+  password_hash VARCHAR NOT NULL,
+  mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  mfa_secret VARCHAR,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP,
+  UNIQUE (platform_id, email)
+);
+
+CREATE TABLE IF NOT EXISTS bootstrap_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform_id UUID NOT NULL REFERENCES platforms(id),
+  token_hash VARCHAR NOT NULL,
+  used_at TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NOT NULL
+);

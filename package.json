@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "bun --hot src/index.ts",
     "start": "NODE_ENV=production bun src/index.ts",
-    "build": "bun run build.ts"
+    "build": "bun run build.ts",
+    "db:migrate": "bun run database/migrate.ts",
+    "db:reset": "bun run database/reset.ts",
+    "db:status": "bun run database/status.ts",
+    "test": "bun test",
+    "test:database": "bun test tests/database"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.7",

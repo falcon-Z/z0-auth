@@ -10,6 +10,7 @@
  */
 
 import { logger, generateRequestId, CORS_POLICIES, generateCORSHeaders } from './lib';
+import { ensureServerStartupReadiness } from './server-startup';
 import type { RequestContext } from './lib';
 
 // ============================================================================
@@ -306,6 +307,8 @@ async function handleRequest(req: Request): Promise<Response> {
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3000');
 const hostname = process.env.HOSTNAME || 'localhost';
+
+await ensureServerStartupReadiness();
 
 const server = await Bun.serve({
   port,
