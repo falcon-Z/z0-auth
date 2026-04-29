@@ -16,6 +16,10 @@ import { handleBootstrapStatus, handleBootstrapInitialize } from '@z0/src/api/v1
 import type { RequestContext } from '@z0/src/lib';
 
 const CANONICAL_OPENAPI_SPEC_PATH = new URL('../docs/openapi/specs/openapi.yaml', import.meta.url);
+const CANONICAL_FRONTEND_SHELL_PATH = new URL('./index.html', import.meta.url);
+const CANONICAL_SCRIPT_TAG = '<script type="module" src="./frontend.tsx"></script>';
+const ROUTED_SERVER_SCRIPT_TAG = '<script type="module" src="/src/frontend.tsx"></script>';
+const canonicalFrontendShellPromise = Bun.file(CANONICAL_FRONTEND_SHELL_PATH).text();
 
 // ============================================================================
 // Middleware Pipeline Types
@@ -173,22 +177,11 @@ async function bootstrapHandler(req: Request): Promise<Response> {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  // TODO: Serve React component from src/App.tsx
-  return new Response(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Z0 Auth - Setup Wizard</title>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-      </head>
-      <body>
-        <div id="root"></div>
-        <script type="module" src="/src/frontend.tsx"></script>
-      </body>
-    </html>
-  `, {
-    headers: { 'Content-Type': 'text/html' },
+  const canonicalShell = await canonicalFrontendShellPromise;
+  const routedShell = canonicalShell.replace(CANONICAL_SCRIPT_TAG, ROUTED_SERVER_SCRIPT_TAG);
+
+  return new Response(routedShell, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
 }
 

@@ -78,22 +78,31 @@ describe('Request routing', () => {
     expect(body.error).toBe('Method not allowed');
   });
 
-  it('serves bootstrap frontend shell from root and console routes with the correct script path', async () => {
+  it('serves bootstrap frontend shell from canonical template for root, bootstrap, and console routes', async () => {
+    const canonicalStandaloneShell = await Bun.file(new URL('../src/index.html', import.meta.url)).text();
+    const expectedRoutedShell = canonicalStandaloneShell
+      .replace('<script type="module" src="./frontend.tsx"></script>', '<script type="module" src="/src/frontend.tsx"></script>');
+
     const rootResponse = await handleRequest(new Request('http://localhost:3000/', {
       method: 'GET',
     }));
     expect(rootResponse.status).toBe(200);
     const rootHtml = await rootResponse.text();
-    expect(rootHtml).toContain('<div id="root"></div>');
-    expect(rootHtml).toContain('<script type="module" src="/src/frontend.tsx"></script>');
+    expect(rootHtml).toBe(expectedRoutedShell);
+
+    const bootstrapResponse = await handleRequest(new Request('http://localhost:3000/bootstrap', {
+      method: 'GET',
+    }));
+    expect(bootstrapResponse.status).toBe(200);
+    const bootstrapHtml = await bootstrapResponse.text();
+    expect(bootstrapHtml).toBe(expectedRoutedShell);
 
     const consoleResponse = await handleRequest(new Request('http://localhost:3000/console', {
       method: 'GET',
     }));
     expect(consoleResponse.status).toBe(200);
     const consoleHtml = await consoleResponse.text();
-    expect(consoleHtml).toContain('<div id="root"></div>');
-    expect(consoleHtml).toContain('<script type="module" src="/src/frontend.tsx"></script>');
+    expect(consoleHtml).toBe(expectedRoutedShell);
   });
 
   it('propagates a shared RequestContext across middleware and handler', async () => {
@@ -131,5 +140,21 @@ describe('Request routing', () => {
 
     const body = await response.json() as { requestId: string };
     expect(body.requestId).toBeTruthy();
+  });
+});
+
+describe('Standalone HTML shell', () => {
+  it('keeps the expected title and loads frontend module after #root without async', async () => {
+    const shell = await Bun.file(new URL('../src/index.html', import.meta.url)).text();
+
+    expect(shell).toContain('<title>Z0 Auth</title>');
+    expect(shell).toContain('<script type="module" src="./frontend.tsx"></script>');
+    expect(shell).not.toContain('src="./frontend.tsx" async');
+
+    const rootIndex = shell.indexOf('<div id="root"></div>');
+    const scriptIndex = shell.indexOf('<script type="module" src="./frontend.tsx"></script>');
+
+    expect(rootIndex).toBeGreaterThanOrEqual(0);
+    expect(scriptIndex).toBeGreaterThan(rootIndex);
   });
 });

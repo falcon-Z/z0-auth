@@ -24,22 +24,19 @@ Canonical UI design standard: see `docs/UI_DESIGN_GUIDELINES.md`.
 - Offline recovery UI (deferred to Phase 3.x)
 
 ### 2. Minimal Operator Console
-**Location**: `/console` (to be built in Phase 3)
-**Purpose**: Essential platform and tenant operator surfaces
-**Scope**:
+**Location**: `/src/App.tsx` (OperatorConsole component, routed at `/console`)
+**Purpose**: Essential deployment verification surface for operators
+**Scope** (currently shipped):
 - Bootstrap verification display (platform initialized, super admin exists, default tenant ready)
-- Health status and dependency checks (database, SMTP, etc.)
-- SMTP configuration state visualization (unconfigured/configured/misconfigured with warning banner if disabled)
-- Audit event log viewer (read-only, platform-level events only)
-- Basic session/identity querying tools (for debugging)
-- API documentation quick link to `/` or `/.well-known/openapi.json`
+- Service readiness check (database connectivity and migration state via `GET /health/ready`)
+- Service liveness check (process uptime via `GET /health/live`)
+- API documentation quick link (`/.well-known/openapi.json`)
 
 **Not Included**:
-- Tenant creation/management UI (API-first only; use CLI or API tools)
-- App registration UI (API-first only; use CLI or API tools)
-- User/identity management UI (API-first only; use CLI or API tools)
-- Role/policy assignment UI (API-first only; use CLI or API tools)
-- Detailed admin dashboards, analytics, or reporting
+- SMTP configuration state visualization (deferred to Phase 2+)
+- Audit event log viewer (deferred to Phase 2+)
+- Basic session/identity querying tools (deferred to Phase 2+)
+- Tenant creation/management UI (API-first only)
 
 ### 3. OAuth2 / OIDC User-Facing Surfaces
 **Location**: Thin protocol endpoints (no rich UI)
@@ -122,7 +119,7 @@ src/
 3. Component checks `GET /api/v1/bootstrap/status` for bootstrap state
 4. If not bootstrapped: show form
 5. On submit: call `POST /api/v1/bootstrap/initialize`
-6. Redirect to `/console` (stub for now, full impl in Phase 1.x)
+6. Redirect to `/console` (minimal operator console, shipped)
 
 ---
 

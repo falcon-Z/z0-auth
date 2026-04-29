@@ -40,6 +40,7 @@ Every feature module in Z0 Auth must meet this Definition of Done before it can 
 
 - [ ] **README**: Brief description of feature and why it exists
 - [ ] **Architecture doc**: How the feature fits into the system (if complex)
+- [ ] **Glossary alignment**: Terms and action verbs match `docs/PRODUCT_GLOSSARY.md` for product, API, and operator language
 - [ ] **API documentation**: OpenAPI spec with examples (platform operator, tenant admin, app developer audiences)
 - [ ] **Deployment guide**: Any special configuration or setup required
 - [ ] **Troubleshooting**: Common issues and their resolution

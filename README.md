@@ -247,6 +247,7 @@ bun run docs:validate      # Validate spec/code parity
 
 - [docs/FRONTEND_SCOPE.md](./docs/FRONTEND_SCOPE.md) - Frontend boundaries and v1.x admin console roadmap
 - [docs/FEATURE_DoD.md](./docs/FEATURE_DoD.md) - Definition of Done checklist for all features
+- [docs/PRODUCT_GLOSSARY.md](./docs/PRODUCT_GLOSSARY.md) - Canonical product terms, lifecycle verbs, and language rules
 - [docs/PROJECT_PLAN_MILESTONES.md](./docs/PROJECT_PLAN_MILESTONES.md) - Canonical GitHub-tracked phase and milestone execution plan
 - [docs/openapi/docs/](./docs/openapi/docs/) - Module-organized API usage guides
 - [docs/openapi/specs/](./docs/openapi/specs/) - Module-organized OpenAPI YAML contracts (root: openapi.yaml)
