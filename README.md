@@ -1,288 +1,161 @@
-# Z0 Auth - Self-Hosted Authentication & IAM
+# Z0 Auth
 
-A production-grade, self-hosted authentication and IAM service optimized for solo maintainers. Built with Bun (TypeScript runtime), PostgreSQL, and a strict definition of done for every feature.
-
-> **Status**: Phase 1 Foundation in progress. Core GA planned for Q3 2026.
+A self-hosted authentication and identity management server built on [Bun](https://bun.com) and PostgreSQL.
 
 ---
 
-## Overview
+## What it does
 
-Z0 Auth is designed to be:
+Z0 Auth provides a multi-tenant authentication backend with:
 
-- **Bun-native first**: Lowest dependency surface; built on Bun's TypeScript runtime, HTTP server, and PostgreSQL driver
-- **PostgreSQL-only in v1**: Single database choice for simplicity and reliability
-- **Strict platform/tenant separation**: No cross-tenant vulnerabilities; explicit privilege guards
-- **Feature-gated release model**: Core GA (essential auth), Gate A (full OIDC), Gate B (advanced registration)
-- **Minimal UI, API-first**: Backend-first architecture; essential frontend surfaces (setup wizard, operator console) deferred to Core GA; full admin UI to Phase 1.x
-- **Mandatory quality bar**: Every feature requires API, docs, tests, and security review before merge
+- **Bootstrap** — one-time secure initialization to register the platform super admin
+- **Tenant and app management** — isolated tenants, each with independent applications
+- **Identity management** — email/password, magic links, TOTP, and API key authentication
+- **Session and token management** — short-lived JWTs, rotating refresh tokens with replay detection, and token revocation
+- **Rate limiting** — route-class middleware with PostgreSQL-backed sliding-window counters
+- **Audit logging** — append-only event log; soft-delete compliance for all identity data
+- **Setup wizard** — browser-based operator setup on first run
+- **Health API** — liveness and readiness endpoints for deployment health checks
+
+The REST API is the primary interface. The setup wizard and operator console are convenience surfaces.
 
 ---
 
-## Quick Start
+## Prerequisites
 
-### Prerequisites
-
-- Bun >= 1.3.5
+- [Bun](https://bun.com) >= 1.3.5
 - PostgreSQL >= 14
-- Docker & Docker Compose (optional, for local dev)
 
-### Local Development
+---
+
+## Running locally
 
 ```bash
 # Install dependencies
 bun install
 
-# Set up environment
+# Configure environment
 cp .env.example .env
+# Edit .env — set DATABASE_URL at minimum
 
-# Start development server
-bun run dev
+# Run database migrations
+bun run database/migrate.ts
 
-# Server runs on http://localhost:3000
-# Setup wizard: http://localhost:3000/
-# Health: http://localhost:3000/health
+# Start the server
+bun run src/index.ts
 ```
+
+The server binds to `0.0.0.0:3000` by default and prints startup URLs using `localhost`.
+
+| URL | Purpose |
+|-----|---------|
+| `http://localhost:3000/` | Setup wizard (first run) |
+| `http://localhost:3000/console` | Operator console |
+| `http://localhost:3000/health` | Liveness check |
+| `http://localhost:3000/.well-known/openapi.json` | OpenAPI spec |
 
 ---
 
-## Architecture
+## Configuration
 
-### System Overview
-
-```
-Frontend (React 19: Setup Wizard + Minimal Operator Console)
-    ↓
-Bun HTTP Server (middleware pipeline: auth, authz, rate limiting, CORS)
-    ↓
-API Transport Layer (endpoints: bootstrap, auth, tenants, apps, etc.)
-    ↓
-Domain Services (identity, session, auth, authorization, audit)
-    ↓
-Data Access Layer (PostgreSQL driver, migrations, schemas)
-    ↓
-PostgreSQL (authoritative data store)
-```
-
-### Tenancy Model
-
-```
-Platform (super admin)
-  ├── Tenant 1 (tenant admin)
-  │   ├── App 1
-  │   │   ├── Identity 1
-  │   │   │   ├── Session
-  │   │   │   └── Credentials
-  │   │   └── Identity 2
-  │   └── App 2
-  └── Tenant 2
-```
-
-**Privilege Boundaries**: Platform > Tenant > App > Identity (strict isolation)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Port the server listens on |
+| `BIND_HOST` | `0.0.0.0` | Network interface to bind |
+| `DISPLAY_HOST` | `localhost` | Hostname shown in startup output |
+| `DATABASE_URL` | — | PostgreSQL connection string |
+| `NODE_ENV` | — | Set to `production` to disable development helpers |
 
 ---
 
-## Release Gates
-
-### Core GA ✅ LOCKED (Q3 2026 target)
-
-**Backend**: Bootstrap, tenant/app/identity lifecycle, email/password/magic-link/TOTP auth, token management, rate limiting, CORS, audit logging
-
-**Frontend** (minimal): Setup wizard, operator console (health + SMTP state), OAuth2 login flows
-
-**Documentation**: OpenAPI specs, deployment guide, architecture decisions, troubleshooting
-
-**Testing**: Unit + integration + authorization matrix + security tests
-
-### v1.x Gate A (Q4 2026 target)
-
-Full OIDC support (discovery, userinfo, jwks, interactive consent UI)
-
-### v1.x Gate B (Q1 2027 target)
-
-Dynamic client registration, passkeys, social login
-
----
-
-## Project Structure
+## Project structure
 
 ```
 src/
-  ├── index.ts              # Bun server + middleware pipeline
-  ├── App.tsx               # React setup wizard
-  ├── api/                  # HTTP endpoints (Phase 3+)
-  ├── app/                  # Domain services (Phase 3+)
-  ├── lib/                  # Shared utilities (errors, validation, crypto, etc.)
-  └── components/ui/        # shadcn/ui components
+  index.ts              Server entry point, routing, and middleware pipeline
+  server-startup.ts     Startup readiness checks
+  App.tsx               Setup wizard and operator console (React)
+  api/                  HTTP endpoint handlers
+    core/health/        Liveness and readiness endpoints
+    v1/bootstrap/       Bootstrap initialization endpoint
+  lib/                  Shared utilities (crypto, validation, errors, rate limiting, CORS)
+  components/ui/        Base UI components
 database/
-  ├── SCHEMA.md             # Database schema documentation
-  └── migrations/           # Forward-only SQL migrations (Phase 2+)
+  migrations/           Forward-only SQL migrations
+  SCHEMA.md             Database schema reference
 docs/
-  ├── FRONTEND_SCOPE.md     # Frontend boundaries (Phase 1 ✅)
-  ├── FEATURE_DoD.md        # Definition of Done template (Phase 1 ✅)
-  ├── DEPLOYMENT.md         # Deployment guide (Phase 8+)
-  └── guides/               # Usage guides (Phase 8+)
-tests/                      # Test suites (Phase 9+)
+  openapi/specs/        OpenAPI YAML contracts
+  openapi/docs/         API usage guides
+tests/                  Test suites mirroring src/ structure
 ```
 
 ---
 
-## Core Principles
+## API
 
-1. **Bun-native first**: Use Bun's built-ins (HTTP, TypeScript, PostgreSQL driver)
-2. **PostgreSQL-only**: Single database choice for v1
-3. **Explicit privilege separation**: Platform/tenant/app/identity boundaries enforced
-4. **One-time bootstrap**: Secure, cloud-deployment-friendly super admin setup
-5. **Mandatory feature DoD**: API + docs + tests + security review for every feature
-6. **Tenant isolation by default**: No cross-tenant data exposure
-7. **Immutable audit trail**: Append-only event log with soft-delete compliance
-8. **Rate limiting as middleware**: Route-class policies; PostgreSQL-backed
-9. **Explicit SMTP state**: Email optional; state visible to operators
-10. **API-first, UI-optional**: REST API is authoritative; UI is convenience
+The OpenAPI contract lives at [`docs/openapi/specs/openapi.yaml`](./docs/openapi/specs/openapi.yaml).
 
----
+Usage guides for each API module are under [`docs/openapi/docs/`](./docs/openapi/docs/).
 
-## Phase 0 Decisions - LOCKED ✅
+### Tenancy model
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| **Access Token Claims** | `{sub, aud, scope, tenant_id, app_id, session_id, iat, exp}` | JWT standard + tenant/app context + session binding |
-| **ID Generation** | Database (PostgreSQL UUID triggers) | Single source of truth |
-| **Soft-Delete Strategy** | Identities, sessions, credentials, API keys, consent, audit, tenants, apps | Compliance; hard-delete only temporary state |
-| **Audit Retention** | 90 days | Compliance window + debugging |
-| **API Key Hashing** | Argon2id (PBKDF2 fallback) | Modern algorithm; GPU-resistant |
-| **Token Revocation Store** | PostgreSQL-backed | No in-memory authority; multi-instance correctness |
-| **SMTP State Machine** | `unconfigured` / `configured` / `misconfigured` | Explicit operator visibility; magic link disabled when unavailable |
-| **Rate Limiting** | Route-class middleware with PostgreSQL counters | Uniform enforcement; distributed correctness |
-| **CORS Policy** | Endpoint-class enforcement | Browser-facing/server/admin distinctions |
-| **Frontend Scope** | Wizard + minimal console (Core GA); full admin UI deferred | Backend-first focus; manageable scope |
-| **API Key Format** | Opaque prefixed `z0_pk_<keyId>_<secret>` | Operator-friendly; hashed at rest |
-| **Test Seeds** | Deterministic fixtures loaded by test harpers | Reproducible; no environment mutation |
+```
+Platform (super admin)
+  └── Tenant
+        └── App
+              └── Identity (user or service account)
+```
 
----
+Privilege boundaries are enforced at the query level. Platform > Tenant > App > Identity — no cross-tenant access is possible.
 
-## Key Implementation Details
+### Access tokens
 
-### Authentication Flow
+Issued as short-lived JWTs with claims: `sub`, `aud`, `scope`, `tenant_id`, `app_id`, `session_id`, `iat`, `exp`.
 
-1. User posts email + password to `/auth/login`
-2. Credentials validated, session created, tokens issued
-3. Access token: short-lived, self-contained JWT
-4. Refresh token: stored in PostgreSQL token family, rotated on use (with replay detection)
-5. Token revocation: exceptional cases consult PostgreSQL; gateway uses introspection for immediate guarantees
+### API keys
 
-### API Key Design
+Format: `z0_pk_<keyId>_<secret>` — opaque, prefixed. Only the key ID and an Argon2id hash are stored. The secret is shown once on creation and cannot be retrieved again.
 
-- **Format**: `z0_pk_<keyId>_<secret>` (opaque, prefixed)
-- **Storage**: Only keyId + Argon2id hash stored; secret displayed once on creation
-- **Binding**: To tenant, app, actor, scopes, and optional expiry
-- **Rotation**: Replace (not modify); old key revoked
+### CORS
 
-### Rate Limiting
-
-- **Route classes**: `bootstrap`, `identity`, `platform`, `tenant`, `admin`
-- **Storage**: PostgreSQL sliding-window counters
-- **Enforcement**: Bun middleware before business logic
-- **Platform defaults**: 10/min (bootstrap), 100/min (identity), 1000/min (platform), 5000/min (tenant), 10000/min (admin)
-
-### CORS Policy
-
-- **Public** (`/.well-known/*`, `/health`): `Access-Control-Allow-Origin: *`
-- **Browser** (`/authorize`, `/userinfo`, `/jwks`): Origin-aware CORS headers
-- **Server** (`/api/*`): No CORS (server-to-server, use Authorization header)
-- **Admin** (`/api/admin/*`): Same-origin only
+| Endpoint class | Policy |
+|----------------|--------|
+| `/.well-known/*`, `/health` | `Access-Control-Allow-Origin: *` |
+| `/authorize`, `/userinfo`, `/jwks` | Origin-aware |
+| `/api/*` | No CORS (server-to-server) |
+| `/api/admin/*` | Same-origin only |
 
 ---
 
-## Development Workflow
-
-### Adding a Feature
-
-1. Define requirements and API contract (Phase 0)
-2. Implement using Definition of Done template
-3. Write OpenAPI spec + usage guide
-4. Add unit + integration + security tests
-5. Review all DoD items with maintainer
-6. Merge only when complete
-
-### Running Tests
+## Running tests
 
 ```bash
-bun run test                # Run all tests
-bun run test:unit          # Unit tests only
-bun run test:integration   # Integration tests only
-bun run test:security      # Security tests only
+bun test
 ```
 
-### Generating Documentation
-
-```bash
-bun run docs:generate      # Generate OpenAPI specs
-bun run docs:validate      # Validate spec/code parity
-```
+Test files mirror the implementation path structure under `tests/`.
 
 ---
 
-## Security & Compliance
+## Security
 
-### Security Measures
-
-- **Passwords**: Argon2id hashing; never logged
-- **Tokens**: Replay detection via refresh token families; revocation store for exceptions
-- **API Keys**: Opaque format; hashed at rest; one-time display
-- **Sessions**: HttpOnly, Secure cookies; SameSite=Strict
-- **Audit**: All privileged actions logged
-- **Tenant isolation**: Query-level tenant scoping; no cross-tenant access
-- **Rate limiting**: Multi-instance correct (PostgreSQL-backed)
-
-### Compliance Features
-
-- **GDPR**: User deletion requests, data export, consent tracking
-- **SOC 2**: Audit logging, access controls, monitoring
-- **HIPAA**: Encryption in transit (deploy-layer TLS); access controls; audit trail
+- Passwords hashed with Argon2id; never logged
+- Refresh tokens rotate on use with replay detection
+- API keys stored as Argon2id hashes; secret visible only at creation
+- Sessions use HttpOnly, Secure, SameSite=Strict cookies
+- All privileged actions written to the audit log
+- Rate limiting enforced before business logic on every route class
 
 ---
 
 ## Documentation
 
-- [docs/FRONTEND_SCOPE.md](./docs/FRONTEND_SCOPE.md) - Frontend boundaries and v1.x admin console roadmap
-- [docs/FEATURE_DoD.md](./docs/FEATURE_DoD.md) - Definition of Done checklist for all features
-- [docs/PRODUCT_GLOSSARY.md](./docs/PRODUCT_GLOSSARY.md) - Canonical product terms, lifecycle verbs, and language rules
-- [docs/PROJECT_PLAN_MILESTONES.md](./docs/PROJECT_PLAN_MILESTONES.md) - Canonical GitHub-tracked phase and milestone execution plan
-- [docs/openapi/docs/](./docs/openapi/docs/) - Module-organized API usage guides
-- [docs/openapi/specs/](./docs/openapi/specs/) - Module-organized OpenAPI YAML contracts (root: openapi.yaml)
-- [docs/SCHEMA.md](./database/SCHEMA.md) - PostgreSQL schema documentation
-- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Deployment guide (Phase 8+)
-
----
-
-## Status & Roadmap
-
-| Phase | Milestone | Status |
-|-------|-----------|--------|
-| 0 | Domain contract & scope freeze | ✅ LOCKED |
-| 1 | Bun-native foundation | 🟡 IN PROGRESS |
-| 2 | PostgreSQL persistence | ⏳ Queued |
-| 3 | Bootstrap & platform control | ⏳ Queued |
-| 4 | IAM core domain services | ⏳ Queued |
-| 5 | Authentication & token system | ⏳ Queued |
-| 6 | OAuth/OIDC | ⏳ Queued |
-| 7 | Security & compliance | ⏳ Queued |
-| 8 | Documentation & DX | ⏳ Queued |
-| 9 | Testing & release gates | ⏳ Queued |
-
----
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/falcon-Z/z0-auth/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/falcon-Z/z0-auth/discussions)
-- **Documentation**: [docs/](./docs/)
+- [API usage guides](./docs/openapi/docs/)
+- [OpenAPI specs](./docs/openapi/specs/)
+- [Database schema](./database/SCHEMA.md)
 
 ---
 
 ## License
 
-Apache License 2.0 — See [LICENSE](./LICENSE) for details
-
-This project was created using `bun init` in bun v1.3.5. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Apache License 2.0 — see [LICENSE](./LICENSE).

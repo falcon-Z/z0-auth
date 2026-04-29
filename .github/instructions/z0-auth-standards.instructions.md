@@ -74,11 +74,13 @@ Examples:
 	- copy-pastable `curl` examples for common and failure flows.
 - Do not treat Markdown usage docs as the machine-consumable API contract; YAML OpenAPI is the source of truth.
 
-## 7) Documentation Placement
+## 7) Documentation Placement and Writing Standards
 
 - Keep formal product and API docs under `docs/`.
+- Keep agent workflow instructions, engineering standards, and build-process guidance under `.github/instructions/`.
 - Keep executable SQL migrations under `database/migrations/`.
-- Design notes and architecture docs should prefer `docs/` unless there is a strong reason to colocate with code.
+- Do not place agent instructions, phase references, or development-process notes in `docs/` or `README.md`.
+- All documentation must follow the tone, structure, and content rules in `.github/instructions/documentation-writing-standards.instructions.md`.
 
 ## 8) UI Design Standards Are Mandatory
 
