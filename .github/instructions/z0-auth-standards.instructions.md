@@ -41,6 +41,18 @@ Examples:
 - Compatibility/core endpoints that stay unversioned (for example health and discovery-compatible surfaces) must live under `src/api/core/<module>/<module>.ts`.
 - Use Bun file-based routing in server/API implementation when appropriate.
 
+### Frontend Module and Component Structure
+
+- Organize frontend app routing/guards by module, not by route-labeled filenames.
+- Use module-first paths under `src/app/`.
+- Root app entry guard belongs in `src/app/index.tsx`.
+- Auth route surfaces belong under `src/app/auth/` (for example `signin.tsx`, `signout.tsx`, `register.tsx`).
+- Setup surfaces belong under `src/app/setup/` (for example `setup.tsx`).
+- Console/operator surfaces belong under their module folders (for example `src/app/console/console.tsx`).
+- Keep filenames simple and understandable. Do not append generic suffixes like `-route`, `-component`, or `-page` unless explicitly required.
+- Module-specific components in `src/components/` must live under module folders, for example `src/components/auth/login-button.tsx`.
+- Keep shared, cross-module primitives under `src/components/ui/`.
+
 ## 4) Import Alias Standard
 
 - Internal imports must use the `@z0` alias instead of deep relative paths.
@@ -96,6 +108,8 @@ Before considering a task complete, confirm:
 - Tests added/updated for every changed behavior.
 - Test paths mirror implementation paths.
 - Frontend/backend boundaries respected (`src/app` vs `src/api`).
+- Frontend module structure follows `src/app/index.tsx` plus module folders (`src/app/auth`, `src/app/setup`, etc.) with simple filenames.
+- Module-specific components are organized under `src/components/<module>/` (for example `src/components/auth/login-button.tsx`) and shared primitives remain in `src/components/ui/`.
 - API module placement follows `src/api/v{n}/<module>/<module>.ts` and `src/api/core/<module>/<module>.ts`.
 - Internal imports use `@z0` alias paths.
 - Abstractions in correct folders (`src/lib`, `database`, etc.).

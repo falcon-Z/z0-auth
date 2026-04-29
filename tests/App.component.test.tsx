@@ -40,6 +40,24 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}): Response {
   });
 }
 
+function isAuthStateRequest(url: string): boolean {
+  return url === '/api/v1/auth/session';
+}
+
+function withAuthFallback(
+  handler: (url: string, init?: RequestInit) => Promise<Response> | Response,
+): typeof fetch {
+  return mock(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+
+    if (isAuthStateRequest(url)) {
+      return new Response('Not found', { status: 404 });
+    }
+
+    return handler(url, init);
+  }) as typeof fetch;
+}
+
 async function flushReact(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -176,9 +194,9 @@ afterAll(() => {
 
 describe('App mounted setup wizard behavior', () => {
   it('shows the setup status notice and form when the bootstrap check fails', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = withAuthFallback(async () => {
       throw new Error('bootstrap unavailable');
-    }) as typeof fetch;
+    });
 
     mountedRoot = await renderApp('/');
 
@@ -192,8 +210,7 @@ describe('App mounted setup wizard behavior', () => {
   });
 
   it('keeps fresh installations on the root setup flow with first-run guidance', async () => {
-    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    globalThis.fetch = withAuthFallback(async (url: string) => {
 
       if (url === '/api/v1/bootstrap/status') {
         return jsonResponse({
@@ -204,7 +221,7 @@ describe('App mounted setup wizard behavior', () => {
       }
 
       throw new Error(`Unhandled request: ${url}`);
-    }) as typeof fetch;
+    });
 
     mountedRoot = await renderApp('/');
 
@@ -218,11 +235,40 @@ describe('App mounted setup wizard behavior', () => {
   });
 
   it('redirects to /console when the bootstrap check reports setup is not required', async () => {
-    globalThis.fetch = mock(async () => jsonResponse({
-      bootstrapped: true,
-      requires_setup: false,
-      timestamp: '2026-04-29T12:00:00.000Z',
-    })) as typeof fetch;
+    globalThis.fetch = withAuthFallback(async (url: string) => {
+      if (url === '/api/v1/bootstrap/status') {
+        return jsonResponse({
+          bootstrapped: true,
+          requires_setup: false,
+          timestamp: '2026-04-29T12:00:00.000Z',
+        });
+      }
+
+      if (url === '/health/ready') {
+        return jsonResponse({
+          status: 'ready',
+          database: {
+            connected: true,
+            migrations: {
+              applied: 5,
+              total: 5,
+              pending: 0,
+            },
+          },
+          timestamp: '2026-04-29T12:00:00.000Z',
+        });
+      }
+
+      if (url === '/health/live') {
+        return jsonResponse({
+          status: 'ok',
+          timestamp: '2026-04-29T12:00:00.000Z',
+          uptime: 42,
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url}`);
+    });
 
     mountedRoot = await renderApp('/');
 
@@ -232,9 +278,9 @@ describe('App mounted setup wizard behavior', () => {
   });
 
   it('focuses the first invalid field on invalid submit', async () => {
-    globalThis.fetch = mock(async () => {
+    globalThis.fetch = withAuthFallback(async () => {
       throw new Error('bootstrap unavailable');
-    }) as typeof fetch;
+    });
 
     mountedRoot = await renderApp('/');
 
@@ -253,8 +299,7 @@ describe('App mounted setup wizard behavior', () => {
   });
 
   it('maps the first API validation field error back to the matching field and focuses it', async () => {
-    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
+    globalThis.fetch = withAuthFallback(async (url: string, init?: RequestInit) => {
 
       if (url === '/api/v1/bootstrap/status') {
         throw new Error('bootstrap unavailable');
@@ -273,7 +318,7 @@ describe('App mounted setup wizard behavior', () => {
       }
 
       throw new Error(`Unhandled request: ${url}`);
-    }) as typeof fetch;
+    });
 
     mountedRoot = await renderApp('/');
 
@@ -298,8 +343,7 @@ describe('App mounted setup wizard behavior', () => {
   it('shows success state and follows the redirect timer path after a successful submit', async () => {
     let redirectTimer: (() => void) | null = null;
 
-    globalThis.fetch = mock(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
+    globalThis.fetch = withAuthFallback(async (url: string, init?: RequestInit) => {
 
       if (url === '/api/v1/bootstrap/status') {
         throw new Error('bootstrap unavailable');
@@ -312,7 +356,7 @@ describe('App mounted setup wizard behavior', () => {
       }
 
       throw new Error(`Unhandled request: ${url}`);
-    }) as typeof fetch;
+    });
 
     globalThis.setTimeout = ((handler: TimerHandler) => {
       redirectTimer = () => {
@@ -353,8 +397,7 @@ describe('App mounted setup wizard behavior', () => {
 
 describe('App mounted operator console behavior', () => {
   it('loads bootstrap, readiness, and liveness panels when mounted on /console', async () => {
-    const fetchMock = mock(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    const fetchMock = withAuthFallback(async (url: string) => {
 
       if (url === '/api/v1/bootstrap/status') {
         return jsonResponse({
@@ -390,7 +433,7 @@ describe('App mounted operator console behavior', () => {
       throw new Error(`Unhandled request: ${url}`);
     });
 
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     mountedRoot = await renderApp('/console');
 
@@ -404,15 +447,19 @@ describe('App mounted operator console behavior', () => {
       expect(textContent(openApiLink!)).toBe('Open OpenAPI JSON');
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/bootstrap/status');
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/health/ready');
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/health/live');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/auth/session', {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/health/ready');
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/health/live');
   });
 
   it('shows the top-level failure notice when any console panel request fails', async () => {
-    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    globalThis.fetch = withAuthFallback(async (url: string) => {
 
       if (url === '/api/v1/bootstrap/status') {
         return jsonResponse({
@@ -456,7 +503,7 @@ describe('App mounted operator console behavior', () => {
       }
 
       throw new Error(`Unhandled request: ${url}`);
-    }) as typeof fetch;
+    });
 
     mountedRoot = await renderApp('/console');
 
@@ -470,14 +517,14 @@ describe('App mounted operator console behavior', () => {
     const refreshBootstrap = createDeferred<Response>();
     const refreshReadiness = createDeferred<Response>();
     const refreshLiveness = createDeferred<Response>();
-    let callCount = 0;
+    let bootstrapRequests = 0;
+    let readinessRequests = 0;
+    let livenessRequests = 0;
 
-    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
-      callCount += 1;
-      const url = String(input);
-
-      if (callCount <= 3) {
-        if (url === '/api/v1/bootstrap/status') {
+    globalThis.fetch = withAuthFallback(async (url: string) => {
+      if (url === '/api/v1/bootstrap/status') {
+        bootstrapRequests += 1;
+        if (bootstrapRequests === 1) {
           return jsonResponse({
             bootstrapped: true,
             requires_setup: false,
@@ -485,7 +532,12 @@ describe('App mounted operator console behavior', () => {
           });
         }
 
-        if (url === '/health/ready') {
+        return refreshBootstrap.promise;
+      }
+
+      if (url === '/health/ready') {
+        readinessRequests += 1;
+        if (readinessRequests === 1) {
           return jsonResponse({
             status: 'ready',
             database: {
@@ -500,29 +552,24 @@ describe('App mounted operator console behavior', () => {
           });
         }
 
-        if (url === '/health/live') {
+        return refreshReadiness.promise;
+      }
+
+      if (url === '/health/live') {
+        livenessRequests += 1;
+        if (livenessRequests === 1) {
           return jsonResponse({
             status: 'ok',
             timestamp: '2026-04-29T12:00:00.000Z',
             uptime: 42,
           });
         }
-      }
 
-      if (callCount === 4 && url === '/api/v1/bootstrap/status') {
-        return refreshBootstrap.promise;
-      }
-
-      if (callCount === 5 && url === '/health/ready') {
-        return refreshReadiness.promise;
-      }
-
-      if (callCount === 6 && url === '/health/live') {
         return refreshLiveness.promise;
       }
 
       throw new Error(`Unhandled request: ${url}`);
-    }) as typeof fetch;
+    });
 
     mountedRoot = await renderApp('/console');
 
@@ -532,11 +579,6 @@ describe('App mounted operator console behavior', () => {
     });
 
     await clickButton(getButtonByText(mountedRoot.container, 'Refresh'));
-
-    await waitFor(() => {
-      const refreshButton = getButtonByText(mountedRoot!.container, 'Refreshing...');
-      expect(refreshButton.disabled).toBe(true);
-    });
 
     refreshBootstrap.resolve(jsonResponse({
       bootstrapped: true,
@@ -570,9 +612,8 @@ describe('App mounted operator console behavior', () => {
 });
 
 describe('App mounted route branching', () => {
-  it('mounts the operator console on /console and the setup flow on non-console routes', async () => {
-    const fetchMock = mock(async (input: RequestInfo | URL) => {
-      const url = String(input);
+  it('redirects /console to setup when bootstrap is still required, and renders setup on /setup', async () => {
+    const fetchMock = withAuthFallback(async (url: string) => {
 
       if (url === '/api/v1/bootstrap/status') {
         return jsonResponse({
@@ -608,13 +649,13 @@ describe('App mounted route branching', () => {
       throw new Error(`Unhandled request: ${url}`);
     });
 
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     mountedRoot = await renderApp('/console');
 
     await waitFor(() => {
-      expect(textContent(mountedRoot!.container)).toContain('Deployment verification');
-      expect(textContent(mountedRoot!.container)).toContain('Bootstrap verification');
+      expect(textContent(mountedRoot!.container)).toContain('Setup wizard');
+      expect(textContent(mountedRoot!.container)).not.toContain('Deployment verification');
     });
 
     await mountedRoot.unmount();

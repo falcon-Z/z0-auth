@@ -5,6 +5,7 @@ import {
   describeLivenessStatus,
   describeReadinessStatus,
   extractApiError,
+  fetchAuthState,
   fetchJson,
   fetchReadiness,
   formatUptime,
@@ -418,5 +419,40 @@ describe('fetchReadiness', () => {
     }) as typeof fetch;
 
     await expect(fetchReadiness()).rejects.toThrow('Network request failed.');
+  });
+});
+
+describe('fetchAuthState', () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = mock(() => {
+      throw new Error('fetch mock not configured');
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('returns authenticated when session endpoint responds 200', async () => {
+    globalThis.fetch = mock(async () => new Response(JSON.stringify({ authenticated: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as typeof fetch;
+
+    await expect(fetchAuthState()).resolves.toBe('authenticated');
+  });
+
+  it('returns unauthenticated when session endpoint responds 401', async () => {
+    globalThis.fetch = mock(async () => new Response('Unauthorized', { status: 401 })) as typeof fetch;
+
+    await expect(fetchAuthState()).resolves.toBe('unauthenticated');
+  });
+
+  it('returns unsupported when session endpoint is not implemented', async () => {
+    globalThis.fetch = mock(async () => new Response('Not found', { status: 404 })) as typeof fetch;
+
+    await expect(fetchAuthState()).resolves.toBe('unsupported');
   });
 });

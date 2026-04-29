@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { Console } from '@z0/src/app/console/console';
+import { SignIn } from '@z0/src/app/auth/signin';
+import { Index } from '@z0/src/app/index';
+import { Setup } from '@z0/src/app/setup/setup';
+import type { AuthCheckState } from '@z0/src/app/types';
 import { Button } from '@z0/src/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@z0/src/components/ui/card';
 import { Input } from '@z0/src/components/ui/input';
@@ -46,6 +52,10 @@ interface LivenessResponse {
   status: 'ok';
   timestamp: string;
   uptime: number;
+}
+
+interface AuthSessionResponse {
+  authenticated?: boolean;
 }
 
 interface AsyncResult<T> {
@@ -326,6 +336,117 @@ export async function fetchJson<T>(paths: string[]): Promise<T> {
   throw new Error(lastError);
 }
 
+export async function fetchAuthState(paths: string[] = ['/api/v1/auth/session']): Promise<'authenticated' | 'unauthenticated' | 'unsupported'> {
+  for (const path of paths) {
+    let response: Response;
+
+    try {
+      response = await fetch(path, {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+    } catch {
+      throw new Error('Network request failed.');
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return 'unauthenticated';
+    }
+
+    if (response.status === 404) {
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(await readErrorResponse(response));
+    }
+
+    let payload: AuthSessionResponse | null = null;
+    try {
+      payload = await response.json() as AuthSessionResponse;
+    } catch {
+      return 'authenticated';
+    }
+
+    if (typeof payload?.authenticated === 'boolean') {
+      return payload.authenticated ? 'authenticated' : 'unauthenticated';
+    }
+
+    return 'authenticated';
+  }
+
+  return 'unsupported';
+}
+
+function sanitizeNextPath(value: string | null): string {
+  if (!value || !value.startsWith('/')) {
+    return '/console';
+  }
+
+  if (value.startsWith('//')) {
+    return '/console';
+  }
+
+  return value;
+}
+
+function RouteLoading({ title, description }: { title: string; description: string }) {
+  return (
+    <PageShell>
+      <Card className="w-full max-w-xl border-border/80 shadow-none">
+        <CardHeader>
+          <CardTitle className="text-2xl font-semibold tracking-tight">{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div aria-live="polite" className="rounded-lg border border-border bg-muted px-4 py-4 text-sm text-muted-foreground">
+            Checking route access...
+          </div>
+        </CardContent>
+      </Card>
+    </PageShell>
+  );
+}
+
+function SignInRequired({ authState, authError }: { authState: AuthCheckState; authError?: string }) {
+  const [searchParams] = useSearchParams();
+  const nextPath = sanitizeNextPath(searchParams.get('next'));
+
+  return (
+    <PageShell>
+      <Card className="w-full max-w-xl border-border/80 shadow-none">
+        <CardHeader className="space-y-3">
+          <StatusBadge tone="warning" label="Sign-in required" />
+          <div className="space-y-2">
+            <CardTitle className="text-2xl font-semibold tracking-tight">Authenticate to continue</CardTitle>
+            <CardDescription>
+              Access to the operator console requires an authenticated user session.
+            </CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {authState === 'unsupported' ? (
+            <AsyncNotice
+              tone="info"
+              message="User session endpoint is not available yet. Console access remains open until server-side authentication is configured."
+            />
+          ) : null}
+          {authState === 'error' ? <AsyncNotice tone="error" message={authError ?? 'Authentication state could not be verified.'} /> : null}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild className="sm:flex-1">
+              <Link to={nextPath}>Retry access</Link>
+            </Button>
+            <Button asChild variant="outline" className="sm:flex-1">
+              <Link to="/">Open setup wizard</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </PageShell>
+  );
+}
+
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background px-4 py-6 text-foreground sm:px-6 lg:px-8">
@@ -432,37 +553,19 @@ function StatusCard<T>({
   );
 }
 
-function SetupWizard() {
-  const [step, setStep] = useState<SetupStep>('checking');
+function SetupWizard({ statusNotice: statusNoticeOverride = '' }: { statusNotice?: string }) {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<SetupStep>('form');
   const [formData, setFormData] = useState<SetupFormData>(initialFormData);
   const [error, setError] = useState('');
   const [invalidField, setInvalidField] = useState<SetupField | null>(null);
-  const [statusNotice, setStatusNotice] = useState('');
+  const [statusNotice] = useState(statusNoticeOverride);
   const fieldRefs: Record<SetupField, React.RefObject<HTMLInputElement | null>> = {
     platformName: useRef<HTMLInputElement>(null),
     adminEmail: useRef<HTMLInputElement>(null),
     adminPassword: useRef<HTMLInputElement>(null),
     confirmPassword: useRef<HTMLInputElement>(null),
   };
-
-  useEffect(() => {
-    const checkBootstrapState = async () => {
-      try {
-        const data = await fetchJson<BootstrapStatusResponse>(['/api/v1/bootstrap/status']);
-        if (data.requires_setup === false) {
-          window.location.href = '/console';
-          return;
-        }
-
-        setStep('form');
-      } catch {
-        setStatusNotice('Setup status could not be verified. If this is a new installation, continue the first-run setup here.');
-        setStep('form');
-      }
-    };
-
-    checkBootstrapState();
-  }, []);
 
   const focusField = (field: SetupField | null) => {
     if (!field) {
@@ -522,7 +625,7 @@ function SetupWizard() {
       if (response.ok) {
         setStep('success');
         setTimeout(() => {
-          window.location.href = '/console';
+          navigate('/console', { replace: true });
         }, 2000);
         return;
       }
@@ -696,23 +799,28 @@ function SetupWizard() {
   );
 }
 
-function OperatorConsole() {
-  const [bootstrapResult, setBootstrapResult] = useState<AsyncResult<BootstrapStatusResponse>>({ state: 'loading' });
+function OperatorConsole({ initialBootstrapStatus }: { initialBootstrapStatus?: BootstrapStatusResponse }) {
+  const [bootstrapResult, setBootstrapResult] = useState<AsyncResult<BootstrapStatusResponse>>(
+    initialBootstrapStatus ? { state: 'success', data: initialBootstrapStatus } : { state: 'loading' },
+  );
   const [readinessResult, setReadinessResult] = useState<AsyncResult<ReadinessResponse>>({ state: 'loading' });
   const [livenessResult, setLivenessResult] = useState<AsyncResult<LivenessResponse>>({ state: 'loading' });
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const hasHydratedInitialBootstrap = useRef(Boolean(initialBootstrapStatus));
 
   const loadConsoleState = async () => {
     setIsRefreshing(true);
-    setBootstrapResult((current) => current.data ? current : { state: 'loading' });
+    const shouldRefetchBootstrap = !hasHydratedInitialBootstrap.current;
+
+    if (shouldRefetchBootstrap) {
+      setBootstrapResult((current) => current.data ? current : { state: 'loading' });
+    }
+
     setReadinessResult((current) => current.data ? current : { state: 'loading' });
     setLivenessResult((current) => current.data ? current : { state: 'loading' });
 
-    const tasks = [
-      fetchJson<BootstrapStatusResponse>(['/api/v1/bootstrap/status'])
-        .then((data) => setBootstrapResult({ state: 'success', data }))
-        .catch((error) => setBootstrapResult({ state: 'error', error: error instanceof Error ? error.message : 'Bootstrap request failed.' })),
+    const tasks: Array<Promise<void>> = [
       fetchReadiness()
         .then((data) => setReadinessResult({ state: 'success', data }))
         .catch((error) => setReadinessResult({ state: 'error', error: error instanceof Error ? error.message : 'Readiness request failed.' })),
@@ -721,7 +829,16 @@ function OperatorConsole() {
         .catch((error) => setLivenessResult({ state: 'error', error: error instanceof Error ? error.message : 'Liveness request failed.' })),
     ];
 
+    if (shouldRefetchBootstrap) {
+      tasks.unshift(
+        fetchJson<BootstrapStatusResponse>(['/api/v1/bootstrap/status'])
+          .then((data) => setBootstrapResult({ state: 'success', data }))
+          .catch((error) => setBootstrapResult({ state: 'error', error: error instanceof Error ? error.message : 'Bootstrap request failed.' })),
+      );
+    }
+
     await Promise.allSettled(tasks);
+    hasHydratedInitialBootstrap.current = false;
     setLastUpdated(new Date().toISOString());
     setIsRefreshing(false);
   };
@@ -789,7 +906,7 @@ function OperatorConsole() {
           >
             {bootstrapResult.data?.requires_setup ? (
               <Button asChild variant="outline">
-                <a href="/">Open setup wizard</a>
+                <Link to="/">Open setup wizard</Link>
               </Button>
             ) : null}
           </StatusCard>
@@ -851,10 +968,90 @@ function OperatorConsole() {
   );
 }
 
-export function App() {
-  const isConsoleRoute = window.location.pathname === '/console' || window.location.pathname === '/console/';
+function AppRoutes() {
+  const [bootstrapResult, setBootstrapResult] = useState<AsyncResult<BootstrapStatusResponse>>({ state: 'loading' });
+  const [authResult, setAuthResult] = useState<{ state: AuthCheckState; error?: string }>({ state: 'loading' });
 
-  return isConsoleRoute ? <OperatorConsole /> : <SetupWizard />;
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveRouteAccess = async () => {
+      try {
+        const bootstrap = await fetchJson<BootstrapStatusResponse>(['/api/v1/bootstrap/status']);
+        if (!cancelled) {
+          setBootstrapResult({ state: 'success', data: bootstrap });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setBootstrapResult({
+            state: 'error',
+            error: error instanceof Error ? error.message : 'Bootstrap status request failed.',
+          });
+        }
+      }
+
+      try {
+        const authState = await fetchAuthState();
+        if (!cancelled) {
+          setAuthResult({ state: authState });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAuthResult({
+            state: 'error',
+            error: error instanceof Error ? error.message : 'Authentication state request failed.',
+          });
+        }
+      }
+    };
+
+    void resolveRouteAccess();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isRouteAccessLoading = bootstrapResult.state === 'loading' || authResult.state === 'loading';
+  const bootstrapData = bootstrapResult.data;
+  const setupStatusNotice = bootstrapResult.state === 'error'
+    ? 'Setup status could not be verified. If this is a new installation, continue the first-run setup here.'
+    : '';
+  const setupElement = <SetupWizard statusNotice={setupStatusNotice} />;
+  const setupLoadingElement = <RouteLoading title="Preparing setup" description="Checking initialization and access state." />;
+  const consoleLoadingElement = <RouteLoading title="Loading console" description="Validating setup and user access before opening operator tools." />;
+  const signInLoadingElement = <RouteLoading title="Checking access" description="Resolving authentication requirements for this environment." />;
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={<Index isRouteAccessLoading={isRouteAccessLoading} bootstrapData={bootstrapData} authState={authResult.state} loadingElement={setupLoadingElement} setupElement={setupElement} />}
+      />
+      <Route
+        path="/setup"
+        element={<Setup isRouteAccessLoading={isRouteAccessLoading} bootstrapData={bootstrapData} authState={authResult.state} loadingElement={setupLoadingElement} setupElement={setupElement} />}
+      />
+      <Route path="/bootstrap" element={<Navigate to="/" replace />} />
+      <Route
+        path="/console"
+        element={<Console isRouteAccessLoading={isRouteAccessLoading} bootstrapData={bootstrapData} authState={authResult.state} loadingElement={consoleLoadingElement} consoleElement={<OperatorConsole initialBootstrapStatus={bootstrapData} />} />}
+      />
+      <Route
+        path="/sign-in"
+        element={<SignIn isRouteAccessLoading={isRouteAccessLoading} bootstrapData={bootstrapData} authState={authResult.state} loadingElement={signInLoadingElement} signInElement={<SignInRequired authState={authResult.state} authError={authResult.error} />} />}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+export function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
+  );
 }
 
 export default App;

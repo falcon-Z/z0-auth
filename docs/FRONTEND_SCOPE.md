@@ -90,6 +90,7 @@ The following are **explicitly out of scope for the initial release** and will b
 
 ### Technology Stack
 - **Framework**: React 19
+- **Routing**: React Router (BrowserRouter with guarded route modules)
 - **Styling**: TailwindCSS 4.1
 - **UI Components**: shadcn/ui (6 base components pre-built: button, card, input, label, select, textarea)
 - **Build**: Bun (native bundler via `bun build`)
@@ -98,9 +99,21 @@ The following are **explicitly out of scope for the initial release** and will b
 ### Code Structure
 ```
 src/
-  App.tsx              — Entry point; SetupWizard for bootstrap, redirects to /console when ready
+  App.tsx              — App composition and shared frontend helpers
   frontend.tsx         — React DOM mount point
+  app/
+    index.tsx          — App entry guard for root path behavior
+    types.ts           — Shared app-level route/auth state types
+    auth/
+      signin.tsx       — Auth module sign-in route guard
+    setup/
+      setup.tsx        — Setup module route guard
+    console/
+      console.tsx      — Console module route guard
   components/
+    auth/              — Auth module components (for example login-button.tsx)
+    setup/             — Setup module components
+    console/           — Console module components
     ui/                — shadcn/ui component library
       button.tsx
       card.tsx
@@ -108,18 +121,25 @@ src/
       label.tsx
       select.tsx
       textarea.tsx
-      # More components added as needed (modal, tabs, etc.)
+      # Shared cross-module primitives only
   lib/                 — Shared frontend utilities (will add: auth context, API client, form hooks)
   index.css            — Global TailwindCSS styles
 ```
 
+### Naming Conventions
+
+- Use module-first organization for app surfaces and components.
+- Keep filenames simple and descriptive.
+- Do not append generic filename suffixes like `-route`, `-component`, or `-page` unless a tool requires it.
+- For module-owned components under `src/components/`, use `src/components/<module>/<name>.tsx` (for example `src/components/auth/login-button.tsx`).
+
 ### Bootstrap Flow
-1. User navigates to `/` or `/bootstrap`
-2. React loads `SetupWizard` component
-3. Component checks `GET /api/v1/bootstrap/status` for bootstrap state
-4. If not bootstrapped: show form
-5. On submit: call `POST /api/v1/bootstrap/initialize`
-6. Redirect to `/console` (minimal operator console, shipped)
+1. User navigates to `/`, `/setup`, or `/console`
+2. Route guards check `GET /api/v1/bootstrap/status`
+3. If setup is required, the app routes to setup flow (`/` or `/setup`)
+4. If setup is complete and user authentication is required but missing, the app routes to `/sign-in`
+5. On setup submit, app calls `POST /api/v1/bootstrap/initialize`
+6. After successful setup, app redirects to `/console` (minimal operator console, shipped)
 
 ---
 
