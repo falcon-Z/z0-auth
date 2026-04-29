@@ -132,11 +132,11 @@ export function extractAuth(req: Request): ExtractedAuth {
 }
 
 /**
- * Verify and parse a JWT token (Phase 3 implementation)
+ * Verify and parse a JWT token
  * For now, returns null - actual implementation requires JWT library
  */
 export async function verifyAccessToken(token: string): Promise<Z0TokenClaims | null> {
-  // TODO: Implement in Phase 3 when JWT verification is added
+  // TODO: Implement JWT verification
   // Should verify:
   // 1. Signature using public key
   // 2. Expiration
@@ -147,13 +147,12 @@ export async function verifyAccessToken(token: string): Promise<Z0TokenClaims | 
 
 /**
  * Verify app credentials (ID + secret)
- * Phase 3: Will query database for app and verify secret hash
  */
 export async function verifyAppCredentials(
   clientId: string,
   clientSecret: string
 ): Promise<{ appId: string; scopes: string[] } | null> {
-  // TODO: Implement in Phase 3 with database query
+  // TODO: Implement with database query
   // Should:
   // 1. Look up app by client_id
   // 2. Verify client_secret hash
@@ -163,10 +162,9 @@ export async function verifyAppCredentials(
 
 /**
  * Verify API key
- * Phase 3: Will query database for key and verify secret hash
  */
 export async function verifyAPIKey(apiKeyFull: string): Promise<{ keyId: string; appId: string } | null> {
-  // TODO: Implement in Phase 3 with database query
+  // TODO: Implement with database query
   // Parse format: z0_pk_<keyId>_<secret>
   // 1. Extract keyId and secret
   // 2. Look up key in database
@@ -183,8 +181,6 @@ export async function verifyAPIKey(apiKeyFull: string): Promise<{ keyId: string;
  * 2. Verifies credentials based on mechanism
  * 3. Populates context with actor and authorization level
  * 4. Passes context to next middleware/handler
- * 
- * Phase 3: Will implement actual verification
  */
 export async function authenticationMiddleware(
   req: Request,
@@ -269,7 +265,7 @@ export async function authenticationMiddleware(
           throw createError('INVALID_TOKEN', 'Bootstrap token is empty');
         }
 
-        // TODO: Phase 3 - Verify bootstrap token from database
+        // TODO: Verify bootstrap token from database
         contextBuilder.setAuthorization('unauthenticated');
         break;
       }

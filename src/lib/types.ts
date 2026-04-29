@@ -20,7 +20,7 @@ export type AuthorizationLevel =
   | 'tenant_admin'        // Tenant admin
   | 'app_operator';       // App operator/developer
 
-/** JWT Claims - structure locked in Phase 0 */
+/** JWT Claims */
 export interface Z0TokenClaims extends JWTPayload {
   // Standard JWT claims
   iss: string;              // Issuer (e.g., 'z0-auth.example.com')

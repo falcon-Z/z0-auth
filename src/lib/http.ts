@@ -17,7 +17,7 @@ export interface CORSPolicy {
 }
 
 /**
- * CORS policies by endpoint class (Phase 1 decision)
+ * CORS policies by endpoint class
  */
 export const CORS_POLICIES: Record<EndpointClass, CORSPolicy> = {
   // Public endpoints (/.well-known/*, /api/v1/health, etc.)

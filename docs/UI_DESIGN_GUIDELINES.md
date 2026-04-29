@@ -5,7 +5,7 @@
 This document is the canonical design standard for all Z0 Auth frontend and UI-facing work.
 
 - It defines the product design philosophy, visual system, interaction behavior, accessibility criteria, and copy standards.
-- It aligns UI delivery with the roadmap in docs/PROJECT_PLAN_MILESTONES.md and scope boundaries in docs/FRONTEND_SCOPE.md.
+- It aligns UI delivery with the scope boundaries defined in docs/FRONTEND_SCOPE.md.
 - It is mandatory for all UI changes produced by humans or agents.
 
 ## 2) Product Design Philosophy
@@ -16,9 +16,9 @@ Z0 Auth is an operator control plane for self-hosted authentication infrastructu
 
 1. Operational clarity over decoration
    - Every screen should make system state, risk, and next action obvious.
-2. Scope honesty by phase
-   - Core GA remains minimal.
-   - Full admin and developer surfaces land in Phase 1.x and Gate milestones.
+2. Scope-honest design
+   - The initial release remains minimal.
+   - Deferred admin and developer surfaces are not built yet.
 3. Security-visible behavior
    - Destructive and policy-impacting actions require explicit confirmation and impact visibility.
 4. Consistency as risk reduction
@@ -28,25 +28,25 @@ Z0 Auth is an operator control plane for self-hosted authentication infrastructu
 6. Tenant isolation awareness
    - Active tenant context is always visible where relevant.
 
-## 3) Roadmap Alignment and Phase UX Contract
+## 3) Scope and Deferral Contract
 
-This design standard is coupled to the planning model in docs/PROJECT_PLAN_MILESTONES.md.
+Agents must not silently expand the shipped UI scope beyond docs/FRONTEND_SCOPE.md.
 
-### Core GA (Q3 2026 target)
+### Shipped Surfaces
 
 - Setup wizard
 - Minimal operator console surfaces
 - Thin OAuth/OIDC protocol UI surfaces
 
-### Deferred Surfaces (Phase 1.x and gates)
+### Deferred Surfaces
 
-- Tenant admin console (Phase 1.1)
-- Platform admin console (Phase 1.2)
-- Developer portal (Phase 1.3)
-- Consent and broader OIDC UX (Gate A)
-- Advanced auth UX such as passkeys/social flows (Gate B)
+- Tenant admin console
+- Platform admin console
+- Developer portal
+- Consent and broader OIDC UX
+- Advanced auth UX such as passkeys/social flows
 
-Agents must not silently expand Core GA UI scope beyond docs/FRONTEND_SCOPE.md.
+Do not build UI for features that are not yet implemented in the backend. If a requested UI change depends on an unimplemented feature, flag it as deferred and do not add placeholder UI unless explicitly approved.
 
 ## 4) Visual Language
 
@@ -202,7 +202,7 @@ Do not introduce module-specific component variants for standard patterns withou
 
 Every UI change should confirm:
 
-- Phase scope compliance against docs/FRONTEND_SCOPE.md
+- Scope compliance against docs/FRONTEND_SCOPE.md
 - Gray-neutral token usage for new UI layers
 - Form behavior compliance with section 5.1
 - Accessibility acceptance criteria met
@@ -215,7 +215,7 @@ Every UI change should confirm:
 When an agent performs UI work:
 
 1. Load this file before proposing or implementing UI changes.
-2. Validate phase scope against docs/FRONTEND_SCOPE.md.
+2. Validate scope against docs/FRONTEND_SCOPE.md.
 3. Follow gray-neutral palette and form rules from this document.
 4. Include compliance checks in the final report.
 5. If a requested UI change conflicts with this standard, ask user for approval before diverging.

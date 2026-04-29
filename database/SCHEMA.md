@@ -4,13 +4,13 @@
 
 PostgreSQL schema for Z0 Auth, designed for:
 - Multi-tenant architecture (3-level hierarchy: Platform → Tenants → Apps → Identities)
-- Compliance and audit (soft-delete strategy per Phase 0)
+- Compliance and audit (soft-delete strategy)
 - Token lifecycle and replay detection
 - Rate limiting and authorization
 - SMTP configuration and magic link state machine
-- OIDC consent grants (Phase 1.x)
+- OIDC consent grants
 
-## Phase 0 Design Decisions Applied
+## Design Decisions Applied
 
 - **ID Generation**: PostgreSQL UUID generation (triggers)
 - **Soft-Delete Strategy**: Soft-delete on: identities, sessions, credentials, API keys, consent grants, audit events, tenants, apps
@@ -265,7 +265,7 @@ CREATE TABLE magic_links (
 );
 ```
 
-### 9. Consent Grants (Phase 1.x)
+### 9. Consent Grants
 
 ```sql
 -- OIDC consent tracking for authorization delegation
@@ -367,14 +367,14 @@ database/
     0006_api_keys.sql        -- API keys
     0007_rate_limit.sql      -- Rate limiting
     0008_smtp_magic.sql      -- SMTP, magic links
-    0009_consent.sql         -- Consent grants (Phase 1.x)
+    0009_consent.sql         -- Consent grants
     0010_audit.sql           -- Audit logging
     0011_retention.sql       -- Retention policies and triggers
 ```
 
 ---
 
-## Phase 2 Implementation Plan
+## Migration Implementation Notes
 
 1. Create migration files (0001-0011) with complete SQL
 2. Implement migration runner in Bun (using bun:sqlite or pg driver)

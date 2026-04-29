@@ -169,7 +169,7 @@ async function openApiHandler(req: Request): Promise<Response> {
 }
 
 // ============================================================================
-// Bootstrap Wizard HTML Endpoint (TODO: React component in Phase 1)
+// Bootstrap Wizard HTML Endpoint
 // ============================================================================
 
 async function bootstrapHandler(req: Request): Promise<Response> {

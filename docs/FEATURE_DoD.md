@@ -4,7 +4,7 @@
 
 Every feature module in Z0 Auth must meet this Definition of Done before it can be merged and considered release-ready. This ensures consistent quality, security, documentation, and testability across all components.
 
-**Phases**: This DoD is enforced for all features starting in Phase 1 and throughout all release gates.
+**Phases**: This DoD is enforced for all features.
 
 ---
 
@@ -17,8 +17,8 @@ Every feature module in Z0 Auth must meet this Definition of Done before it can 
 - [ ] **Input validation**: All inputs validated using `ValidationSchema` from `/src/lib/validation.ts`
 - [ ] **Request context**: Request context properly propagated through all handlers
 - [ ] **Audit logging**: All privileged mutations emit audit events with actor/action/resource/result
-- [ ] **Rate limiting hooks**: Auth-critical endpoints have rate limiting applied (Phase 7)
-- [ ] **CORS enforcement**: Endpoint class and CORS policy applied correctly (Phase 7)
+- [ ] **Rate limiting hooks**: Auth-critical endpoints have rate limiting applied
+- [ ] **CORS enforcement**: Endpoint class and CORS policy applied correctly
 - [ ] **No hardcoded secrets**: All sensitive data externalized to environment or secure vault
 - [ ] **Bun-native dependencies only**: No external packages added without documented blocker and ADR
 - [ ] **Tenant isolation**: All queries include tenant context; no cross-tenant data leakage
@@ -69,7 +69,7 @@ Every feature module in Z0 Auth must meet this Definition of Done before it can 
 - [ ] **Password handling**: Passwords hashed via Argon2id, never logged
 - [ ] **Token handling**: Tokens handled securely (HttpOnly cookies, no localStorage logging)
 - [ ] **SQL injection prevention**: All queries use parameterized statements
-- [ ] **CSRF protection**: State-changing operations protected (Phase 7)
+- [ ] **CSRF protection**: State-changing operations protected
 - [ ] **Input sanitization**: XSS prevention for any rendered user input
 - [ ] **Audit trail**: All actions logged with actor, action, resource, result, timestamp
 - [ ] **Data retention**: Soft-delete strategy applied; hard-delete only for temporary data
@@ -87,10 +87,10 @@ Every feature module in Z0 Auth must meet this Definition of Done before it can 
 ### 7. Observability
 
 - [ ] **Logging**: Structured logs at INFO level for key operations, DEBUG for detailed traces
-- [ ] **Metrics**: Request count, error rate, latency tracked (Phase 7)
+- [ ] **Metrics**: Request count, error rate, latency tracked
 - [ ] **Tracing**: Request ID propagated through all layers for request tracing
 - [ ] **Error reporting**: Errors include context for debugging (requestId, actor, resource)
-- [ ] **Health checks**: Endpoint health and dependency status checked (Phase 7)
+- [ ] **Health checks**: Endpoint health and dependency status checked
 
 ### 8. Code Quality
 
@@ -116,10 +116,10 @@ Some modules have additional DoD requirements:
 
 ### Authentication Module
 - [ ] Multiple auth methods supported (password, magic link, TOTP, etc.)
-- [ ] Token replay detection implemented (Phase 5)
+- [ ] Token replay detection implemented
 - [ ] Lockout/backoff protection implemented
 - [ ] Session state management correct
-- [ ] Token revocation store (PostgreSQL) consulted for revocation (Phase 5)
+- [ ] Token revocation store (PostgreSQL) consulted for revocation
 
 ### Database Migration
 - [ ] Forward-only migration (no rollback script)

@@ -16,7 +16,7 @@ export interface RateLimitConfig {
   class: RateLimitClass;
 }
 
-// Platform defaults for each rate limit class (Phase 1 decision)
+// Platform defaults for each rate limit class
 export const RATE_LIMIT_DEFAULTS: Record<RateLimitClass, RateLimitConfig> = {
   bootstrap: { requests: 10, windowSeconds: 60, class: 'bootstrap' },      // 10 per minute
   identity: { requests: 100, windowSeconds: 60, class: 'identity' },       // 100 per minute
@@ -27,7 +27,6 @@ export const RATE_LIMIT_DEFAULTS: Record<RateLimitClass, RateLimitConfig> = {
 
 /**
  * Rate limiter that uses a PostgreSQL backend for distributed counting
- * (Implementation will be provided in Phase 3 when DB is available)
  */
 export class RateLimiter {
   constructor(private db?: any) {} // DB connection injected during initialization
@@ -37,7 +36,6 @@ export class RateLimiter {
     config: RateLimitConfig,
     requestId?: string
   ): Promise<{ allowed: boolean; remaining: number; resetAt: Date }> {
-    // This will be implemented in Phase 3 with actual database calls
     // For now, return permissive defaults
     logger.debug(
       'Rate limit check',
@@ -58,7 +56,6 @@ export class RateLimiter {
     requestId?: string
   ): Promise<void> {
     logger.debug('Recording request for rate limit', { identifier, class: config.class }, requestId);
-    // Implementation in Phase 3
   }
 }
 

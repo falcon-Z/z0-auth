@@ -1,12 +1,12 @@
-# Z0 Auth Frontend Scope Boundary - Core GA
+# Z0 Auth Frontend Scope Boundary
 
 ## Overview
 
-The Z0 Auth frontend is **intentionally minimal in Core GA** to maintain focus on backend-first authentication infrastructure. This document defines what IS and IS NOT part of the Core GA frontend, and where full admin/tenant management UI will be deferred.
+The Z0 Auth frontend is **intentionally minimal in the initial release** to maintain focus on backend-first authentication infrastructure. This document defines what IS and IS NOT part of the shipped frontend, and where full admin/tenant management UI will be deferred.
 
 Canonical UI design standard: see `docs/UI_DESIGN_GUIDELINES.md`.
 
-## Core GA Frontend Surfaces (Shipped)
+## Shipped Frontend Surfaces
 
 ### 1. Setup Wizard
 **Location**: `/src/App.tsx` (SetupWizard component)
@@ -21,7 +21,7 @@ Canonical UI design standard: see `docs/UI_DESIGN_GUIDELINES.md`.
 **Not Included**:
 - SMTP configuration during setup (deferred; SMTP can be configured post-bootstrap via API)
 - Multi-platform support (single platform only in v1)
-- Offline recovery UI (deferred to Phase 3.x)
+- Offline recovery UI (deferred)
 
 ### 2. Minimal Operator Console
 **Location**: `/src/App.tsx` (OperatorConsole component, routed at `/console`)
@@ -33,15 +33,15 @@ Canonical UI design standard: see `docs/UI_DESIGN_GUIDELINES.md`.
 - API documentation quick link (`/.well-known/openapi.json`)
 
 **Not Included**:
-- SMTP configuration state visualization (deferred to Phase 2+)
-- Audit event log viewer (deferred to Phase 2+)
-- Basic session/identity querying tools (deferred to Phase 2+)
+- SMTP configuration state visualization (deferred)
+- Audit event log viewer (deferred)
+- Basic session/identity querying tools (deferred)
 - Tenant creation/management UI (API-first only)
 
 ### 3. OAuth2 / OIDC User-Facing Surfaces
 **Location**: Thin protocol endpoints (no rich UI)
 **Purpose**: Support OAuth2/OIDC flows for end users
-**Scope** (Core GA):
+**Scope** (shipped):
 - Authorization endpoint (`/oauth2/authorize`) returns HTML with:
   - Login form (email/password or magic link request)
   - TOTP verification form (if MFA required)
@@ -51,17 +51,17 @@ Canonical UI design standard: see `docs/UI_DESIGN_GUIDELINES.md`.
 - Userinfo endpoint (`/oauth2/userinfo`) returns JSON
 
 **Not Included**:
-- Consent/scope grant UI (Gate A feature)
-- Account linking UI (Gate A+)
-- Social login UI (Gate B feature)
+- Consent/scope grant UI (deferred)
+- Account linking UI (deferred)
+- Social login UI (deferred)
 - Device flow UIs (deferred)
 - Pushed authorization request UX (deferred)
 
 ---
 
-## Deferred: Full Admin Console (Phase 1.x+)
+## Deferred: Full Admin Console
 
-The following are **explicitly out of Core GA scope** and will be built as a separate admin/management console after the core IAM platform stabilizes:
+The following are **explicitly out of scope for the initial release** and will be built as a separate admin/management console after the core IAM platform stabilizes:
 
 ### Tenant Admin Console
 - Tenant dashboard and analytics
@@ -174,54 +174,42 @@ Content-Type: application/json
 
 ---
 
-## Phase 1.x Admin Console Roadmap
+## Deferred: Admin Console
 
-When Core GA ships and is stable, Phase 1.x will begin implementation of the full admin console. Current plan:
+When the initial release is stable, the full admin console will be built as a follow-on effort:
 
-1. **Phase 1.1**: Tenant admin console foundation
-   - App/client management UI
-   - Identity search and inspection
-   - Role/policy management
-   - Tenant settings
-
-2. **Phase 1.2**: Platform admin console
-   - Tenant creation and lifecycle
-   - Platform settings and limits
-   - System audit logs
-
-3. **Phase 1.3**: Developer portal
-   - API key management
-   - Documentation portal
-   - API test client
+- **Tenant admin console**: App/client management UI, identity search and inspection, role/policy management, tenant settings
+- **Platform admin console**: Tenant creation and lifecycle, platform settings and limits, system audit logs
+- **Developer portal**: API key management, documentation portal, API test client
 
 ---
 
 ## Design Rationale
 
-**Why minimal Core GA frontend?**
+**Why minimal initial release frontend?**
 
 1. **Focus**: Backend-first architecture ensures authentication logic is rock-solid before building management UX
 2. **Maintainability**: Fewer frontend surfaces = less to maintain for solo operator
 3. **API-first**: All operations can be performed via REST API; UI is convenience layer, not blocker
-4. **Separation of concerns**: Core GA backend is stable; admin console can iterate independently
-5. **Release gates**: Core GA backend can ship without waiting for full admin UI completion
+4. **Separation of concerns**: Core backend is stable; admin console can iterate independently
+5. **Incremental delivery**: Core backend can ship without waiting for full admin UI completion
 
-**Why OAuth2/OIDC user flows in Core GA?**
+**Why OAuth2/OIDC user flows in the initial release?**
 
-End users need to log in to applications immediately, so OAuth2 redirect flows (authorize, login, MFA, token exchange) must be in Core GA. However, these are thin protocol surfaces; rich UX (consent screens, account linking, etc.) is deferred to phases where they're needed.
+End users need to log in to applications immediately, so OAuth2 redirect flows (authorize, login, MFA, token exchange) must be in the initial release. However, these are thin protocol surfaces; rich UX (consent screens, account linking, etc.) is deferred.
 
 ---
 
 ## Testing Scope for Frontend
 
-**Included in Core GA testing**:
+**Included in testing**:
 - Setup wizard form validation
 - Bootstrap API integration
 - OAuth2/OIDC login and token flows
 - MFA (TOTP) input validation
 - Error handling and display
 
-**Deferred to Phase 1.x**:
+**Deferred**:
 - Admin console feature testing
 - Tenant/app management UI tests
 - Identity/user management UI tests
@@ -230,11 +218,11 @@ End users need to log in to applications immediately, so OAuth2 redirect flows (
 
 ## Known Limitations & Future Work
 
-1. **No consent UI in Core GA**: Consent/scope grant decisions are handled by API (automatic approval); interactive consent UI is Gate A
+1. **No consent UI in initial release**: Consent/scope grant decisions are handled by API (automatic approval); interactive consent UI is Gate A
 2. **No account linking**: Social login linking deferred to Gate B
-3. **Single tenant on frontend**: Multi-tenant admin experience deferred to Phase 1.x
-4. **No branding/customization**: Custom branding on auth flows deferred to Phase 1.x
-5. **No analytics dashboard**: Usage analytics and reporting deferred to Phase 1.x
+3. **Single tenant on frontend**: Multi-tenant admin experience deferred
+4. **No branding/customization**: Custom branding on auth flows deferred
+5. **No analytics dashboard**: Usage analytics and reporting deferred
 
 ---
 
@@ -247,6 +235,6 @@ All frontend surfaces follow these policies:
 3. **Input validation**: All form inputs validated both client-side (UX feedback) and server-side (security boundary)
 4. **Password handling**: Never logged; TLS-only transmission; hashed at rest via Argon2id
 5. **Session tokens**: HttpOnly, Secure cookies; no localStorage for sensitive data
-6. **Rate limiting**: Protected via Bun middleware layer (Phase 7)
+6. **Rate limiting**: Protected via Bun middleware layer (rate-limit middleware)
 7. **Audit logging**: All user actions logged server-side; no sensitive data in logs
 
