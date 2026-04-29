@@ -373,20 +373,52 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
+export interface ServerAddressConfig {
+  port: number;
+  bindHost: string;
+  displayHost: string;
+}
+
+export function resolveServerAddressConfig(
+  env: Record<string, string | undefined> = process.env,
+): ServerAddressConfig {
+  const parsedPort = parseInt(env.PORT || '3000', 10);
+
+  return {
+    port: Number.isFinite(parsedPort) ? parsedPort : 3000,
+    bindHost: env.BIND_HOST || '0.0.0.0',
+    displayHost: env.DISPLAY_HOST || 'localhost',
+  };
+}
+
+export function renderStartupBanner({ port, displayHost }: ServerAddressConfig): string {
+  const origin = `http://${displayHost}:${port}`;
+
+  return `
+╔═════════════════════════════════════════════════════════════╗
+║                    Z0 Auth Server                           ║
+╠═════════════════════════════════════════════════════════════╣
+║ 🚀 Server running at ${origin}
+║ 📚 API Docs:  ${origin}/.well-known/openapi.json
+║ 🏥 Health:    ${origin}/health
+║ 🔧 Setup:     ${origin}/
+╚═════════════════════════════════════════════════════════════╝
+`;
+}
+
 // ============================================================================
 // Server Initialization
 // ============================================================================
 
 if (import.meta.main) {
   const isDevelopment = process.env.NODE_ENV !== 'production';
-  const port = parseInt(process.env.PORT || '3000');
-  const hostname = process.env.HOSTNAME || 'localhost';
+  const { port, bindHost, displayHost } = resolveServerAddressConfig();
 
   await ensureServerStartupReadiness();
 
   const server = await Bun.serve({
     port,
-    hostname,
+    hostname: bindHost,
     fetch: handleRequest,
     development: isDevelopment && {
       hmr: true,
@@ -394,17 +426,7 @@ if (import.meta.main) {
     },
   });
 
-  console.log(`
-╔═════════════════════════════════════════════════════════════╗
-║                    Z0 Auth Server                           ║
-║                    Phase 1 - Foundation                     ║
-╠═════════════════════════════════════════════════════════════╣
-║ 🚀 Server running at http://${hostname}:${port}
-║ 📚 API Docs:  http://${hostname}:${port}/.well-known/openapi.json
-║ 🏥 Health:    http://${hostname}:${port}/health
-║ 🔧 Setup:     http://${hostname}:${port}/bootstrap
-╚═════════════════════════════════════════════════════════════╝
-`);
+  console.log(renderStartupBanner({ port, bindHost, displayHost }));
 
   // Graceful shutdown
   process.on('SIGTERM', () => {

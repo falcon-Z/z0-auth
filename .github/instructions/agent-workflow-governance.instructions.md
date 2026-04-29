@@ -40,10 +40,13 @@ Required sequence for each new phase implementation:
 ## 4) Standards and Documentation Integrity
 
 - Every behavior change requires corresponding tests.
+- User-facing runtime, UI, documentation, and startup copy must not expose internal roadmap, phase, GA, or milestone terminology unless the user explicitly requests that language.
+- Local startup banners, examples, and operator-facing local URLs must not leak container or machine hostnames by default; display URLs should use `localhost` unless an explicit display-host override is configured.
 - API behavior changes require OpenAPI YAML updates under `docs/openapi/specs/` and usage guide updates under `docs/openapi/docs/`.
 - UI behavior changes require alignment with `docs/UI_DESIGN_GUIDELINES.md` and scope checks against `docs/FRONTEND_SCOPE.md`.
 - Documentation must be written as end-user and developer guidance, not implementation notes.
 - Documentation should explain when to use, required context, examples, failure flows, and operator/developer actions.
+- Tests must validate user-visible behavior and outcomes, not only internal implementation details or helper wiring.
 - Agents must align implementation, tests, and docs before phase completion.
 
 ## 5) Reporting Discipline

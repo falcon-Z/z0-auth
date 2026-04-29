@@ -183,9 +183,37 @@ describe('App mounted setup wizard behavior', () => {
     mountedRoot = await renderApp('/');
 
     await waitFor(() => {
-      expect(textContent(mountedRoot!.container)).toContain('Bootstrap status could not be verified. Continue setup if this is a new deployment.');
+      expect(textContent(mountedRoot!.container)).toContain('Setup status could not be verified. If this is a new installation, continue the first-run setup here.');
+      expect(textContent(mountedRoot!.container)).toContain('First-run setup');
       expect(textContent(mountedRoot!.container)).toContain('Setup wizard');
       expect(textContent(mountedRoot!.container)).toContain('Initialize platform');
+      expect(textContent(mountedRoot!.container)).not.toContain('Core GA');
+    });
+  });
+
+  it('keeps fresh installations on the root setup flow with first-run guidance', async () => {
+    globalThis.fetch = mock(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url === '/api/v1/bootstrap/status') {
+        return jsonResponse({
+          bootstrapped: false,
+          requires_setup: true,
+          timestamp: '2026-04-29T12:00:00.000Z',
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url}`);
+    }) as typeof fetch;
+
+    mountedRoot = await renderApp('/');
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/');
+      expect(textContent(mountedRoot!.container)).toContain('First-run setup');
+      expect(textContent(mountedRoot!.container)).toContain('Complete the one-time setup to create the platform record, administrator account, and default tenant.');
+      expect(textContent(mountedRoot!.container)).toContain('After setup, the operator console shows setup status, readiness, liveness, and the OpenAPI link.');
+      expect(textContent(mountedRoot!.container)).not.toContain('Core GA');
     });
   });
 

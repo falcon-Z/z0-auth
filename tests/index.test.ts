@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { executeMiddlewareChain, handleRequest, type Middleware } from '@z0/src/index';
+import {
+  executeMiddlewareChain,
+  handleRequest,
+  renderStartupBanner,
+  resolveServerAddressConfig,
+  type Middleware,
+} from '@z0/src/index';
 import type { RequestContext } from '@z0/src/lib';
 
 describe('Request routing', () => {
@@ -156,5 +162,39 @@ describe('Standalone HTML shell', () => {
 
     expect(rootIndex).toBeGreaterThanOrEqual(0);
     expect(scriptIndex).toBeGreaterThan(rootIndex);
+  });
+});
+
+describe('Server startup banner', () => {
+  it('uses localhost display URLs by default and points setup users at root', () => {
+    const config = resolveServerAddressConfig({});
+    const banner = renderStartupBanner(config);
+
+    expect(config.bindHost).toBe('0.0.0.0');
+    expect(config.displayHost).toBe('localhost');
+    expect(banner).toContain('http://localhost:3000');
+    expect(banner).toContain('http://localhost:3000/');
+    expect(banner).not.toContain('/bootstrap');
+    expect(banner).not.toContain('Phase 1');
+  });
+
+  it('keeps bind host separate from display URLs unless display host is explicitly configured', () => {
+    const defaultDisplayConfig = resolveServerAddressConfig({
+      PORT: '4010',
+      BIND_HOST: '127.0.0.1',
+    });
+
+    expect(renderStartupBanner(defaultDisplayConfig)).toContain('http://localhost:4010');
+    expect(renderStartupBanner(defaultDisplayConfig)).not.toContain('http://127.0.0.1:4010');
+
+    const overriddenDisplayConfig = resolveServerAddressConfig({
+      PORT: '4010',
+      BIND_HOST: '0.0.0.0',
+      DISPLAY_HOST: 'devbox.internal',
+    });
+
+    const banner = renderStartupBanner(overriddenDisplayConfig);
+    expect(banner).toContain('http://devbox.internal:4010');
+    expect(banner).not.toContain('http://localhost:4010');
   });
 });

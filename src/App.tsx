@@ -456,7 +456,7 @@ function SetupWizard() {
 
         setStep('form');
       } catch {
-        setStatusNotice('Bootstrap status could not be verified. Continue setup if this is a new deployment.');
+        setStatusNotice('Setup status could not be verified. If this is a new installation, continue the first-run setup here.');
         setStep('form');
       }
     };
@@ -548,11 +548,11 @@ function SetupWizard() {
         <Card className="w-full max-w-xl border-border/80 shadow-none">
           <CardHeader>
             <CardTitle className="text-2xl font-semibold tracking-tight">Preparing setup</CardTitle>
-            <CardDescription>Checking whether this deployment still requires bootstrap.</CardDescription>
+            <CardDescription>Checking whether this installation still needs first-run setup.</CardDescription>
           </CardHeader>
           <CardContent>
             <div aria-live="polite" className="rounded-lg border border-border bg-muted px-4 py-4 text-sm text-muted-foreground">
-              Checking bootstrap state...
+              Checking setup status...
             </div>
           </CardContent>
         </Card>
@@ -583,24 +583,24 @@ function SetupWizard() {
       <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
         <Card className="border-border/80 shadow-none">
           <CardHeader className="space-y-4">
-            <StatusBadge tone="neutral" label="Core GA setup" />
+            <StatusBadge tone="neutral" label="First-run setup" />
             <div className="space-y-2">
               <CardTitle className="text-2xl font-semibold tracking-tight">Initialize Z0 Auth</CardTitle>
               <CardDescription>
-                Complete the one-time bootstrap flow to create the platform record, super admin account, and default tenant.
+                Complete the one-time setup to create the platform record, administrator account, and default tenant.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
             <div className="rounded-lg border border-border bg-muted/60 p-4">
               <p className="font-medium text-foreground">What happens during setup</p>
-              <p className="mt-2">The API initializes the platform, stores the admin credentials securely, and issues a bootstrap token for the initial handoff.</p>
+              <p className="mt-2">Setup creates the platform record, stores the administrator credentials securely, and prepares this installation for sign-in and verification.</p>
             </div>
             <div className="rounded-lg border border-border bg-card p-4">
               <p className="font-medium text-foreground">Before you submit</p>
-              <p className="mt-2">Use a monitored admin email and a strong password. This action can only complete once for a deployment.</p>
+              <p className="mt-2">Use an email inbox you monitor and a strong password. This action only completes once for each installation.</p>
             </div>
-            <p className="text-xs">After setup, the minimal operator console will show bootstrap verification, readiness, liveness, and the API contract link.</p>
+            <p className="text-xs">After setup, the operator console shows setup status, readiness, liveness, and the OpenAPI link.</p>
           </CardContent>
         </Card>
 
@@ -686,7 +686,7 @@ function SetupWizard() {
               </Button>
 
               <p className="text-center text-xs text-muted-foreground">
-                This one-time action creates the super admin account and the default tenant using the current bootstrap API.
+                This one-time action creates the administrator account and default tenant for this installation.
               </p>
             </form>
           </CardContent>
@@ -755,11 +755,11 @@ function OperatorConsole() {
       <div className="flex w-full max-w-6xl flex-col gap-6">
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card/90 p-6 shadow-none lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
-            <StatusBadge tone="neutral" label="Minimal operator console" />
+            <StatusBadge tone="neutral" label="Operator console" />
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Deployment verification</h1>
               <p className="text-sm text-muted-foreground">
-                Confirm bootstrap state and core service health using the APIs that ship in Core GA.
+                Confirm setup status and service health using the available API checks.
               </p>
             </div>
           </div>

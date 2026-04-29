@@ -13,6 +13,13 @@ These instructions are mandatory for all Copilot-generated changes in this repos
 - For every new implementation, including a small function, add tests in the same change.
 - Do not merge implementation-only changes without tests unless explicitly approved by maintainers.
 - Target maximum practical code coverage and prioritize meaningful branch/path coverage.
+- Prefer assertions on user-visible behavior, operator-facing copy, routes, and outcomes over tests that only prove internal implementation details.
+
+## 1.1) User-Facing Copy and Local URL Safety
+
+- Shipped runtime banners, UI copy, and docs must not leak internal roadmap, phase, milestone, or GA terminology unless explicitly required by approved scope.
+- Local startup and operator guidance must default to `localhost` display URLs.
+- Do not use ambient machine or container hostnames for user-facing local URLs. Only show a different display host when an explicit configuration value is provided for that purpose.
 
 ## 2) Test Folder Structure
 
