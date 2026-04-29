@@ -153,6 +153,7 @@ Test files mirror the implementation path structure under `tests/`.
 - [API usage guides](./docs/openapi/docs/)
 - [OpenAPI specs](./docs/openapi/specs/)
 - [Database schema](./database/SCHEMA.md)
+- [Product and engineering guidelines](./docs/PRODUCT_ENGINEERING_GUIDELINES.md)
 
 ---
 
