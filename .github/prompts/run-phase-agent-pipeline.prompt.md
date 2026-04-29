@@ -1,6 +1,6 @@
 ---
 name: "Run Phase Agent Pipeline"
-description: "Execute the chained phase workflow: implement, review, fix, re-review until clear, then request approval to progress; optionally run API-to-UI track with design gating."
+description: "Execute the standard chained workflow: discovery, planning, implementation loop, review/remediation loop, then UI integration loop with UI testing and review."
 argument-hint: "Phase goal, accepted scope, API/UI tracks, and known constraints"
 agent: "Project Phase Orchestrator"
 ---
@@ -14,14 +14,25 @@ Inputs to collect first:
 - Whether approved design guidelines already exist.
 
 Execution rules:
-1. Start with implementation.
-2. Immediately run quality inspection.
-3. If findings exist, run fix agent for prioritized issues.
-4. Re-run review until clear for this phase.
-5. Ask user for explicit approval before moving to next stage.
-6. If API track is complete and UI is required:
-   - If design guidelines are complete: run UI Integration Agent.
-   - If not complete: run Design Philosophy Agent, request user approval, then run UI Integration Agent.
+1. Start with Phase Codebase Discovery Agent.
+2. Run Phase Task Planner Agent.
+3. Execute implementation loop for each approved task slice:
+   - Phase Implementation Agent
+   - Phase API Test Agent
+   - Phase OpenAPI Spec Agent when API behavior changes
+   - Phase Documentation Agent when behavior/docs change
+4. Repeat implementation loop until phase scope is complete.
+5. Run Phase Quality Inspector.
+6. If findings exist, run Phase Fix Implementer and then Phase Quality Inspector again.
+7. Repeat remediation and review until clear for this phase.
+8. Ask user for explicit approval before moving to UI integration stage.
+9. If UI track is required:
+   - If design guidelines are incomplete: run Design Philosophy Agent and request approval.
+   - Run UI Integration Agent.
+   - Run Phase UI Test Agent.
+   - Run Phase Quality Inspector for UI/integration scope.
+   - Repeat UI integration plus UI tests plus review until clear.
+10. Ask user for explicit approval before closing phase.
 
 Reporting format each cycle:
 1. Stage

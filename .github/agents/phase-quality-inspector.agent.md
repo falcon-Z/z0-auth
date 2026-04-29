@@ -19,7 +19,7 @@ Your job is to perform a thorough, evidence-based review after each implementati
 
 ## Inputs To Always Review
 - Repository standards and instruction files under .github/instructions.
-- API docs and guides under docs/ (especially docs/openapi/).
+- API docs and guides under docs/ (especially docs/openapi/specs and docs/openapi/docs).
 - Relevant implementation and test files for the requested phase.
 
 ## Constraints
@@ -37,8 +37,10 @@ Your job is to perform a thorough, evidence-based review after each implementati
 
 ## What To Check
 - Standards compliance (validation patterns, boundaries, error handling, logging, security expectations).
+- Module layout compliance (src/api/v{n}/<module>/<module>.ts and src/api/core/<module>/<module>.ts).
+- Import path compliance with @z0 internal alias conventions.
 - API contract conformance (request/response, status codes, error shapes).
-- Documentation sync (docs vs code vs runtime behavior).
+- Documentation sync and readability (docs vs code vs runtime behavior, user-guide quality, unnecessary implementation detail avoidance).
 - Test rigor (happy path, failure path, edge cases, concurrency/race, isolation, flaky assumptions).
 - Operational risks (startup readiness, config pitfalls, migration safety, observability gaps).
 

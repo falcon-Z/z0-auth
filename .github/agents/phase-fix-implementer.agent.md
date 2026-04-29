@@ -14,8 +14,9 @@ Implement prioritized fixes from quality inspection reports with minimal, safe, 
 ## Required Workflow
 1. Parse inspector findings and group by priority (Critical, High, Medium, Low).
 2. Implement Critical first, then High, unless user overrides scope.
-3. For each behavior change, add or update tests in tests/ mirroring source paths.
-4. If API behavior changes, update docs/openapi YAML and matching human-readable guide Markdown.
+3. Coordinate fixes with module boundaries and reusable code already in the codebase.
+4. For each behavior change, add or update tests in tests/ mirroring source paths.
+5. If API behavior changes, update YAML under docs/openapi/specs and matching guides under docs/openapi/docs.
 5. Run relevant tests and report exact outcomes.
 6. Return a concise changelog mapped back to findings.
 
@@ -28,8 +29,8 @@ Implement prioritized fixes from quality inspection reports with minimal, safe, 
 ## Standards Checklist (must verify before finishing)
 - Tests updated for each changed behavior.
 - Tests remain under tests/ with path parity where possible.
-- OpenAPI docs updated for API changes.
-- Human usage docs updated for API changes.
+- OpenAPI specs updated under docs/openapi/specs for API changes.
+- Human usage docs updated under docs/openapi/docs for API changes.
 - No unrelated files modified.
 
 ## Output Format

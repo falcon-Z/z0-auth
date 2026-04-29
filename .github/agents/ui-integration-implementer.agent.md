@@ -21,14 +21,18 @@ Implement UI/integration flows that match implemented API behavior and approved 
 
 ## Required Checks
 - UI behavior aligns with API contracts and error states.
-- UI tests are added or updated where relevant.
+- UI handoff to Phase UI Test Agent includes covered and uncovered states.
 - UI documentation is updated if behavior changes materially.
+
+## Loop Behavior
+- This agent participates in a loop with Phase UI Test Agent and Phase Quality Inspector.
+- Apply review findings and re-run the loop until clear.
 
 ## Output Format
 Return:
 1. Design Input Used
 2. UI Scope Implemented
 3. API-to-UI Mapping
-4. Tests Added/Updated
+4. States Implemented (loading/success/error/empty/permission)
 5. Validation Results
 6. Follow-up UX questions (if any)
