@@ -31,7 +31,7 @@ Required default sequence:
 ## 4) Standards and Documentation Integrity
 
 - Every behavior change requires corresponding tests.
-- API behavior changes require OpenAPI YAML updates and usage guide updates.
+- API behavior changes require OpenAPI YAML updates under `docs/openapi/specs/` and usage guide updates under `docs/openapi/docs/`.
 - Agents must align implementation, tests, and docs before phase completion.
 
 ## 5) Reporting Discipline

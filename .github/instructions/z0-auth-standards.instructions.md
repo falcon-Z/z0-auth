@@ -21,7 +21,8 @@ These instructions are mandatory for all Copilot-generated changes in this repos
 - Keep path parity between source and tests whenever possible.
 
 Examples:
-- `src/api/auth/login.ts` -> `tests/api/auth/login.test.ts`
+- `src/api/v1/users/users.ts` -> `tests/api/v1/users/users.test.ts`
+- `src/api/core/health/health.ts` -> `tests/api/core/health/health.test.ts`
 - `src/app/components/SetupWizard.tsx` -> `tests/app/components/SetupWizard.test.tsx`
 - `src/lib/crypto.ts` -> `tests/lib/crypto.test.ts`
 
@@ -29,28 +30,36 @@ Examples:
 
 - `src/app/` contains frontend code only (React UI, client behavior, browser concerns).
 - `src/api/` contains backend/server code only (handlers, server routing, API contracts).
+- Versioned API endpoints must use module directories under `src/api/v{n}/<module>/<module>.ts`.
+- Compatibility/core endpoints that stay unversioned (for example health and discovery-compatible surfaces) must live under `src/api/core/<module>/<module>.ts`.
 - Use Bun file-based routing in server/API implementation when appropriate.
 
-## 4) Abstraction Placement
+## 4) Import Alias Standard
+
+- Internal imports must use the `@z0` alias instead of deep relative paths.
+- Use `@z0/src/...` for source modules and `@z0/database/...` for database modules.
+- Avoid introducing new `../` import chains for internal code unless there is a justified tooling constraint.
+
+## 5) Abstraction Placement
 
 - Shared abstractions must be placed in their proper dedicated locations.
 - Utilities belong in `src/lib/`.
 - Database-related code belongs in `database/` and/or a dedicated DB module folder.
 - Avoid mixing frontend/server/db concerns in the same module.
 
-## 5) OpenAPI Is Mandatory
+## 6) OpenAPI Is Mandatory
 
-- Every API endpoint must have an OpenAPI specification in `docs/openapi/` as YAML (`*.yaml`).
+- Every API endpoint must have an OpenAPI specification under `docs/openapi/specs/` as YAML (`*.yaml`).
 - OpenAPI specs must use the latest stable OpenAPI standard (currently OpenAPI 3.1.x).
 - Specs must be compatible with tooling import workflows (for example Postman OpenAPI import).
-- Keep a consolidated root spec (for example `docs/openapi/openapi.yaml`) that references or includes all implemented endpoints.
+- Keep a consolidated root spec at `docs/openapi/specs/openapi.yaml` that references or includes all implemented endpoints.
 - Any API change, even small, must include corresponding OpenAPI updates in the same change.
 - OpenAPI specs must stay in sync with implemented behavior, schemas, status codes, and errors.
 - Follow proper REST API design guidelines in endpoint and schema definitions.
 
 ### Human-Readable API Docs
 
-- Markdown files under `docs/openapi/` are human-readable usage guides only.
+- Markdown files under `docs/openapi/docs/` are human-readable usage guides only.
 - Each API Markdown guide must include:
 	- a short "when to use" section,
 	- authentication/context requirements,
@@ -58,20 +67,22 @@ Examples:
 	- copy-pastable `curl` examples for common and failure flows.
 - Do not treat Markdown usage docs as the machine-consumable API contract; YAML OpenAPI is the source of truth.
 
-## 6) Documentation Placement
+## 7) Documentation Placement
 
 - Keep formal product and API docs under `docs/`.
 - Keep executable SQL migrations under `database/migrations/`.
 - Design notes and architecture docs should prefer `docs/` unless there is a strong reason to colocate with code.
 
-## 7) PR/Change Checklist
+## 8) PR/Change Checklist
 
 Before considering a task complete, confirm:
 - Tests added/updated for every changed behavior.
 - Test paths mirror implementation paths.
 - Frontend/backend boundaries respected (`src/app` vs `src/api`).
+- API module placement follows `src/api/v{n}/<module>/<module>.ts` and `src/api/core/<module>/<module>.ts`.
+- Internal imports use `@z0` alias paths.
 - Abstractions in correct folders (`src/lib`, `database`, etc.).
 - OpenAPI updated in `docs/` for every API change.
-- OpenAPI YAML updated in `docs/openapi/*.yaml` for every API change.
+- OpenAPI YAML updated in `docs/openapi/specs/**/*.yaml` (including `docs/openapi/specs/openapi.yaml` when needed) for every API change.
 - Human-readable API docs updated with usage notes and `curl` examples.
 - Documentation and implementation are synchronized.
