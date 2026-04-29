@@ -17,9 +17,17 @@ import type { RequestContext } from '@z0/src/lib';
 
 const CANONICAL_OPENAPI_SPEC_PATH = new URL('../docs/openapi/specs/openapi.yaml', import.meta.url);
 const CANONICAL_FRONTEND_SHELL_PATH = new URL('./index.html', import.meta.url);
-const CANONICAL_SCRIPT_TAG = '<script type="module" src="./frontend.tsx"></script>';
-const ROUTED_SERVER_SCRIPT_TAG = '<script type="module" src="/src/frontend.tsx"></script>';
+const CANONICAL_FRONTEND_SRC = './frontend.tsx';
+const CANONICAL_FRONTEND_BUNDLE_ENTRYPOINT = 'src/frontend.tsx';
+const FRONTEND_BUNDLE_ENTRYPOINT_FALLBACKS = [
+  './src/frontend.tsx',
+  new URL('./frontend.tsx', import.meta.url).pathname,
+  new URL('../src/frontend.tsx', import.meta.url).pathname,
+];
+const ROUTED_SERVER_FRONTEND_SRC = '/frontend.tsx';
+const FRONTEND_SRC_REWRITE_PATTERN = /(\bsrc=(['"]))\.\/frontend\.tsx(\2)/i;
 const canonicalFrontendShellPromise = Bun.file(CANONICAL_FRONTEND_SHELL_PATH).text();
+let cachedFrontendBundle: string | null = null;
 
 // ============================================================================
 // Middleware Pipeline Types
@@ -178,10 +186,71 @@ async function bootstrapHandler(req: Request): Promise<Response> {
   }
 
   const canonicalShell = await canonicalFrontendShellPromise;
-  const routedShell = canonicalShell.replace(CANONICAL_SCRIPT_TAG, ROUTED_SERVER_SCRIPT_TAG);
+  const routedShell = canonicalShell.replace(FRONTEND_SRC_REWRITE_PATTERN, `$1${ROUTED_SERVER_FRONTEND_SRC}$3`);
+
+  if (routedShell === canonicalShell || routedShell.includes(CANONICAL_FRONTEND_SRC)) {
+    logger.error('Failed to rewrite frontend module path for bootstrap shell', new Error('frontend script rewrite did not occur'));
+    return new Response('Failed to render bootstrap shell', { status: 500 });
+  }
 
   return new Response(routedShell, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}
+
+async function frontendBundleHandler(req: Request): Promise<Response> {
+  if (req.method !== 'GET') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: {
+        'Content-Type': 'application/json',
+        Allow: 'GET',
+      },
+    });
+  }
+
+  if (!cachedFrontendBundle) {
+    const attemptedEntrypoints = [CANONICAL_FRONTEND_BUNDLE_ENTRYPOINT, ...FRONTEND_BUNDLE_ENTRYPOINT_FALLBACKS];
+    const attemptedErrors: string[] = [];
+
+    for (const entrypoint of attemptedEntrypoints) {
+      try {
+        const buildResult = await Bun.build({
+          entrypoints: [entrypoint],
+          write: false,
+          target: 'browser',
+          format: 'esm',
+        });
+
+        if (!buildResult.success) {
+          attemptedErrors.push(`${entrypoint}: ${buildResult.logs.map((log) => log.message).join('\n') || 'Unknown build failure'}`);
+          continue;
+        }
+
+        const jsOutput = buildResult.outputs.find((output) => output.kind === 'entry-point' || output.path.endsWith('.js'));
+        if (!jsOutput) {
+          attemptedErrors.push(`${entrypoint}: missing JS output artifact`);
+          continue;
+        }
+
+        cachedFrontendBundle = await jsOutput.text();
+        break;
+      } catch (error) {
+        attemptedErrors.push(`${entrypoint}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    if (!cachedFrontendBundle) {
+      logger.error('Failed to build frontend module for /frontend.tsx', new Error(attemptedErrors.join('\n') || 'Unknown build failure'));
+      return Response.json({ error: 'Failed to build frontend module' }, { status: 500 });
+    }
+  }
+
+  return new Response(cachedFrontendBundle, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8',
+    },
   });
 }
 
@@ -226,11 +295,16 @@ const routes: Route[] = [
   // Bootstrap API endpoints
   { pattern: '/api/v1/bootstrap/status', method: 'GET', handler: handleBootstrapStatus },
   { pattern: '/api/v1/bootstrap/initialize', method: 'POST', handler: handleBootstrapInitialize },
+
+  // Frontend module runtime bundle for browser shell
+  { pattern: /^\/frontend\.tsx$/, method: 'GET', handler: frontendBundleHandler },
   
   // Bootstrap UI (wizard)
   { pattern: '/', method: 'GET', handler: bootstrapHandler },
   { pattern: /^\/bootstrap\/?$/, method: 'GET', handler: bootstrapHandler },
   { pattern: /^\/console\/?$/, method: 'GET', handler: bootstrapHandler },
+  { pattern: /^\/setup\/?$/, method: 'GET', handler: bootstrapHandler },
+  { pattern: /^\/sign-in\/?$/, method: 'GET', handler: bootstrapHandler },
 ];
 
 /**

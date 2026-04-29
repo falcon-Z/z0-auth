@@ -84,31 +84,50 @@ describe('Request routing', () => {
     expect(body.error).toBe('Method not allowed');
   });
 
-  it('serves bootstrap frontend shell from canonical template for root, bootstrap, and console routes', async () => {
-    const canonicalStandaloneShell = await Bun.file(new URL('../src/index.html', import.meta.url)).text();
-    const expectedRoutedShell = canonicalStandaloneShell
-      .replace('<script type="module" src="./frontend.tsx"></script>', '<script type="module" src="/src/frontend.tsx"></script>');
+  it('serves bootstrap frontend shell from canonical template for app shell routes', async () => {
+    const shellRoutes = [
+      '/',
+      '/bootstrap',
+      '/bootstrap/',
+      '/console',
+      '/console/',
+      '/setup',
+      '/setup/',
+      '/sign-in',
+      '/sign-in/',
+    ];
 
-    const rootResponse = await handleRequest(new Request('http://localhost:3000/', {
+    for (const route of shellRoutes) {
+      const response = await handleRequest(new Request(`http://localhost:3000${route}`, {
+        method: 'GET',
+      }));
+
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('/frontend.tsx');
+      expect(html).not.toContain('./frontend.tsx');
+    }
+  });
+
+  it('serves a browser-executable frontend module from the emitted shell script src path', async () => {
+    const shellResponse = await handleRequest(new Request('http://localhost:3000/', {
       method: 'GET',
     }));
-    expect(rootResponse.status).toBe(200);
-    const rootHtml = await rootResponse.text();
-    expect(rootHtml).toBe(expectedRoutedShell);
 
-    const bootstrapResponse = await handleRequest(new Request('http://localhost:3000/bootstrap', {
+    expect(shellResponse.status).toBe(200);
+    const html = await shellResponse.text();
+    const scriptSrcMatch = html.match(/<script\s+type="module"\s+src="([^"]+)"/i);
+
+    expect(scriptSrcMatch).toBeTruthy();
+    const modulePath = scriptSrcMatch?.[1];
+    expect(modulePath).toBeTruthy();
+
+    const moduleResponse = await handleRequest(new Request(`http://localhost:3000${modulePath}`, {
       method: 'GET',
     }));
-    expect(bootstrapResponse.status).toBe(200);
-    const bootstrapHtml = await bootstrapResponse.text();
-    expect(bootstrapHtml).toBe(expectedRoutedShell);
 
-    const consoleResponse = await handleRequest(new Request('http://localhost:3000/console', {
-      method: 'GET',
-    }));
-    expect(consoleResponse.status).toBe(200);
-    const consoleHtml = await consoleResponse.text();
-    expect(consoleHtml).toBe(expectedRoutedShell);
+    expect(moduleResponse.status).toBe(200);
+    expect(moduleResponse.headers.get('Content-Type')).toContain('javascript');
   });
 
   it('propagates a shared RequestContext across middleware and handler', async () => {
