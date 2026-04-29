@@ -14,6 +14,7 @@ import { ensureServerStartupReadiness } from '@z0/src/server-startup';
 import { handleLivenessCheck, handleReadinessCheck } from '@z0/src/api/core/health/health';
 import { handleBootstrapStatus, handleBootstrapInitialize } from '@z0/src/api/v1/bootstrap/bootstrap';
 import type { RequestContext } from '@z0/src/lib';
+import tailwindPlugin from 'bun-plugin-tailwind';
 
 const CANONICAL_OPENAPI_SPEC_PATH = new URL('../docs/openapi/specs/openapi.yaml', import.meta.url);
 const CANONICAL_FRONTEND_SHELL_PATH = new URL('./index.html', import.meta.url);
@@ -25,9 +26,12 @@ const FRONTEND_BUNDLE_ENTRYPOINT_FALLBACKS = [
   new URL('../src/frontend.tsx', import.meta.url).pathname,
 ];
 const ROUTED_SERVER_FRONTEND_SRC = '/frontend.tsx';
+const ROUTED_SERVER_FRONTEND_STYLES = '/frontend.css';
 const FRONTEND_SRC_REWRITE_PATTERN = /(\bsrc=(['"]))\.\/frontend\.tsx(\2)/i;
+const FRONTEND_HEAD_CLOSING_TAG_PATTERN = /<\/head>/i;
 const canonicalFrontendShellPromise = Bun.file(CANONICAL_FRONTEND_SHELL_PATH).text();
 let cachedFrontendBundle: string | null = null;
+let cachedFrontendStylesheet: string | null = null;
 
 // ============================================================================
 // Middleware Pipeline Types
@@ -186,16 +190,76 @@ async function bootstrapHandler(req: Request): Promise<Response> {
   }
 
   const canonicalShell = await canonicalFrontendShellPromise;
-  const routedShell = canonicalShell.replace(FRONTEND_SRC_REWRITE_PATTERN, `$1${ROUTED_SERVER_FRONTEND_SRC}$3`);
+  const scriptRewrittenShell = canonicalShell.replace(FRONTEND_SRC_REWRITE_PATTERN, `$1${ROUTED_SERVER_FRONTEND_SRC}$3`);
+  const routedShell = scriptRewrittenShell.replace(
+    FRONTEND_HEAD_CLOSING_TAG_PATTERN,
+    `    <link rel="stylesheet" href="${ROUTED_SERVER_FRONTEND_STYLES}" />\n  </head>`
+  );
 
   if (routedShell === canonicalShell || routedShell.includes(CANONICAL_FRONTEND_SRC)) {
     logger.error('Failed to rewrite frontend module path for bootstrap shell', new Error('frontend script rewrite did not occur'));
     return new Response('Failed to render bootstrap shell', { status: 500 });
   }
 
+  if (!routedShell.includes(ROUTED_SERVER_FRONTEND_STYLES)) {
+    logger.error('Failed to inject frontend stylesheet path for bootstrap shell', new Error('frontend stylesheet rewrite did not occur'));
+    return new Response('Failed to render bootstrap shell', { status: 500 });
+  }
+
   return new Response(routedShell, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
+}
+
+async function ensureFrontendBundleArtifacts(): Promise<{ ok: true } | { ok: false; response: Response }> {
+  if (cachedFrontendBundle && cachedFrontendStylesheet) {
+    return { ok: true };
+  }
+
+  const attemptedEntrypoints = [CANONICAL_FRONTEND_BUNDLE_ENTRYPOINT, ...FRONTEND_BUNDLE_ENTRYPOINT_FALLBACKS];
+  const attemptedErrors: string[] = [];
+
+  for (const entrypoint of attemptedEntrypoints) {
+    try {
+      const buildResult = await Bun.build({
+        entrypoints: [entrypoint],
+        write: false,
+        target: 'browser',
+        format: 'esm',
+        plugins: [tailwindPlugin],
+      });
+
+      if (!buildResult.success) {
+        attemptedErrors.push(`${entrypoint}: ${buildResult.logs.map((log) => log.message).join('\n') || 'Unknown build failure'}`);
+        continue;
+      }
+
+      const jsOutput = buildResult.outputs.find((output) => output.kind === 'entry-point' || output.path.endsWith('.js'));
+      const cssOutput = buildResult.outputs.find((output) => output.path.endsWith('.css'));
+
+      if (!jsOutput) {
+        attemptedErrors.push(`${entrypoint}: missing JS output artifact`);
+        continue;
+      }
+
+      if (!cssOutput) {
+        attemptedErrors.push(`${entrypoint}: missing CSS output artifact`);
+        continue;
+      }
+
+      cachedFrontendBundle = await jsOutput.text();
+      cachedFrontendStylesheet = await cssOutput.text();
+      return { ok: true };
+    } catch (error) {
+      attemptedErrors.push(`${entrypoint}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  logger.error('Failed to build frontend module artifacts', new Error(attemptedErrors.join('\n') || 'Unknown build failure'));
+  return {
+    ok: false,
+    response: Response.json({ error: 'Failed to build frontend module' }, { status: 500 }),
+  };
 }
 
 async function frontendBundleHandler(req: Request): Promise<Response> {
@@ -209,47 +273,39 @@ async function frontendBundleHandler(req: Request): Promise<Response> {
     });
   }
 
-  if (!cachedFrontendBundle) {
-    const attemptedEntrypoints = [CANONICAL_FRONTEND_BUNDLE_ENTRYPOINT, ...FRONTEND_BUNDLE_ENTRYPOINT_FALLBACKS];
-    const attemptedErrors: string[] = [];
-
-    for (const entrypoint of attemptedEntrypoints) {
-      try {
-        const buildResult = await Bun.build({
-          entrypoints: [entrypoint],
-          write: false,
-          target: 'browser',
-          format: 'esm',
-        });
-
-        if (!buildResult.success) {
-          attemptedErrors.push(`${entrypoint}: ${buildResult.logs.map((log) => log.message).join('\n') || 'Unknown build failure'}`);
-          continue;
-        }
-
-        const jsOutput = buildResult.outputs.find((output) => output.kind === 'entry-point' || output.path.endsWith('.js'));
-        if (!jsOutput) {
-          attemptedErrors.push(`${entrypoint}: missing JS output artifact`);
-          continue;
-        }
-
-        cachedFrontendBundle = await jsOutput.text();
-        break;
-      } catch (error) {
-        attemptedErrors.push(`${entrypoint}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-
-    if (!cachedFrontendBundle) {
-      logger.error('Failed to build frontend module for /frontend.tsx', new Error(attemptedErrors.join('\n') || 'Unknown build failure'));
-      return Response.json({ error: 'Failed to build frontend module' }, { status: 500 });
-    }
+  const buildResult = await ensureFrontendBundleArtifacts();
+  if (!buildResult.ok) {
+    return buildResult.response;
   }
 
   return new Response(cachedFrontendBundle, {
     status: 200,
     headers: {
       'Content-Type': 'application/javascript; charset=utf-8',
+    },
+  });
+}
+
+async function frontendStylesheetHandler(req: Request): Promise<Response> {
+  if (req.method !== 'GET') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: {
+        'Content-Type': 'application/json',
+        Allow: 'GET',
+      },
+    });
+  }
+
+  const buildResult = await ensureFrontendBundleArtifacts();
+  if (!buildResult.ok) {
+    return buildResult.response;
+  }
+
+  return new Response(cachedFrontendStylesheet, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/css; charset=utf-8',
     },
   });
 }
@@ -293,11 +349,12 @@ const routes: Route[] = [
   { pattern: '/.well-known/openapi.yaml', method: 'GET', handler: openApiHandler },
   
   // Bootstrap API endpoints
-  { pattern: '/api/v1/bootstrap/status', method: 'GET', handler: handleBootstrapStatus },
-  { pattern: '/api/v1/bootstrap/initialize', method: 'POST', handler: handleBootstrapInitialize },
+  { pattern: '/api/v1/bootstrap/status', method: 'GET', handler: (req: Request) => handleBootstrapStatus(req) },
+  { pattern: '/api/v1/bootstrap/initialize', method: 'POST', handler: (req: Request) => handleBootstrapInitialize(req) },
 
   // Frontend module runtime bundle for browser shell
   { pattern: /^\/frontend\.tsx$/, method: 'GET', handler: frontendBundleHandler },
+  { pattern: /^\/frontend\.css$/, method: 'GET', handler: frontendStylesheetHandler },
   
   // Bootstrap UI (wizard)
   { pattern: '/', method: 'GET', handler: bootstrapHandler },

@@ -105,6 +105,7 @@ describe('Request routing', () => {
       expect(response.status).toBe(200);
       const html = await response.text();
       expect(html).toContain('/frontend.tsx');
+      expect(html).toContain('/frontend.css');
       expect(html).not.toContain('./frontend.tsx');
     }
   });
@@ -128,6 +129,30 @@ describe('Request routing', () => {
 
     expect(moduleResponse.status).toBe(200);
     expect(moduleResponse.headers.get('Content-Type')).toContain('javascript');
+  });
+
+  it('serves a stylesheet bundle from the emitted shell stylesheet href', async () => {
+    const shellResponse = await handleRequest(new Request('http://localhost:3000/', {
+      method: 'GET',
+    }));
+
+    expect(shellResponse.status).toBe(200);
+    const html = await shellResponse.text();
+    const stylesheetHrefMatch = html.match(/<link\s+rel="stylesheet"\s+href="([^"]+)"\s*\/?\s*>/i);
+
+    expect(stylesheetHrefMatch).toBeTruthy();
+    const stylesheetPath = stylesheetHrefMatch?.[1];
+    expect(stylesheetPath).toBeTruthy();
+
+    const stylesheetResponse = await handleRequest(new Request(`http://localhost:3000${stylesheetPath}`, {
+      method: 'GET',
+    }));
+
+    expect(stylesheetResponse.status).toBe(200);
+    expect(stylesheetResponse.headers.get('Content-Type')).toContain('text/css');
+
+    const css = await stylesheetResponse.text();
+    expect(css.length).toBeGreaterThan(0);
   });
 
   it('propagates a shared RequestContext across middleware and handler', async () => {
