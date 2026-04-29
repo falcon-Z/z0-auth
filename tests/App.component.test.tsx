@@ -228,8 +228,8 @@ describe('App mounted setup wizard behavior', () => {
     await waitFor(() => {
       expect(window.location.pathname).toBe('/');
       expect(textContent(mountedRoot!.container)).toContain('First-run setup');
-      expect(textContent(mountedRoot!.container)).toContain('Complete the one-time setup to create the platform record, administrator account, and default tenant.');
-      expect(textContent(mountedRoot!.container)).toContain('After setup, the operator console shows setup status, readiness, liveness, and the OpenAPI link.');
+      expect(textContent(mountedRoot!.container)).toContain('Complete one-time setup to create your platform and operator account.');
+      expect(textContent(mountedRoot!.container)).toContain('After setup, use the operator console to verify bootstrap, readiness, liveness, and OpenAPI.');
       expect(textContent(mountedRoot!.container)).not.toContain('Core GA');
     });
   });
@@ -380,10 +380,84 @@ describe('App mounted setup wizard behavior', () => {
     await setInputValue(getInput(mountedRoot.container, 'confirmPassword'), 'ValidPassword123!');
     await submitForm(mountedRoot.container);
 
-    await waitFor(() => {
-      expect(textContent(mountedRoot!.container)).toContain('Platform initialized');
-      expect(textContent(mountedRoot!.container)).toContain('Redirecting to the operator console');
+    expect(redirectTimer).not.toBeNull();
+
+    await act(async () => {
+      redirectTimer?.();
     });
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/console');
+      expect(textContent(mountedRoot!.container)).toContain('Deployment verification');
+    });
+  });
+
+  it('does not route back to setup after successful initialization when initial status required setup', async () => {
+    let redirectTimer: (() => void) | null = null;
+    let bootstrapStatusRequests = 0;
+
+    globalThis.fetch = withAuthFallback(async (url: string, init?: RequestInit) => {
+      if (url === '/api/v1/bootstrap/status') {
+        bootstrapStatusRequests += 1;
+
+        return jsonResponse({
+          bootstrapped: false,
+          requires_setup: true,
+          timestamp: '2026-04-29T12:00:00.000Z',
+        });
+      }
+
+      if (url === '/api/v1/bootstrap/initialize' && init?.method === 'POST') {
+        return jsonResponse({ ok: true });
+      }
+
+      if (url === '/health/ready') {
+        return jsonResponse({
+          status: 'ready',
+          database: {
+            connected: true,
+            migrations: {
+              applied: 5,
+              total: 5,
+              pending: 0,
+            },
+          },
+          timestamp: '2026-04-29T12:00:00.000Z',
+        });
+      }
+
+      if (url === '/health/live') {
+        return jsonResponse({
+          status: 'ok',
+          timestamp: '2026-04-29T12:00:00.000Z',
+          uptime: 42,
+        });
+      }
+
+      throw new Error(`Unhandled request: ${url}`);
+    });
+
+    globalThis.setTimeout = ((handler: TimerHandler) => {
+      redirectTimer = () => {
+        if (typeof handler === 'function') {
+          handler();
+        }
+      };
+
+      return 1 as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout;
+
+    mountedRoot = await renderApp('/');
+
+    await waitFor(() => {
+      expect(textContent(mountedRoot!.container)).toContain('Setup wizard');
+    });
+
+    await setInputValue(getInput(mountedRoot.container, 'platformName'), 'Acme Identity');
+    await setInputValue(getInput(mountedRoot.container, 'adminEmail'), 'admin@example.com');
+    await setInputValue(getInput(mountedRoot.container, 'adminPassword'), 'ValidPassword123!');
+    await setInputValue(getInput(mountedRoot.container, 'confirmPassword'), 'ValidPassword123!');
+    await submitForm(mountedRoot.container);
 
     expect(redirectTimer).not.toBeNull();
 
@@ -391,7 +465,14 @@ describe('App mounted setup wizard behavior', () => {
       redirectTimer?.();
     });
 
-    expect(window.location.href).toContain('/console');
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/console');
+      expect(textContent(mountedRoot!.container)).toContain('Deployment verification');
+      expect(textContent(mountedRoot!.container)).toContain('Bootstrap completed successfully.');
+      expect(textContent(mountedRoot!.container)).not.toContain('Setup wizard');
+    });
+
+    expect(bootstrapStatusRequests).toBe(1);
   });
 });
 

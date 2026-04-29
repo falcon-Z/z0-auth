@@ -553,7 +553,13 @@ function StatusCard<T>({
   );
 }
 
-function SetupWizard({ statusNotice: statusNoticeOverride = '' }: { statusNotice?: string }) {
+function SetupWizard({
+  statusNotice: statusNoticeOverride = '',
+  onSetupComplete,
+}: {
+  statusNotice?: string;
+  onSetupComplete?: () => void;
+}) {
   const navigate = useNavigate();
   const [step, setStep] = useState<SetupStep>('form');
   const [formData, setFormData] = useState<SetupFormData>(initialFormData);
@@ -623,6 +629,7 @@ function SetupWizard({ statusNotice: statusNoticeOverride = '' }: { statusNotice
       });
 
       if (response.ok) {
+        onSetupComplete?.();
         setStep('success');
         setTimeout(() => {
           navigate('/console', { replace: true });
@@ -690,20 +697,20 @@ function SetupWizard({ statusNotice: statusNoticeOverride = '' }: { statusNotice
             <div className="space-y-2">
               <CardTitle className="text-2xl font-semibold tracking-tight">Initialize Z0 Auth</CardTitle>
               <CardDescription>
-                Complete the one-time setup to create the platform record, administrator account, and default tenant.
+                Complete one-time setup to create your platform and operator account.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
             <div className="rounded-lg border border-border bg-muted/60 p-4">
               <p className="font-medium text-foreground">What happens during setup</p>
-              <p className="mt-2">Setup creates the platform record, stores the administrator credentials securely, and prepares this installation for sign-in and verification.</p>
+              <p className="mt-2">Setup creates the platform record, secures operator credentials, and enables sign-in.</p>
             </div>
             <div className="rounded-lg border border-border bg-card p-4">
               <p className="font-medium text-foreground">Before you submit</p>
-              <p className="mt-2">Use an email inbox you monitor and a strong password. This action only completes once for each installation.</p>
+              <p className="mt-2">Use an inbox you control and a strong password. You can run this once per installation.</p>
             </div>
-            <p className="text-xs">After setup, the operator console shows setup status, readiness, liveness, and the OpenAPI link.</p>
+            <p className="text-xs">After setup, use the operator console to verify bootstrap, readiness, liveness, and OpenAPI.</p>
           </CardContent>
         </Card>
 
@@ -1017,7 +1024,21 @@ function AppRoutes() {
   const setupStatusNotice = bootstrapResult.state === 'error'
     ? 'Setup status could not be verified. If this is a new installation, continue the first-run setup here.'
     : '';
-  const setupElement = <SetupWizard statusNotice={setupStatusNotice} />;
+  const setupElement = (
+    <SetupWizard
+      statusNotice={setupStatusNotice}
+      onSetupComplete={() => {
+        setBootstrapResult({
+          state: 'success',
+          data: {
+            bootstrapped: true,
+            requires_setup: false,
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }}
+    />
+  );
   const setupLoadingElement = <RouteLoading title="Preparing setup" description="Checking initialization and access state." />;
   const consoleLoadingElement = <RouteLoading title="Loading console" description="Validating setup and user access before opening operator tools." />;
   const signInLoadingElement = <RouteLoading title="Checking access" description="Resolving authentication requirements for this environment." />;
