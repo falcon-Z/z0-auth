@@ -1,8 +1,8 @@
 /**
  * Z0 Auth - API Module Scaffolding
  * 
- * This directory contains HTTP endpoint handlers organized by module:
- * - bootstrap.ts — Platform initialization and state detection
+ * This directory contains HTTP endpoint handlers organized by module and version:
+ * - v1/bootstrap/bootstrap.ts — Platform initialization and state detection
  * - platform.ts — Platform super-admin operations
  * - tenants.ts — Tenant lifecycle management
  * - apps.ts — App/client registration and credential management
@@ -10,7 +10,7 @@
  * - auth.ts — Authentication flows (login, magic link, TOTP, token exchange)
  * - sessions.ts — Session and device management
  * - audit.ts — Audit log querying
- * - health.ts — Health check and readiness endpoints
+ * - core/health/health.ts — Health check and readiness endpoints
  * - oidc.ts — OIDC-specific endpoints (.well-known/*, userinfo, jwks) [Phase 6]
  * 
  * Each module follows the Feature Definition of Done (docs/FEATURE_DoD.md):
@@ -83,10 +83,10 @@
  * 
  * ## OpenAPI Structure
  * 
- * Each module should have a corresponding OpenAPI spec fragment in docs/openapi/:
+ * Each module should have matching usage docs and OpenAPI fragments in docs/openapi/docs and docs/openapi/specs:
  * 
  * ```yaml
- * # docs/openapi/bootstrap.yaml
+ * # docs/openapi/specs/v1/bootstrap/bootstrap.yaml
  * paths:
  *   /api/v1/bootstrap:
  *     post:
@@ -107,11 +107,11 @@
  *                 $ref: '#/components/schemas/BootstrapResponse'
  * ```
  * 
- * Generated spec at Phase 8 combines all fragments into `/` and `/.well-known/openapi.json`.
+ * Generated spec at Phase 8 combines all fragments into docs/openapi/specs/openapi.yaml and serves them at `/.well-known/openapi.json`.
  * 
  * ## Phase Implementation Order
  * 
- * Phase 3: bootstrap.ts, health.ts
+ * Phase 3: v1/bootstrap/bootstrap.ts, core/health/health.ts
  * Phase 4: platform.ts, tenants.ts, apps.ts, identities.ts
  * Phase 5: auth.ts, sessions.ts
  * Phase 7: audit.ts (full query implementation)

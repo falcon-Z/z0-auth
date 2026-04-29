@@ -5,8 +5,8 @@
  * following Kubernetes health check conventions.
  */
 
-import { checkDatabaseReadiness } from '../../database/runtime';
-import { logger } from '../lib';
+import { checkDatabaseReadiness } from '@z0/database/runtime';
+import { logger } from '@z0/src/lib';
 
 export interface LivenessResponse {
   status: 'ok';

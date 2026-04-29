@@ -9,9 +9,9 @@
  * This is the contract layer between HTTP transport and domain logic.
  */
 
-import type { RequestContext, AuthorizationLevel, Z0TokenClaims } from './types';
-import { extractBearerToken, extractBasicAuth, generateRequestId, logger } from './index';
-import { createError } from './errors';
+import type { RequestContext, AuthorizationLevel, Z0TokenClaims } from '@z0/src/lib/types';
+import { extractBearerToken, extractBasicAuth, generateRequestId, logger } from '@z0/src/lib/index';
+import { createError } from '@z0/src/lib/errors';
 
 /**
  * Context builder - progressively populates request context through middleware chain

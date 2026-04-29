@@ -5,8 +5,8 @@
  * Rate limits are enforced per route class (bootstrap, identity, platform, etc.)
  */
 
-import { logger } from './logger';
-import { createError } from './errors';
+import { logger } from '@z0/src/lib/logger';
+import { createError } from '@z0/src/lib/errors';
 
 export type RateLimitClass = 'bootstrap' | 'identity' | 'platform' | 'tenant' | 'admin';
 

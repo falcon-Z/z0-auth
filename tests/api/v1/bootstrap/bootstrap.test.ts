@@ -1,5 +1,5 @@
 import { describe, it, expect, mock } from 'bun:test';
-import { handleBootstrapStatus, handleBootstrapInitialize, type BootstrapDependencies } from '../../src/api/bootstrap';
+import { handleBootstrapStatus, handleBootstrapInitialize, type BootstrapDependencies } from '@z0/src/api/v1/bootstrap/bootstrap';
 
 function createDependencies(overrides: Partial<BootstrapDependencies> = {}): BootstrapDependencies {
   return {

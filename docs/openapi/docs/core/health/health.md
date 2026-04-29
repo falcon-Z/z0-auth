@@ -1,6 +1,6 @@
 # Health API Usage Guide
 
-Machine-readable contract: see health.yaml and openapi.yaml in this folder.
+Machine-readable contract: see docs/openapi/specs/core/health/health.yaml and docs/openapi/specs/openapi.yaml.
 
 This page explains how to use health endpoints operationally.
 

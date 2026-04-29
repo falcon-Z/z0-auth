@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { executeMiddlewareChain, handleRequest, type Middleware } from '../src/index';
-import type { RequestContext } from '../src/lib';
+import { executeMiddlewareChain, handleRequest, type Middleware } from '@z0/src/index';
+import type { RequestContext } from '@z0/src/lib';
 
 describe('Request routing', () => {
   it('returns 405 with Allow header for known path and unsupported method', async () => {

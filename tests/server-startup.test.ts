@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { ensureServerStartupReadiness } from '../src/server-startup';
+import { ensureServerStartupReadiness } from '@z0/src/server-startup';
 
 describe('ensureServerStartupReadiness', () => {
   test('checks database readiness before server start', async () => {

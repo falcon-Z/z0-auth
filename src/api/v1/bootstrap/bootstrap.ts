@@ -6,9 +6,9 @@
  */
 
 import { SQL } from 'bun';
-import { hashSecret, generateRandomString, logger, PATTERNS } from '../lib';
-import { createDatabaseClient } from '../../database/runtime';
-import { resolveDatabaseUrl } from '../../database/migration-runner';
+import { hashSecret, generateRandomString, logger, PATTERNS } from '@z0/src/lib';
+import { createDatabaseClient } from '@z0/database/runtime';
+import { resolveDatabaseUrl } from '@z0/database/migration-runner';
 
 type DbClient = {
   unsafe: (query: string, params?: unknown[]) => Promise<unknown>;

@@ -1,6 +1,6 @@
 # OpenAPI Discovery Usage Guide
 
-Machine-readable contract: see openapi.yaml in this folder.
+Machine-readable contract: see docs/openapi/specs/openapi.yaml.
 
 This page explains how to retrieve the API contract in JSON or YAML formats.
 

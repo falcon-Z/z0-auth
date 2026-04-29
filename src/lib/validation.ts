@@ -5,8 +5,8 @@
  * No external schema libraries to keep Bun-native first approach.
  */
 
-import { createError } from './errors';
-import type { ValidationErrorDetail } from './types';
+import { createError } from '@z0/src/lib/errors';
+import type { ValidationErrorDetail } from '@z0/src/lib/types';
 
 export interface ValidationSchema {
   [key: string]: Validator;

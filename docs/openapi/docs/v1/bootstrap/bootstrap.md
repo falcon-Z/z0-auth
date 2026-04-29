@@ -1,6 +1,6 @@
 # Bootstrap API Usage Guide
 
-Machine-readable contract: see bootstrap.yaml and openapi.yaml in this folder.
+Machine-readable contract: see docs/openapi/specs/v1/bootstrap/bootstrap.yaml and docs/openapi/specs/openapi.yaml.
 
 This page explains how to perform first-time setup and verify bootstrap state.
 

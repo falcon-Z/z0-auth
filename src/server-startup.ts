@@ -1,5 +1,5 @@
-import { logger } from './lib/logger';
-import { ensureDatabaseReady, type DatabaseStartupResult } from '../database/runtime';
+import { logger } from '@z0/src/lib/logger';
+import { ensureDatabaseReady, type DatabaseStartupResult } from '@z0/database/runtime';
 
 export interface StartupLogger {
   info(message: string, context?: Record<string, unknown>): void;

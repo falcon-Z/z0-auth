@@ -3,8 +3,8 @@ import {
   ensureDatabaseReady,
   pingDatabase,
   type DatabaseClient,
-} from '../../database/runtime';
-import type { AppliedMigration, Migration } from '../../database/migration-runner';
+} from '@z0/database/runtime';
+import type { AppliedMigration, Migration } from '@z0/database/migration-runner';
 
 function createMockClient(): DatabaseClient & {
   unsafe: ReturnType<typeof mock>;

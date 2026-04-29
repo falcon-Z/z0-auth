@@ -1,5 +1,5 @@
 import { describe, it, expect, mock } from 'bun:test';
-import { handleLivenessCheck, handleReadinessCheck } from '../../src/api/health';
+import { handleLivenessCheck, handleReadinessCheck } from '@z0/src/api/core/health/health';
 
 describe('Health Endpoints', () => {
   describe('Liveness Check', () => {

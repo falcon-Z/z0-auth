@@ -9,13 +9,13 @@
  * - HMR support in development
  */
 
-import { logger, generateRequestId, CORS_POLICIES, generateCORSHeaders } from './lib';
-import { ensureServerStartupReadiness } from './server-startup';
-import { handleLivenessCheck, handleReadinessCheck } from './api/health';
-import { handleBootstrapStatus, handleBootstrapInitialize } from './api/bootstrap';
-import type { RequestContext } from './lib';
+import { logger, generateRequestId, CORS_POLICIES, generateCORSHeaders } from '@z0/src/lib';
+import { ensureServerStartupReadiness } from '@z0/src/server-startup';
+import { handleLivenessCheck, handleReadinessCheck } from '@z0/src/api/core/health/health';
+import { handleBootstrapStatus, handleBootstrapInitialize } from '@z0/src/api/v1/bootstrap/bootstrap';
+import type { RequestContext } from '@z0/src/lib';
 
-const CANONICAL_OPENAPI_SPEC_PATH = new URL('../docs/openapi/openapi.yaml', import.meta.url);
+const CANONICAL_OPENAPI_SPEC_PATH = new URL('../docs/openapi/specs/openapi.yaml', import.meta.url);
 
 // ============================================================================
 // Middleware Pipeline Types
@@ -111,7 +111,7 @@ async function bootstrapMiddleware(req: Request, _ctx: RequestContext, next: Mid
   return next();
 }
 
-// Health Check Endpoints are now in src/api/health.ts
+// Health Check Endpoints are in src/api/core/health/health.ts
 
 // ============================================================================
 // OpenAPI Discovery Endpoint

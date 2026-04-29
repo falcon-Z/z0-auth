@@ -32,10 +32,11 @@ echo "$API_CHANGED"
 
 FAIL=0
 for api_file in $API_CHANGED; do
-  stem=$(basename "$api_file" .ts)
-  test_file="tests/api/${stem}.test.ts"
-  yaml_file="docs/openapi/${stem}.yaml"
-  md_file="docs/openapi/${stem}.md"
+  module_path="${api_file#src/api/}"
+  module_stem="${module_path%.ts}"
+  test_file="tests/api/${module_stem}.test.ts"
+  yaml_file="docs/openapi/specs/${module_stem}.yaml"
+  md_file="docs/openapi/docs/${module_stem}.md"
 
   printf "\nChecking sync for: %s\n" "$api_file"
 
@@ -50,15 +51,15 @@ for api_file in $API_CHANGED; do
   fi
 
   if [[ -f "$yaml_file" ]]; then
-    if ! echo "$CHANGED_FILES" | grep -Eq "^${yaml_file}$|^docs/openapi/openapi\.yaml$"; then
-      echo "  FAIL: API file changed but OpenAPI YAML was not updated: $yaml_file or docs/openapi/openapi.yaml"
+    if ! echo "$CHANGED_FILES" | grep -Eq "^${yaml_file}$|^docs/openapi/specs/openapi\.yaml$"; then
+      echo "  FAIL: API file changed but OpenAPI YAML was not updated: $yaml_file or docs/openapi/specs/openapi.yaml"
       FAIL=1
     else
       echo "  OK: OpenAPI YAML updated"
     fi
   else
-    if ! echo "$CHANGED_FILES" | grep -q '^docs/openapi/openapi.yaml$'; then
-      echo "  FAIL: No per-endpoint YAML found and root OpenAPI was not updated: docs/openapi/openapi.yaml"
+    if ! echo "$CHANGED_FILES" | grep -q '^docs/openapi/specs/openapi.yaml$'; then
+      echo "  FAIL: No per-endpoint YAML found and root OpenAPI was not updated: docs/openapi/specs/openapi.yaml"
       FAIL=1
     else
       echo "  OK: Root OpenAPI updated"
