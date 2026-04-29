@@ -247,6 +247,7 @@ bun run docs:validate      # Validate spec/code parity
 
 - [docs/FRONTEND_SCOPE.md](./docs/FRONTEND_SCOPE.md) - Frontend boundaries and v1.x admin console roadmap
 - [docs/FEATURE_DoD.md](./docs/FEATURE_DoD.md) - Definition of Done checklist for all features
+- [docs/PROJECT_PLAN_MILESTONES.md](./docs/PROJECT_PLAN_MILESTONES.md) - Canonical GitHub-tracked phase and milestone execution plan
 - [docs/SCHEMA.md](./database/SCHEMA.md) - PostgreSQL schema documentation
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Deployment guide (Phase 8+)
 
