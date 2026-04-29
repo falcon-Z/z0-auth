@@ -30,16 +30,18 @@ Required sequence for each new phase implementation:
 ## 3) UI Integration and Validation Loop
 
 - UI integration starts only after relevant API capability is complete and reviewed.
+- Before UI implementation, agents must load and align with `docs/UI_DESIGN_GUIDELINES.md` and `docs/FRONTEND_SCOPE.md`.
 - Integration agent implements UI and integration surfaces against approved contracts.
 - UI test agent writes or updates UI and integration tests.
 - Review agent inspects UI and integration quality.
 - Repeat UI implementation plus UI testing plus review loop until clear.
-- If design guidelines are incomplete, run design philosophy agent first and request user approval.
+- If design guidelines are incomplete or conflicting, run design philosophy agent first and request user approval.
 
 ## 4) Standards and Documentation Integrity
 
 - Every behavior change requires corresponding tests.
 - API behavior changes require OpenAPI YAML updates under `docs/openapi/specs/` and usage guide updates under `docs/openapi/docs/`.
+- UI behavior changes require alignment with `docs/UI_DESIGN_GUIDELINES.md` and scope checks against `docs/FRONTEND_SCOPE.md`.
 - Documentation must be written as end-user and developer guidance, not implementation notes.
 - Documentation should explain when to use, required context, examples, failure flows, and operator/developer actions.
 - Agents must align implementation, tests, and docs before phase completion.

@@ -73,7 +73,15 @@ Examples:
 - Keep executable SQL migrations under `database/migrations/`.
 - Design notes and architecture docs should prefer `docs/` unless there is a strong reason to colocate with code.
 
-## 8) PR/Change Checklist
+## 8) UI Design Standards Are Mandatory
+
+- For all frontend/UI work, `docs/UI_DESIGN_GUIDELINES.md` is the canonical design standard.
+- Agents and contributors must align UI behavior, visual tokens, and interaction patterns with that document.
+- New UI work must use the gray-neutral baseline token direction defined in the design guideline document.
+- Form UX must follow the form rules in the design guideline document (Adam Silver style principles).
+- If requested UI changes conflict with the design guideline document, ask for explicit user/maintainer approval before diverging.
+
+## 9) PR/Change Checklist
 
 Before considering a task complete, confirm:
 - Tests added/updated for every changed behavior.
@@ -86,3 +94,4 @@ Before considering a task complete, confirm:
 - OpenAPI YAML updated in `docs/openapi/specs/**/*.yaml` (including `docs/openapi/specs/openapi.yaml` when needed) for every API change.
 - Human-readable API docs updated with usage notes and `curl` examples.
 - Documentation and implementation are synchronized.
+- UI changes checked against `docs/UI_DESIGN_GUIDELINES.md` and `docs/FRONTEND_SCOPE.md`.

@@ -4,6 +4,8 @@
 
 The Z0 Auth frontend is **intentionally minimal in Core GA** to maintain focus on backend-first authentication infrastructure. This document defines what IS and IS NOT part of the Core GA frontend, and where full admin/tenant management UI will be deferred.
 
+Canonical UI design standard: see `docs/UI_DESIGN_GUIDELINES.md`.
+
 ## Core GA Frontend Surfaces (Shipped)
 
 ### 1. Setup Wizard
