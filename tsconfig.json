@@ -23,15 +23,13 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@z0/*": ["./*"]
+      "@/*": ["./src/*"]
     },
 
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false,
-    "ignoreDeprecations": "6.0"
+    "noPropertyAccessFromIndexSignature": false
   },
 
   "exclude": ["dist", "node_modules"]

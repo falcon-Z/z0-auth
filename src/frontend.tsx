@@ -7,36 +7,9 @@
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "@z0/src/App";
-
-function applySystemThemePreference(): void {
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  document.documentElement.classList.toggle("dark", prefersDark);
-}
-
-function subscribeToSystemThemePreferenceChanges(): () => void {
-  const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  const handleChange = () => {
-    applySystemThemePreference();
-  };
-
-  if (typeof mediaQuery.addEventListener === "function") {
-    mediaQuery.addEventListener("change", handleChange);
-    return () => {
-      mediaQuery.removeEventListener("change", handleChange);
-    };
-  }
-
-  mediaQuery.addListener(handleChange);
-  return () => {
-    mediaQuery.removeListener(handleChange);
-  };
-}
+import { App } from "./App";
 
 const elem = document.getElementById("root")!;
-applySystemThemePreference();
-const disposeThemeListener = subscribeToSystemThemePreferenceChanges();
-
 const app = (
   <StrictMode>
     <App />
@@ -44,10 +17,6 @@ const app = (
 );
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    disposeThemeListener();
-  });
-
   // With hot module reloading, `import.meta.hot.data` is persisted.
   const root = (import.meta.hot.data.root ??= createRoot(elem));
   root.render(app);
