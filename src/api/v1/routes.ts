@@ -1,4 +1,5 @@
 import { json } from "../lib/http";
+import { meRoutes } from "./me";
 
 /**
  * Versioned resource APIs (CRUD modules) live under /api/v1/*.
@@ -9,9 +10,10 @@ export const v1Routes = {
     GET() {
       return json({
         version: "v1",
-        modules: [],
-        message: "Resource APIs will be mounted under /api/v1/<resource>.",
+        modules: ["me"],
+        message: "Resource APIs are mounted under /api/v1/<resource>.",
       });
     },
   },
+  ...meRoutes,
 } as const;

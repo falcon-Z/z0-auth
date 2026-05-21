@@ -1,8 +1,13 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 
+import { closeDatabase } from "../../src/api/lib/db";
 import { healthRoutes } from "../../src/api/health/routes";
 
 describe("health routes", () => {
+  afterAll(async () => {
+    await closeDatabase();
+  });
+
   test("GET /api/live returns alive", async () => {
     const handler = healthRoutes["/api/live"].GET;
     const response = await handler();

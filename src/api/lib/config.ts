@@ -10,6 +10,10 @@ export type AppConfig = {
   bindAddress: string;
   databaseUrl: string;
   appName: string;
+  /** When set, POST /api/setup requires X-Install-Token header. */
+  installToken?: string;
+  /** Allow server start when setup is incomplete (development escape hatch). */
+  allowIncompleteSetup: boolean;
 };
 
 function requireEnv(name: string, fallback?: string): string {
@@ -41,6 +45,8 @@ export function loadConfig(): AppConfig {
     bindAddress: resolveBindAddress(nodeEnv),
     databaseUrl: requireEnv("DATABASE_URL"),
     appName: process.env.APP_NAME ?? "z0-auth",
+    installToken: process.env.INSTALL_TOKEN,
+    allowIncompleteSetup: process.env.ALLOW_INCOMPLETE_SETUP === "true",
   };
 }
 

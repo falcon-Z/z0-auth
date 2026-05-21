@@ -1,0 +1,77 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Setup API
+  version: 0.1.0
+paths:
+  /api/setup/status:
+    get:
+      summary: Platform setup status
+      responses:
+        "200":
+          description: Setup state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [completed]
+                properties:
+                  completed:
+                    type: boolean
+                  organizationName:
+                    type: string
+  /api/setup:
+    post:
+      summary: Complete one-time platform setup
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Install-Token
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, passwordConfirm, organizationName]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                passwordConfirm:
+                  type: string
+                organizationName:
+                  type: string
+      responses:
+        "201":
+          description: Setup completed; creates default tenant and super admin
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organizationName:
+                    type: string
+                  tenant:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      slug:
+                        type: string
+                  recoveryKey:
+                    type: string
+        "409":
+          description: Setup already completed

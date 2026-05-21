@@ -28,9 +28,19 @@ bun run db:reset       # requires local Postgres
 bun dev
 ```
 
-- Console SPA: http://localhost:3000/
+**First run:** open http://localhost:3000/setup and create the platform super admin. Save the **recovery key** shown once on the complete page (copy, download, or email-to-self via your mail client). SMTP is not required for the initial admin password reset.
+
+Optional production hardening:
+
+- Set `INSTALL_TOKEN` before exposing the instance; pass `X-Install-Token` on `POST /api/setup`.
+- Complete setup before production traffic; otherwise set `ALLOW_INCOMPLETE_SETUP=true` only for maintenance.
+
+- Console SPA: http://localhost:3000/ (after setup + sign-in)
+- Setup: http://localhost:3000/setup
 - Auth UI: http://localhost:3000/login
 - Health: http://localhost:3000/api/health
+
+See [docs/security/recovery-key.md](docs/security/recovery-key.md) and [docs/api/ui-flows.md](docs/api/ui-flows.md).
 
 ## Scripts
 
@@ -42,6 +52,19 @@ bun dev
 | `bun test` | Run tests |
 | `bun run db:reset` | Drop `public` schema and apply baseline SQL |
 
+## Troubleshooting
+
+**Postgres `sorry, too many clients already`:** stray `bun dev`, `bun test`, or `bun src/server.ts` processes can hold connections. Stop them before `db:reset` or tests:
+
+```bash
+pgrep -a bun          # list processes
+pkill -f "bun.*server" # or kill specific PIDs
+```
+
+Tests use `--concurrency 1` to limit parallel DB use; still avoid running `bun dev` and `bun test` against the same database at once.
+
 ## OpenAPI
 
-Health endpoints: [docs/api/references/health.openapi.yaml](docs/api/references/health.openapi.yaml)
+- [health.openapi.yaml](docs/api/references/health.openapi.yaml)
+- [setup.openapi.yaml](docs/api/references/setup.openapi.yaml)
+- [auth.openapi.yaml](docs/api/references/auth.openapi.yaml)

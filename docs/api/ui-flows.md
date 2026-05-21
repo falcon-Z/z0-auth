@@ -1,0 +1,52 @@
+# UI flow contract
+
+This document defines redirect and API behavior the React shells rely on. Integration test `tests/integration/ui-contract.test.ts` guards this file.
+
+## Setup incomplete
+
+| Surface | Behavior |
+|---------|----------|
+| `GET /api/setup/status` | `{ completed: false }` |
+| `/` | Server **302** to `/setup`, `/login`, or `/console` |
+| `/console` | Console SPA (after server guard on `/` only) |
+| `/login`, `/register`, `/forgot-password` | Redirect to `/setup` |
+| Protected `/api/*` (except setup + health) | **503** `SetupRequired` |
+
+## Setup flow
+
+1. User opens `/setup`.
+2. `GET /api/setup/status` — if `completed`, redirect `/login`.
+3. `POST /api/setup` with CSRF — **201** returns `recoveryKey` once.
+4. Navigate to `/setup/complete` with router state (not query string).
+5. User acknowledges storage → `/login`.
+
+## Setup complete page refresh
+
+| State | Behavior |
+|-------|----------|
+| Router state present | Show recovery key UI |
+| No state | Message + link to `/login` (key not recoverable from server) |
+
+## Authenticated console
+
+| Surface | Behavior |
+|---------|----------|
+| `/`, `/console` | `GET /api/auth/session` — if not authenticated, redirect `/login` |
+| Sign out | `POST /api/auth/logout` → redirect `/login` |
+
+## Password reset (recovery key)
+
+| Surface | Behavior |
+|---------|----------|
+| `/forgot-password` | Form posts `POST /api/auth/reset-password` |
+| Success | Link to `/login`; all sessions revoked |
+
+## HTTP status codes (auth/setup)
+
+| Code | When |
+|------|------|
+| 201 | Setup succeeded |
+| 409 | Setup already completed |
+| 403 | CSRF or install token failure |
+| 429 | Rate limited |
+| 503 | API used before setup complete |

@@ -17,7 +17,8 @@
     "noImplicitOverride": true,
     "baseUrl": ".",
     "paths": {
-      "@z0/*": ["./src/app/*"]
+      "@z0/*": ["./src/app/*"],
+      "@shared/*": ["./src/shared/*"]
     },
     "noUnusedLocals": false,
     "noUnusedParameters": false,

@@ -46,7 +46,29 @@ The backend intentionally uses **Bun’s built-in toolset** (`Bun.serve`, `bun:s
 ## Database
 
 - Connection via `DATABASE_URL` (PostgreSQL).
-- `bun run db:reset` drops `public` and applies `scripts/sql/schema.sql` (local dev only).
+- `bun run db:reset` drops `public`, applies `scripts/sql/schema.sql`, then ordered files in `scripts/sql/migrations/`.
+
+## Phase 1 security (bootstrap + auth)
+
+- **Setup:** one-time `POST /api/setup` inside a DB transaction (`FOR UPDATE` on `platform_settings`); optional `INSTALL_TOKEN`.
+- **CSRF:** double-submit cookie `z0_csrf` + `X-CSRF-Token` on mutating routes; `Origin`/`Referer` checked.
+- **Sessions:** HttpOnly cookie `z0_session`; token stored as SHA-256 hash; rotated on login.
+- **Recovery key:** shown once at setup; Argon2id hash in `user_recovery_keys`; reset via `POST /api/auth/reset-password`.
+- **Password policy:** shared rules in `src/shared/contracts/password-policy.ts` (14+ chars, classes, weak list, contextual).
+- **Contracts:** TypeScript types in `src/shared/contracts/`; keep OpenAPI references in sync manually.
+
+## Tenants (organizations)
+
+Bootstrap (`POST /api/setup`) creates a **default tenant** from `organizationName` (slug derived automatically). The super admin receives:
+
+- `platform_memberships` — `platform_admin` (platform scope)
+- `tenant_memberships` — `tenant_admin` on the default tenant
+
+When adding **platform managers** or other platform users in a later phase, also insert `tenant_memberships` for the default tenant (`platform_settings.default_tenant_id`) so platform operators belong to the root organization.
+
+## Shared contracts
+
+`src/shared/contracts/` is imported by both `src/api/` and `src/app/` (via `@shared/*` path alias) so UI validation matches API responses.
 
 ## Frontend dependencies
 

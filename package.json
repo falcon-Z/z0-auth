@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "imports": {
+    "@shared/*": "./src/shared/*"
+  },
   "scripts": {
     "dev": "bun --hot src/server.ts",
     "start": "NODE_ENV=production bun src/server.ts",
     "build": "bun run build.ts",
-    "test": "bun test",
+    "test": "bun test --concurrency 1",
     "db:reset": "bun scripts/db-reset.ts",
     "db:setup": "bun scripts/db-reset.ts"
   },
