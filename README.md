@@ -4,6 +4,11 @@
 
 This repository is in an early **definition and console-template** phase: the README describes the product; the auth server and persistence layer are not implemented here yet.
 
+**Documentation**
+
+- [System architecture](docs/ARCHITECTURE.md) — high-level design, routing, modules, data model, phases
+- [Project guidelines](docs/GUIDELINES.md) — REST conventions, security, separate `api/` vs `console/` packages, tests, OpenAPI
+
 ---
 
 ## Why Z0 Auth
