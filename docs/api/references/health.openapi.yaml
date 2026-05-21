@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Health API
+  version: 0.1.0
+  description: Operational health, liveness, and readiness endpoints.
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Health
+    description: Service health and orchestration probes
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Composite health check
+      description: Returns service status and dependency checks (database).
+      operationId: getHealth
+      responses:
+        "200":
+          description: Health payload (may be degraded if database is down)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Indicates the process is running. Does not check dependencies.
+      operationId: getLive
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LiveResponse"
+  /api/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: Indicates the service can accept traffic (database must be reachable).
+      operationId: getReady
+      responses:
+        "200":
+          description: Ready to serve traffic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadyResponse"
+components:
+  schemas:
+    DatabaseHealth:
+      type: object
+      required: [ok, latencyMs]
+      properties:
+        ok:
+          type: boolean
+        latencyMs:
+          type: integer
+          minimum: 0
+        version:
+          type: string
+        error:
+          type: string
+    HealthResponse:
+      type: object
+      required: [status, service, uptimeSeconds, checks]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded]
+        service:
+          type: string
+        uptimeSeconds:
+          type: integer
+          minimum: 0
+        checks:
+          type: object
+          properties:
+            database:
+              $ref: "#/components/schemas/DatabaseHealth"
+    LiveResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [alive]
+    ReadyResponse:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          type: string
+          enum: [ready, not_ready]
+        checks:
+          type: object
+          properties:
+            database:
+              $ref: "#/components/schemas/DatabaseHealth"

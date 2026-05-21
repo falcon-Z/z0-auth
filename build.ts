@@ -117,8 +117,8 @@ if (existsSync(outdir)) {
 
 const start = performance.now();
 
-const entrypoints = [...new Bun.Glob("**.html").scanSync("src")]
-  .map(a => path.resolve("src", a))
+const entrypoints = [...new Bun.Glob("**/*.html").scanSync("src/app")]
+  .map(a => path.resolve("src/app", a))
   .filter(dir => !dir.includes("node_modules"));
 console.log(`📄 Found ${entrypoints.length} HTML ${entrypoints.length === 1 ? "file" : "files"} to process\n`);
 
@@ -129,6 +129,7 @@ const result = await Bun.build({
   minify: true,
   target: "browser",
   sourcemap: "linked",
+  tsconfig: "./tsconfig.json",
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },
