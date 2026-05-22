@@ -1,4 +1,4 @@
-import { CSRF_COOKIE, CSRF_HEADER } from "@shared/contracts/http";
+import { CSRF_COOKIE, CSRF_HEADER } from "@z0/contracts/http";
 
 export function buildRequest(
   method: string,

@@ -41,6 +41,3 @@ jobs:
 
       - name: Run tests
         run: bun test
-
-      - name: Build frontend
-        run: bun run build

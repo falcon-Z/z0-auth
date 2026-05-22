@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { ErrorCodes } from "@shared/contracts/errors";
-import { normalizeEmail, validateEmail, validateRequiredString } from "@shared/contracts/validation";
+import { ErrorCodes } from "@z0/contracts/errors";
+import { normalizeEmail, validateEmail, validateRequiredString } from "@z0/contracts/validation";
 
 describe("validation", () => {
   test("validateEmail rejects missing and invalid", () => {

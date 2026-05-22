@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { ErrorCodes } from "@shared/contracts/errors";
-import { closeDatabase } from "../../src/api/lib/db";
-import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
+import { ErrorCodes } from "@z0/contracts/errors";
+import { closeDatabase } from "../../packages/server/src/api/lib/db";
+import { resetRateLimitsForTests } from "../../packages/server/src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { dispatch } from "./api-routes";

@@ -1,23 +1,20 @@
 # z0-auth
 
-Cloud-native, self-hostable IAM / authentication server (baseline scaffold). Bring your own PostgreSQL database; backend uses **Bun builtins only**.
+Cloud-native, self-hostable IAM / authentication server. Bring your own PostgreSQL database; core server uses **Bun builtins only**.
 
 ## Structure
 
 ```
-src/
-  server.ts          # Bun.serve entry + startup checks
-  app/               # Frontend (React + React Router console, auth pages)
-  api/               # Backend HTTP modules
-    auth/            # /api/auth/*
-    health/          # /api/health, /api/live, /api/ready
-    v1/              # /api/v1/* resource APIs
-tests/               # Mirrors src/
-docs/                # Architecture + OpenAPI references
-scripts/             # DB reset/setup
+packages/
+  contracts/     # Shared API types and validation (@z0/contracts)
+  server/        # Bun HTTP server: JSON API + HTML auth pages (@z0/server)
+tests/
+docs/
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for routing, naming notes, and dependency policy.
+Auth pages (`/setup`, `/login`, `/register`, `/forgot-password`) are **HTML served by the server**, not a React SPA. JSON lives under `/api/*`.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for routing and dependency policy.
 
 ## Quick start
 
@@ -32,36 +29,29 @@ bun dev
 
 Optional production hardening:
 
-- Set `INSTALL_TOKEN` before exposing the instance; pass `X-Install-Token` on `POST /api/setup`.
+- Set `INSTALL_TOKEN` before exposing the instance; pass `X-Install-Token` on `POST /api/setup` (API) when using programmatic setup.
 - Complete setup before production traffic; otherwise set `ALLOW_INCOMPLETE_SETUP=true` only for maintenance.
 
-- Console SPA: http://localhost:3000/ (after setup + sign-in)
 - Setup: http://localhost:3000/setup
-- Auth UI: http://localhost:3000/login
+- Sign in: http://localhost:3000/login
 - Health: http://localhost:3000/api/health
 
-See [docs/api/ui-flows.md](docs/api/ui-flows.md) for UI redirect behavior.
+See [docs/api/ui-flows.md](docs/api/ui-flows.md) for redirect behavior.
 
 ## Scripts
 
 | Script | Description |
 |--------|-------------|
-| `bun dev` | Dev server with HMR |
+| `bun dev` | Dev server (`@z0/server`) |
 | `bun start` | Production server |
-| `bun run build` | Build frontend HTML bundles to `dist/` |
 | `bun test` | Run tests |
 | `bun run db:reset` | Drop `public` schema and apply baseline SQL |
 
 ## Troubleshooting
 
-**Postgres `sorry, too many clients already`:** stray `bun dev`, `bun test`, or `bun src/server.ts` processes can hold connections. Stop them before `db:reset` or tests:
+**Postgres `sorry, too many clients already`:** stop stray `bun dev` or test processes before `db:reset` or tests.
 
-```bash
-pgrep -a bun          # list processes
-pkill -f "bun.*server" # or kill specific PIDs
-```
-
-Tests use `--concurrency 1` to limit parallel DB use; still avoid running `bun dev` and `bun test` against the same database at once.
+Tests use `--concurrency 1` to limit parallel DB use.
 
 ## OpenAPI
 

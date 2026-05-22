@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import type { SessionResponse } from "@shared/contracts/auth";
-import { SESSION_COOKIE } from "../../src/api/lib/session";
-import { closeDatabase } from "../../src/api/lib/db";
-import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
+import type { SessionResponse } from "@z0/contracts/auth";
+import { SESSION_COOKIE } from "../../packages/server/src/api/lib/session";
+import { closeDatabase } from "../../packages/server/src/api/lib/db";
+import { resetRateLimitsForTests } from "../../packages/server/src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { dispatch } from "./api-routes";

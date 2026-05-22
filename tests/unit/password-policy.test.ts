@@ -5,7 +5,7 @@ import {
   passwordRules,
   validatePassword,
   validatePasswordConfirm,
-} from "@shared/contracts/password-policy";
+} from "@z0/contracts/password-policy";
 
 describe("password policy", () => {
   test("rejects empty password", () => {

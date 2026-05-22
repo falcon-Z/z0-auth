@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { closeDatabase } from "../../src/api/lib/db";
-import { healthRoutes } from "../../src/api/health/routes";
+import { closeDatabase } from "../../packages/server/src/api/lib/db";
+import { healthRoutes } from "../../packages/server/src/api/health/routes";
 
 describe("health routes", () => {
   afterAll(async () => {

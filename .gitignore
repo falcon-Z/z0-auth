@@ -48,8 +48,7 @@ jwt-private.key
 jwt-public.key
 
 # Config files (if accidentally created)
-src/api/config.json
-src/app/config.json
+packages/server/config.json
 config.json
 
 # Claude AI files

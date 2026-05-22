@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { closeDatabase } from "../../src/api/lib/db";
+import { closeDatabase } from "../../packages/server/src/api/lib/db";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { dispatch } from "./api-routes";

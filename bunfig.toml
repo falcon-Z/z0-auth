@@ -1,7 +1,2 @@
-[serve.static]
-plugins = ["bun-plugin-tailwind"]
-env = "BUN_PUBLIC_*"
-
-# Resolve @shared/* for server code (package.json imports + tsconfig paths)
 [run]
-tsconfig = "tsconfig.json"
+tsconfig = "packages/server/tsconfig.json"
