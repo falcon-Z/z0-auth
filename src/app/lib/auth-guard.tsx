@@ -65,7 +65,7 @@ export function ConsoleAuthGuard({ children }: { children: ReactNode }) {
 
   if (state === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
         Loading…
       </div>
     );

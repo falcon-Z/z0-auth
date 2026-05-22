@@ -4,8 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@z0/c
 import { Button } from "@z0/components/ui/button";
 import { apiFetch, ensureCsrf } from "@z0/lib/api";
 import type { SessionResponse } from "@shared/contracts/auth";
-import { ConsoleAuthGuard } from "@z0/lib/auth-guard";
-
 function ConsoleHomeContent() {
   const [session, setSession] = useState<SessionResponse | null>(null);
 
@@ -23,8 +21,8 @@ function ConsoleHomeContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b px-6 py-4">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="border-b border-border px-6 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">z0-auth</p>
@@ -68,9 +66,5 @@ function ConsoleHomeContent() {
 }
 
 export function ConsoleHomePage() {
-  return (
-    <ConsoleAuthGuard>
-      <ConsoleHomeContent />
-    </ConsoleAuthGuard>
-  );
+  return <ConsoleHomeContent />;
 }

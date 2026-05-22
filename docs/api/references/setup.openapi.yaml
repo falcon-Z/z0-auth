@@ -71,7 +71,5 @@ paths:
                         type: string
                       slug:
                         type: string
-                  recoveryKey:
-                    type: string
         "409":
           description: Setup already completed

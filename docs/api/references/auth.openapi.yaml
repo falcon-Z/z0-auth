@@ -22,7 +22,16 @@ paths:
       summary: Sign out
   /api/auth/reset-password:
     post:
-      summary: Reset password using recovery key
+      summary: Password reset (unavailable until SMTP is configured)
+      responses:
+        "503":
+          description: Password reset not available
+  /api/auth/forgot-password:
+    post:
+      summary: Password reset (unavailable until SMTP is configured)
+      responses:
+        "503":
+          description: Password reset not available
   /api/auth/register:
     post:
       summary: Disabled on platform

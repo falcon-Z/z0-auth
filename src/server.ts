@@ -11,12 +11,7 @@ import { v1Routes } from "./api/v1/routes";
 import { guardConsoleEntry } from "./api/lib/console-guard";
 import { isSetupComplete } from "./api/lib/platform";
 
-import consoleApp from "./app/console/index.html";
-import forgotPasswordPage from "./app/auth/forgot-password/index.html";
-import loginPage from "./app/auth/login/index.html";
-import registerPage from "./app/auth/register/index.html";
-import setupPage from "./app/setup/index.html";
-import setupCompletePage from "./app/setup/complete/index.html";
+import app from "./app/index.html";
 
 const config = loadConfig();
 const dbHealth = await checkDatabaseHealth();
@@ -43,22 +38,28 @@ const apiRoutes = applySetupGuard({
   ...v1Routes,
 });
 
+/** One HTML bundle for all UI routes; React Router handles client paths. */
+const uiRoutes = {
+  "/login": app,
+  "/register": app,
+  "/forgot-password": app,
+  "/setup": app,
+  "/console": app,
+  "/console/*": app,
+} as const;
+
 const server = serve({
   hostname: config.bindAddress,
   port: config.port,
 
   routes: {
-    "/login": loginPage,
-    "/register": registerPage,
-    "/forgot-password": forgotPasswordPage,
-    "/setup": setupPage,
-    "/setup/complete": setupCompletePage,
-
     "/": {
       GET: guardConsoleEntry,
       HEAD: guardConsoleEntry,
     },
-    "/console": consoleApp,
+    ...uiRoutes,
+    // SPA fallback for deep links (React Router); API and Bun assets are matched first.
+    "/*": app,
   },
 
   async fetch(req) {

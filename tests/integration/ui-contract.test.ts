@@ -8,7 +8,7 @@ describe("ui contract documentation", () => {
     const content = readFileSync(docPath, "utf8");
     expect(content).toContain("/setup");
     expect(content).toContain("/login");
-    expect(content).toContain("/setup/complete");
+    expect(content).toContain("session storage");
     expect(content).toContain("503");
     expect(content).toContain("SetupRequired");
   });

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>z0-auth</title>
+    <script>
+      (function () {
+        var d = document.documentElement;
+        var m = window.matchMedia("(prefers-color-scheme: dark)");
+        var apply = function () {
+          var dark = m.matches;
+          d.classList.toggle("dark", dark);
+          d.style.colorScheme = dark ? "dark" : "light";
+        };
+        apply();
+        m.addEventListener("change", apply);
+      })();
+    </script>
+    <script type="module" src="./main.tsx"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

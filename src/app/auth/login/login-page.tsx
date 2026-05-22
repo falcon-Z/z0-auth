@@ -9,12 +9,32 @@ import { apiFetch, ensureCsrf } from "@z0/lib/api";
 import type { SessionResponse } from "@shared/contracts/auth";
 import type { SetupStatus } from "@shared/contracts/setup";
 
+const SETUP_FLASH_KEY = "z0_setup_flash";
+
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(SETUP_FLASH_KEY);
+    if (raw) {
+      sessionStorage.removeItem(SETUP_FLASH_KEY);
+      try {
+        const flash = JSON.parse(raw) as { organizationName?: string };
+        if (flash.organizationName) {
+          setSetupMessage(
+            `Setup complete for ${flash.organizationName}. Sign in with your super admin account.`,
+          );
+        }
+      } catch {
+        setSetupMessage("Setup complete. Sign in with your super admin account.");
+      }
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +89,11 @@ export function LoginPage() {
             <CardTitle>Login</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {setupMessage ? (
+              <p className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm text-foreground">
+                {setupMessage}
+              </p>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -99,7 +124,7 @@ export function LoginPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-2 text-sm text-muted-foreground">
             <a href="/forgot-password" className="hover:text-foreground">
-              Forgot password? Use recovery key
+              Forgot password?
             </a>
           </CardFooter>
         </Card>

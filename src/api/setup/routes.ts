@@ -14,7 +14,6 @@ import { getDb } from "../lib/db";
 import { json, problem } from "../lib/http";
 import { hashPassword } from "../lib/password";
 import { getPlatformSettings } from "../lib/platform";
-import { generateRecoveryKey, hashRecoveryKey } from "../lib/recovery-key";
 import { uniqueTenantSlug } from "../lib/tenant";
 import { checkRateLimit, clientIp } from "../lib/rate-limit";
 
@@ -111,8 +110,6 @@ export const setupRoutes = {
       }
 
       const email = normalizeEmail(body.email);
-      const recoveryKey = generateRecoveryKey();
-      const recoveryKeyHash = await hashRecoveryKey(recoveryKey);
       const passwordHash = await hashPassword(body.password);
 
       const db = getDb();
@@ -160,11 +157,6 @@ export const setupRoutes = {
           `;
 
           await tx`
-            INSERT INTO user_recovery_keys (user_id, key_hash)
-            VALUES (${userId}, ${recoveryKeyHash})
-          `;
-
-          await tx`
             UPDATE platform_settings
             SET platform_name = ${organizationName},
                 default_tenant_id = ${tenantId},
@@ -195,7 +187,6 @@ export const setupRoutes = {
             name: (result.tenant as { name: string }).name,
             slug: (result.tenant as { slug: string }).slug,
           },
-          recoveryKey,
         };
 
         console.info(

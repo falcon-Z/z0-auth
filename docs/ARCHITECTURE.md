@@ -17,11 +17,12 @@
 
 Bun matches routes by specificity (exact → params → wildcard):
 
-1. **`/api/*`** — JSON API (health, auth, v1 resources).
-2. **`/login`, `/register`, `/forgot-password`** — Dedicated HTML entry points with minimal bundles (shadcn UI, no full console SPA).
-3. **`/` and `/*`** — Management console SPA (`src/app/console`).
+1. **`fetch` handler** — only `/api/*` JSON (health, auth, setup, v1).
+2. **`/`** — server redirect (setup → `/setup`, signed out → `/login`, signed in → `/console`).
+3. **`/login`, `/register`, `/forgot-password`, `/setup`, `/console`, `/console/*`** — single HTML import (`src/app/index.html`); one React bundle, client routes in `src/app/app-routes.tsx`.
+4. **`/*`** — SPA fallback for deep links and future console paths.
 
-This keeps public authentication UI separate from the operator console while using a single server process.
+Development uses Bun’s HTML import bundler (HMR). Production uses `bun run build` output from the same entry.
 
 ## Naming: alternatives to `api`
 
@@ -53,7 +54,7 @@ The backend intentionally uses **Bun’s built-in toolset** (`Bun.serve`, `bun:s
 - **Setup:** one-time `POST /api/setup` inside a DB transaction (`FOR UPDATE` on `platform_settings`); optional `INSTALL_TOKEN`.
 - **CSRF:** double-submit cookie `z0_csrf` + `X-CSRF-Token` on mutating routes; `Origin`/`Referer` checked.
 - **Sessions:** HttpOnly cookie `z0_session`; token stored as SHA-256 hash; rotated on login.
-- **Recovery key:** shown once at setup; Argon2id hash in `user_recovery_keys`; reset via `POST /api/auth/reset-password`.
+- **Password reset:** `POST /api/auth/reset-password` returns **503** until SMTP is configured (later phase).
 - **Password policy:** shared rules in `src/shared/contracts/password-policy.ts` (14+ chars, classes, weak list, contextual).
 - **Contracts:** TypeScript types in `src/shared/contracts/`; keep OpenAPI references in sync manually.
 

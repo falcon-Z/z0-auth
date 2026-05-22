@@ -6,8 +6,7 @@ import { ConsoleNotFoundPage } from "./pages/not-found";
 export function ConsoleRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<ConsoleHomePage />} />
-      <Route path="/console" element={<ConsoleHomePage />} />
+      <Route index element={<ConsoleHomePage />} />
       <Route path="*" element={<ConsoleNotFoundPage />} />
     </Routes>
   );

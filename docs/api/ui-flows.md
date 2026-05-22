@@ -16,16 +16,9 @@ This document defines redirect and API behavior the React shells rely on. Integr
 
 1. User opens `/setup`.
 2. `GET /api/setup/status` — if `completed`, redirect `/login`.
-3. `POST /api/setup` with CSRF — **201** returns `recoveryKey` once.
-4. Navigate to `/setup/complete` with router state (not query string).
-5. User acknowledges storage → `/login`.
-
-## Setup complete page refresh
-
-| State | Behavior |
-|-------|----------|
-| Router state present | Show recovery key UI |
-| No state | Message + link to `/login` (key not recoverable from server) |
+3. `POST /api/setup` with CSRF — **201** returns user and default tenant.
+4. Browser redirects to `/login` with a one-time setup flash (session storage).
+5. User signs in → `/` → console.
 
 ## Authenticated console
 
@@ -34,12 +27,12 @@ This document defines redirect and API behavior the React shells rely on. Integr
 | `/`, `/console` | `GET /api/auth/session` — if not authenticated, redirect `/login` |
 | Sign out | `POST /api/auth/logout` → redirect `/login` |
 
-## Password reset (recovery key)
+## Password reset
 
 | Surface | Behavior |
 |---------|----------|
-| `/forgot-password` | Form posts `POST /api/auth/reset-password` |
-| Success | Link to `/login`; all sessions revoked |
+| `/forgot-password` | Informational UI; reset not available until SMTP |
+| `POST /api/auth/reset-password` | **503** until SMTP is configured |
 
 ## HTTP status codes (auth/setup)
 
@@ -49,4 +42,4 @@ This document defines redirect and API behavior the React shells rely on. Integr
 | 409 | Setup already completed |
 | 403 | CSRF or install token failure |
 | 429 | Rate limited |
-| 503 | API used before setup complete |
+| 503 | API used before setup complete, or password reset unavailable |

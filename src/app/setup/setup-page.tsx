@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { AuthLayout } from "@z0/auth/components/auth-layout";
 import { PasswordChecklist } from "@z0/components/password-checklist";
@@ -11,8 +10,9 @@ import { apiFetch, ensureCsrf } from "@z0/lib/api";
 import type { SetupResponse, SetupStatus } from "@shared/contracts/setup";
 import { isPasswordPolicyMet } from "@shared/contracts/password-policy";
 
+const SETUP_FLASH_KEY = "z0_setup_flash";
+
 export function SetupPage() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +64,11 @@ export function SetupPage() {
       return;
     }
 
-    navigate("/setup/complete", {
-      replace: true,
-      state: { ...result.data, email },
-    });
+    sessionStorage.setItem(
+      SETUP_FLASH_KEY,
+      JSON.stringify({ organizationName: result.data.organizationName }),
+    );
+    window.location.assign("/login");
   }
 
   if (loading) {

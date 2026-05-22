@@ -28,7 +28,7 @@ bun run db:reset       # requires local Postgres
 bun dev
 ```
 
-**First run:** open http://localhost:3000/setup and create the platform super admin. Save the **recovery key** shown once on the complete page (copy, download, or email-to-self via your mail client). SMTP is not required for the initial admin password reset.
+**First run:** open http://localhost:3000/setup and create your organization and super admin account, then sign in at `/login`.
 
 Optional production hardening:
 
@@ -40,7 +40,7 @@ Optional production hardening:
 - Auth UI: http://localhost:3000/login
 - Health: http://localhost:3000/api/health
 
-See [docs/security/recovery-key.md](docs/security/recovery-key.md) and [docs/api/ui-flows.md](docs/api/ui-flows.md).
+See [docs/api/ui-flows.md](docs/api/ui-flows.md) for UI redirect behavior.
 
 ## Scripts
 

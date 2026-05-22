@@ -27,5 +27,4 @@ export type SetupResponse = {
   user: SetupUser;
   organizationName: string;
   tenant: SetupTenant;
-  recoveryKey: string;
 };

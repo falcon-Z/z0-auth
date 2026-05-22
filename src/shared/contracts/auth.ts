@@ -22,17 +22,3 @@ export type SessionResponse = {
   tenant?: SessionTenant;
 };
 
-export type ResetPasswordRequest = {
-  email: string;
-  recoveryKey: string;
-  newPassword: string;
-  passwordConfirm: string;
-};
-
-export type RegenerateRecoveryKeyRequest = {
-  currentPassword: string;
-};
-
-export type RegenerateRecoveryKeyResponse = {
-  recoveryKey: string;
-};

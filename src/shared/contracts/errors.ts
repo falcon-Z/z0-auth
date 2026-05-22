@@ -23,4 +23,5 @@ export const ErrorCodes = {
   RATE_LIMITED: "rate_limited",
   INSTALL_TOKEN_REQUIRED: "install_token_required",
   INSTALL_TOKEN_INVALID: "install_token_invalid",
+  PASSWORD_RESET_UNAVAILABLE: "password_reset_unavailable",
 } as const;

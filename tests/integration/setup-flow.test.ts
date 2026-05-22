@@ -27,7 +27,7 @@ run("setup flow", () => {
     expect(body.completed).toBe(false);
   });
 
-  test("POST /api/setup creates admin and returns recovery key", async () => {
+  test("POST /api/setup creates admin, default tenant, and memberships", async () => {
     const csrf = await fetchCsrfToken(dispatch);
     const res = await dispatch(
       buildRequest("POST", "/api/setup", {
@@ -47,7 +47,8 @@ run("setup flow", () => {
     expect(body.organizationName).toBe("Acme IAM");
     expect(body.tenant.name).toBe("Acme IAM");
     expect(body.tenant.slug).toBe("acme-iam");
-    expect(body.recoveryKey.length).toBeGreaterThan(20);
+    expect(body.user.id).toBeTruthy();
+    expect(body.tenant.id).toBeTruthy();
   });
 
   test("POST /api/setup again returns 409", async () => {

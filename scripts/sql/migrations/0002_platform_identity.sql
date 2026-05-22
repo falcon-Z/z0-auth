@@ -1,4 +1,4 @@
--- Platform identity: users, bootstrap settings, sessions, recovery keys.
+-- Platform identity: users, bootstrap settings, sessions.
 
 CREATE TABLE platform_settings (
   id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -47,18 +47,6 @@ CREATE TABLE sessions (
 
 CREATE UNIQUE INDEX sessions_token_hash_unique ON sessions (token_hash);
 CREATE INDEX sessions_user_id_idx ON sessions (user_id) WHERE revoked_at IS NULL;
-
-CREATE TABLE user_recovery_keys (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  key_hash TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  revoked_at TIMESTAMPTZ
-);
-
-CREATE UNIQUE INDEX user_recovery_keys_one_active_per_user
-  ON user_recovery_keys (user_id)
-  WHERE revoked_at IS NULL;
 
 INSERT INTO schema_migrations (version)
 VALUES ('0002_platform_identity')

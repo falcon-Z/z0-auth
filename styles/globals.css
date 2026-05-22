@@ -75,7 +75,13 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
+  html {
     @apply bg-background text-foreground;
+  }
+  body {
+    @apply min-h-screen bg-background text-foreground;
+  }
+  #root {
+    @apply min-h-screen;
   }
 }
