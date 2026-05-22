@@ -92,6 +92,7 @@ function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { f
         msgEmail: "Enter an email address like name@example.com",
       })}
       ${renderPasswordField({
+        value: v("password"),
         autocomplete: "new-password",
         context: { email: v("email"), name: v("name") },
         attempted: fieldErrorMessages(errors, "password").length > 0,
@@ -102,6 +103,7 @@ function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { f
         name: "passwordConfirm",
         label: "Confirm password",
         type: "password",
+        value: v("passwordConfirm"),
         required: true,
         autocomplete: "new-password",
         error: fieldErrorFor(errors, "passwordConfirm"),

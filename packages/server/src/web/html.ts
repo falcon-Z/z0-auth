@@ -1,8 +1,29 @@
 import {
-  getPasswordRuleStates,
+  getPasswordChecklistStates,
+  PASSWORD_MAX_LENGTH,
   type PasswordPolicyContext,
   type PasswordRuleStatus,
 } from "@z0/contracts/password-policy";
+
+const SVG_CHECK = `<svg class="auth-status-icon auth-status-icon--success" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="currentColor" stroke-width="1.25"/><path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M4.5 7.25 6.1 8.85 9.75 5.35"/></svg>`;
+
+const SVG_CROSS = `<svg class="auth-status-icon auth-status-icon--error" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="currentColor" stroke-width="1.25"/><path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" d="M5.1 5.1 8.9 8.9M8.9 5.1 5.1 8.9"/></svg>`;
+
+const SVG_WARNING = `<svg class="auth-status-icon auth-status-icon--warning" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="currentColor" stroke-width="1.25"/><path fill="currentColor" d="M7 4.25a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0V5a.75.75 0 0 1 .75-.75Zm0 6.5a.875.875 0 1 0 0-1.75.875.875 0 0 0 0 1.75Z"/></svg>`;
+
+function renderFieldError(id: string, message: string, hidden = false): string {
+  const visibility = hidden ? " hidden" : "";
+  const body = hidden
+    ? ""
+    : `${SVG_WARNING}<span class="auth-field-error__text">${escapeHtml(message)}</span>`;
+  return `<p id="${id}" class="auth-field-error" role="alert"${visibility}>${body}</p>`;
+}
+
+function passwordChecklistIcon(state: PasswordRuleStatus["state"]): string {
+  if (state === "met") return SVG_CHECK;
+  if (state === "failed") return SVG_CROSS;
+  return "";
+}
 
 export function escapeHtml(value: string): string {
   return value
@@ -71,7 +92,7 @@ export function fieldErrorMessages(errors: FieldError[], field: string): string[
 export function formErrorsSummary(errors: FieldError[]): string {
   const formError = errors.find((e) => e.field === "_form");
   if (!formError) return "";
-  return `<p class="auth-form-error" role="alert">${escapeHtml(formError.message)}</p>`;
+  return `<p class="auth-form-error" role="alert">${SVG_WARNING}<span class="auth-form-error__text">${escapeHtml(formError.message)}</span></p>`;
 }
 
 /** @deprecated Use formErrorsSummary — kept for tests referencing the name. */
@@ -128,9 +149,7 @@ export function renderAuthField(options: AuthFieldOptions): string {
     hintContent.length > 0
       ? `<div id="${hintId}" class="auth-field-hint"${hasError ? " hidden" : ""}>${hintContent}</div>`
       : "";
-  const errorHtml = options.error
-    ? `<p id="${errorId}" class="auth-field-error" role="alert">${escapeHtml(options.error)}</p>`
-    : `<p id="${errorId}" class="auth-field-error" hidden></p>`;
+  const errorHtml = renderFieldError(errorId, options.error ?? "", !options.error);
   const autocomplete = options.autocomplete
     ? ` autocomplete="${escapeHtml(options.autocomplete)}"`
     : "";
@@ -141,12 +160,6 @@ export function renderAuthField(options: AuthFieldOptions): string {
     ${errorHtml}
     ${hintBlock}
   </div>`;
-}
-
-function passwordRuleIcon(state: PasswordRuleStatus["state"]): string {
-  if (state === "met") return "✓";
-  if (state === "failed") return "✗";
-  return "·";
 }
 
 function passwordRuleAria(state: PasswordRuleStatus["state"], label: string): string {
@@ -163,22 +176,25 @@ export type PasswordChecklistOptions = {
 };
 
 export function renderPasswordChecklist(options: PasswordChecklistOptions = {}): string {
-  const states = getPasswordRuleStates(options.password ?? "", options.context ?? {}, {
+  const { rules, extraInvalid } = getPasswordChecklistStates(options.password ?? "", options.context ?? {}, {
     attempted: options.attempted,
     failedLabels: options.failedLabels,
   });
-  const anyFailed = states.some((s) => s.state === "failed");
-  const items = states
+  const anyFailed = rules.some((s) => s.state === "failed") || extraInvalid;
+  const items = rules
     .map((rule) => {
-      const icon = passwordRuleIcon(rule.state);
+      const icon = passwordChecklistIcon(rule.state);
+      const iconHtml = icon ? `<span class="auth-password-rule__icon">${icon}</span>` : "";
       return `<li class="auth-password-rule auth-password-rule--${rule.state}" data-rule-id="${escapeHtml(rule.id)}" aria-label="${escapeHtml(passwordRuleAria(rule.state, rule.label))}">
-        <span class="auth-password-rule__icon" aria-hidden="true">${icon}</span>
-        <span>${escapeHtml(rule.label)}</span>
+        ${iconHtml}<span class="auth-password-rule__label">${escapeHtml(rule.label)}</span>
       </li>`;
     })
     .join("");
+  const maxHint = extraInvalid
+    ? `<p class="auth-field-error auth-password-max-error" role="alert">${SVG_WARNING}<span class="auth-field-error__text">Use at most ${PASSWORD_MAX_LENGTH} characters</span></p>`
+    : "";
 
-  return `<ul id="password-hint" class="auth-password-checklist${anyFailed ? " auth-password-checklist--invalid" : ""}" aria-label="Password requirements">${items}</ul>`;
+  return `<ul id="password-hint" class="auth-hint auth-password-checklist" aria-label="Password requirements">${items}</ul>${maxHint}`;
 }
 
 export type PasswordFieldOptions = {
@@ -190,19 +206,23 @@ export type PasswordFieldOptions = {
 };
 
 export function renderPasswordField(options: PasswordFieldOptions = {}): string {
-  const states = getPasswordRuleStates(options.value ?? "", options.context ?? {}, {
+  const { rules, extraInvalid } = getPasswordChecklistStates(options.value ?? "", options.context ?? {}, {
     attempted: options.attempted,
     failedLabels: options.failedLabels,
   });
-  const anyFailed = states.some((s) => s.state === "failed");
+  const anyFailed = rules.some((s) => s.state === "failed") || extraInvalid;
   const invalidClass = anyFailed ? " auth-field--invalid" : "";
   const autocomplete = options.autocomplete
     ? ` autocomplete="${escapeHtml(options.autocomplete)}"`
     : "";
+  const valueAttr =
+    options.value !== undefined && options.value !== ""
+      ? ` value="${escapeHtml(options.value)}"`
+      : "";
 
   return `<div class="auth-field${invalidClass}" data-password-field>
     <label for="password">Password</label>
-    <input id="password" name="password" type="password" required${autocomplete}${anyFailed ? ' aria-invalid="true"' : ""} aria-describedby="password-hint" data-password-input />
+    <input id="password" name="password" type="password" required${autocomplete}${valueAttr}${anyFailed ? ' aria-invalid="true"' : ""} aria-describedby="password-hint" data-password-input />
     <p id="password-error" class="auth-field-error" hidden></p>
     <div class="auth-field-hint">
       ${renderPasswordChecklist({

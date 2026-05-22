@@ -47,4 +47,9 @@ describe("password policy", () => {
     const errors = validatePassword("SuperAdmin123!", { email: "a@b.co", name: "Other" });
     expect(errors.some((e) => e.message.includes("commonly used"))).toBe(true);
   });
+
+  test('rejects "test" as commonly used', () => {
+    const errors = validatePassword("test");
+    expect(errors.some((e) => e.message.includes("commonly used"))).toBe(true);
+  });
 });
