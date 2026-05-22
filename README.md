@@ -49,6 +49,8 @@ See [docs/api/ui-flows.md](docs/api/ui-flows.md) for redirect behavior.
 
 ## Troubleshooting
 
+**`DATABASE_URL is required` on `db:reset`:** copy `.env.example` to `.env` at the repo root and set `DATABASE_URL`. The reset script loads that file automatically; you do not need to `source .env` first.
+
 **Postgres `sorry, too many clients already`:** stop stray `bun dev` or test processes before `db:reset` or tests.
 
 Tests use `--concurrency 1` to limit parallel DB use.

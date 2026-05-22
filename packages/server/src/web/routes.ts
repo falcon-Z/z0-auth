@@ -10,10 +10,21 @@ import { parseCookies } from "../api/lib/csrf";
 import { runSetup } from "../api/setup/service";
 import { redirectForAuthPage } from "./ui-guard";
 import { parseFormBody } from "./forms";
-import { escapeHtml, fieldErrorsHtml, renderAuthPage, renderPasswordChecklist, type Flash } from "./html";
+import {
+  escapeHtml,
+  fieldErrorFor,
+  fieldErrorMessages,
+  formErrorsSummary,
+  renderAuthField,
+  renderAuthPage,
+  renderPasswordField,
+  type Flash,
+} from "./html";
 import { preparePageCsrf, withSetCookie } from "./csrf-page";
 
-const AUTH_CSS = Bun.file(path.join(import.meta.dir, "static", "auth.css"));
+const STATIC_DIR = path.join(import.meta.dir, "static");
+const AUTH_CSS = Bun.file(path.join(STATIC_DIR, "auth.css"));
+const AUTH_FORMS_JS = Bun.file(path.join(STATIC_DIR, "auth-forms.js"));
 
 type FormFields = Record<string, string>;
 
@@ -42,33 +53,62 @@ async function problemFieldErrors(res: Response): Promise<{ field: string; messa
 }
 
 function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { field: string; message: string }[] = []): string {
-  const v = (key: string) => escapeHtml(values[key] ?? "");
+  const v = (key: string) => values[key] ?? "";
   const body = `
-    <form method="post" action="/setup" class="auth-card">
+    <form method="post" action="/setup" class="auth-card" data-validate>
       <h2>Initial setup</h2>
-      ${fieldErrorsHtml(errors)}
-      <div class="auth-field">
-        <label for="organizationName">Organization name</label>
-        <input id="organizationName" name="organizationName" value="${v("organizationName")}" required autocomplete="organization" />
-        <p class="auth-hint">Creates your default tenant and platform name.</p>
-      </div>
-      <div class="auth-field">
-        <label for="name">Your name</label>
-        <input id="name" name="name" value="${v("name")}" required autocomplete="name" />
-      </div>
-      <div class="auth-field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" value="${v("email")}" required autocomplete="email" />
-      </div>
-      <div class="auth-field">
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" required autocomplete="new-password" />
-        ${renderPasswordChecklist()}
-      </div>
-      <div class="auth-field">
-        <label for="passwordConfirm">Confirm password</label>
-        <input id="passwordConfirm" name="passwordConfirm" type="password" required autocomplete="new-password" />
-      </div>
+      ${formErrorsSummary(errors)}
+      ${renderAuthField({
+        id: "organizationName",
+        name: "organizationName",
+        label: "Organization name",
+        value: v("organizationName"),
+        required: true,
+        autocomplete: "organization",
+        hint: "Creates your default tenant and platform name.",
+        error: fieldErrorFor(errors, "organizationName"),
+        msgRequired: "Enter your organization name",
+      })}
+      ${renderAuthField({
+        id: "name",
+        name: "name",
+        label: "Your name",
+        value: v("name"),
+        required: true,
+        autocomplete: "name",
+        error: fieldErrorFor(errors, "name"),
+        msgRequired: "Enter your name",
+      })}
+      ${renderAuthField({
+        id: "email",
+        name: "email",
+        label: "Email",
+        type: "email",
+        value: v("email"),
+        required: true,
+        autocomplete: "email",
+        error: fieldErrorFor(errors, "email"),
+        msgRequired: "Enter your email address",
+        msgEmail: "Enter an email address like name@example.com",
+      })}
+      ${renderPasswordField({
+        autocomplete: "new-password",
+        context: { email: v("email"), name: v("name") },
+        attempted: fieldErrorMessages(errors, "password").length > 0,
+        failedLabels: fieldErrorMessages(errors, "password"),
+      })}
+      ${renderAuthField({
+        id: "passwordConfirm",
+        name: "passwordConfirm",
+        label: "Confirm password",
+        type: "password",
+        required: true,
+        autocomplete: "new-password",
+        error: fieldErrorFor(errors, "passwordConfirm"),
+        msgRequired: "Enter your password again to confirm it",
+        msgMatch: "Enter the same password in both fields",
+        matchSelector: "#password",
+      })}
       <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
       <div class="auth-actions">
         <button type="submit" class="auth-button">Complete setup</button>
@@ -89,19 +129,33 @@ function renderLoginForm(
   errors: { field: string; message: string }[] = [],
   flash?: Flash,
 ): string {
-  const v = (key: string) => escapeHtml(values[key] ?? "");
+  const v = (key: string) => values[key] ?? "";
   const body = `
-    <form method="post" action="/login" class="auth-card">
+    <form method="post" action="/login" class="auth-card" data-validate>
       <h2>Sign in</h2>
-      ${fieldErrorsHtml(errors)}
-      <div class="auth-field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" value="${v("email")}" required autocomplete="username" />
-      </div>
-      <div class="auth-field">
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" required autocomplete="current-password" />
-      </div>
+      ${formErrorsSummary(errors)}
+      ${renderAuthField({
+        id: "email",
+        name: "email",
+        label: "Email",
+        type: "email",
+        value: v("email"),
+        required: true,
+        autocomplete: "username",
+        error: fieldErrorFor(errors, "email"),
+        msgRequired: "Enter your email address",
+        msgEmail: "Enter an email address like name@example.com",
+      })}
+      ${renderAuthField({
+        id: "password",
+        name: "password",
+        label: "Password",
+        type: "password",
+        required: true,
+        autocomplete: "current-password",
+        error: fieldErrorFor(errors, "password"),
+        msgRequired: "Enter your password",
+      })}
       <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
       <div class="auth-actions">
         <button type="submit" class="auth-button">Sign in</button>
@@ -289,6 +343,12 @@ async function serveAuthCss(): Promise<Response> {
   });
 }
 
+async function serveAuthFormsJs(): Promise<Response> {
+  return new Response(AUTH_FORMS_JS, {
+    headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 export const webRoutes = {
   "/": {
     GET: getHomePage,
@@ -312,5 +372,8 @@ export const webRoutes = {
   },
   "/static/auth.css": {
     GET: serveAuthCss,
+  },
+  "/static/auth-forms.js": {
+    GET: serveAuthFormsJs,
   },
 } as const;

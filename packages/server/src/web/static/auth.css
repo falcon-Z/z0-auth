@@ -117,11 +117,64 @@ body.auth-body {
   color: var(--muted-foreground);
 }
 
-.auth-errors {
+.auth-form-error {
   margin: 0 0 1rem;
-  padding-left: 1.25rem;
   font-size: 0.875rem;
+  font-weight: 500;
   color: var(--destructive);
+}
+
+.auth-field-error {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--destructive);
+}
+
+.auth-field-hint .auth-hint {
+  margin-top: 0.25rem;
+}
+
+.auth-password-checklist {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+}
+
+.auth-password-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.auth-password-rule__icon {
+  flex-shrink: 0;
+  width: 1rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.auth-password-rule--pending {
+  color: var(--muted-foreground);
+}
+
+.auth-password-rule--met {
+  color: var(--success);
+}
+
+.auth-password-rule--failed {
+  color: var(--destructive);
+  font-weight: 500;
+}
+
+.auth-password-checklist--invalid .auth-password-rule--failed .auth-password-rule__icon {
+  font-weight: 700;
+}
+
+.auth-field--invalid input {
+  border-color: var(--destructive);
 }
 
 .auth-flash {

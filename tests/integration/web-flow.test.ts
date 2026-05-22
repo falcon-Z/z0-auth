@@ -48,6 +48,15 @@ run("web auth pages", () => {
     const html = await res.text();
     expect(html).toContain("Platform setup");
     expect(html).toContain('name="organizationName"');
+    expect(html).toContain('data-validate');
+    expect(html).toContain("/static/auth-forms.js");
+    expect(html).toContain("data-msg-required");
+  });
+
+  test("GET /static/auth-forms.js is served", async () => {
+    const res = await dispatchWeb(new Request("http://localhost/static/auth-forms.js"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("javascript");
   });
 
   test("POST /setup redirects to login", async () => {

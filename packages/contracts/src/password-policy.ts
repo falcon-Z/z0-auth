@@ -144,3 +144,54 @@ export function validatePasswordConfirm(
 export function isPasswordPolicyMet(password: string, ctx: PasswordPolicyContext = {}): boolean {
   return validatePassword(password, ctx).length === 0;
 }
+
+export type PasswordRuleState = "pending" | "met" | "failed";
+
+export type PasswordRuleStatus = {
+  id: string;
+  label: string;
+  state: PasswordRuleState;
+};
+
+/**
+ * Status for each password rule (checklist UI).
+ * When the server returns policy errors, pass failedLabels so passed rules still show as met.
+ */
+export function getPasswordRuleStates(
+  password: string,
+  ctx: PasswordPolicyContext = {},
+  options: { attempted?: boolean; failedLabels?: string[] } = {},
+): PasswordRuleStatus[] {
+  const { attempted = false, failedLabels } = options;
+
+  if (failedLabels && failedLabels.length > 0) {
+    const failedSet = new Set(failedLabels);
+    return passwordRules.map((rule) => ({
+      id: rule.id,
+      label: rule.label,
+      state: failedSet.has(rule.label) ? "failed" : "met",
+    }));
+  }
+
+  if (password.length > 0) {
+    return passwordRules.map((rule) => ({
+      id: rule.id,
+      label: rule.label,
+      state: rule.test(password, ctx) ? "met" : "failed",
+    }));
+  }
+
+  if (attempted) {
+    return passwordRules.map((rule) => ({
+      id: rule.id,
+      label: rule.label,
+      state: "failed",
+    }));
+  }
+
+  return passwordRules.map((rule) => ({
+    id: rule.id,
+    label: rule.label,
+    state: "pending",
+  }));
+}

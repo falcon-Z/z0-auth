@@ -3,6 +3,9 @@ import { serve } from "bun";
 import { authRoutes } from "./api/auth/routes";
 import { checkDatabaseHealth } from "./api/lib/db";
 import { loadConfig } from "./api/lib/config";
+import { loadRootEnv } from "./lib/load-root-env";
+
+loadRootEnv();
 import { printStartupSummary } from "./api/lib/startup-log";
 import { applySetupGuard, dispatchRoute } from "./api/lib/router";
 import { healthRoutes } from "./api/health/routes";

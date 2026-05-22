@@ -8,9 +8,14 @@ import { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { loadRootEnv } from "../src/lib/load-root-env";
+
+loadRootEnv();
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
-  console.error("DATABASE_URL is required");
+  console.error("DATABASE_URL is required.");
+  console.error("Create a .env at the repo root (see .env.example) or export DATABASE_URL.");
   process.exit(1);
 }
 
