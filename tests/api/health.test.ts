@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 
-import { closeDatabase } from "../../packages/server/src/api/lib/db";
-import { healthRoutes } from "../../packages/server/src/api/health/routes";
+import { closeDatabase } from "../../src/api/lib/db";
+import { healthApiRoutes } from "../../src/api/health/routes";
 
 describe("health routes", () => {
   afterAll(async () => {
@@ -9,7 +9,7 @@ describe("health routes", () => {
   });
 
   test("GET /api/live returns alive", async () => {
-    const handler = healthRoutes["/api/live"].GET;
+    const handler = healthApiRoutes["/api/live"].GET;
     const response = await handler();
     expect(response.status).toBe(200);
     const body = await response.json();
@@ -17,7 +17,7 @@ describe("health routes", () => {
   });
 
   test("GET /api/health returns structured payload", async () => {
-    const handler = healthRoutes["/api/health"].GET;
+    const handler = healthApiRoutes["/api/health"].GET;
     const response = await handler();
     expect(response.status).toBe(200);
     const body = (await response.json()) as {

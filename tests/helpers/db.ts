@@ -2,7 +2,7 @@ import { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { closeDatabase } from "../../packages/server/src/api/lib/db";
+import { closeDatabase } from "../../src/api/lib/db";
 
 export function getTestDatabaseUrl(): string | null {
   return process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? null;

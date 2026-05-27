@@ -4,23 +4,29 @@
 
 | Path | Role |
 |------|------|
-| `packages/contracts/` | Shared types and validation (`@z0/contracts`). |
-| `packages/server/src/api/` | JSON HTTP handlers (`/api/*`). |
-| `packages/server/src/web/` | HTML auth pages and static CSS. |
-| `packages/server/src/server.ts` | Process entry: `Bun.serve` routing. |
+| `src/server.ts` | Bun process entrypoint (`Bun.serve`) and route-map assembly. |
+| `src/api/` | JSON API route maps under `/api/*` (`health`, `setup`, `auth`, `v1`). |
+| `src/web/auth/` | Server-rendered auth pages under `/auth/*` with HTMX enhancement. |
+| `src/web/oauth/` | Browser-facing OAuth authorization flow routes (`/oauth/*`). |
+| `src/lib/contracts/` | Shared validation/types imported by server and tests. |
+| `src/app/console/` | React + shadcn management console SPA entry and modules. |
 | `tests/` | Integration and unit tests. |
 | `docs/api/references/` | OpenAPI specifications. |
 
 ## Routing (`Bun.serve`)
 
-1. **`routes`** — HTML pages: `/`, `/setup`, `/login`, `/register`, `/forgot-password`, `/logout`, `/static/auth.css`.
-2. **`fetch`** — `/api/*` JSON only (health, auth, setup, v1).
+All routing is declared explicitly in `routes` (no `fetch` dispatcher):
 
-Each HTML route runs a **server-side guard** first (setup complete? session?) and returns **302** or the page.
+1. `...authWebRoutes` for `/auth/*`
+2. `...oauthWebRoutes` for `/oauth/*`
+3. `...apiRoutes` for `/api/*` (assembled via spread from `...healthApiRoutes`, `...setupApiRoutes`, `...authApiRoutes`, `...v1ApiRoutes`)
+4. `"/"` + `"/*"` serve `src/app/console/index.html` for SPA entry/deep links
+
+Route precedence is critical: `/*` is always last so API/auth routes are never shadowed.
 
 ## Backend dependencies
 
-The server package uses **Bun’s built-in toolset** only (`Bun.serve`, `bun:sql`, env loading). No Hono/Elysia.
+The server runtime uses Bun built-ins (`Bun.serve`, `bun:sql`, native Request/Response) plus project dependencies required for console and UI.
 
 ## Server bind address
 
@@ -31,15 +37,18 @@ The server package uses **Bun’s built-in toolset** only (`Bun.serve`, `bun:sql
 ## Database
 
 - Connection via `DATABASE_URL` (PostgreSQL).
-- `bun run db:reset` — drops `public`, applies `packages/server/scripts/sql/schema.sql` and migrations.
+- `bun run db:reset` drops `public`, applies `src/scripts/sql/schema.sql`, then ordered migrations.
 
-## Phase 1 security
+## Security model (phase 1)
 
-- **Setup:** one-time `POST /api/setup` or `POST /setup` (HTML form).
+- **Setup:** one-time setup via `POST /api/setup` (JSON) or `POST /auth/setup` (form).
 - **CSRF:** cookie `z0_csrf` + header `X-CSRF-Token` (API) or hidden `_csrf` field (HTML forms).
 - **Sessions:** HttpOnly cookie `z0_session`.
-- **Contracts:** `@z0/contracts` imported by server and tests.
+- **Guarding setup state:** APIs are wrapped with `applySetupGuard` so protected routes return `503 SetupRequired` before setup completes.
 
-## Console (later)
+## URL ownership contract
 
-Management UI will be a separate workspace package and OAuth client. It is not part of the core server bundle.
+- `/auth/*` — server HTML pages (setup/login/register/forgot/logout)
+- `/oauth/*` — authorization-server browser flow
+- `/api/*` — JSON-only API surface (for console + external clients)
+- `/` and SPA deep links — React console shell

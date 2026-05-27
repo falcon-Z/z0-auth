@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { slugifyOrganization } from "../../packages/server/src/api/lib/tenant";
+import { slugifyOrganization } from "../../src/api/lib/tenant";
 
 describe("slugifyOrganization", () => {
   test("lowercases and hyphenates", () => {

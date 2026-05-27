@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { passwordChecklistRules } from "@z0/contracts/password-policy";
-import { formErrorsSummary, renderAuthField, renderPasswordChecklist, renderPasswordField } from "../../packages/server/src/web/html";
+import { formErrorsSummary, renderAuthField, renderPasswordChecklist, renderPasswordField } from "../../src/web/html";
 
 describe("web html helpers", () => {
   test("formErrorsSummary renders only form-level errors with icon", () => {

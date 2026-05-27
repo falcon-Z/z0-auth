@@ -1,21 +1,30 @@
-# bun-react-tailwind-shadcn-template
+# z0-auth
 
-To install dependencies:
+Authentication server and management console built as a single Bun monolith.
+
+## Structure
+
+```txt
+src/
+  server.ts             # Bun.serve route composition
+  api/                  # /api/* JSON routes
+  web/auth/             # /auth/* server-rendered forms (+ HTMX)
+  web/oauth/            # /oauth/* authorization flow routes
+  app/console/          # React + shadcn console SPA
+  lib/contracts/        # shared validation/types
+```
+
+## Commands
 
 ```bash
 bun install
-```
-
-To start a development server:
-
-```bash
+bun run db:reset
 bun dev
 ```
 
-To run for production:
+## URL contract
 
-```bash
-bun start
-```
-
-This project was created using `bun init` in bun v1.3.5. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+- `/auth/*` server HTML auth pages
+- `/oauth/*` authorization server browser flow
+- `/api/*` JSON API for console + external apps
+- `/` and deep links served by console SPA

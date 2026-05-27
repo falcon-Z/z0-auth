@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { formatDatabaseTarget } from "../../packages/server/src/api/lib/startup-log";
+import { formatDatabaseTarget } from "../../src/api/lib/startup-log";
 
 describe("formatDatabaseTarget", () => {
   test("redacts credentials and shows host/port/database", () => {

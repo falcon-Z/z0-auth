@@ -1,39 +1,97 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { APITester } from "./APITester";
-import "./index.css";
+import { useEffect, useState } from "react";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@z0/components/ui/card";
+import { dashboardRoutes } from "@z0/modules/dashboard/routes";
+import { clientsRoutes } from "@z0/modules/clients/routes";
 
-import logo from "./logo.svg";
-import reactLogo from "./react.svg";
+type SessionState = "loading" | "authenticated" | "unauthenticated";
 
-export function App() {
+function useSessionGate(): SessionState {
+  const [state, setState] = useState<SessionState>("loading");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session", {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        });
+        if (!mounted) return;
+        if (!res.ok) {
+          setState("unauthenticated");
+          return;
+        }
+        const body = (await res.json()) as { authenticated?: boolean };
+        setState(body.authenticated ? "authenticated" : "unauthenticated");
+      } catch {
+        if (mounted) setState("unauthenticated");
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return state;
+}
+
+function ConsoleShell() {
+  const location = useLocation();
+
   return (
-    <div className="container mx-auto p-8 text-center relative z-10">
-      <div className="flex justify-center items-center gap-8 mb-8">
-        <img
-          src={logo}
-          alt="Bun Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#646cffaa] scale-120"
-        />
-        <img
-          src={reactLogo}
-          alt="React Logo"
-          className="h-36 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#61dafbaa] [animation:spin_20s_linear_infinite]"
-        />
-      </div>
-      <Card>
-        <CardHeader className="gap-4">
-          <CardTitle className="text-3xl font-bold">Bun + React</CardTitle>
-          <CardDescription>
-            Edit <code className="rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono">src/App.tsx</code> and save to
-            test HMR
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <APITester />
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-muted/30">
+      <header className="border-b bg-background">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <h1 className="text-lg font-semibold">Z0 Auth Console</h1>
+          <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+            <Link className={location.pathname === "/" ? "text-foreground" : ""} to="/">
+              Dashboard
+            </Link>
+            <Link className={location.pathname === "/clients" ? "text-foreground" : ""} to="/clients">
+              Clients
+            </Link>
+            <a href="/auth/logout" className="text-destructive">
+              Sign out
+            </a>
+          </nav>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Management Console</CardTitle>
+            <CardDescription>Manage authentication clients and platform settings.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Routes>
+              {[...dashboardRoutes, ...clientsRoutes].map((route) => (
+                <Route key={route.path} path={route.path} element={route.element} />
+              ))}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 }
 
-export default App;
+export function App() {
+  const session = useSessionGate();
+
+  if (session === "loading") {
+    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading session...</div>;
+  }
+  if (session === "unauthenticated") {
+    window.location.href = "/auth/login";
+    return null;
+  }
+
+  return (
+    <BrowserRouter>
+      <ConsoleShell />
+    </BrowserRouter>
+  );
+}

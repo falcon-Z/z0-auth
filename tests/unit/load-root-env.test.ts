@@ -18,7 +18,7 @@ describe("loadRootEnv", () => {
 
     process.env.TEST_LOAD_ROOT_ENV = "from_process";
 
-    const { loadEnvFile } = await import("../../packages/server/src/lib/load-root-env");
+    const { loadEnvFile } = await import("../../src/lib/load-root-env");
     loadEnvFile(envFile);
 
     expect(process.env.TEST_LOAD_ROOT_ENV).toBe("from_process");
@@ -32,7 +32,7 @@ describe("loadRootEnv", () => {
 
     delete process.env.TEST_LOAD_ROOT_ENV;
 
-    const { loadEnvFile } = await import("../../packages/server/src/lib/load-root-env");
+    const { loadEnvFile } = await import("../../src/lib/load-root-env");
     loadEnvFile(envFile);
 
     expect(process.env.TEST_LOAD_ROOT_ENV).toBe("from_file");
