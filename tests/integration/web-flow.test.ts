@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
-import { closeDatabase } from "../../packages/server/src/api/lib/db";
-import { resetRateLimitsForTests } from "../../packages/server/src/api/lib/rate-limit";
+import { closeDatabase } from "../../src/api/lib/db";
+import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { dispatchWeb } from "./web-dispatch";
 
@@ -23,7 +23,7 @@ function extractCsrfFromSetCookie(res: Response): string | undefined {
 }
 
 async function fetchSetupCsrf(): Promise<string> {
-  const res = await dispatchWeb(new Request("http://localhost/setup"));
+  const res = await dispatchWeb(new Request("http://localhost/auth/setup"));
   const fromCookie = extractCsrfFromSetCookie(res);
   if (fromCookie) return fromCookie;
   const html = await res.text();
@@ -41,8 +41,8 @@ run("web auth pages", () => {
     resetRateLimitsForTests();
   });
 
-  test("GET /setup returns HTML form", async () => {
-    const res = await dispatchWeb(new Request("http://localhost/setup"));
+  test("GET /auth/setup returns HTML form", async () => {
+    const res = await dispatchWeb(new Request("http://localhost/auth/setup"));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const html = await res.text();
@@ -59,7 +59,7 @@ run("web auth pages", () => {
     expect(res.headers.get("content-type")).toContain("javascript");
   });
 
-  test("POST /setup redirects to login", async () => {
+  test("POST /auth/setup redirects to login", async () => {
     const csrf = await fetchSetupCsrf();
     const body = new URLSearchParams({
       _csrf: csrf,
@@ -71,7 +71,7 @@ run("web auth pages", () => {
     });
 
     const res = await dispatchWeb(
-      new Request("http://localhost/setup", {
+      new Request("http://localhost/auth/setup", {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -84,18 +84,18 @@ run("web auth pages", () => {
     );
 
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toContain("/login");
+    expect(res.headers.get("location")).toContain("/auth/login");
     expect(res.headers.get("location")).toContain("setup=complete");
   });
 
-  test("GET /login redirects to /setup when incomplete", async () => {
+  test("GET /auth/login redirects to /auth/setup when incomplete", async () => {
     await resetTestDatabase();
-    const res = await dispatchWeb(new Request("http://localhost/login"));
+    const res = await dispatchWeb(new Request("http://localhost/auth/login"));
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toContain("/setup");
+    expect(res.headers.get("location")).toContain("/auth/setup");
   });
 
-  test("GET /login shows form after setup", async () => {
+  test("GET /auth/login shows form after setup", async () => {
     const csrf = await fetchSetupCsrf();
     const body = new URLSearchParams({
       _csrf: csrf,
@@ -106,7 +106,7 @@ run("web auth pages", () => {
       passwordConfirm: strongPassword,
     });
     await dispatchWeb(
-      new Request("http://localhost/setup", {
+      new Request("http://localhost/auth/setup", {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",
@@ -118,7 +118,7 @@ run("web auth pages", () => {
       }),
     );
 
-    const loginRes = await dispatchWeb(new Request("http://localhost/login"));
+    const loginRes = await dispatchWeb(new Request("http://localhost/auth/login"));
     expect(loginRes.status).toBe(200);
     const html = await loginRes.text();
     expect(html).toContain("Sign in");

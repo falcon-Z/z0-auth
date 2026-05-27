@@ -6,8 +6,8 @@ describe("ui contract documentation", () => {
   test("ui-flows.md documents required redirects", () => {
     const docPath = path.join(import.meta.dir, "../../docs/api/ui-flows.md");
     const content = readFileSync(docPath, "utf8");
-    expect(content).toContain("/setup");
-    expect(content).toContain("/login");
+    expect(content).toContain("/auth/setup");
+    expect(content).toContain("/auth/login");
     expect(content).toContain("303");
     expect(content).toContain("503");
     expect(content).toContain("SetupRequired");

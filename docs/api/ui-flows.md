@@ -7,30 +7,30 @@ Integration tests guard this file and `tests/integration/web-flow.test.ts`.
 | Surface | Behavior |
 |---------|----------|
 | `GET /api/setup/status` | `{ completed: false }` |
-| `GET /login`, `/register`, `/forgot-password` | Server **302** to `/setup` |
-| `GET /setup` | Setup HTML form |
+| `GET /auth/login`, `/auth/register`, `/auth/forgot-password` | Server **302** to `/auth/setup` |
+| `GET /auth/setup` | Setup HTML form |
 | Protected `/api/*` (except setup + health) | **503** `SetupRequired` |
 
 ## Setup flow
 
-1. User opens `/setup`.
-2. `POST /setup` with CSRF — creates org, tenant, super admin.
-3. Server **303** redirect to `/login?setup=complete&org=...`.
-4. User signs in → `POST /login` → **303** to `/`.
+1. User opens `/auth/setup`.
+2. `POST /auth/setup` with CSRF — creates org, tenant, super admin.
+3. Server **303** redirect to `/auth/login?setup=complete&org=...`.
+4. User signs in → `POST /auth/login` → **303** to `/`.
 
 ## Authenticated
 
 | Surface | Behavior |
 |---------|----------|
-| `GET /` | Signed-in home (email + sign out) if session exists; else **302** `/login` |
-| `GET /login` | **302** `/` when already signed in |
-| Sign out | `POST /logout` → **303** `/login` |
+| `GET /` | Console shell when session exists; else **302** `/auth/login` |
+| `GET /auth/login` | **302** `/` when already signed in |
+| Sign out | `POST /auth/logout` → **303** `/auth/login` |
 
 ## Password reset
 
 | Surface | Behavior |
 |---------|----------|
-| `/forgot-password` | Informational HTML until SMTP is configured |
+| `/auth/forgot-password` | Informational HTML until SMTP is configured |
 | `POST /api/auth/reset-password` | **503** until SMTP |
 
 ## HTTP status codes (auth/setup)

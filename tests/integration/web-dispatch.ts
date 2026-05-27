@@ -1,6 +1,7 @@
 import type { BunRequest } from "bun";
 
-import { webRoutes } from "../../packages/server/src/web/routes";
+import { authWebRoutes } from "../../src/web/auth/routes";
+import { oauthWebRoutes } from "../../src/web/oauth/routes";
 
 type MethodHandlers = {
   GET?: (req: BunRequest) => Response | Promise<Response>;
@@ -10,7 +11,11 @@ type MethodHandlers = {
 
 export async function dispatchWeb(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const handlers = (webRoutes as Record<string, MethodHandlers>)[url.pathname];
+  const routes = {
+    ...authWebRoutes,
+    ...oauthWebRoutes,
+  } as const;
+  const handlers = (routes as Record<string, MethodHandlers>)[url.pathname];
   if (!handlers) return new Response("Not found", { status: 404 });
 
   const method = req.method as keyof MethodHandlers;
