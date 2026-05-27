@@ -4,11 +4,12 @@ import { CSRF_COOKIE } from "@z0/contracts/http";
 import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
+import { makeStrongPassword } from "../helpers/password";
 import { dispatchWeb } from "./web-dispatch";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
-const strongPassword = "ValidPassphrase99!";
+const strongPassword = makeStrongPassword();
 
 function extractCsrfFromHtml(html: string): string | undefined {
   const match = html.match(/name="_csrf" value="([^"]+)"/);

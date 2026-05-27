@@ -5,11 +5,12 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
+import { makeStrongPassword } from "../helpers/password";
 import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
-const strongPassword = "ValidPassphrase99!";
+const strongPassword = makeStrongPassword();
 
 function fieldCodes(res: Response): Promise<string[]> {
   return res.json().then((body) => {
