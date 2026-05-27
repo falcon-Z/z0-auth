@@ -1,2 +1,2 @@
 [run]
-tsconfig = "packages/server/tsconfig.json"
+tsconfig = "tsconfig.json"
