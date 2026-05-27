@@ -190,7 +190,7 @@ async function getSetupPage(req: BunRequest): Promise<Response> {
   if (redirect) return redirect;
 
   const { token, setCookie } = preparePageCsrf(req);
-  return withSetCookie(htmlResponse(renderSetupForm(token)), 200, setCookie ? { "Set-Cookie": setCookie } : undefined);
+  return withSetCookie(htmlResponse(renderSetupForm(token)), setCookie);
 }
 
 async function postSetupPage(req: BunRequest): Promise<Response> {
@@ -243,11 +243,7 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
   }
 
   const { token, setCookie } = preparePageCsrf(req);
-  return withSetCookie(
-    htmlResponse(renderLoginForm(token, {}, [], flash, returnTo)),
-    200,
-    setCookie ? { "Set-Cookie": setCookie } : undefined,
-  );
+  return withSetCookie(htmlResponse(renderLoginForm(token, {}, [], flash, returnTo)), setCookie);
 }
 
 async function postLoginPage(req: BunRequest): Promise<Response> {
@@ -289,7 +285,7 @@ async function getForgotPasswordPage(req: BunRequest): Promise<Response> {
     `<p class="auth-footer">Self-service password reset is not enabled. Contact your platform operator if you are locked out.</p>
      <div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div>`,
   );
-  return withSetCookie(htmlResponse(html), 200, setCookie ? { "Set-Cookie": setCookie } : undefined);
+  return withSetCookie(htmlResponse(html), setCookie);
 }
 
 async function getRegisterPage(req: BunRequest): Promise<Response> {
@@ -304,7 +300,7 @@ async function getRegisterPage(req: BunRequest): Promise<Response> {
     `<p class="auth-footer">Accounts are created by your platform administrator.</p>
      <div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div>`,
   );
-  return withSetCookie(htmlResponse(html), 200, setCookie ? { "Set-Cookie": setCookie } : undefined);
+  return withSetCookie(htmlResponse(html), setCookie);
 }
 
 async function getHomePage(req: BunRequest): Promise<Response> {
@@ -332,7 +328,7 @@ async function getHomePage(req: BunRequest): Promise<Response> {
     body,
   });
 
-  return withSetCookie(htmlResponse(html), 200, setCookie ? { "Set-Cookie": setCookie } : undefined);
+  return withSetCookie(htmlResponse(html), setCookie);
 }
 
 async function postLogoutPage(req: BunRequest): Promise<Response> {

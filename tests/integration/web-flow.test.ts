@@ -54,6 +54,17 @@ run("web auth pages", () => {
     expect(html).toContain("data-msg-required");
   });
 
+  test("GET /auth/setup sets z0_csrf cookie matching hidden _csrf field", async () => {
+    const res = await dispatchWeb(new Request("http://localhost/auth/setup"));
+    const html = await res.text();
+    const fromHtml = extractCsrfFromHtml(html);
+    const fromCookie = extractCsrfFromSetCookie(res);
+    expect(fromHtml).toBeTruthy();
+    expect(fromCookie).toBe(fromHtml);
+    const cookies = res.headers.getSetCookie?.() ?? [];
+    expect(cookies.some((c) => c.startsWith("200"))).toBe(false);
+  });
+
   test("GET /static/auth-forms.js is served", async () => {
     const res = await dispatchWeb(new Request("http://localhost/static/auth-forms.js"));
     expect(res.status).toBe(200);
