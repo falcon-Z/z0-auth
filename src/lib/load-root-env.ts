@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-/** Repo root `.env` (workspace scripts run from packages/server). */
-const ROOT_ENV = path.join(import.meta.dir, "..", "..", "..", "..", ".env");
+/** Repo root `.env` (monolith runs from repo root or `src/`). */
+const ROOT_ENV = path.join(import.meta.dir, "..", "..", ".env");
 
 /** Load a `.env` file without overriding existing process.env entries. */
 export function loadEnvFile(envPath: string): void {
@@ -30,7 +30,7 @@ export function loadEnvFile(envPath: string): void {
 
 /**
  * Load root `.env` when variables are not already set (e.g. CI exports DATABASE_URL).
- * Bun only auto-loads `.env` from cwd; filter runs from packages/server.
+ * Bun only auto-loads `.env` from cwd; this loads the repo root file when needed.
  */
 export function loadRootEnv(): void {
   loadEnvFile(ROOT_ENV);

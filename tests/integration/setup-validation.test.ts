@@ -5,7 +5,7 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
-import { dispatch } from "./api-routes";
+import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
@@ -28,8 +28,8 @@ run("setup validation", () => {
   });
 
   test("rejects empty required fields", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
@@ -49,8 +49,8 @@ run("setup validation", () => {
   });
 
   test("rejects invalid email", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
@@ -68,8 +68,8 @@ run("setup validation", () => {
   });
 
   test("rejects weak password", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
@@ -87,8 +87,8 @@ run("setup validation", () => {
   });
 
   test("rejects password confirm mismatch", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
@@ -106,7 +106,7 @@ run("setup validation", () => {
   });
 
   test("rejects missing CSRF token", async () => {
-    const res = await dispatch(
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         body: {
           name: "Admin",

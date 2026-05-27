@@ -5,15 +5,15 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
-import { dispatch } from "./api-routes";
+import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
 const strongPassword = "ValidPassphrase99!";
 
 async function completeSetup() {
-  const csrf = await fetchCsrfToken(dispatch);
-  await dispatch(
+  const csrf = await fetchCsrfToken(dispatchApi);
+  await dispatchApi(
     buildRequest("POST", "/api/setup", {
       csrfToken: csrf,
       body: {
@@ -35,8 +35,8 @@ run("password reset unavailable", () => {
   });
 
   test("POST /api/auth/reset-password returns 503 after setup", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/auth/reset-password", {
         csrfToken: csrf,
         body: { email: "admin@example.com" },

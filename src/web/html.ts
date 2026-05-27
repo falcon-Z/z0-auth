@@ -96,11 +96,6 @@ export function formErrorsSummary(errors: FieldError[]): string {
   return `<p class="auth-form-error" role="alert">${SVG_WARNING}<span class="auth-form-error__text">${escapeHtml(formError.message)}</span></p>`;
 }
 
-/** @deprecated Use formErrorsSummary — kept for tests referencing the name. */
-export function fieldErrorsHtml(errors: FieldError[]): string {
-  return formErrorsSummary(errors);
-}
-
 export type AuthFieldOptions = {
   id: string;
   name: string;

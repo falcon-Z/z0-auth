@@ -18,6 +18,3 @@ export async function dispatchApi(req: Request): Promise<Response> {
   const res = await dispatchRoute(integrationRoutes, req);
   return res ?? new Response("Not found", { status: 404 });
 }
-
-/** @deprecated Use dispatchApi */
-export const dispatch = dispatchApi;

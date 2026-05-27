@@ -22,7 +22,7 @@ import {
 } from "../html";
 import { preparePageCsrf, withSetCookie } from "../csrf-page";
 
-const STATIC_DIR = path.join(import.meta.dir, "../../web/static");
+const STATIC_DIR = path.join(import.meta.dir, "../static");
 const AUTH_CSS = Bun.file(path.join(STATIC_DIR, "auth.css"));
 const AUTH_FORMS_JS = Bun.file(path.join(STATIC_DIR, "auth-forms.js"));
 

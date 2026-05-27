@@ -5,15 +5,15 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
-import { dispatch } from "./api-routes";
+import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
 const strongPassword = "ValidPassphrase99!";
 
 async function completeSetup() {
-  const csrf = await fetchCsrfToken(dispatch);
-  await dispatch(
+  const csrf = await fetchCsrfToken(dispatchApi);
+  await dispatchApi(
     buildRequest("POST", "/api/setup", {
       csrfToken: csrf,
       body: {
@@ -35,8 +35,8 @@ run("auth validation", () => {
   });
 
   test("login rejects invalid email format", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/auth/login", {
         csrfToken: csrf,
         body: { email: "bad", password: strongPassword },
@@ -48,8 +48,8 @@ run("auth validation", () => {
   });
 
   test("login returns generic 401 for wrong password", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/auth/login", {
         csrfToken: csrf,
         body: { email: "auth@example.com", password: "WrongPassphrase99!" },

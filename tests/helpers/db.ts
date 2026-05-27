@@ -14,7 +14,7 @@ export async function resetTestDatabase(): Promise<void> {
 
   await closeDatabase();
 
-  const sqlDir = path.join(import.meta.dir, "../../scripts/sql");
+  const sqlDir = path.join(import.meta.dir, "../../src/scripts/sql");
   const resetSql = await Bun.file(path.join(sqlDir, "reset.sql")).text();
   const schemaSql = await Bun.file(path.join(sqlDir, "schema.sql")).text();
   const migrationsDir = path.join(sqlDir, "migrations");

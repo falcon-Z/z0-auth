@@ -6,15 +6,15 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
-import { dispatch } from "./api-routes";
+import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
 const strongPassword = "ValidPassphrase99!";
 
 async function completeSetup() {
-  const csrf = await fetchCsrfToken(dispatch);
-  await dispatch(
+  const csrf = await fetchCsrfToken(dispatchApi);
+  await dispatchApi(
     buildRequest("POST", "/api/setup", {
       csrfToken: csrf,
       body: {
@@ -44,8 +44,8 @@ run("auth flow", () => {
   });
 
   test("login sets session cookie and returns user", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/auth/login", {
         csrfToken: csrf,
         body: { email: "auth@example.com", password: strongPassword },
@@ -59,15 +59,15 @@ run("auth flow", () => {
   });
 
   test("session reflects authentication", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const loginRes = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const loginRes = await dispatchApi(
       buildRequest("POST", "/api/auth/login", {
         csrfToken: csrf,
         body: { email: "auth@example.com", password: strongPassword },
       }),
     );
     const token = sessionCookieFromResponse(loginRes)!;
-    const sessionRes = await dispatch(
+    const sessionRes = await dispatchApi(
       buildRequest("GET", "/api/auth/session", {
         cookies: { [SESSION_COOKIE]: token },
       }),
@@ -77,21 +77,21 @@ run("auth flow", () => {
   });
 
   test("logout clears session", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const loginRes = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const loginRes = await dispatchApi(
       buildRequest("POST", "/api/auth/login", {
         csrfToken: csrf,
         body: { email: "auth@example.com", password: strongPassword },
       }),
     );
     const token = sessionCookieFromResponse(loginRes)!;
-    await dispatch(
+    await dispatchApi(
       buildRequest("POST", "/api/auth/logout", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: token },
       }),
     );
-    const sessionRes = await dispatch(buildRequest("GET", "/api/auth/session"));
+    const sessionRes = await dispatchApi(buildRequest("GET", "/api/auth/session"));
     const session = (await sessionRes.json()) as SessionResponse;
     expect(session.authenticated).toBe(false);
   });

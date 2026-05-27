@@ -4,7 +4,7 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
-import { dispatch } from "./api-routes";
+import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
@@ -17,7 +17,7 @@ run("setup hijack", () => {
   });
 
   test("parallel setup requests allow only one success", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
+    const csrf = await fetchCsrfToken(dispatchApi);
     const body = {
       name: "Race Admin",
       email: "race@example.com",
@@ -28,7 +28,7 @@ run("setup hijack", () => {
 
     const results = await Promise.all(
       Array.from({ length: 5 }, () =>
-        dispatch(
+        dispatchApi(
           buildRequest("POST", "/api/setup", {
             csrfToken: csrf,
             body,

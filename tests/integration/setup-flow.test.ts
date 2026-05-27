@@ -5,7 +5,7 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
-import { dispatch } from "./api-routes";
+import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
@@ -21,15 +21,15 @@ run("setup flow", () => {
   });
 
   test("GET /api/setup/status returns incomplete", async () => {
-    const res = await dispatch(buildRequest("GET", "/api/setup/status"));
+    const res = await dispatchApi(buildRequest("GET", "/api/setup/status"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.completed).toBe(false);
   });
 
   test("POST /api/setup creates admin, default tenant, and memberships", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
@@ -52,8 +52,8 @@ run("setup flow", () => {
   });
 
   test("POST /api/setup again returns 409", async () => {
-    const csrf = await fetchCsrfToken(dispatch);
-    const res = await dispatch(
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
@@ -69,7 +69,7 @@ run("setup flow", () => {
   });
 
   test("GET /api/setup/status returns completed with organization name", async () => {
-    const res = await dispatch(buildRequest("GET", "/api/setup/status"));
+    const res = await dispatchApi(buildRequest("GET", "/api/setup/status"));
     const body = await res.json();
     expect(body.completed).toBe(true);
     expect(body.organizationName).toBe("Acme IAM");

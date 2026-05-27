@@ -297,11 +297,3 @@ export function getPasswordChecklistStates(
   };
 }
 
-/** @deprecated Use getPasswordChecklistStates */
-export function getPasswordRuleStates(
-  password: string,
-  ctx: PasswordPolicyContext = {},
-  options: { attempted?: boolean; failedLabels?: string[] } = {},
-): PasswordRuleStatus[] {
-  return getPasswordChecklistStates(password, ctx, options).rules;
-}
