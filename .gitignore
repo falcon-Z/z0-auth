@@ -50,6 +50,9 @@ jwt-public.key
 # Config files (if accidentally created)
 config.json
 
+# Local workspace notes (not committed)
+.local/
+
 # Claude AI files
 .github/copilot-instructions.md
 .claude/claude.md
