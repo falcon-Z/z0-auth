@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@z0/*": ["./src/*"],
+      "@z0/contracts/*": ["./src/lib/contracts/*"],
+      "@z0/components/ui/*": ["./src/app/console/components/ui/*"],
+      "@z0/components/auth/*": ["./src/app/console/components/auth/*"],
+      "@z0/modules/*": ["./src/app/console/modules/*"],
+      "@z0/lib/*": ["./src/lib/*"]
+    }
+  },
+  "include": ["src/**/*", "tests/**/*"]
+}
