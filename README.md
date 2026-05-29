@@ -28,3 +28,7 @@ bun dev
 - `/oauth/*` authorization server browser flow
 - `/api/*` JSON API for console + external apps
 - `/` and deep links served by console SPA
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
