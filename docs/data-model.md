@@ -176,7 +176,9 @@ Map existing enum roles to permission bundles in migration seed data.
 |----------|----------------|
 | This document + migrations (`password_credentials`, RBAC, `audit_events`, OAuth stubs, `user_preferences`) | — |
 | Session API + `POST /api/auth/active-tenant` | — |
-| Console org switcher when `canSwitchOrganization` | Rich org management screens |
+| Console basic layout + session chrome | — |
+| Console: logout (API+CSRF), org switcher, setup/login integration | — |
+| Create organization API + console form | **Deferred P2** — not Phase 1 |
 | Invite / accept flow | P1-M3+ |
 
 ---
