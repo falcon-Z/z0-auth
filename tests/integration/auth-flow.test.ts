@@ -56,6 +56,8 @@ run("auth flow", () => {
     const body = (await res.json()) as SessionResponse;
     expect(body.authenticated).toBe(true);
     expect(body.roles).toContain("platform_admin");
+    expect(body.tenantRoles).toContain("tenant_admin");
+    expect(body.canSwitchOrganization).toBe(false);
     expect(sessionCookieFromResponse(res)).toBeDefined();
   });
 

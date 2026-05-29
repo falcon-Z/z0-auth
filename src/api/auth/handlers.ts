@@ -1,18 +1,19 @@
 import type { BunRequest } from "bun";
 
-import type { LoginRequest } from "@z0/contracts/auth";
+import type { LoginRequest, SetActiveTenantRequest } from "@z0/contracts/auth";
 import { ErrorCodes } from "@z0/contracts/errors";
 import { parseJsonBody } from "@z0/contracts/validation";
 
-import { buildSessionResponse, getUserById, getUserRoles } from "../lib/auth";
-import { getUserDefaultTenant } from "../lib/tenant";
+import { buildSessionResponse, requireSession } from "../lib/auth";
 import { validateCsrf, parseCookies } from "../lib/csrf";
 import { json, problem } from "../lib/http";
+import { buildAuthenticatedSessionPayload } from "../lib/session-payload";
 import {
   clearSessionCookieHeader,
   revokeSessionByToken,
   SESSION_COOKIE,
 } from "../lib/session";
+import { setActiveTenant } from "../lib/tenant";
 import { runLogin } from "./service";
 
 export async function handleLogin(req: BunRequest): Promise<Response> {
@@ -25,21 +26,11 @@ export async function handleLogin(req: BunRequest): Promise<Response> {
   const result = await runLogin(req, parsed.body.email, parsed.body.password ?? "");
   if (!result.ok) return result.response;
 
-  const sessionUser = await getUserById(result.userId);
-  const roles = await getUserRoles(result.userId);
-  const tenant = await getUserDefaultTenant(result.userId);
+  const payload = await buildAuthenticatedSessionPayload(result.userId);
   const headers = new Headers({ "Content-Type": "application/json; charset=utf-8" });
   headers.set("Set-Cookie", result.setCookie);
 
-  return new Response(
-    JSON.stringify({
-      authenticated: true,
-      user: sessionUser,
-      roles,
-      ...(tenant ? { tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } } : {}),
-    }),
-    { status: 200, headers },
-  );
+  return new Response(JSON.stringify(payload), { status: 200, headers });
 }
 
 export async function handleLogout(req: BunRequest): Promise<Response> {
@@ -57,6 +48,40 @@ export async function handleLogout(req: BunRequest): Promise<Response> {
 export async function handleSession(req: BunRequest): Promise<Response> {
   const session = await buildSessionResponse(req);
   return json(session);
+}
+
+export async function handleSetActiveTenant(req: BunRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+
+  const parsed = await parseJsonBody<SetActiveTenantRequest>(req);
+  if (!parsed.ok) return parsed.response;
+
+  const tenantId = parsed.body.tenantId?.trim() ?? "";
+  if (!tenantId) {
+    return problem(400, "Validation Error", "Invalid request", {
+      errors: [{ field: "tenantId", code: ErrorCodes.REQUIRED, message: "Organization is required" }],
+    });
+  }
+
+  const updated = await setActiveTenant(auth.userId, tenantId);
+  if (!updated) {
+    return problem(403, "Forbidden", "You do not have access to this organization", {
+      errors: [
+        {
+          field: "tenantId",
+          code: ErrorCodes.TENANT_ACCESS_DENIED,
+          message: "You do not have access to this organization",
+        },
+      ],
+    });
+  }
+
+  const payload = await buildAuthenticatedSessionPayload(auth.userId);
+  return json(payload);
 }
 
 export async function handlePasswordResetUnavailable(): Promise<Response> {

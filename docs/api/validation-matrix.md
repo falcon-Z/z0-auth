@@ -71,6 +71,19 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Session cookie | Valid, not revoked, not expired | — | 200 `authenticated: true` | Console loads | `auth-flow` |
 | No/invalid session | — | — | 200 `authenticated: false` | Redirect to `/auth/login` | `auth-flow` |
 | Setup incomplete | — | `SetupRequired` | 503 | Setup flow | `pre-setup-guard` |
+| Authenticated | Includes `organizations`, `tenantRoles`, `canSwitchOrganization` | — | 200 | Show org switcher when `canSwitchOrganization` | `auth-organization` |
+
+---
+
+## `POST /api/auth/active-tenant`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| Session | Required | — | 401 | Redirect to login | `auth-organization` |
+| CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
+| `tenantId` | Non-empty | `required` | 400 | Inline | `auth-organization` |
+| `tenantId` | User is member of org | `tenant_access_denied` | 403 | Show error | `auth-organization` |
+| Success | — | — | 200 session payload; `tenant` updated | Switcher reflects new org | `auth-organization` |
 
 ---
 

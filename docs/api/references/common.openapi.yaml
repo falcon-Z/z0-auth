@@ -82,6 +82,7 @@ components:
         - pkce_required
         - invalid_client
         - unauthorized_client
+        - tenant_access_denied
     ProblemDetail:
       type: object
       required: [type, title, status, requestId]

@@ -4,14 +4,7 @@ import type { SessionResponse, SessionUser } from "@z0/contracts/auth";
 import { getDb } from "./db";
 import { problem } from "./http";
 import { resolveSession } from "./session";
-import { getUserDefaultTenant } from "./tenant";
-
-export async function getUserRoles(userId: string): Promise<string[]> {
-  const rows = await getDb()`
-    SELECT role FROM platform_memberships WHERE user_id = ${userId}
-  `;
-  return rows.map((r) => String((r as { role: string }).role));
-}
+import { buildAuthenticatedSessionPayload } from "./session-payload";
 
 export async function getUserById(userId: string): Promise<SessionUser | null> {
   const [row] = await getDb()`
@@ -26,18 +19,7 @@ export async function buildSessionResponse(req: Request): Promise<SessionRespons
   const session = await resolveSession(req);
   if (!session) return { authenticated: false };
 
-  const user = await getUserById(session.userId);
-  if (!user) return { authenticated: false };
-
-  const roles = await getUserRoles(session.userId);
-  const tenant = await getUserDefaultTenant(session.userId);
-
-  return {
-    authenticated: true,
-    user,
-    roles,
-    ...(tenant ? { tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug } } : {}),
-  };
+  return buildAuthenticatedSessionPayload(session.userId);
 }
 
 export async function requireSession(req: BunRequest): Promise<

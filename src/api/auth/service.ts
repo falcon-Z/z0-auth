@@ -50,11 +50,14 @@ export async function runLogin(
   const email = normalizeEmail(emailRaw);
   const invalidMessage = "Invalid email or password";
 
-  const [user] = await getDb()`
-    SELECT id, password_hash FROM users WHERE lower(email) = ${email} AND status = 'active'
+  const [row] = await getDb()`
+    SELECT u.id, pc.password_hash
+    FROM users u
+    JOIN password_credentials pc ON pc.user_id = u.id
+    WHERE lower(u.email) = ${email} AND u.status = 'active'
   `;
 
-  if (!user) {
+  if (!row) {
     return {
       ok: false,
       response: problem(401, "Unauthorized", invalidMessage, {
@@ -64,7 +67,8 @@ export async function runLogin(
     };
   }
 
-  const valid = await verifyPassword(password, (user as { password_hash: string }).password_hash);
+  const user = row as { id: string; password_hash: string };
+  const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
     return {
       ok: false,
@@ -75,7 +79,7 @@ export async function runLogin(
     };
   }
 
-  const userId = String((user as { id: string }).id);
+  const userId = String(user.id);
   const existingToken = parseCookies(req).get(SESSION_COOKIE);
   if (existingToken) await revokeSessionByToken(existingToken);
 

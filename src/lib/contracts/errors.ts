@@ -39,6 +39,8 @@ export const ErrorCodes = {
   INVALID_CLIENT: "invalid_client",
   /** OAuth: client not permitted for this grant or redirect. */
   UNAUTHORIZED_CLIENT: "unauthorized_client",
+  /** Active organization is not in the user's memberships. */
+  TENANT_ACCESS_DENIED: "tenant_access_denied",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

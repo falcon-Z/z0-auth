@@ -13,6 +13,7 @@ import { clientIp } from "../lib/rate-limit";
 import { getDb } from "../lib/db";
 import { problem } from "../lib/http";
 import { hashPassword } from "../lib/password";
+import { assignPlatformRole, assignTenantRole } from "../lib/roles";
 import { uniqueTenantSlug } from "../lib/tenant";
 import { checkRateLimit } from "../lib/rate-limit";
 
@@ -113,12 +114,17 @@ export async function runSetup(req: BunRequest, body: SetupRequest): Promise<Set
       const tenantId = String((tenant as { id: string }).id);
 
       const [user] = await tx`
-        INSERT INTO users (email, name, password_hash, email_verified_at)
-        VALUES (${email}, ${body.name.trim()}, ${passwordHash}, NOW())
+        INSERT INTO users (email, name, email_verified_at)
+        VALUES (${email}, ${body.name.trim()}, NOW())
         RETURNING id, email, name
       `;
 
       const userId = String((user as { id: string }).id);
+
+      await tx`
+        INSERT INTO password_credentials (user_id, password_hash)
+        VALUES (${userId}, ${passwordHash})
+      `;
 
       await tx`
         INSERT INTO platform_memberships (user_id, role)
@@ -128,6 +134,14 @@ export async function runSetup(req: BunRequest, body: SetupRequest): Promise<Set
       await tx`
         INSERT INTO tenant_memberships (user_id, tenant_id, role)
         VALUES (${userId}, ${tenantId}, 'tenant_admin')
+      `;
+
+      await assignPlatformRole(userId, "platform_admin", tx);
+      await assignTenantRole(userId, tenantId, "tenant_admin", tx);
+
+      await tx`
+        INSERT INTO user_preferences (user_id, active_tenant_id)
+        VALUES (${userId}, ${tenantId})
       `;
 
       await tx`
