@@ -2,74 +2,134 @@ openapi: 3.1.0
 info:
   title: z0-auth Setup API
   version: 0.1.0
+  description: One-time platform provisioning (super admin + default tenant).
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Setup
+    description: Platform bootstrap
 paths:
   /api/setup/status:
     get:
+      tags: [Setup]
       summary: Platform setup status
+      description: |
+        Returns whether initial setup has completed. Issues a CSRF cookie when absent (for subsequent POST).
+        Available before setup completes (not subject to setup guard).
+      operationId: getSetupStatus
       responses:
         "200":
           description: Setup state
+          headers:
+            Set-Cookie:
+              description: May set `z0_csrf` when not already present.
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                type: object
-                required: [completed]
-                properties:
-                  completed:
-                    type: boolean
-                  organizationName:
-                    type: string
+                $ref: "#/components/schemas/SetupStatus"
   /api/setup:
     post:
+      tags: [Setup]
       summary: Complete one-time platform setup
+      description: |
+        Creates default tenant, super admin user, and platform memberships. Idempotent only by conflict — second call returns 409.
+        Rate limit: 3 attempts per client IP per hour.
+      operationId: postSetup
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
       parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema:
-            type: string
-        - in: header
-          name: X-Install-Token
-          required: false
-          schema:
-            type: string
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "common.openapi.yaml#/components/parameters/InstallToken"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [name, email, password, passwordConfirm, organizationName]
-              properties:
-                name:
-                  type: string
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                passwordConfirm:
-                  type: string
-                organizationName:
-                  type: string
+              $ref: "#/components/schemas/SetupRequest"
       responses:
         "201":
-          description: Setup completed; creates default tenant and super admin
+          description: Setup completed
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  organizationName:
-                    type: string
-                  tenant:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      name:
-                        type: string
-                      slug:
-                        type: string
+                $ref: "#/components/schemas/SetupResponse"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "409":
-          description: Setup already completed
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
+components:
+  securitySchemes:
+    CsrfHeader:
+      $ref: "common.openapi.yaml#/components/securitySchemes/CsrfHeader"
+    CsrfCookie:
+      $ref: "common.openapi.yaml#/components/securitySchemes/CsrfCookie"
+  schemas:
+    SetupStatus:
+      type: object
+      required: [completed]
+      properties:
+        completed:
+          type: boolean
+        organizationName:
+          type: string
+          description: Present when `completed` is true.
+    SetupRequest:
+      type: object
+      required: [name, email, password, passwordConfirm, organizationName]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 14
+          maxLength: 128
+        passwordConfirm:
+          type: string
+        organizationName:
+          type: string
+          minLength: 1
+    SetupUser:
+      type: object
+      required: [id, email, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+    SetupTenant:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+    SetupResponse:
+      type: object
+      required: [user, organizationName, tenant]
+      properties:
+        user:
+          $ref: "#/components/schemas/SetupUser"
+        organizationName:
+          type: string
+        tenant:
+          $ref: "#/components/schemas/SetupTenant"

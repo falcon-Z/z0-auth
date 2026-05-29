@@ -43,7 +43,9 @@ run("setup validation", () => {
       }),
     );
     expect(res.status).toBe(400);
-    const codes = await fieldCodes(res);
+    const body = await res.json();
+    expect(typeof body.requestId).toBe("string");
+    const codes = (body.errors ?? []).map((e: { field: string; code: string }) => `${e.field}:${e.code}`);
     expect(codes).toContain(`name:${ErrorCodes.REQUIRED}`);
     expect(codes).toContain(`email:${ErrorCodes.REQUIRED}`);
     expect(codes).toContain(`organizationName:${ErrorCodes.REQUIRED}`);

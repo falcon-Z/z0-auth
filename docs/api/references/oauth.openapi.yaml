@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: z0-auth OAuth 2.1 / OIDC API (planned)
+  version: 0.1.0
+  description: |
+    **Status: planned (Phase 3).** Browser flow stubs exist at `/oauth/*`; token and client APIs are not implemented yet.
+
+    Normative validation rules for OAuth are defined in `docs/api/security-contract.md` and must be implemented before these endpoints ship.
+
+    When implementing, extend this spec and add contract tests — do not diverge from shared error components in `common.openapi.yaml`.
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: OAuth
+    description: Authorization server (planned)
+paths:
+  /oauth/authorize:
+    get:
+      tags: [OAuth]
+      summary: Authorization endpoint (browser, partial)
+      description: |
+        **Current:** dev stub; requires session; validates `response_type`, `client_id`, `redirect_uri` presence only.
+
+        **Target:** RFC 6749 authorization code + OAuth 2.1 constraints (PKCE, exact redirect URI, scope subset).
+      operationId: getOAuthAuthorize
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Space-delimited scopes; must be subset of client-registered scopes.
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: code_challenge
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Required for public clients (S256).
+        - name: code_challenge_method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [S256]
+      responses:
+        "302":
+          description: Redirect to login or back to client with `code` and optional `state`
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/BadRequest"
+  /oauth/token:
+    post:
+      tags: [OAuth]
+      summary: Token endpoint (planned)
+      operationId: postOAuthToken
+      x-z0-status: planned
+      responses:
+        "200":
+          description: Access token (and optional refresh token) issued
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /oauth/revoke:
+    post:
+      tags: [OAuth]
+      summary: Token revocation (planned)
+      operationId: postOAuthRevoke
+      x-z0-status: planned
+      responses:
+        "200":
+          description: Token revoked (or unknown token accepted per RFC 7009)
+  /api/oauth/clients:
+    post:
+      tags: [OAuth]
+      summary: Register OAuth client (planned)
+      operationId: postOAuthClient
+      x-z0-status: planned
+      responses:
+        "201":
+          description: Client created
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"

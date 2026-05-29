@@ -29,6 +29,8 @@ bun dev
 - `/api/*` JSON API for console + external apps
 - `/` and deep links served by console SPA
 
+API contracts, validation matrix, and OpenAPI specs: [docs/api/README.md](docs/api/README.md).
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).

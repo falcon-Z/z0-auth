@@ -1,5 +1,5 @@
 import type { FieldError } from "./errors";
-import { ErrorCodes } from "./errors";
+import { createProblemDetail, ErrorCodes } from "./errors";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,13 +39,8 @@ export async function parseJsonBody<T extends Record<string, unknown>>(
     return {
       ok: false,
       response: new Response(
-        JSON.stringify({
-          type: "about:blank",
-          title: "Bad Request",
-          status: 400,
-          detail: "Invalid JSON body",
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        JSON.stringify(createProblemDetail(400, "Bad Request", "Invalid JSON body")),
+        { status: 400, headers: { "Content-Type": "application/json; charset=utf-8" } },
       ),
     };
   }

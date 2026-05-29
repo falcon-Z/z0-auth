@@ -2,6 +2,9 @@
 
 Integration tests guard this file and `tests/integration/web-flow.test.ts`.
 
+Field-level validation and error codes: [validation-matrix.md](./validation-matrix.md).  
+Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.md).
+
 ## Setup incomplete
 
 | Surface | Behavior |

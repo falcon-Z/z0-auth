@@ -11,7 +11,7 @@
 | `src/lib/contracts/` | Shared validation/types imported by server and tests. |
 | `src/app/console/` | React + shadcn management console SPA entry and modules. |
 | `tests/` | Integration and unit tests. |
-| `docs/api/references/` | OpenAPI specifications. |
+| `docs/api/` | API contracts, validation matrix, OpenAPI (`references/*.openapi.yaml`). |
 
 ## Routing (`Bun.serve`)
 
@@ -41,10 +41,13 @@ The server runtime uses Bun built-ins (`Bun.serve`, `bun:sql`, native Request/Re
 
 ## Security model (phase 1)
 
+Normative detail: [docs/api/security-contract.md](api/security-contract.md).
+
 - **Setup:** one-time setup via `POST /api/setup` (JSON) or `POST /auth/setup` (form).
 - **CSRF:** cookie `z0_csrf` + header `X-CSRF-Token` (API) or hidden `_csrf` field (HTML forms).
-- **Sessions:** HttpOnly cookie `z0_session`.
+- **Sessions:** HttpOnly cookie `z0_session` (14-day absolute lifetime).
 - **Guarding setup state:** APIs are wrapped with `applySetupGuard` so protected routes return `503 SetupRequired` before setup completes.
+- **Errors:** JSON problem responses with `requestId` — see [docs/api/CONTRACTS.md](api/CONTRACTS.md).
 
 ## URL ownership contract
 

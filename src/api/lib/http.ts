@@ -1,5 +1,7 @@
 import type { BunRequest } from "bun";
 
+import { createProblemDetail } from "@z0/contracts/errors";
+
 export type RouteHandler = (req: BunRequest) => Response | Promise<Response>;
 
 export type MethodHandlers = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler>>;
@@ -18,16 +20,7 @@ export function problem(
   detail?: string,
   extra?: Record<string, unknown>,
 ): Response {
-  return json(
-    {
-      type: "about:blank",
-      title,
-      status,
-      detail,
-      ...extra,
-    },
-    { status },
-  );
+  return json(createProblemDetail(status, title, detail, extra), { status });
 }
 
 export function methodNotAllowed(allowed: string[]): Response {

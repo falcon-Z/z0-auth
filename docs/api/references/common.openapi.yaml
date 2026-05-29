@@ -1,0 +1,199 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Shared API Components
+  version: 0.1.0
+  description: |
+    Reusable schemas, parameters, and responses for all z0-auth OpenAPI specs.
+
+    **Normative runtime contract:** `src/lib/contracts/errors.ts` and `problem()` in `src/api/lib/http.ts`.
+
+    When adding a new API surface, create or extend a domain spec under `docs/api/references/` and `$ref` this file.
+servers:
+  - url: http://localhost:3000
+    description: Local development
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: z0_session
+      description: HttpOnly session token issued after successful login.
+    CsrfCookie:
+      type: apiKey
+      in: cookie
+      name: z0_csrf
+      description: CSRF double-submit cookie (not HttpOnly; paired with header or form field).
+    CsrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Must match the `z0_csrf` cookie on state-changing JSON requests.
+    InstallToken:
+      type: apiKey
+      in: header
+      name: X-Install-Token
+      description: Required on setup when `INSTALL_TOKEN` is configured in the environment.
+  parameters:
+    CsrfHeader:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+      description: CSRF token matching cookie `z0_csrf`.
+    InstallToken:
+      name: X-Install-Token
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Install gate token when `INSTALL_TOKEN` env is set.
+  schemas:
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          description: |
+            Input field name, or synthetic field for non-field errors (`_auth`, `_csrf`, `_rate`, `_setup`, `_install`, `_reset`).
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        message:
+          type: string
+          description: Human-readable message safe to show in UI (may be generic for security-sensitive cases).
+    ErrorCode:
+      type: string
+      description: Machine-readable error code. Extend only via `src/lib/contracts/errors.ts` and this enum.
+      enum:
+        - required
+        - invalid_email
+        - password_policy
+        - password_mismatch
+        - setup_complete
+        - invalid_credentials
+        - csrf_invalid
+        - rate_limited
+        - install_token_required
+        - install_token_invalid
+        - password_reset_unavailable
+        - invalid_redirect_uri
+        - invalid_scope
+        - pkce_required
+        - invalid_client
+        - unauthorized_client
+    ProblemDetail:
+      type: object
+      required: [type, title, status, requestId]
+      properties:
+        type:
+          type: string
+          const: about:blank
+          description: RFC 7807-style type URI; fixed for JSON APIs.
+        title:
+          type: string
+          description: Short summary of the error class (e.g. "Validation Error").
+        status:
+          type: integer
+          description: HTTP status code (duplicated in body for client parsers).
+        detail:
+          type: string
+          description: Optional longer explanation.
+        requestId:
+          type: string
+          format: uuid
+          description: Correlation id for logs and support; include when reporting issues.
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+          description: Field-level validation or domain errors when applicable.
+        code:
+          type: string
+          description: Top-level machine code when no field errors apply (e.g. `SetupRequired`).
+        retryAfter:
+          type: integer
+          minimum: 0
+          description: Seconds until retry is allowed (rate limits).
+        allowed:
+          type: array
+          items:
+            type: string
+          description: Allowed HTTP methods (405 responses).
+    SetupRequiredProblem:
+      allOf:
+        - $ref: "#/components/schemas/ProblemDetail"
+        - type: object
+          required: [code]
+          properties:
+            code:
+              type: string
+              const: SetupRequired
+    LogoutResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          const: true
+  responses:
+    BadRequest:
+      description: Malformed request (e.g. invalid JSON).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    ValidationError:
+      description: Request failed validation; see `errors` for field details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Unauthorized:
+      description: Authentication required or credentials invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Forbidden:
+      description: Authenticated or anonymous request is not allowed (CSRF, registration disabled, install token).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    Conflict:
+      description: State conflict (e.g. setup already completed).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    TooManyRequests:
+      description: Rate limit exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    SetupRequired:
+      description: Platform setup must be completed before this API is available.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SetupRequiredProblem"
+    ServiceUnavailable:
+      description: Feature not available (e.g. SMTP not configured).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+    MethodNotAllowed:
+      description: HTTP method not supported for this path.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"

@@ -2,39 +2,190 @@ openapi: 3.1.0
 info:
   title: z0-auth Auth API
   version: 0.1.0
+  description: |
+    Session-based authentication JSON API under `/api/auth/*`.
+
+    HTML equivalents live under `/auth/*` (see `docs/api/ui-flows.md`).
+servers:
+  - url: http://localhost:3000
+    description: Local development
+tags:
+  - name: Auth
+    description: Sign-in, session, and account entrypoints
 paths:
   /api/auth/session:
     get:
+      tags: [Auth]
       summary: Current session
+      description: |
+        Returns authentication state for the console and API clients. Does not require CSRF.
+        Subject to setup guard (503 when setup incomplete).
+      operationId: getAuthSession
       responses:
         "200":
           description: Session payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "503":
+          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
   /api/auth/login:
     post:
+      tags: [Auth]
       summary: Sign in
+      description: |
+        Validates credentials, revokes any existing session cookie, issues new `z0_session`.
+        Rate limit: 10 attempts per client IP per 15 minutes.
+      operationId: postAuthLogin
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Authenticated
+          description: Authenticated; `Set-Cookie` includes session token
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedSession"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
         "401":
-          description: Invalid credentials
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
+        "503":
+          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
   /api/auth/logout:
     post:
+      tags: [Auth]
       summary: Sign out
-  /api/auth/reset-password:
-    post:
-      summary: Password reset (unavailable until SMTP is configured)
+      description: Revokes server session and clears session cookie. Requires CSRF.
+      operationId: postAuthLogout
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
       responses:
+        "200":
+          description: Logged out
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "common.openapi.yaml#/components/schemas/LogoutResponse"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "503":
-          description: Password reset not available
-  /api/auth/forgot-password:
-    post:
-      summary: Password reset (unavailable until SMTP is configured)
-      responses:
-        "503":
-          description: Password reset not available
+          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
   /api/auth/register:
     post:
-      summary: Disabled on platform
+      tags: [Auth]
+      summary: Self-service registration (disabled)
+      description: Platform registration is disabled; use admin provisioning flows.
+      operationId: postAuthRegister
       responses:
         "403":
-          description: Registration disabled
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "503":
+          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
+  /api/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset (unavailable)
+      operationId: postAuthForgotPassword
+      responses:
+        "503":
+          description: SMTP not configured, or platform setup incomplete
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "common.openapi.yaml#/components/schemas/ProblemDetail"
+                  - $ref: "common.openapi.yaml#/components/schemas/SetupRequiredProblem"
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Complete password reset (unavailable)
+      operationId: postAuthResetPassword
+      responses:
+        "503":
+          $ref: "common.openapi.yaml#/components/responses/ServiceUnavailable"
+components:
+  securitySchemes:
+    CsrfHeader:
+      $ref: "common.openapi.yaml#/components/securitySchemes/CsrfHeader"
+    CsrfCookie:
+      $ref: "common.openapi.yaml#/components/securitySchemes/CsrfCookie"
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    SessionUser:
+      type: object
+      required: [id, email, name]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+    SessionTenant:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+    SessionResponse:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        roles:
+          type: array
+          items:
+            type: string
+        tenant:
+          $ref: "#/components/schemas/SessionTenant"
+    AuthenticatedSession:
+      allOf:
+        - $ref: "#/components/schemas/SessionResponse"
+        - type: object
+          required: [authenticated, user]
+          properties:
+            authenticated:
+              type: boolean
+              const: true
