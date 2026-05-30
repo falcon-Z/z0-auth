@@ -26,7 +26,7 @@ Normative model for P1-M1 and later modules. **HTTP contracts** stay in `docs/ap
 | **Organizations** | Optional grouping. Setup creates one default org; users may create more orgs or stay on the single default org. |
 | **RBAC** | Scoped roles: `platform` vs `tenant` on one role catalog; permissions attached to roles; assignments via `user_roles` with `tenant_id` NULL (platform) or set (org). |
 | **Session** | Cookie proves **who** (`user_id`). **Active org** is separate state (preference + optional `z0_tenant` cookie later), validated against `tenant_memberships`. |
-| **Invites (later)** | Prefer explicit accept / invite token when linking an existing user to a new org (not silent auto-membership without consent). |
+| **Invites** | Explicit accept / invite token when linking users to orgs (`tenant_invites`, `/auth/invite/:token`). |
 
 ---
 

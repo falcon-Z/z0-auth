@@ -29,6 +29,6 @@ test.describe("console shell", () => {
   test("navigates to a planned module placeholder", async ({ page }) => {
     await page.goto("/security/sessions");
     await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText(/Module P2-M3/)).toBeVisible();
+    await expect(page.getByText("Not available yet")).toBeVisible();
   });
 });

@@ -70,11 +70,12 @@ Reference minimal setup (outside this repo): `/home/madhan/projects/z0-tailwind-
 ### Playwright (console UI)
 
 ```bash
-export E2E_PASSWORD='your-admin-password'   # same as /auth/setup admin
+# Uses TEST_DATABASE_URL from .env.test when set (resets DB before e2e)
+export E2E_PASSWORD='your-strong-password'   # must not contain name/email substrings
 bun run test:e2e
 ```
 
-Optional: `E2E_EMAIL` (default `admin@example.com`). Requires platform setup complete and a valid session.
+Optional: `E2E_EMAIL` (default `admin@example.com`), `PLAYWRIGHT_BASE_URL`, `PORT`. Fresh instances: auth setup bootstraps via `/api/setup` when `E2E_PASSWORD` is set.
 
 Install browsers once: `bunx playwright install chromium`. If Playwright reports an unsupported OS, run tests in CI or a supported Linux/macOS host.
 

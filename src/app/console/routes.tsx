@@ -12,8 +12,11 @@ const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/clients": <ClientsPage />,
 };
 
+/** Nav paths wired to real pages — keep in sync with `IMPLEMENTED_PAGES`. */
+export const WIRED_CONSOLE_NAV_PATHS = ["/", "/members", "/clients"] as const;
+
 /** Nested module routes need a splat so in-module `<Routes>` match subpaths. */
-function routePathForNav(path: string): string {
+export function routePathForNav(path: string): string {
   if (path === "/members") return "/members/*";
   return path;
 }
