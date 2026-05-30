@@ -1,10 +1,8 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Shield } from "lucide-react";
 
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -18,7 +16,7 @@ import { cn } from "../../lib/utils";
 import { CONSOLE_NAV } from "../../config/navigation";
 import { useSession } from "../../context/session-context";
 import { NavStatusBadge } from "../layout/NavStatusBadge";
-import { NavUser } from "./NavUser";
+import { SidebarWorkspace } from "./SidebarWorkspace";
 
 function isNavItemActive(pathname: string, path: string): boolean {
   if (path === "/") return pathname === "/";
@@ -33,21 +31,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <NavLink to="/" end>
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Shield className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Z0 Auth</span>
-                  <span className="truncate text-xs text-muted-foreground">Management</span>
-                </div>
-              </NavLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <SidebarWorkspace />
       </SidebarHeader>
 
       <SidebarContent>
@@ -92,9 +76,6 @@ export function AppSidebar() {
         ))}
       </SidebarContent>
 
-      <SidebarFooter>
-        <NavUser />
-      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

@@ -37,7 +37,7 @@ export function DashboardPage() {
             <CardTitle>Active tenant</CardTitle>
             <CardDescription>
               {session.canSwitchOrganization
-                ? "Use the tenant control in the header to switch context."
+                ? "Use the workspace menu at the top of the sidebar to switch tenants."
                 : "You belong to one tenant on this instance."}
             </CardDescription>
           </CardHeader>

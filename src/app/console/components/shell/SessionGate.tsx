@@ -6,10 +6,6 @@ export function SessionGate() {
       <div className="flex h-14 items-center gap-3 border-b bg-card px-4">
         <Skeleton className="size-8 rounded-md" />
         <Skeleton className="h-4 w-40" />
-        <div className="ml-auto flex gap-2">
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="size-8 rounded-full" />
-        </div>
       </div>
       <div className="flex flex-1">
         <div className="hidden w-64 shrink-0 border-r bg-sidebar p-4 md:block">

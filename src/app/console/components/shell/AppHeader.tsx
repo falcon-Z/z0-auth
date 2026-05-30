@@ -11,7 +11,6 @@ import {
 import { Separator } from "@z0/components/ui/separator";
 import { SidebarTrigger } from "@z0/components/ui/sidebar";
 import { findNavItem } from "../../config/navigation";
-import { TenantSwitcher } from "./TenantSwitcher";
 
 export function AppHeader() {
   const location = useLocation();
@@ -33,9 +32,6 @@ export function AppHeader() {
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <div className="ml-auto flex items-center gap-3">
-        <TenantSwitcher />
-      </div>
     </header>
   );
 }
