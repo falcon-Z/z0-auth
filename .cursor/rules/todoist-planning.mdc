@@ -1,0 +1,31 @@
+---
+description: Planning lives in Todoist only — never in app code or UI
+alwaysApply: true
+---
+
+# Planning in Todoist, not in code
+
+## Where planning goes
+
+- **Todoist (Auth project)** — tasks, subtasks, descriptions, acceptance criteria, next steps.
+- **Repo docs** — contracts only: OpenAPI, validation matrix, data model, security contract (`docs/api/`, `docs/data-model.md`).
+- **Chat** — alignment and decisions before implementation.
+
+## Never put in code or user-facing UI
+
+- Agent checklists, integration steps, module IDs for developers, or "replace this placeholder" instructions.
+- Internal planning, follow-up notes, or discussion summaries.
+- References to `AGENTS.md`, skills, or Todoist in screens users see.
+
+Console placeholders for **unbuilt** nav items: minimal empty state only (e.g. "Not available yet"). No dev checklists.
+
+## Todoist task shape
+
+- **Parent module tasks** — high level (e.g. "P2-M1: RBAC + invites API + UI").
+- **When starting work** — read the task, write a **detailed plan** in chat and/or as **subtasks** with concrete next steps.
+- **More scope discovered** — add subtasks or follow-up tasks in Todoist; do not expand scope silently or document it in code.
+- **Before closing a task** — every subtask done; plan in Todoist matches what shipped.
+
+## Closing a task
+
+A module task is **complete** only when all of its subtasks and acceptance criteria are verified — not when API tests pass alone. See `module-delivery.mdc`.

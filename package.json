@@ -7,7 +7,7 @@
     "dev": "bun --hot src/server.ts",
     "start": "NODE_ENV=production bun src/server.ts",
     "build": "bun src/scripts/build.ts",
-    "test": "bun test --concurrency=1",
+    "test": "bun test --concurrency=1 tests/unit tests/integration tests/api",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:reset": "bun src/scripts/db-reset.ts",

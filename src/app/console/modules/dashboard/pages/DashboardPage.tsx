@@ -1,20 +1,22 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@z0/components/ui/card";
+import { Link } from "react-router-dom";
+import { ArrowRight } from "lucide-react";
+
+import { Button } from "@z0/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@z0/components/ui/card";
 import { ConsolePage } from "../../../components/layout/ConsolePage";
+import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
 import { useSession } from "../../../context/session-context";
 
 export function DashboardPage() {
   const { session } = useSession();
+  const { canReadMembers } = useTenantPermissions();
 
   return (
-    <ConsolePage
-      title="Dashboard"
-      description="Platform setup is complete. Use the sidebar to open tenant and application settings as they ship."
-    >
+    <ConsolePage title="Dashboard">
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Your account</CardTitle>
-            <CardDescription>Signed in across the platform and active tenant.</CardDescription>
+            <CardTitle>Account</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p>
@@ -26,7 +28,7 @@ export function DashboardPage() {
               {session.user.email}
             </p>
             <p>
-              <span className="text-muted-foreground">Platform roles </span>
+              <span className="text-muted-foreground">Platform </span>
               {session.roles?.length ? session.roles.join(", ") : "—"}
             </p>
           </CardContent>
@@ -34,12 +36,7 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Active tenant</CardTitle>
-            <CardDescription>
-              {session.canSwitchOrganization
-                ? "Use the workspace menu at the top of the sidebar to switch tenants."
-                : "You belong to one tenant on this instance."}
-            </CardDescription>
+            <CardTitle>Tenant</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {session.tenant ? (
@@ -53,18 +50,29 @@ export function DashboardPage() {
                   {session.tenant.slug}
                 </p>
                 <p>
-                  <span className="text-muted-foreground">Tenant roles </span>
+                  <span className="text-muted-foreground">Roles </span>
                   {session.tenantRoles?.length ? session.tenantRoles.join(", ") : "—"}
                 </p>
               </>
             ) : (
-              <p className="text-muted-foreground">No tenant selected.</p>
+              <p className="text-muted-foreground">None selected</p>
             )}
-            {session.organizations && session.organizations.length > 1 ? (
-              <p className="text-muted-foreground">Member of {session.organizations.length} tenants.</p>
-            ) : null}
           </CardContent>
         </Card>
+
+        {canReadMembers && session.tenant ? (
+          <Card className="md:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle>Members</CardTitle>
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/members">
+                  Open
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            </CardHeader>
+          </Card>
+        ) : null}
       </div>
     </ConsolePage>
   );

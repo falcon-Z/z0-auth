@@ -142,8 +142,9 @@ export async function validateTenantRoleKeys(roleKeys: string[]): Promise<{ fiel
     return errors;
   }
 
-  const rows = await getDb()`
-    SELECT key FROM roles WHERE scope = 'tenant' AND key IN ${roleKeys}
+  const sql = getDb();
+  const rows = await sql`
+    SELECT key FROM roles WHERE scope = 'tenant' AND key IN ${sql(roleKeys)}
   `;
   const valid = new Set(rows.map((r) => String((r as { key: string }).key)));
   for (const key of roleKeys) {
@@ -198,7 +199,8 @@ export async function createTenantInvite(
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
   try {
-    const [inserted] = await getDb()`
+    const sql = getDb();
+    const [inserted] = await sql`
       INSERT INTO tenant_invites (
         tenant_id,
         email,
@@ -212,7 +214,7 @@ export async function createTenantInvite(
         ${tenantId},
         ${email},
         ${invitedName},
-        ${roleKeys},
+        ${sql.array(roleKeys, "TEXT")},
         ${tokenHash},
         ${invitedByUserId},
         ${expiresAt}

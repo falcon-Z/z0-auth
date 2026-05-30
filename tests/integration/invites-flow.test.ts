@@ -253,4 +253,190 @@ run("invite flow", () => {
     const preview = (await previewRes.json()) as { status: string };
     expect(preview.status).toBe("declined");
   });
+
+  test("duplicate pending invite returns 409", async () => {
+    const admin = await login("admin@example.com", adminPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const body = {
+      email: "dup@example.com",
+      invitedName: "Dup User",
+      roleKeys: ["tenant_member"],
+    };
+    const first = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body,
+      }),
+    );
+    expect(first.status).toBe(201);
+
+    const second = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body,
+      }),
+    );
+    expect(second.status).toBe(409);
+  });
+
+  test("member without invite permission gets 403", async () => {
+    const bob = await login("bob@example.com", bobPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const res = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: bob.cookie! },
+        body: {
+          email: "blocked@example.com",
+          invitedName: "Blocked",
+          roleKeys: ["tenant_member"],
+        },
+      }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  test("admin revokes pending invite", async () => {
+    const admin = await login("admin@example.com", adminPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const createRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body: {
+          email: "revoke-me@example.com",
+          invitedName: "Revoke Me",
+          roleKeys: ["tenant_member"],
+        },
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    const { id, inviteUrl: url } = (await createRes.json()) as { id: string; inviteUrl: string };
+    const token = inviteTokenFromUrl(url);
+
+    const revokeRes = await dispatchApi(
+      buildRequest("DELETE", `/api/v1/tenants/${tenantId}/invites/${id}`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+      }),
+    );
+    expect(revokeRes.status).toBe(200);
+
+    const previewRes = await dispatchApi(buildRequest("GET", `/api/v1/invites/${token}`));
+    const preview = (await previewRes.json()) as { status: string };
+    expect(preview.status).toBe("revoked");
+  });
+
+  test("expired invite cannot be accepted", async () => {
+    const admin = await login("admin@example.com", adminPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const createRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body: {
+          email: "expired@example.com",
+          invitedName: "Expired User",
+          roleKeys: ["tenant_member"],
+        },
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    const { inviteUrl: url } = (await createRes.json()) as { inviteUrl: string };
+    const token = inviteTokenFromUrl(url);
+
+    await getDb()`
+      UPDATE tenant_invites
+      SET expires_at = NOW() - INTERVAL '1 hour'
+      WHERE email = 'expired@example.com' AND tenant_id = ${tenantId}
+    `;
+
+    const previewRes = await dispatchApi(buildRequest("GET", `/api/v1/invites/${token}`));
+    const preview = (await previewRes.json()) as { status: string };
+    expect(preview.status).toBe("expired");
+
+    const expiredPassword = makeStrongPassword();
+    const acceptRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/invites/${token}/accept`, {
+        csrfToken: await fetchCsrfToken(dispatchApi),
+        body: {
+          name: "Expired User",
+          password: expiredPassword,
+          passwordConfirm: expiredPassword,
+        },
+      }),
+    );
+    expect(acceptRes.status).toBe(409);
+  });
+
+  test("admin updates member roles and removes member", async () => {
+    const admin = await login("admin@example.com", adminPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const createRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body: {
+          email: "carol@example.com",
+          invitedName: "Carol Example",
+          roleKeys: ["tenant_member"],
+        },
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    const { inviteUrl: carolUrl } = (await createRes.json()) as { inviteUrl: string };
+    const carolToken = inviteTokenFromUrl(carolUrl);
+    const carolPassword = makeStrongPassword();
+
+    const acceptRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/invites/${carolToken}/accept`, {
+        csrfToken: await fetchCsrfToken(dispatchApi),
+        body: {
+          name: "Carol Example",
+          password: carolPassword,
+          passwordConfirm: carolPassword,
+        },
+      }),
+    );
+    expect(acceptRes.status).toBe(200);
+
+    const [carolRow] = await getDb()`SELECT id FROM users WHERE email = 'carol@example.com'`;
+    const carolUserId = String((carolRow as { id: string }).id);
+
+    const patchRes = await dispatchApi(
+      buildRequest("PATCH", `/api/v1/tenants/${tenantId}/members/${carolUserId}/roles`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body: { roleKeys: ["tenant_manager"] },
+      }),
+    );
+    expect(patchRes.status).toBe(200);
+
+    const listRes = await dispatchApi(
+      buildRequest("GET", `/api/v1/tenants/${tenantId}/members`, {
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+      }),
+    );
+    const { members } = (await listRes.json()) as { members: { email: string; roleKeys: string[] }[] };
+    const carol = members.find((m) => m.email === "carol@example.com");
+    expect(carol?.roleKeys).toContain("tenant_manager");
+
+    const removeRes = await dispatchApi(
+      buildRequest("DELETE", `/api/v1/tenants/${tenantId}/members/${carolUserId}`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+      }),
+    );
+    expect(removeRes.status).toBe(200);
+
+    const afterRemove = await dispatchApi(
+      buildRequest("GET", `/api/v1/tenants/${tenantId}/members`, {
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+      }),
+    );
+    const { members: afterMembers } = (await afterRemove.json()) as { members: { email: string }[] };
+    expect(afterMembers.some((m) => m.email === "carol@example.com")).toBe(false);
+  });
 });

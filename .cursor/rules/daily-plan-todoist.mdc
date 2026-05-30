@@ -1,0 +1,24 @@
+---
+description: When planning today's work, use Auth Todoist only; dates are tracking not deadlines
+alwaysApply: true
+---
+
+# Daily plan (Todoist)
+
+When I ask for **today's plan**, **plan for today**, **check today's task**, or similar:
+
+## Do
+
+- Use Todoist MCP scoped to the **Auth** project only (`projectId` for Auth under z0, or filter `##Auth`).
+- Read incomplete tasks, especially **Module Delivery (1/day)** and overdue Auth items.
+- Propose a plan to **complete work as soon as possible** — pick the next shippable module/task, not "what is due today" across my whole life.
+
+## Don't
+
+- Do **not** call `find-tasks-by-date` for "today" across all projects.
+- Do **not** list inbox, routines, personal, or other z0 sub-projects unless I explicitly ask.
+
+## Dates
+
+- Due dates in Todoist are **for tracking and ordering**, not hard deadlines or blockers.
+- If P2-M1 is due tomorrow but incomplete, treat it as **today's dev focus** until done.

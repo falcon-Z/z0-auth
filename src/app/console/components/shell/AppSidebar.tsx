@@ -15,6 +15,7 @@ import {
 import { cn } from "../../lib/utils";
 import { CONSOLE_NAV } from "../../config/navigation";
 import { useSession } from "../../context/session-context";
+import { sessionHasPermission } from "../../lib/tenant-permissions";
 import { NavStatusBadge } from "../layout/NavStatusBadge";
 import { SidebarWorkspace } from "./SidebarWorkspace";
 
@@ -41,7 +42,13 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  const disabled = item.requiresTenant && !hasTenant;
+                  const missingTenant = item.requiresTenant && !hasTenant;
+                  const missingPermission =
+                    item.requiredPermission && !sessionHasPermission(session, item.requiredPermission);
+                  const hidden = missingPermission && !missingTenant;
+                  if (hidden) return null;
+
+                  const disabled = missingTenant;
                   const Icon = item.icon;
                   const isActive = isNavItemActive(location.pathname, item.path);
 

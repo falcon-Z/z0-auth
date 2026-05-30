@@ -34,6 +34,8 @@ export type ConsoleNavItem = {
   summary: string;
   /** Disable nav when no active tenant is selected */
   requiresTenant?: boolean;
+  /** Hide nav when session lacks this tenant permission (see tenant-permissions.ts) */
+  requiredPermission?: string;
 };
 
 export type ConsoleNavGroup = {
@@ -78,8 +80,9 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: Users,
         status: "available",
         module: "P2-M1",
-        summary: "Invite-only membership, roles, and pending invitations.",
+        summary: "Members and invitations.",
         requiresTenant: true,
+        requiredPermission: "users:read",
       },
       {
         id: "users",
