@@ -4,7 +4,6 @@ node_modules
 # output
 out
 dist
-src/app/console/styles/bundle.css
 tests/e2e/.auth/
 playwright-report/
 test-results/

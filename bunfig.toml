@@ -1,2 +1,7 @@
 [run]
 tsconfig = "tsconfig.json"
+
+# Required for Tailwind v4 when bundling HTML routes in Bun.serve (console SPA).
+# See https://bun.com/docs/bundler/fullstack#tailwindcss-plugin
+[serve.static]
+plugins = ["bun-plugin-tailwind"]

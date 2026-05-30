@@ -59,11 +59,13 @@ Contracts and error codes: `src/lib/contracts/` and [api/README.md](./api/README
 ## UI (shadcn)
 
 - Config: `components.json` (`baseColor: neutral`, `style: new-york`)
-- Theme source: `src/app/console/styles/globals.css` (neutral gray tokens)
-- Compiled CSS: `src/app/console/styles/bundle.css` (generated — do not edit)
+- Theme + Tailwind entry: `src/app/console/styles/globals.css` (imported from `main.tsx`)
+- `bunfig.toml` enables `bun-plugin-tailwind` for HTML routes in `Bun.serve` (see [Bun fullstack docs](https://bun.com/docs/bundler/fullstack#tailwindcss-plugin))
 - Add components: `bunx shadcn@latest add <component>` (files land in `src/app/console/components/ui/`)
 
-`bun dev` runs Tailwind CLI in watch mode and the Bun server. If styles look unstyled (plain text), run `bun run css:build` and reload.
+Auth HTML under `/auth/*` uses a separate static stylesheet (`/static/auth.css`), not the console Tailwind pipeline.
+
+Reference minimal setup (outside this repo): `/home/madhan/projects/z0-tailwind-reference`.
 
 ### Playwright (console UI)
 
