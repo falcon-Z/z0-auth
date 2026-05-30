@@ -340,11 +340,17 @@
     }
   }
 
+  function bindForm(form) {
+    if (!(form instanceof HTMLFormElement) || form.dataset.authBound === "true") return;
+    form.dataset.authBound = "true";
+    form.setAttribute("novalidate", "");
+    form.addEventListener("submit", onSubmit);
+    form.addEventListener("input", onInput);
+  }
+
   function init() {
     document.querySelectorAll("form[data-validate]").forEach((form) => {
-      form.setAttribute("novalidate", "");
-      form.addEventListener("submit", onSubmit);
-      form.addEventListener("input", onInput);
+      bindForm(form);
     });
 
     const password = document.querySelector("[data-password-input]");
@@ -361,4 +367,8 @@
   } else {
     init();
   }
+
+  document.body.addEventListener("htmx:afterSwap", (event) => {
+    if (event.detail.target?.id === "auth-root") init();
+  });
 })();

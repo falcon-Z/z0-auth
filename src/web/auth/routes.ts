@@ -9,6 +9,7 @@ import { clearSessionCookieHeader, revokeSessionByToken, SESSION_COOKIE } from "
 import { parseCookies } from "../../api/lib/csrf";
 import { runSetup } from "../../api/setup/service";
 import { redirectForAuthPage } from "../ui-guard";
+import { authFormErrorStatus, htmlFormRedirect, htmxAuthErrorHeaders } from "../htmx";
 import { parseFormBody } from "../forms";
 import {
   escapeHtml,
@@ -32,6 +33,12 @@ function htmlResponse(html: string, status = 200, extraHeaders?: HeadersInit): R
   const headers = new Headers(extraHeaders);
   headers.set("Content-Type", "text/html; charset=utf-8");
   return new Response(html, { status, headers });
+}
+
+function authErrorResponse(html: string, req: BunRequest, fallbackStatus: number, setCookie?: string): Response {
+  const status = authFormErrorStatus(req, fallbackStatus);
+  const extra = status === 200 ? htmxAuthErrorHeaders() : undefined;
+  return withSetCookie(htmlResponse(html, status, extra), setCookie);
 }
 
 function problemToFieldErrors(res: Response): { field: string; message: string }[] {
@@ -202,7 +209,7 @@ async function postSetupPage(req: BunRequest): Promise<Response> {
   if (csrfError) {
     const errors = await problemFieldErrors(csrfError);
     const { token, setCookie } = preparePageCsrf(req);
-    return withSetCookie(htmlResponse(renderSetupForm(token, form, errors), 403), setCookie);
+    return authErrorResponse(renderSetupForm(token, form, errors), req, 403, setCookie);
   }
 
   const body: SetupRequest = {
@@ -217,12 +224,12 @@ async function postSetupPage(req: BunRequest): Promise<Response> {
   if (!result.ok) {
     const errors = await problemFieldErrors(result.response);
     const { token, setCookie } = preparePageCsrf(req);
-    return withSetCookie(htmlResponse(renderSetupForm(token, form, errors), 400), setCookie);
+    return authErrorResponse(renderSetupForm(token, form, errors), req, 400, setCookie);
   }
 
   const org = encodeURIComponent(result.response.organizationName);
   const location = `/auth/login?setup=complete&org=${org}`;
-  return Response.redirect(new URL(location, req.url), 303);
+  return htmlFormRedirect(req, location);
 }
 
 async function getLoginPage(req: BunRequest): Promise<Response> {
@@ -255,22 +262,20 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
   if (csrfError) {
     const errors = await problemFieldErrors(csrfError);
     const { token, setCookie } = preparePageCsrf(req);
-    return withSetCookie(htmlResponse(renderLoginForm(token, form, errors, undefined, form.return_to), 403), setCookie);
+    return authErrorResponse(renderLoginForm(token, form, errors, undefined, form.return_to), req, 403, setCookie);
   }
 
   const result = await runLogin(req, form.email ?? "", form.password ?? "");
   if (!result.ok) {
     const errors = result.fieldErrors ?? (await problemFieldErrors(result.response));
     const { token, setCookie } = preparePageCsrf(req);
-    const status = result.response.status === 401 ? 401 : 400;
-    return withSetCookie(htmlResponse(renderLoginForm(token, form, errors, undefined, form.return_to), status), setCookie);
+    const fallback = result.response.status === 401 ? 401 : 400;
+    return authErrorResponse(renderLoginForm(token, form, errors, undefined, form.return_to), req, fallback, setCookie);
   }
 
   const hasOauthReturn = parseCookies(req).has("z0_oauth_return");
   const location = form.return_to || (hasOauthReturn ? "/oauth/resume" : "/");
-  const headers = new Headers({ Location: location.startsWith("/") ? location : "/" });
-  headers.set("Set-Cookie", result.setCookie);
-  return new Response(null, { status: 303, headers });
+  return htmlFormRedirect(req, location, { setCookie: result.setCookie });
 }
 
 async function getForgotPasswordPage(req: BunRequest): Promise<Response> {

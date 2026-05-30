@@ -3,11 +3,15 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { closeDatabase } from "../../src/api/lib/db";
+import { loadRootEnv } from "../../src/lib/load-root-env";
+
+loadRootEnv();
 
 export function getTestDatabaseUrl(): string | null {
-  return process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? null;
+  return process.env.DATABASE_URL?.trim() || null;
 }
 
+/** Drops schema and reapplies migrations on DATABASE_URL (same as `bun run db:reset`). */
 export async function resetTestDatabase(): Promise<void> {
   const url = getTestDatabaseUrl();
   if (!url) return;

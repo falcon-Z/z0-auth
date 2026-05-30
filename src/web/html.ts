@@ -91,7 +91,9 @@ export function fieldErrorMessages(errors: FieldError[], field: string): string[
 
 /** Form-level errors only; field errors render inline next to each input. */
 export function formErrorsSummary(errors: FieldError[]): string {
-  const formError = errors.find((e) => e.field === "_form");
+  const formError = errors.find((e) =>
+    e.field === "_form" || e.field === "_auth" || e.field === "_rate" || e.field === "_csrf",
+  );
   if (!formError) return "";
   return `<p class="auth-form-error" role="alert">${SVG_WARNING}<span class="auth-form-error__text">${escapeHtml(formError.message)}</span></p>`;
 }

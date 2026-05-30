@@ -22,6 +22,8 @@ bun run db:reset
 bun dev
 ```
 
+Local setup (Postgres, env, console API helpers): [docs/development.md](docs/development.md).
+
 ## URL contract
 
 - `/auth/*` server HTML auth pages

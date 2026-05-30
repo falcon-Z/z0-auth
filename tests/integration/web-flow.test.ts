@@ -135,6 +135,87 @@ run("web auth pages", () => {
     const html = await loginRes.text();
     expect(html).toContain("Sign in");
   });
+
+  test("POST /auth/login with wrong password shows generic form error in HTML", async () => {
+    const loginPage = await dispatchWeb(new Request("http://localhost/auth/login"));
+    const loginHtml = await loginPage.text();
+    const loginCsrf = extractCsrfFromHtml(loginHtml)!;
+    const cookie = extractCsrfFromSetCookie(loginPage) ?? loginCsrf;
+
+    const res = await dispatchWeb(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(cookie)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: loginCsrf,
+          email: "admin@example.com",
+          password: "WrongPassword123!Aa",
+        }).toString(),
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    const html = await res.text();
+    expect(html).toContain("auth-form-error");
+    expect(html).toContain("Invalid email or password");
+  });
+
+  test("POST /auth/login HTMX error returns swappable 200 with form error", async () => {
+    await resetTestDatabase();
+    const csrf = await fetchSetupCsrf();
+    await dispatchWeb(
+      new Request("http://localhost/auth/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(csrf)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: csrf,
+          organizationName: "Acme",
+          name: "Admin",
+          email: "admin@example.com",
+          password: strongPassword,
+          passwordConfirm: strongPassword,
+        }).toString(),
+      }),
+    );
+
+    const loginPage = await dispatchWeb(new Request("http://localhost/auth/login"));
+    const loginHtml = await loginPage.text();
+    const loginCsrf = extractCsrfFromHtml(loginHtml)!;
+    const cookie = extractCsrfFromSetCookie(loginPage) ?? loginCsrf;
+
+    const res = await dispatchWeb(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          "hx-request": "true",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(cookie)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: loginCsrf,
+          email: "admin@example.com",
+          password: "WrongPassword123!Aa",
+        }).toString(),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("auth-form-error");
+    expect(html).toContain("Invalid email or password");
+  });
 });
 
 afterAll(async () => {
