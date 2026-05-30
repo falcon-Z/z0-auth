@@ -7,6 +7,12 @@ export type SetActiveTenantRequest = {
   tenantId: string;
 };
 
+export type ChangePasswordRequest = {
+  currentPassword: string;
+  password: string;
+  passwordConfirm: string;
+};
+
 export type SessionUser = {
   id: string;
   email: string;

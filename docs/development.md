@@ -28,7 +28,15 @@ Apply schema:
 bun run db:reset
 ```
 
-Complete setup in the browser at `/auth/setup` with your own admin email and password.
+Complete setup in the browser at `/auth/setup` with your own admin email and password. Those credentials live only in your dev database — the app does not store or print them anywhere.
+
+One-time, create the isolated test database on the same Postgres instance:
+
+```bash
+bun run db:test:init
+```
+
+This creates `z0auth_test` alongside `z0auth` (same container, different database).
 
 ### Run the app
 
@@ -40,9 +48,18 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
 
 ## Tests and the dev database
 
-Integration tests for **setup, registration guards, and login** call `resetTestDatabase()` in `beforeAll`, which runs the same `DROP SCHEMA` + migrations as `bun run db:reset`. After `bun test`, the database is empty until you set up again.
+Integration tests use **`TEST_DATABASE_URL`** (`z0auth_test` on the same Postgres as dev), loaded from `.env.test` via `tests/preload.ts`. They call `resetTestDatabase()` in `beforeAll`, which drops and migrates **only that test database**.
 
-For manual work, run `bun run db:reset` when you want a clean slate, then complete `/auth/setup` with credentials you choose.
+| Database | Env var | Used by |
+|----------|---------|---------|
+| `z0auth` | `DATABASE_URL` | `bun dev`, manual browser work |
+| `z0auth_test` | `TEST_DATABASE_URL` | `bun test`, Playwright e2e |
+
+Tests still create platform admins with **dynamic passwords** (full setup → user flows). That state is ephemeral — wiped on every test run and discarded when CI finishes. It never touches your dev database.
+
+If `TEST_DATABASE_URL` matches `DATABASE_URL`, test resets fail fast instead of wiping dev data.
+
+For a clean dev slate, run `bun run db:reset` and complete `/auth/setup` again with credentials you choose.
 
 ## Console API building blocks
 
@@ -97,5 +114,6 @@ When shipping a module: set `status` to `available` (or `stub`), add the page un
 | Command | Purpose |
 |---------|---------|
 | `bun dev` | Dev server with hot reload |
-| `bun test` | Unit + integration tests |
+| `bun test` | Unit + integration tests (isolated test DB) |
+| `bun run db:test:init` | Create `z0auth_test` on existing Postgres |
 | `bun run db:reset` | Drop schema, migrate (fresh platform) |

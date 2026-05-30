@@ -1,6 +1,6 @@
 import type { BunRequest } from "bun";
 
-import type { LoginRequest, SetActiveTenantRequest } from "@z0/contracts/auth";
+import type { ChangePasswordRequest, LoginRequest, SetActiveTenantRequest } from "@z0/contracts/auth";
 import { ErrorCodes } from "@z0/contracts/errors";
 import { parseJsonBody } from "@z0/contracts/validation";
 
@@ -14,6 +14,7 @@ import {
   SESSION_COOKIE,
 } from "../lib/session";
 import { setActiveTenant } from "../lib/tenant";
+import { changePassword } from "../lib/users";
 import { runLogin } from "./service";
 
 export async function handleLogin(req: BunRequest): Promise<Response> {
@@ -103,4 +104,19 @@ export async function handlePasswordResetUnavailable(): Promise<Response> {
 
 export async function handleRegister(): Promise<Response> {
   return problem(403, "Forbidden", "Platform registration is disabled.");
+}
+
+export async function handleChangePassword(req: BunRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+
+  const parsed = await parseJsonBody<ChangePasswordRequest>(req);
+  if (!parsed.ok) return parsed.response;
+
+  const result = await changePassword(req, auth.userId, auth.sessionId, parsed.body);
+  if (!result.ok) return result.response;
+  return json({ ok: true });
 }

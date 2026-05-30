@@ -203,6 +203,54 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 
 ---
 
+## `GET /api/v1/users`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| Session | Required | — | 401 | Redirect to login | `users-lifecycle` |
+| Permission | `platform:manage` | `permission_denied` | 403 | Users page empty/denied | `users-lifecycle` |
+| Success | — | — | 200 `{ users }` | Table of users | `users-lifecycle` |
+
+---
+
+## `GET /api/v1/users/:userId`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| Permission | `platform:manage` | `permission_denied` | 403 | — | `users-lifecycle` |
+| `userId` | Known user | `user_not_found` | 404 | — | `users-lifecycle` |
+| Success | — | — | 200 user | Detail row | `users-lifecycle` |
+
+---
+
+## `PATCH /api/v1/users/:userId`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
+| Permission | `platform:manage` | `permission_denied` | 403 | — | `users-lifecycle` |
+| `status` | `active` or `disabled` | `required` / validation | 400 | Inline | `users-lifecycle` |
+| Target | Not self | `cannot_disable_self` | 403 | Inline error | `users-lifecycle` |
+| Target | Not last active platform admin when disabling | `last_platform_admin` | 403 | Inline error | `users-lifecycle` |
+| `userId` | Known user | `user_not_found` | 404 | — | `users-lifecycle` |
+| Disable | Revokes all target sessions | — | 200 | Row status updates | `users-lifecycle` |
+| Success | Audit `user.disabled` / `user.enabled` | — | 200 | — | `users-lifecycle` |
+
+---
+
+## `POST /api/auth/change-password`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| Session | Required | — | 401 | Redirect to login | `users-lifecycle` |
+| CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
+| `currentPassword` | Matches stored hash | `invalid_credentials` | 401 | Inline on current | `users-lifecycle` |
+| `password` | Policy rules | `password_policy` | 400 | Checklist / inline | `users-lifecycle` |
+| `passwordConfirm` | Equals `password` | `password_mismatch` | 400 | Inline on confirm | `users-lifecycle` |
+| Success | Revokes other sessions; audit `user.password_changed` | — | 200 `{ ok: true }` | Success message | `users-lifecycle` |
+
+---
+
 ## OAuth (planned — enforce before implementation)
 
 | Input | Rule | Code | HTTP |

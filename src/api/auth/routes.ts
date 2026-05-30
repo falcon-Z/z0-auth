@@ -1,4 +1,5 @@
 import {
+  handleChangePassword,
   handleLogin,
   handleLogout,
   handleRegister,
@@ -37,5 +38,9 @@ export const authApiRoutes = {
 
   "/api/auth/active-tenant": {
     POST: handleSetActiveTenant,
+  },
+
+  "/api/auth/change-password": {
+    POST: handleChangePassword,
   },
 } as const;

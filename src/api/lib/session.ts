@@ -41,6 +41,15 @@ export async function revokeAllUserSessions(userId: string): Promise<void> {
   `;
 }
 
+export async function revokeOtherUserSessions(userId: string, exceptSessionId: string): Promise<void> {
+  await getDb()`
+    UPDATE sessions SET revoked_at = NOW()
+    WHERE user_id = ${userId}
+      AND revoked_at IS NULL
+      AND id != ${exceptSessionId}
+  `;
+}
+
 export type ActiveSession = {
   userId: string;
   sessionId: string;

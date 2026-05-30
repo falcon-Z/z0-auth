@@ -167,6 +167,45 @@ paths:
       responses:
         "503":
           $ref: "common.openapi.yaml#/components/responses/ServiceUnavailable"
+  /api/auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change password (authenticated)
+      description: |
+        Console-only self-service password change. Verifies the current password, applies password policy,
+        revokes all other sessions, and keeps the current session active.
+      operationId: postAuthChangePassword
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "503":
+          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
 components:
   securitySchemes:
     CsrfHeader:
@@ -211,6 +250,16 @@ components:
         tenantId:
           type: string
           description: Organization id (tenant id in storage)
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, password, passwordConfirm]
+      properties:
+        currentPassword:
+          type: string
+        password:
+          type: string
+        passwordConfirm:
+          type: string
     SessionResponse:
       type: object
       required: [authenticated]

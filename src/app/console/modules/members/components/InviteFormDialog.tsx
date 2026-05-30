@@ -12,7 +12,7 @@ import {
 import { Input } from "@z0/components/ui/input";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { Field, RolePicker } from "./RolePicker";
+import { Field, RoleSelect } from "./RolePicker";
 
 type InviteFormDialogProps = {
   open: boolean;
@@ -25,14 +25,14 @@ type InviteFormDialogProps = {
 export function InviteFormDialog({ open, onOpenChange, roles, onSubmit, onCreated }: InviteFormDialogProps) {
   const [email, setEmail] = useState("");
   const [invitedName, setInvitedName] = useState("");
-  const [roleKeys, setRoleKeys] = useState<string[]>(["tenant_member"]);
+  const [roleKey, setRoleKey] = useState("tenant_member");
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   function reset() {
     setEmail("");
     setInvitedName("");
-    setRoleKeys(["tenant_member"]);
+    setRoleKey("tenant_member");
     setFieldErrors({});
   }
 
@@ -41,7 +41,7 @@ export function InviteFormDialog({ open, onOpenChange, roles, onSubmit, onCreate
     setSubmitting(true);
     setFieldErrors({});
     try {
-      const result = await onSubmit({ email, invitedName, roleKeys });
+      const result = await onSubmit({ email, invitedName, roleKeys: [roleKey] });
       reset();
       onOpenChange(false);
       onCreated(result);
@@ -68,18 +68,13 @@ export function InviteFormDialog({ open, onOpenChange, roles, onSubmit, onCreate
             <Field label="Name" error={fieldErrors.invitedName}>
               <Input value={invitedName} onChange={(e) => setInvitedName(e.target.value)} required />
             </Field>
-            <RolePicker
-              roles={roles}
-              roleKeys={roleKeys}
-              onChange={setRoleKeys}
-              error={fieldErrors.roleKeys}
-            />
+            <RoleSelect roles={roles} roleKey={roleKey} onChange={setRoleKey} error={fieldErrors.roleKeys} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting || roleKeys.length === 0}>
+            <Button type="submit" disabled={submitting || !roleKey}>
               {submitting ? "Saving…" : "Create"}
             </Button>
           </DialogFooter>

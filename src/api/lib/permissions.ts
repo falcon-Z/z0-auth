@@ -75,6 +75,35 @@ export async function requirePermission(
   return auth;
 }
 
+export async function requirePlatformPermission(
+  req: BunRequest,
+  permissionKey: string,
+): Promise<
+  | { ok: true; userId: string; sessionId: string }
+  | { ok: false; response: Response }
+> {
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth;
+
+  const allowed = await userHasPermission(auth.userId, permissionKey);
+  if (!allowed) {
+    return {
+      ok: false,
+      response: problem(403, "Forbidden", "You do not have permission to perform this action", {
+        errors: [
+          {
+            field: "_auth",
+            code: ErrorCodes.PERMISSION_DENIED,
+            message: "You do not have permission to perform this action",
+          },
+        ],
+      }),
+    };
+  }
+
+  return auth;
+}
+
 /** Platform operators with platform:manage may access any tenant without membership. */
 export async function canAccessTenantAdmin(userId: string, tenantId: string): Promise<boolean> {
   if (await userHasPermission(userId, "platform:manage")) return true;

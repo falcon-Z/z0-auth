@@ -2,6 +2,13 @@ import type { ReactNode } from "react";
 
 import type { RoleSummary } from "@z0/contracts/invites";
 import { Label } from "@z0/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@z0/components/ui/select";
 import { formatRoleKey } from "../../../lib/tenant-permissions";
 
 type RolePickerProps = {
@@ -10,6 +17,32 @@ type RolePickerProps = {
   onChange: (keys: string[]) => void;
   error?: string;
 };
+
+type RoleSelectProps = {
+  roles: RoleSummary[];
+  roleKey: string;
+  onChange: (key: string) => void;
+  error?: string;
+};
+
+export function RoleSelect({ roles, roleKey, onChange, error }: RoleSelectProps) {
+  return (
+    <Field label="Role" error={error}>
+      <Select value={roleKey} onValueChange={onChange}>
+        <SelectTrigger className="w-full">
+          <SelectValue placeholder="Select a role" />
+        </SelectTrigger>
+        <SelectContent>
+          {roles.map((role) => (
+            <SelectItem key={role.key} value={role.key}>
+              {formatRoleKey(role.key)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+}
 
 export function RolePicker({ roles, roleKeys, onChange, error }: RolePickerProps) {
   function toggle(key: string) {

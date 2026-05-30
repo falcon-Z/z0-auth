@@ -1,0 +1,121 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Platform Users API
+  version: 0.1.0
+  description: Platform-scoped user lifecycle (list, disable/enable). Requires `platform:manage`.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Users
+paths:
+  /api/v1/users:
+    get:
+      tags: [Users]
+      summary: List platform users
+      operationId: listPlatformUsers
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PlatformUserSummary"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/users/{userId}:
+    get:
+      tags: [Users]
+      summary: Get platform user
+      operationId: getPlatformUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformUserSummary"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    patch:
+      tags: [Users]
+      summary: Update platform user status
+      operationId: patchPlatformUser
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPlatformUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformUserSummary"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+components:
+  schemas:
+    UserStatus:
+      type: string
+      enum: [active, disabled]
+    PlatformUserSummary:
+      type: object
+      required: [id, email, name, status, createdAt, platformRoles]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/UserStatus"
+        createdAt:
+          type: string
+          format: date-time
+        platformRoles:
+          type: array
+          items:
+            type: string
+    PatchPlatformUserRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/UserStatus"

@@ -53,6 +53,12 @@ export const ErrorCodes = {
   INVITE_ALREADY_MEMBER: "invite_already_member",
   /** Invalid or unknown role key for assignment. */
   INVALID_ROLE: "invalid_role",
+  /** Target user does not exist. */
+  USER_NOT_FOUND: "user_not_found",
+  /** Operator cannot disable their own account. */
+  CANNOT_DISABLE_SELF: "cannot_disable_self",
+  /** Cannot disable the last active platform administrator. */
+  LAST_PLATFORM_ADMIN: "last_platform_admin",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

@@ -10,7 +10,15 @@ import {
   handleUpdateMemberRoles,
 } from "./tenants/handlers";
 
+import {
+  handleGetUser,
+  handleListUsers,
+  handlePatchUser,
+} from "./users/handlers";
+
 export const v1PatternRoutes: PathRoute[] = [
+  { pattern: "/api/v1/users", handlers: { GET: handleListUsers } },
+  { pattern: "/api/v1/users/:userId", handlers: { GET: handleGetUser, PATCH: handlePatchUser } },
   { pattern: "/api/v1/roles", handlers: { GET: handleListRoles } },
   { pattern: "/api/v1/tenants/:tenantId/members", handlers: { GET: handleListMembers } },
   { pattern: "/api/v1/tenants/:tenantId/members/:userId/roles", handlers: { PATCH: handleUpdateMemberRoles } },

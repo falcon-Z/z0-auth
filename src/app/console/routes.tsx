@@ -5,15 +5,19 @@ import { ModulePlaceholderPage } from "./components/layout/ModulePlaceholderPage
 import { ClientsPage } from "./modules/clients/pages/ClientsPage";
 import { DashboardPage } from "./modules/dashboard/pages/DashboardPage";
 import { MembersModule } from "./modules/members/MembersModule";
+import { AccountSecurityPage } from "./modules/security/pages/AccountSecurityPage";
+import { UsersModule } from "./modules/users/UsersModule";
 
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/": <DashboardPage />,
   "/members": <MembersModule />,
   "/clients": <ClientsPage />,
+  "/users": <UsersModule />,
+  "/security/account": <AccountSecurityPage />,
 };
 
 /** Nav paths wired to real pages — keep in sync with `IMPLEMENTED_PAGES`. */
-export const WIRED_CONSOLE_NAV_PATHS = ["/", "/members", "/clients"] as const;
+export const WIRED_CONSOLE_NAV_PATHS = ["/", "/members", "/clients", "/users", "/security/account"] as const;
 
 /** Nested module routes need a splat so in-module `<Routes>` match subpaths. */
 export function routePathForNav(path: string): string {
