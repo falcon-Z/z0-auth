@@ -41,6 +41,18 @@ export const ErrorCodes = {
   UNAUTHORIZED_CLIENT: "unauthorized_client",
   /** Active organization is not in the user's memberships. */
   TENANT_ACCESS_DENIED: "tenant_access_denied",
+  /** Caller lacks permission for this action. */
+  PERMISSION_DENIED: "permission_denied",
+  /** Invite token unknown or not pending. */
+  INVITE_INVALID: "invite_invalid",
+  /** Invite past expires_at. */
+  INVITE_EXPIRED: "invite_expired",
+  /** Signed-in user email does not match the invite. */
+  INVITE_EMAIL_MISMATCH: "invite_email_mismatch",
+  /** User is already a member of the organization. */
+  INVITE_ALREADY_MEMBER: "invite_already_member",
+  /** Invalid or unknown role key for assignment. */
+  INVALID_ROLE: "invalid_role",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

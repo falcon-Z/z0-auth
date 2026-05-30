@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { SessionGate } from "../components/shell/SessionGate";
 import { loadSession, postActiveTenant, postLogout } from "../lib/api";
 
 type SessionContextValue = {
@@ -58,7 +59,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const next = await postActiveTenant(tenantId);
       setSession(next);
     } catch (error) {
-      setSwitchError(error instanceof Error ? error.message : "Could not switch organization");
+      setSwitchError(error instanceof Error ? error.message : "Could not switch tenant");
     } finally {
       setSwitching(false);
     }
@@ -77,11 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [session, refreshSession, signOut, switchOrganization, switchError, switching]);
 
   if (gate === "loading" || !value) {
-    return (
-      <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">
-        Loading session…
-      </div>
-    );
+    return <SessionGate />;
   }
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

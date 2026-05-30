@@ -83,6 +83,12 @@ components:
         - invalid_client
         - unauthorized_client
         - tenant_access_denied
+        - permission_denied
+        - invite_invalid
+        - invite_expired
+        - invite_email_mismatch
+        - invite_already_member
+        - invalid_role
     ProblemDetail:
       type: object
       required: [type, title, status, requestId]

@@ -1,0 +1,105 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Invites & Members API
+  version: 0.1.0
+  description: Organization invites (invite-only onboarding) and member listing.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Invites
+  - name: Members
+paths:
+  /api/v1/roles:
+    get:
+      tags: [Invites]
+      summary: List assignable tenant roles
+      operationId: listTenantRoles
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [tenant]
+      responses:
+        "200":
+          description: Role catalog
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /api/v1/tenants/{tenantId}/members:
+    get:
+      tags: [Members]
+      summary: List organization members
+      operationId: listTenantMembers
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Members
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/tenants/{tenantId}/invites:
+    post:
+      tags: [Invites]
+      summary: Create invitation
+      operationId: createTenantInvite
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: Invite created (manual delivery via link or mailto)
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/invites/{token}:
+    get:
+      tags: [Invites]
+      summary: Invitation preview
+      operationId: getInvitePreview
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Preview for accept/decline UI
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/v1/invites/{token}/accept:
+    post:
+      tags: [Invites]
+      summary: Accept invitation
+      operationId: acceptInvite
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      responses:
+        "200":
+          description: Accepted
+  /api/v1/invites/{token}/decline:
+    post:
+      tags: [Invites]
+      summary: Decline invitation
+      operationId: declineInvite
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      responses:
+        "200":
+          description: Declined

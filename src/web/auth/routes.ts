@@ -132,7 +132,7 @@ function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { f
   });
 }
 
-function renderLoginForm(
+export function renderLoginForm(
   csrfToken: string,
   values: FormFields = {},
   errors: { field: string; message: string }[] = [],
@@ -299,10 +299,10 @@ async function getRegisterPage(req: BunRequest): Promise<Response> {
 
   const { token, setCookie } = preparePageCsrf(req);
   const html = renderStaticMessagePage(
-    "Registration",
-    "Public registration is disabled on this platform.",
+    "Invitation only",
+    "New accounts are created through an organization invitation.",
     token,
-    `<p class="auth-footer">Accounts are created by your platform administrator.</p>
+    `<p class="auth-footer">If you were invited, open the link from your invitation email. Otherwise contact your platform administrator.</p>
      <div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div>`,
   );
   return withSetCookie(htmlResponse(html), setCookie);

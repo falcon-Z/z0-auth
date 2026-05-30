@@ -7,14 +7,14 @@ import {
 } from "@z0/components/ui/select";
 import { useSession } from "../../context/session-context";
 
-export function OrganizationSwitcher() {
+export function TenantSwitcher() {
   const { session, switchOrganization, switching, switchError } = useSession();
 
   if (!session.canSwitchOrganization || !session.organizations?.length) {
     if (!session.tenant) return null;
     return (
-      <div className="text-sm">
-        <span className="text-muted-foreground">Organization </span>
+      <div className="rounded-md border bg-muted/50 px-3 py-1.5 text-sm">
+        <span className="text-muted-foreground">Tenant </span>
         <span className="font-medium text-foreground">{session.tenant.name}</span>
       </div>
     );
@@ -22,16 +22,18 @@ export function OrganizationSwitcher() {
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-muted-foreground" htmlFor="org-switcher">
-        Organization
-      </label>
       <Select
         value={session.tenant?.id ?? ""}
         onValueChange={(tenantId) => void switchOrganization(tenantId)}
         disabled={switching}
       >
-        <SelectTrigger id="org-switcher" className="min-w-[12rem]" size="sm" aria-label="Switch organization">
-          <SelectValue placeholder="Select organization" />
+        <SelectTrigger
+          id="tenant-switcher"
+          className="h-9 w-[14rem] bg-background"
+          size="sm"
+          aria-label="Switch tenant"
+        >
+          <SelectValue placeholder="Select tenant" />
         </SelectTrigger>
         <SelectContent>
           {session.organizations.map((org) => (

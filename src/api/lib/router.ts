@@ -2,6 +2,7 @@ import type { BunRequest } from "bun";
 
 import type { MethodHandlers, RouteHandler } from "./http";
 import { methodNotAllowed } from "./http";
+import { dispatchPatternRoutes, type PathRoute } from "./path-router";
 import { checkSetupGuard } from "./setup-guard";
 
 type RouteMap = Record<string, MethodHandlers | RouteHandler>;
@@ -35,21 +36,30 @@ export function applySetupGuard(routes: RouteMap): RouteMap {
 export async function dispatchRoute(
   routes: RouteMap,
   req: Request,
+  patterns?: PathRoute[],
 ): Promise<Response | null> {
   const url = new URL(req.url);
   const handlers = routes[url.pathname];
-  if (!handlers) return null;
+  if (handlers) {
+    if (typeof handlers === "function") {
+      return handlers(req as BunRequest);
+    }
 
-  if (typeof handlers === "function") {
-    return handlers(req as BunRequest);
+    const method = req.method as keyof MethodHandlers;
+    const handler = handlers[method];
+    if (!handler) {
+      const allowed = Object.keys(handlers).filter((m) => handlers[m as keyof MethodHandlers]);
+      return methodNotAllowed(allowed);
+    }
+
+    return handler(req as BunRequest);
   }
 
-  const method = req.method as keyof MethodHandlers;
-  const handler = handlers[method];
-  if (!handler) {
-    const allowed = Object.keys(handlers).filter((m) => handlers[m as keyof MethodHandlers]);
-    return methodNotAllowed(allowed);
+  if (patterns?.length) {
+    return dispatchPatternRoutes(patterns, req, (pathname, handler) =>
+      wrapHandler(pathname, handler),
+    );
   }
 
-  return handler(req as BunRequest);
+  return null;
 }

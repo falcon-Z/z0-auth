@@ -122,6 +122,87 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 
 ---
 
+## `GET /api/v1/roles`
+
+| Query | Rule | Code | HTTP | UI |
+|-------|------|------|------|-----|
+| Session | Required | — | 401 | Login |
+| `scope` | `tenant` (default) | — | 200 | Role checkboxes on invite form |
+
+---
+
+## `GET /api/v1/tenants/:tenantId/members`
+
+| Rule | Code | HTTP | UI |
+|------|------|------|-----|
+| Session | Required | — | 401 | Login |
+| Permission | `users:read` for tenant (or `platform:manage`) | `permission_denied` | 403 | Members page empty state |
+| Tenant | Valid UUID | — | 404 | — |
+
+---
+
+## `POST /api/v1/tenants/:tenantId/invites`
+
+| Field | Rule | Code | HTTP | UI |
+|-------|------|------|------|-----|
+| Session + CSRF | Required | `csrf_invalid` | 403 | — |
+| Permission | `users:invite` | `permission_denied` | 403 | — |
+| `email` | Valid email | `invalid_email` | 400 | Inline |
+| `invitedName` | Non-empty | `required` | 400 | Inline |
+| `roleKeys` | ≥1 valid tenant role | `invalid_role` / `required` | 400 | Checkboxes |
+| Email | Not already member | `invite_already_member` | 409 | Inline |
+| Email | No duplicate pending invite | `invite_invalid` | 409 | Inline |
+
+**Success:** 201 + `inviteUrl` (no email sent). Console: copy link + `mailto:`.
+
+---
+
+## `GET /api/v1/invites/:token`
+
+| Rule | Code | HTTP | UI |
+|------|------|------|-----|
+| Token | Valid pending (or terminal status in body) | `invite_invalid` | 404 | `/auth/invite/:token` message |
+| — | Expired pending → `status: expired` in 200 | — | 200 | Expired message |
+
+**Response includes `accountExists` and `viewer.authenticated` / `viewer.emailMatches` for accept/decline UX.**
+
+---
+
+## `POST /api/v1/invites/:token/accept`
+
+| Case | Rule | Code | HTTP | UI |
+|------|------|------|------|-----|
+| New user | `password` + policy + `name` | `password_policy` etc. | 400 | Accept form |
+| Existing user | Session required; email matches invite | `invite_email_mismatch` | 403 | Wrong-account page |
+| Existing user | Not already member | `invite_already_member` | 409 | — |
+| Token | Pending, not expired | `invite_invalid` / `invite_expired` | 404/409 | — |
+
+**Success:** 200; new users receive session cookie.
+
+---
+
+## `POST /api/v1/invites/:token/decline`
+
+| Case | Rule | Code | HTTP | UI |
+|------|------|------|------|-----|
+| Existing user | Session + email match | `invite_email_mismatch` | 403 | Sign in first |
+| New user (no account) | Token only | — | 200 | Decline without sign-in |
+| Token | Pending | `invite_invalid` | 404/409 | — |
+
+---
+
+## `GET /auth/invite/:token` (HTML)
+
+| State | Behavior |
+|-------|----------|
+| Pending + new user | Password accept form |
+| Pending + existing + unsigned | Login with `return_to` invite URL |
+| Pending + existing + signed in + email match | Accept / Decline buttons |
+| Pending + existing + wrong account | Sign out + retry |
+| Not pending | Status message |
+
+---
+
 ## OAuth (planned — enforce before implementation)
 
 | Input | Rule | Code | HTTP |

@@ -59,8 +59,35 @@ Contracts and error codes: `src/lib/contracts/` and [api/README.md](./api/README
 ## UI (shadcn)
 
 - Config: `components.json` (`baseColor: neutral`, `style: new-york`)
-- Theme tokens: `src/app/console/styles/globals.css`
-- Add components: `bunx shadcn@latest add <component>`
+- Theme source: `src/app/console/styles/globals.css` (neutral gray tokens)
+- Compiled CSS: `src/app/console/styles/bundle.css` (generated — do not edit)
+- Add components: `bunx shadcn@latest add <component>` (files land in `src/app/console/components/ui/`)
+
+`bun dev` runs Tailwind CLI in watch mode and the Bun server. If styles look unstyled (plain text), run `bun run css:build` and reload.
+
+### Playwright (console UI)
+
+```bash
+export E2E_PASSWORD='your-admin-password'   # same as /auth/setup admin
+bun run test:e2e
+```
+
+Optional: `E2E_EMAIL` (default `admin@example.com`). Requires platform setup complete and a valid session.
+
+Install browsers once: `bunx playwright install chromium`. If Playwright reports an unsupported OS, run tests in CI or a supported Linux/macOS host.
+
+### Console shell
+
+The management SPA uses a **shadcn sidebar + header** layout (`AppShell`) and a single navigation catalog:
+
+| File | Role |
+|------|------|
+| `src/app/console/config/navigation.ts` | All console routes, grouped by area; `status`: `available`, `stub`, or `planned` |
+| `src/app/console/routes.tsx` | Registers routes; maps paths to real pages or `ModulePlaceholderPage` |
+| `src/app/console/components/layout/ConsolePage.tsx` | Shared page title and description |
+| `src/app/console/components/layout/ModulePlaceholderPage.tsx` | Default body for planned modules |
+
+When shipping a module: set `status` to `available` (or `stub`), add the page under `src/app/console/modules/<name>/`, and register it in `routes.tsx` `IMPLEMENTED_PAGES`. Keep API wiring in the module page using `apiFetch` and `form-errors.ts`.
 
 ## Useful commands
 

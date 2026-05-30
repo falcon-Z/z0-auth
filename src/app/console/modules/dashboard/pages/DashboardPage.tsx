@@ -1,23 +1,20 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@z0/components/ui/card";
+import { ConsolePage } from "../../../components/layout/ConsolePage";
 import { useSession } from "../../../context/session-context";
 
 export function DashboardPage() {
   const { session } = useSession();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">
-          Platform setup is complete. Use the header to manage your session and organization context.
-        </p>
-      </div>
-
+    <ConsolePage
+      title="Dashboard"
+      description="Platform setup is complete. Use the sidebar to open tenant and application settings as they ship."
+    >
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Your account</CardTitle>
-            <CardDescription>Signed in across the platform and active organization.</CardDescription>
+            <CardDescription>Signed in across the platform and active tenant.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <p>
@@ -37,11 +34,11 @@ export function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Active organization</CardTitle>
+            <CardTitle>Active tenant</CardTitle>
             <CardDescription>
               {session.canSwitchOrganization
-                ? "Use the organization control in the header to switch context."
-                : "You belong to one organization on this instance."}
+                ? "Use the tenant control in the header to switch context."
+                : "You belong to one tenant on this instance."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
@@ -56,21 +53,19 @@ export function DashboardPage() {
                   {session.tenant.slug}
                 </p>
                 <p>
-                  <span className="text-muted-foreground">Organization roles </span>
+                  <span className="text-muted-foreground">Tenant roles </span>
                   {session.tenantRoles?.length ? session.tenantRoles.join(", ") : "—"}
                 </p>
               </>
             ) : (
-              <p className="text-muted-foreground">No organization selected.</p>
+              <p className="text-muted-foreground">No tenant selected.</p>
             )}
             {session.organizations && session.organizations.length > 1 ? (
-              <p className="text-muted-foreground">
-                Member of {session.organizations.length} organizations.
-              </p>
+              <p className="text-muted-foreground">Member of {session.organizations.length} tenants.</p>
             ) : null}
           </CardContent>
         </Card>
       </div>
-    </div>
+    </ConsolePage>
   );
 }

@@ -1,17 +1,16 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { AppShell } from "./components/shell/AppShell";
 import { SessionProvider } from "./context/session-context";
-import { ConsoleLayout } from "./components/layout/ConsoleLayout";
-import { dashboardRoutes } from "./modules/dashboard/routes";
-import { clientsRoutes } from "./modules/clients/routes";
+import { consoleRoutes } from "./routes";
 
 export function App() {
   return (
     <BrowserRouter>
       <SessionProvider>
         <Routes>
-          <Route element={<ConsoleLayout />}>
-            {[...dashboardRoutes, ...clientsRoutes].map((route) => (
+          <Route element={<AppShell />}>
+            {consoleRoutes.map((route) => (
               <Route key={route.path} path={route.path} element={route.element} />
             ))}
             <Route path="*" element={<Navigate to="/" replace />} />

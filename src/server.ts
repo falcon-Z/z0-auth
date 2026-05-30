@@ -1,18 +1,15 @@
 import { serve } from "bun";
 
-import { authApiRoutes } from "./api/auth/routes";
+import { apiRouteMap, dispatchApiRequest } from "./api/dispatch";
 import { checkDatabaseHealth } from "./api/lib/db";
 import { loadConfig } from "./api/lib/config";
 import { loadRootEnv } from "./lib/load-root-env";
 
 loadRootEnv();
 import { printStartupSummary } from "./api/lib/startup-log";
-import { applySetupGuard } from "./api/lib/router";
-import { healthApiRoutes } from "./api/health/routes";
-import { setupApiRoutes } from "./api/setup/routes";
-import { v1ApiRoutes } from "./api/v1/routes";
 import { isSetupComplete } from "./api/lib/platform";
 import { authWebRoutes } from "./web/auth/routes";
+import { inviteWebRoutes } from "./web/auth/invite-routes";
 import { oauthWebRoutes } from "./web/oauth/routes";
 import consoleApp from "./app/console/index.html";
 
@@ -34,20 +31,15 @@ if (config.nodeEnv === "production" && dbHealth.ok) {
   }
 }
 
-const apiRoutes = applySetupGuard({
-  ...healthApiRoutes,
-  ...setupApiRoutes,
-  ...authApiRoutes,
-  ...v1ApiRoutes,
-});
-
 const server = serve({
   hostname: config.bindAddress,
   port: config.port,
   routes: {
     ...authWebRoutes,
+    ...inviteWebRoutes,
     ...oauthWebRoutes,
-    ...apiRoutes,
+    ...apiRouteMap,
+    "/api/*": dispatchApiRequest,
     "/": consoleApp,
     "/*": consoleApp,
   },
