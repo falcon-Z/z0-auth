@@ -14,10 +14,18 @@ type DataTableProps<T> = {
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  rowActions?: (row: T) => ReactNode;
   emptyMessage?: string;
 };
 
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, emptyMessage = "No rows" }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  rowActions,
+  emptyMessage = "No rows",
+}: DataTableProps<T>) {
   if (rows.length === 0) {
     return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>;
   }
@@ -36,6 +44,11 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, emptyMessage =
                 {col.header}
               </th>
             ))}
+            {rowActions ? (
+              <th scope="col" className="px-4 py-3 text-right font-medium text-muted-foreground">
+                Actions
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -61,6 +74,15 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, emptyMessage =
                   {col.cell(row)}
                 </td>
               ))}
+              {rowActions ? (
+                <td
+                  className="px-4 py-3 text-right"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-end gap-1">{rowActions(row)}</div>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>

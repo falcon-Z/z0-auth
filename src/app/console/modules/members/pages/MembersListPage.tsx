@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import type { CreateInviteResponse, PendingInvite, TenantMember } from "@z0/contracts/invites";
 import { Badge } from "@z0/components/ui/badge";
@@ -11,14 +10,14 @@ import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { useMembersData } from "../../../hooks/use-members-data";
 import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
 import { useSession } from "../../../context/session-context";
+import { removeMember, revokeTenantInvite, updateMemberRoles } from "../../../lib/members-api";
 import { formatRoleKey } from "../../../lib/tenant-permissions";
 import { MembersListSkeleton } from "../MembersAccessGate";
-import { BulkInviteDialog } from "../components/BulkInviteDialog";
+import { EditRolesDialog } from "../components/EditRolesDialog";
 import { InviteFormDialog } from "../components/InviteFormDialog";
 import { InviteResultDialog } from "../components/InviteResultDialog";
 
 export function MembersListPage() {
-  const navigate = useNavigate();
   const { session } = useSession();
   const { canInviteMembers } = useTenantPermissions();
   const tenantId = session.tenant!.id;
@@ -31,13 +30,36 @@ export function MembersListPage() {
 
   const [tab, setTab] = useState<"members" | "invites">("members");
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [bulkOpen, setBulkOpen] = useState(false);
   const [createdInvite, setCreatedInvite] = useState<CreateInviteResponse | null>(null);
+  const [editMember, setEditMember] = useState<TenantMember | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const tabs = [
     { id: "members", label: "Members" },
     ...(canInviteMembers ? [{ id: "invites", label: "Invites" }] : []),
   ];
+
+  async function handleRemoveMember(member: TenantMember) {
+    if (!window.confirm(`Remove ${member.name} from this organization?`)) return;
+    setBusyId(member.userId);
+    try {
+      await removeMember(tenantId, member.userId);
+      await reload();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleRevokeInvite(invite: PendingInvite) {
+    if (!window.confirm(`Revoke the invitation for ${invite.email}?`)) return;
+    setBusyId(invite.id);
+    try {
+      await revokeTenantInvite(tenantId, invite.id);
+      await reload();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (loading) return <MembersListSkeleton />;
 
@@ -56,12 +78,7 @@ export function MembersListPage() {
         title="Members"
         actions={
           canInviteMembers ? (
-            <>
-              <Button variant="outline" onClick={() => setBulkOpen(true)}>
-                Bulk invite
-              </Button>
-              <Button onClick={() => setInviteOpen(true)}>Invite</Button>
-            </>
+            <Button onClick={() => setInviteOpen(true)}>Invite</Button>
           ) : undefined
         }
       />
@@ -76,9 +93,7 @@ export function MembersListPage() {
             {
               id: "name",
               header: "Name",
-              cell: (row) => (
-                <span className="font-medium">{row.name}</span>
-              ),
+              cell: (row) => <span className="font-medium">{row.name}</span>,
             },
             { id: "email", header: "Email", cell: (row) => row.email },
             {
@@ -102,8 +117,33 @@ export function MembersListPage() {
           ]}
           rows={members}
           rowKey={(row) => row.userId}
-          onRowClick={(row) => navigate(`/members/${row.userId}`)}
           emptyMessage="No members"
+          rowActions={
+            canInviteMembers
+              ? (member) => {
+                  const isSelf = member.userId === session.user!.id;
+                  return (
+                    <>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setEditMember(member)}>
+                        Roles
+                      </Button>
+                      {!isSelf ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          disabled={busyId === member.userId}
+                          onClick={() => void handleRemoveMember(member)}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </>
+                  );
+                }
+              : undefined
+          }
         />
       )}
 
@@ -137,8 +177,19 @@ export function MembersListPage() {
           ]}
           rows={invites}
           rowKey={(row) => row.id}
-          onRowClick={(row) => navigate(`/members/invites/${row.id}`)}
           emptyMessage="No pending invites"
+          rowActions={(invite) => (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={busyId === invite.id}
+              onClick={() => void handleRevokeInvite(invite)}
+            >
+              Revoke
+            </Button>
+          )}
         />
       )}
 
@@ -150,15 +201,20 @@ export function MembersListPage() {
         onCreated={setCreatedInvite}
       />
 
-      <BulkInviteDialog
-        open={bulkOpen}
-        onOpenChange={setBulkOpen}
-        roles={roles}
-        onSubmitRow={(body) => submitInvite(body)}
-        onDone={() => void reload()}
-      />
-
       <InviteResultDialog invite={createdInvite} onClose={() => setCreatedInvite(null)} />
+
+      {editMember ? (
+        <EditRolesDialog
+          open
+          onOpenChange={(open) => !open && setEditMember(null)}
+          roles={roles}
+          initialRoleKeys={editMember.roleKeys}
+          onSave={async (roleKeys) => {
+            await updateMemberRoles(tenantId, editMember.userId, roleKeys);
+            await reload();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
