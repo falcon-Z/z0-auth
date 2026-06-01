@@ -8,11 +8,13 @@ import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { ApiError } from "../../../lib/api";
 import { fetchPlatformUsers, updateUserStatus } from "../../../lib/users-api";
+import { sessionHasPermission } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
 import { UsersListSkeleton } from "../UsersAccessGate";
 
 export function UsersListPage() {
   const { session } = useSession();
+  const canWriteUsers = sessionHasPermission(session, "platform:users:write");
   const [users, setUsers] = useState<PlatformUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +118,9 @@ export function UsersListPage() {
         rows={users}
         rowKey={(row) => row.id}
         emptyMessage="No users"
-        rowActions={(user) => {
+        rowActions={
+          canWriteUsers
+            ? (user) => {
           const isSelf = user.id === session.user?.id;
           if (isSelf) return null;
           const disabling = user.status === "active";
@@ -132,7 +136,9 @@ export function UsersListPage() {
               {disabling ? "Disable" : "Enable"}
             </Button>
           );
-        }}
+            }
+            : undefined
+        }
       />
     </div>
   );

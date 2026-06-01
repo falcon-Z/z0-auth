@@ -1,6 +1,7 @@
 import type { AuthenticatedSessionPayload, SessionResponse } from "@z0/contracts/auth";
 
 import { getUserById } from "./auth";
+import { listPlatformPermissionKeys, listUserPermissionKeys } from "./permissions";
 import { getPlatformRoleKeys, getTenantRoleKeys } from "./roles";
 import { listUserTenants, resolveActiveTenant, type Tenant } from "./tenant";
 
@@ -20,6 +21,9 @@ export async function buildAuthenticatedSessionPayload(userId: string): Promise<
   const tenant = activeTenant ? tenantToOrganization(activeTenant) : undefined;
   const tenantRoles = activeTenant ? await getTenantRoleKeys(userId, activeTenant.id) : [];
   const canSwitchOrganization = organizations.length > 1;
+  const permissions = activeTenant
+    ? await listUserPermissionKeys(userId, activeTenant.id)
+    : await listPlatformPermissionKeys(userId);
 
   const payload: AuthenticatedSessionPayload = {
     authenticated: true,
@@ -28,6 +32,7 @@ export async function buildAuthenticatedSessionPayload(userId: string): Promise<
     tenantRoles,
     organizations,
     canSwitchOrganization,
+    permissions,
   };
   if (tenant) payload.tenant = tenant;
   return payload;

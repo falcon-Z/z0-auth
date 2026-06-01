@@ -23,6 +23,7 @@ import { getDb } from "./db";
 import { problem } from "./http";
 import { hashPassword } from "./password";
 import { resolveSession } from "./session";
+import { assertCanAssignTenantRoles, assertNotLastTenantAdmin } from "./rbac";
 import { assignTenantRole } from "./roles";
 import { getTenantForMember } from "./tenant";
 import { createSession, sessionCookieHeader } from "./session";
@@ -173,6 +174,9 @@ export async function createTenantInvite(
   const email = normalizeEmail(body.email);
   const invitedName = body.invitedName.trim();
   const roleKeys = [...new Set(body.roleKeys)];
+
+  const roleAssignment = await assertCanAssignTenantRoles(invitedByUserId, tenantId, roleKeys);
+  if (!roleAssignment.ok) return roleAssignment;
 
   const [userRow] = await getDb()`SELECT id FROM users WHERE lower(email) = ${email} LIMIT 1`;
   if (userRow) {
@@ -621,6 +625,12 @@ export async function updateMemberRoles(
   }
 
   const keys = [...new Set(roleKeys)];
+  const roleAssignment = await assertCanAssignTenantRoles(actorUserId, tenantId, keys);
+  if (!roleAssignment.ok) return roleAssignment;
+
+  const lastAdmin = await assertNotLastTenantAdmin(tenantId, targetUserId, keys);
+  if (!lastAdmin.ok) return lastAdmin;
+
   const membershipRole = primaryMembershipRole(keys);
 
   await getDb().begin(async (tx) => {
@@ -670,6 +680,9 @@ export async function removeTenantMember(
       }),
     };
   }
+
+  const lastAdmin = await assertNotLastTenantAdmin(tenantId, targetUserId);
+  if (!lastAdmin.ok) return lastAdmin;
 
   await getDb().begin(async (tx) => {
     await tx`

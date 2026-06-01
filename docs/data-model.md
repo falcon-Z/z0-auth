@@ -160,11 +160,15 @@ Start small; expand per module in the validation matrix.
 
 | Permission | Typical scope |
 |------------|----------------|
-| `platform:manage` | Platform |
+| `platform:users:read` / `platform:users:write` | Platform user lifecycle |
+| `platform:sessions:revoke` | Support — revoke any session |
+| `platform:tenants:read` | Platform — org metadata |
 | `tenants:create` | Platform only (`POST /api/v1/tenants`) |
 | `tenants:read` | Org |
-| `users:read` / `users:invite` | Org |
-| `sessions:revoke` | Self + org admin |
+| `users:read` / `users:invite` | Org members |
+| `sessions:revoke` | Org admin/manager |
+
+Normative role bundles: `docs/rbac.md`.
 
 Map existing enum roles to permission bundles in migration seed data.
 
@@ -185,6 +189,7 @@ Map existing enum roles to permission bundles in migration seed data.
 
 ## Related docs
 
+- [rbac.md](./rbac.md)
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
 - [api/security-contract.md](./api/security-contract.md)
 - [api/CONTRACTS.md](./api/CONTRACTS.md)

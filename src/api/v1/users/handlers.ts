@@ -13,7 +13,7 @@ function userIdFrom(req: RoutedRequest): string {
 }
 
 export async function handleListUsers(req: RoutedRequest): Promise<Response> {
-  const perm = await requirePlatformPermission(req, "platform:manage");
+  const perm = await requirePlatformPermission(req, "platform:users:read");
   if (!perm.ok) return perm.response;
 
   const users = await listPlatformUsers();
@@ -21,7 +21,7 @@ export async function handleListUsers(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handleGetUser(req: RoutedRequest): Promise<Response> {
-  const perm = await requirePlatformPermission(req, "platform:manage");
+  const perm = await requirePlatformPermission(req, "platform:users:read");
   if (!perm.ok) return perm.response;
 
   const user = await getPlatformUser(userIdFrom(req));
@@ -43,7 +43,7 @@ export async function handlePatchUser(req: RoutedRequest): Promise<Response> {
   const csrfError = validateCsrf(req);
   if (csrfError) return csrfError;
 
-  const perm = await requirePlatformPermission(req, "platform:manage");
+  const perm = await requirePlatformPermission(req, "platform:users:write");
   if (!perm.ok) return perm.response;
 
   const parsed = await parseJsonBody<PatchPlatformUserRequest>(req);

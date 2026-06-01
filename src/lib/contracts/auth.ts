@@ -39,6 +39,8 @@ export type SessionResponse = {
   organizations?: SessionTenant[];
   /** True when the user belongs to more than one organization; console must show the switcher. */
   canSwitchOrganization?: boolean;
+  /** Effective permission keys (platform + active organization). Authoritative for console gates. */
+  permissions?: string[];
 };
 
 export type AuthenticatedSessionPayload = SessionResponse & {
@@ -48,4 +50,5 @@ export type AuthenticatedSessionPayload = SessionResponse & {
   tenantRoles: string[];
   organizations: SessionTenant[];
   canSwitchOrganization: boolean;
+  permissions: string[];
 };

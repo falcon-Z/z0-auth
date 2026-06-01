@@ -61,6 +61,10 @@ export const ErrorCodes = {
   CANNOT_DISABLE_SELF: "cannot_disable_self",
   /** Cannot disable the last active platform administrator. */
   LAST_PLATFORM_ADMIN: "last_platform_admin",
+  /** Cannot remove or demote the last organization administrator. */
+  LAST_TENANT_ADMIN: "last_tenant_admin",
+  /** Actor cannot assign the requested tenant role keys. */
+  ROLE_ASSIGNMENT_DENIED: "role_assignment_denied",
   /** Session id not found or not active for the current user. */
   SESSION_NOT_FOUND: "session_not_found",
   /** Organization slug format is invalid. */

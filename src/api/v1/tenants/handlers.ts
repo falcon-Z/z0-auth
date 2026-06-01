@@ -16,7 +16,6 @@ import {
 } from "../../lib/invites";
 import { requirePermission, userHasPermission } from "../../lib/permissions";
 import type { RoutedRequest } from "../../lib/path-router";
-import { getTenantForMember } from "../../lib/tenant";
 import { ErrorCodes } from "@z0/contracts/errors";
 
 function tenantIdFrom(req: RoutedRequest): string {
@@ -44,8 +43,6 @@ export async function handleCreateTenant(req: RoutedRequest): Promise<Response> 
 }
 
 async function canReadTenantMembers(userId: string, tenantId: string): Promise<boolean> {
-  if (await userHasPermission(userId, "platform:manage")) return true;
-  if (!(await getTenantForMember(userId, tenantId))) return false;
   return userHasPermission(userId, "users:read", tenantId);
 }
 

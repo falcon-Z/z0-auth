@@ -8,7 +8,7 @@ import { sessionHasPermission } from "../../lib/tenant-permissions";
 export function UsersAccessGate({ children }: { children: ReactNode }) {
   const { session } = useSession();
 
-  if (!sessionHasPermission(session, "platform:manage")) {
+  if (!sessionHasPermission(session, "platform:users:read")) {
     return (
       <Alert>
         <AlertTitle>Access denied</AlertTitle>

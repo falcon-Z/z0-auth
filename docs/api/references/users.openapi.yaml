@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: z0-auth Platform Users API
   version: 0.1.0
-  description: Platform-scoped user lifecycle (list, disable/enable). Requires `platform:manage`.
+  description: Platform-scoped user lifecycle. List/get require `platform:users:read`; patch requires `platform:users:write`.
 servers:
   - url: http://localhost:3000
 tags:

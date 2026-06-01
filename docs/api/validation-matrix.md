@@ -136,7 +136,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Rule | Code | HTTP | UI |
 |------|------|------|-----|
 | Session | Required | — | 401 | Login |
-| Permission | `users:read` for tenant (or `platform:manage`) | `permission_denied` | 403 | Members page empty state |
+| Permission | `users:read` for tenant (platform scope satisfies) | `permission_denied` | 403 | Members page empty state |
 | Tenant | Valid UUID | — | 404 | — |
 
 ---
@@ -150,6 +150,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | `email` | Valid email | `invalid_email` | 400 | Inline |
 | `invitedName` | Non-empty | `required` | 400 | Inline |
 | `roleKeys` | ≥1 valid tenant role | `invalid_role` / `required` | 400 | Checkboxes |
+| `roleKeys` | Actor may assign (admin: all; manager: member/manager only) | `role_assignment_denied` | 403 | Role select filtered |
 | Email | Not already member | `invite_already_member` | 409 | Inline |
 | Email | No duplicate pending invite | `invite_invalid` | 409 | Inline |
 
@@ -208,7 +209,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Input | Rule | Code | HTTP | UI | Test |
 |-------|------|------|------|-----|------|
 | Session | Required | — | 401 | Redirect to login | `users-lifecycle` |
-| Permission | `platform:manage` | `permission_denied` | 403 | Users page empty/denied | `users-lifecycle` |
+| Permission | `platform:users:read` | `permission_denied` | 403 | Users page empty/denied | `users-lifecycle` |
 | Success | — | — | 200 `{ users }` | Table of users | `users-lifecycle` |
 
 ---
@@ -217,7 +218,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 
 | Input | Rule | Code | HTTP | UI | Test |
 |-------|------|------|------|-----|------|
-| Permission | `platform:manage` | `permission_denied` | 403 | — | `users-lifecycle` |
+| Permission | `platform:users:read` | `permission_denied` | 403 | — | `users-lifecycle` |
 | `userId` | Known user | `user_not_found` | 404 | — | `users-lifecycle` |
 | Success | — | — | 200 user | Detail row | `users-lifecycle` |
 
@@ -228,7 +229,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Input | Rule | Code | HTTP | UI | Test |
 |-------|------|------|------|-----|------|
 | CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
-| Permission | `platform:manage` | `permission_denied` | 403 | — | `users-lifecycle` |
+| Permission | `platform:users:write` | `permission_denied` | 403 | Hide disable/enable | `users-lifecycle` |
 | `status` | `active` or `disabled` | `required` / validation | 400 | Inline | `users-lifecycle` |
 | Target | Not self | `cannot_disable_self` | 403 | Inline error | `users-lifecycle` |
 | Target | Not last active platform admin when disabling | `last_platform_admin` | 403 | Inline error | `users-lifecycle` |

@@ -11,7 +11,7 @@ import { useMembersData } from "../../../hooks/use-members-data";
 import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
 import { useSession } from "../../../context/session-context";
 import { removeMember, revokeTenantInvite, updateMemberRoles } from "../../../lib/members-api";
-import { formatRoleKey } from "../../../lib/tenant-permissions";
+import { assignableRolesFromSession, formatRoleKey } from "../../../lib/tenant-permissions";
 import { MembersListSkeleton } from "../MembersAccessGate";
 import { EditRolesDialog } from "../components/EditRolesDialog";
 import { InviteFormDialog } from "../components/InviteFormDialog";
@@ -33,6 +33,9 @@ export function MembersListPage() {
   const [createdInvite, setCreatedInvite] = useState<CreateInviteResponse | null>(null);
   const [editMember, setEditMember] = useState<TenantMember | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const assignableRoleKeys = new Set(assignableRolesFromSession(session));
+  const assignableRoleList = roles.filter((role) => assignableRoleKeys.has(role.key));
 
   const tabs = [
     { id: "members", label: "Members" },
@@ -196,7 +199,7 @@ export function MembersListPage() {
       <InviteFormDialog
         open={inviteOpen}
         onOpenChange={setInviteOpen}
-        roles={roles}
+        roles={assignableRoleList}
         onSubmit={(body) => submitInvite(body)}
         onCreated={setCreatedInvite}
       />
@@ -207,7 +210,7 @@ export function MembersListPage() {
         <EditRolesDialog
           open
           onOpenChange={(open) => !open && setEditMember(null)}
-          roles={roles}
+          roles={assignableRoleList}
           initialRoleKeys={editMember.roleKeys}
           onSave={async (roleKeys) => {
             await updateMemberRoles(tenantId, editMember.userId, roleKeys);

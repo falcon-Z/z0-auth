@@ -118,7 +118,7 @@ run("platform user lifecycle", () => {
     expect(body.users.some((u) => u.email === "bob@example.com")).toBe(true);
   });
 
-  test("denies user list without platform:manage", async () => {
+  test("denies user list without platform:users:read", async () => {
     const { cookie } = await login("bob@example.com", bobPassword);
     const res = await dispatchApi(
       buildRequest("GET", "/api/v1/users", withSession(cookie)),

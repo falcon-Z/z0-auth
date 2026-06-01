@@ -92,7 +92,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "available",
         module: "P2-M2",
         summary: "Platform user lifecycle — disable and re-enable accounts.",
-        requiredPermission: "platform:manage",
+        requiredPermission: "platform:users:read",
       },
       {
         id: "roles",
@@ -112,6 +112,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "available",
         module: "P2-M4",
         summary: "Organizations you belong to; create new ones when permitted.",
+        requiredPermission: "tenants:read",
       },
     ],
   },
