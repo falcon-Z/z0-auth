@@ -5,9 +5,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 
 import { SessionGate } from "../components/shell/SessionGate";
 import { loadSession, postActiveTenant, postLogout } from "../lib/api";
@@ -22,6 +24,28 @@ type SessionContextValue = {
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+/** Re-check session with the server after in-app navigation or tab focus (revoked cookies). */
+function SessionRevalidator({ onRevalidate }: { onRevalidate: () => Promise<void> }) {
+  const { pathname } = useLocation();
+  const initialPath = useRef(pathname);
+
+  useEffect(() => {
+    if (pathname === initialPath.current) return;
+    initialPath.current = pathname;
+    void onRevalidate();
+  }, [pathname, onRevalidate]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void onRevalidate();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [onRevalidate]);
+
+  return null;
+}
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -52,7 +76,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [refreshSession]);
 
   const signOut = useCallback(async () => {
-    await postLogout();
+    try {
+      await postLogout();
+    } catch {
+      // Idempotent: cookie may already be cleared (e.g. revoke current session).
+    }
     window.location.href = "/auth/login";
   }, []);
 
@@ -93,7 +121,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return <SessionGate />;
   }
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={value}>
+      <SessionRevalidator onRevalidate={refreshSession} />
+      {children}
+    </SessionContext.Provider>
+  );
 }
 
 export function useSession(): SessionContextValue {

@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { ApiError } from "../../../lib/api";
+import { useSession } from "../../../context/session-context";
 import { fetchSessions, revokeOtherSessions, revokeSession } from "../../../lib/sessions-api";
 
 function formatWhen(iso: string): string {
@@ -19,6 +20,7 @@ function formatWhen(iso: string): string {
 }
 
 export function SessionsPage() {
+  const { signOut } = useSession();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +53,10 @@ export function SessionsPage() {
     try {
       const result = await revokeSession(row.id);
       if (result.revokedCurrent) {
-        window.location.href = "/auth/login";
+        await signOut();
         return;
       }
-      setSessions((prev) => prev.filter((s) => s.id !== row.id));
+      await reload();
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "Could not revoke session.");
     } finally {

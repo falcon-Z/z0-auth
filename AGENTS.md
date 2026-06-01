@@ -44,6 +44,10 @@ Think from two angles:
 
 If the task is vague, ask clarifying questions. Do not guess scope.
 
+## Commit and push
+
+When I ask to **commit and push** (or similar), read **`.agents/skills/code-review/SKILL.md`**, run CodeRabbit per that skill, fix feedback, then commit and push. See `.cursor/rules/commit-and-push.mdc`.
+
 ## Feature alignment
 
 When you propose a feature, share your idea and push back where useful. I should convince you of my plan, or we accept your proposal — so we align on the best solution before building.
