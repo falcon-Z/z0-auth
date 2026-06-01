@@ -20,12 +20,15 @@ export async function createTenant(body: CreateTenantRequest): Promise<TenantSum
   return tenant;
 }
 
-export function slugifyOrganizationName(name: string): string {
+export function slugifyTenantName(name: string): string {
   const base = name
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .slice(0, 64)
     .replace(/^-+|-+$/g, "");
-  return base || "organization";
+  return base || "tenant";
 }
+
+/** @deprecated Use slugifyTenantName */
+export const slugifyOrganizationName = slugifyTenantName;

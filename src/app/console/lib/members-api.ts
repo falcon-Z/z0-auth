@@ -54,7 +54,7 @@ export async function removeMember(tenantId: string, userId: string): Promise<vo
 export function buildInviteMailto(invite: CreateInviteResponse): string {
   const subject = encodeURIComponent(`Invitation to join — ${invite.invitedName}`);
   const body = encodeURIComponent(
-    `You have been invited to join our organization.\n\nOpen this link to accept or decline:\n${invite.inviteUrl}\n\nThis link expires on ${new Date(invite.expiresAt).toLocaleString()}.`,
+    `You have been invited to join our tenant.\n\nOpen this link to accept or decline:\n${invite.inviteUrl}\n\nThis link expires on ${new Date(invite.expiresAt).toLocaleString()}.`,
   );
   return `mailto:${encodeURIComponent(invite.email)}?subject=${subject}&body=${body}`;
 }

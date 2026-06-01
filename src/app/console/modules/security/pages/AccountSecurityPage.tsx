@@ -4,7 +4,7 @@ import { passwordChecklistRules, getPasswordChecklistStates } from "@z0/contract
 import { Button } from "@z0/components/ui/button";
 import { Input } from "@z0/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
-import { ListPageHeader } from "../../../components/crud/ListPageHeader";
+import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
 import { Field } from "../../members/components/RolePicker";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
@@ -63,7 +63,7 @@ export function AccountSecurityPage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
-      <ListPageHeader title="Account security" />
+      <DetailPageHeader backTo="/profile" backLabel="Your account" title="Password" />
 
       <p className="text-sm text-muted-foreground">
         Change the password for {session.user?.email}. Other signed-in sessions will be signed out.

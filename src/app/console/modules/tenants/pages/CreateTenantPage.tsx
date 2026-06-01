@@ -10,7 +10,7 @@ import { Label } from "@z0/components/ui/label";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { createTenantInvite, fetchTenantRoles } from "../../../lib/members-api";
-import { createTenant, slugifyOrganizationName } from "../../../lib/tenants-api";
+import { createTenant, slugifyTenantName } from "../../../lib/tenants-api";
 import { sessionHasPermission } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
 import { InviteFormDialog } from "../../members/components/InviteFormDialog";
@@ -31,14 +31,13 @@ export function CreateTenantPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [created, setCreated] = useState<TenantSummary | null>(null);
-  const [joined, setJoined] = useState(false);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [createdInvite, setCreatedInvite] = useState<CreateInviteResponse | null>(null);
 
   useEffect(() => {
     if (!slugTouched) {
-      setSlug(name ? slugifyOrganizationName(name) : "");
+      setSlug(name ? slugifyTenantName(name) : "");
     }
   }, [name, slugTouched]);
 
@@ -55,7 +54,7 @@ export function CreateTenantPage() {
     return (
       <Alert>
         <AlertTitle>Access denied</AlertTitle>
-        <AlertDescription>You need permission to create organizations on this platform.</AlertDescription>
+        <AlertDescription>You need permission to create tenants on this platform.</AlertDescription>
       </Alert>
     );
   }
@@ -75,15 +74,16 @@ export function CreateTenantPage() {
       if (joinAsAdmin) {
         await switchOrganization(tenant.id);
         await refreshSession();
+        navigate(`/tenants/${tenant.id}`, { replace: true });
+        return;
       }
       setCreated(tenant);
-      setJoined(joinAsAdmin);
     } catch (e) {
       if (e instanceof ApiError) {
         setFieldErrors(fieldErrorsFromProblem(e.problem));
         if (!e.problem.errors?.length) setFormError(e.message);
       } else {
-        setFormError("Could not create organization.");
+        setFormError("Could not create tenant.");
       }
     } finally {
       setSubmitting(false);
@@ -91,7 +91,7 @@ export function CreateTenantPage() {
   }
 
   async function handleInvite(body: { email: string; invitedName: string; roleKeys: string[] }) {
-    if (!created) throw new Error("No organization");
+    if (!created) throw new Error("No tenant");
     return createTenantInvite(created.id, body);
   }
 
@@ -99,32 +99,27 @@ export function CreateTenantPage() {
     return (
       <div className="mx-auto max-w-lg space-y-6">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Organization created</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Tenant created</h1>
           <p className="text-muted-foreground text-sm">
             <span className="font-medium text-foreground">{created.name}</span> ({created.slug}) is ready.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {!joined ? (
-            <Button type="button" onClick={() => void openInviteDialog()}>
-              Invite administrator
-            </Button>
-          ) : null}
-          {joined ? (
-            <Button type="button" onClick={() => navigate("/members")}>
-              Go to members
-            </Button>
-          ) : null}
-          <Button type="button" variant="outline" onClick={() => navigate("/tenants")}>
-            Back to organizations
+          <Button type="button" onClick={() => void openInviteDialog()}>
+            Invite administrator
+          </Button>
+          <Button type="button" variant="outline" asChild>
+            <Link to={`/tenants/${created.id}`}>View tenant</Link>
+          </Button>
+          <Button type="button" variant="outline" asChild>
+            <Link to="/tenants">All tenants</Link>
           </Button>
           <Button
             type="button"
             variant="ghost"
             onClick={() => {
               setCreated(null);
-              setJoined(false);
               setName("");
               setSlug("");
               setSlugTouched(false);
@@ -136,18 +131,20 @@ export function CreateTenantPage() {
           </Button>
         </div>
 
-        {!joined ? (
-          <InviteFormDialog
-            open={inviteOpen}
-            onOpenChange={setInviteOpen}
-            roles={roles.filter((r) => r.key === "tenant_admin").length > 0 ? roles.filter((r) => r.key === "tenant_admin") : roles}
-            onSubmit={handleInvite}
-            onCreated={(result) => {
-              setCreatedInvite(result);
-              setInviteOpen(false);
-            }}
-          />
-        ) : null}
+        <InviteFormDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          roles={
+            roles.filter((r) => r.key === "tenant_admin").length > 0
+              ? roles.filter((r) => r.key === "tenant_admin")
+              : roles
+          }
+          onSubmit={handleInvite}
+          onCreated={(result) => {
+            setCreatedInvite(result);
+            setInviteOpen(false);
+          }}
+        />
 
         <InviteResultDialog invite={createdInvite} onClose={() => setCreatedInvite(null)} />
       </div>
@@ -157,10 +154,9 @@ export function CreateTenantPage() {
   return (
     <div className="mx-auto max-w-lg space-y-6">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Create organization</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Create tenant</h1>
         <p className="text-muted-foreground text-sm">
-          Provision a new organization on this platform. You can join as administrator or invite someone else to
-          manage it.
+          Provision a new tenant on this platform. You can join as administrator or invite someone else to manage it.
         </p>
       </div>
 
@@ -173,9 +169,9 @@ export function CreateTenantPage() {
 
       <form className="space-y-5" onSubmit={(e) => void handleSubmit(e)}>
         <div className="space-y-2">
-          <Label htmlFor="org-name">Name</Label>
+          <Label htmlFor="tenant-name">Name</Label>
           <Input
-            id="org-name"
+            id="tenant-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -185,9 +181,9 @@ export function CreateTenantPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="org-slug">Slug</Label>
+          <Label htmlFor="tenant-slug">Slug</Label>
           <Input
-            id="org-slug"
+            id="tenant-slug"
             value={slug}
             onChange={(e) => {
               setSlugTouched(true);
@@ -211,7 +207,7 @@ export function CreateTenantPage() {
           />
           <div className="space-y-1">
             <Label htmlFor="join-as-admin" className="leading-snug">
-              Add me as administrator of this organization
+              Add me as administrator of this tenant
             </Label>
             <p className="text-muted-foreground text-xs">
               When unchecked, you will not be a member until you invite yourself or another administrator accepts an
@@ -222,7 +218,7 @@ export function CreateTenantPage() {
 
         <div className="flex flex-wrap gap-2">
           <Button type="submit" disabled={submitting}>
-            {submitting ? "Creating…" : "Create organization"}
+            {submitting ? "Creating…" : "Create tenant"}
           </Button>
           <Button type="button" variant="outline" asChild>
             <Link to="/tenants">Cancel</Link>

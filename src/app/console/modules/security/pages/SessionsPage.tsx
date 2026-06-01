@@ -5,7 +5,7 @@ import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
-import { ListPageHeader } from "../../../components/crud/ListPageHeader";
+import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
 import { ApiError } from "../../../lib/api";
 import { useSession } from "../../../context/session-context";
 import { fetchSessions, revokeOtherSessions, revokeSession } from "../../../lib/sessions-api";
@@ -92,7 +92,7 @@ export function SessionsPage() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <ListPageHeader title="Sessions" />
+        <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
         <p className="text-sm text-muted-foreground">Loading sessions…</p>
       </div>
     );
@@ -109,7 +109,9 @@ export function SessionsPage() {
 
   return (
     <div className="space-y-6">
-      <ListPageHeader
+      <DetailPageHeader
+        backTo="/profile"
+        backLabel="Your account"
         title="Sessions"
         actions={
           otherCount > 0 ? (
@@ -125,7 +127,7 @@ export function SessionsPage() {
         }
       />
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-muted-foreground text-sm">
         Devices where you are signed in. Sign out any session you do not recognize.
       </p>
 

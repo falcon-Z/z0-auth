@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { CreateInviteResponse, PendingInvite, TenantMember } from "@z0/contracts/invites";
 import { Badge } from "@z0/components/ui/badge";
@@ -6,6 +7,7 @@ import { Button } from "@z0/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
+import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { useMembersData } from "../../../hooks/use-members-data";
 import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
@@ -18,6 +20,7 @@ import { InviteFormDialog } from "../components/InviteFormDialog";
 import { InviteResultDialog } from "../components/InviteResultDialog";
 
 export function MembersListPage() {
+  const navigate = useNavigate();
   const { session } = useSession();
   const { canInviteMembers } = useTenantPermissions();
   const tenantId = session.tenant!.id;
@@ -43,7 +46,7 @@ export function MembersListPage() {
   ];
 
   async function handleRemoveMember(member: TenantMember) {
-    if (!window.confirm(`Remove ${member.name} from this organization?`)) return;
+    if (!window.confirm(`Remove ${member.name} from this tenant?`)) return;
     setBusyId(member.userId);
     try {
       await removeMember(tenantId, member.userId);
@@ -120,33 +123,35 @@ export function MembersListPage() {
           ]}
           rows={members}
           rowKey={(row) => row.userId}
+          onRowClick={(member) => navigate(`/members/${member.userId}`)}
           emptyMessage="No members"
-          rowActions={
-            canInviteMembers
-              ? (member) => {
-                  const isSelf = member.userId === session.user!.id;
-                  return (
-                    <>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setEditMember(member)}>
-                        Roles
+          rowActions={(member) => {
+            const isSelf = member.userId === session.user!.id;
+            return (
+              <>
+                <RowActionLink to={`/members/${member.userId}`}>View</RowActionLink>
+                {canInviteMembers ? (
+                  <>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setEditMember(member)}>
+                      Edit roles
+                    </Button>
+                    {!isSelf ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={busyId === member.userId}
+                        onClick={() => void handleRemoveMember(member)}
+                      >
+                        Remove
                       </Button>
-                      {!isSelf ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          disabled={busyId === member.userId}
-                          onClick={() => void handleRemoveMember(member)}
-                        >
-                          Remove
-                        </Button>
-                      ) : null}
-                    </>
-                  );
-                }
-              : undefined
-          }
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            );
+          }}
         />
       )}
 
@@ -180,18 +185,22 @@ export function MembersListPage() {
           ]}
           rows={invites}
           rowKey={(row) => row.id}
+          onRowClick={(invite) => navigate(`/members/invites/${invite.id}`)}
           emptyMessage="No pending invites"
           rowActions={(invite) => (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              disabled={busyId === invite.id}
-              onClick={() => void handleRevokeInvite(invite)}
-            >
-              Revoke
-            </Button>
+            <>
+              <RowActionLink to={`/members/invites/${invite.id}`}>View</RowActionLink>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={busyId === invite.id}
+                onClick={() => void handleRevokeInvite(invite)}
+              >
+                Revoke
+              </Button>
+            </>
           )}
         />
       )}

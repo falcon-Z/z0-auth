@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import type { PlatformUserSummary } from "@z0/contracts/users";
 import { Badge } from "@z0/components/ui/badge";
@@ -6,6 +7,7 @@ import { Button } from "@z0/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
+import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ApiError } from "../../../lib/api";
 import { fetchPlatformUsers, updateUserStatus } from "../../../lib/users-api";
 import { sessionHasPermission } from "../../../lib/tenant-permissions";
@@ -13,6 +15,7 @@ import { useSession } from "../../../context/session-context";
 import { UsersListSkeleton } from "../UsersAccessGate";
 
 export function UsersListPage() {
+  const navigate = useNavigate();
   const { session } = useSession();
   const canWriteUsers = sessionHasPermission(session, "platform:users:write");
   const [users, setUsers] = useState<PlatformUserSummary[]>([]);
@@ -117,28 +120,28 @@ export function UsersListPage() {
         ]}
         rows={users}
         rowKey={(row) => row.id}
+        onRowClick={(user) => navigate(`/users/${user.id}`)}
         emptyMessage="No users"
-        rowActions={
-          canWriteUsers
-            ? (user) => {
+        rowActions={(user) => {
           const isSelf = user.id === session.user?.id;
-          if (isSelf) return null;
-          const disabling = user.status === "active";
           return (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={disabling ? "text-destructive hover:text-destructive" : undefined}
-              disabled={busyId === user.id}
-              onClick={() => void handleToggleStatus(user)}
-            >
-              {disabling ? "Disable" : "Enable"}
-            </Button>
+            <>
+              <RowActionLink to={`/users/${user.id}`}>View</RowActionLink>
+              {canWriteUsers && !isSelf ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className={user.status === "active" ? "text-destructive hover:text-destructive" : undefined}
+                  disabled={busyId === user.id}
+                  onClick={() => void handleToggleStatus(user)}
+                >
+                  {user.status === "active" ? "Disable" : "Enable"}
+                </Button>
+              ) : null}
+            </>
           );
-            }
-            : undefined
-        }
+        }}
       />
     </div>
   );

@@ -14,6 +14,7 @@ import {
 } from "@z0/components/ui/sidebar";
 import { cn } from "../../lib/utils";
 import { CONSOLE_NAV } from "../../config/navigation";
+import { shouldHideTenantsNav } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
 import { sessionHasPermission } from "../../lib/tenant-permissions";
 import { NavStatusBadge } from "../layout/NavStatusBadge";
@@ -42,6 +43,10 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => {
+                  if (item.id === "tenants" && shouldHideTenantsNav(session)) {
+                    return null;
+                  }
+
                   const missingTenant = item.requiresTenant && !hasTenant;
                   const missingPermission =
                     item.requiredPermission && !sessionHasPermission(session, item.requiredPermission);

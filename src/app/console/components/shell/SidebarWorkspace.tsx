@@ -1,4 +1,5 @@
-import { Check, ChevronsUpDown, LogOut } from "lucide-react";
+import { Check, ChevronsUpDown, CircleUser, LogOut } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import {
@@ -113,6 +114,12 @@ export function SidebarWorkspace() {
             ) : null}
 
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/profile">
+                <CircleUser />
+                Your account
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={() => void signOut()}>
               <LogOut />
               Sign out

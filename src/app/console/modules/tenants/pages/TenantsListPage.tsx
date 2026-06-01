@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { isTenantOnlyConsoleUser, tenantMembershipCount } from "../../../lib/console-access";
+
 import type { TenantSummary } from "@z0/contracts/tenants";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
+import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ApiError } from "../../../lib/api";
 import { fetchTenants } from "../../../lib/tenants-api";
 import { sessionHasPermission } from "../../../lib/tenant-permissions";
@@ -40,7 +43,7 @@ export function TenantsListPage() {
     try {
       setTenants(await fetchTenants());
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load organizations.");
+      setError(e instanceof ApiError ? e.message : "Could not load tenants.");
     } finally {
       setLoading(false);
     }
@@ -50,18 +53,24 @@ export function TenantsListPage() {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (isTenantOnlyConsoleUser(session) && tenantMembershipCount(session) === 1 && session.tenant) {
+      navigate("/", { replace: true });
+    }
+  }, [navigate, session]);
+
   async function handleSwitch(tenant: TenantSummary) {
     if (tenant.id === activeId) {
-      navigate("/members");
+      navigate(`/tenants/${tenant.id}`);
       return;
     }
     setBusyId(tenant.id);
     setActionError(null);
     try {
       await switchOrganization(tenant.id);
-      navigate("/members");
+      navigate(`/tenants/${tenant.id}`);
     } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Could not switch organization.");
+      setActionError(e instanceof ApiError ? e.message : "Could not switch tenant.");
     } finally {
       setBusyId(null);
     }
@@ -81,17 +90,17 @@ export function TenantsListPage() {
   return (
     <div className="space-y-6">
       <ListPageHeader
-        title="Organizations"
+        title="Tenants"
         actions={
           canCreate ? (
             <Button asChild>
-              <Link to="/tenants/new">Create organization</Link>
+              <Link to="/tenants/new">Create tenant</Link>
             </Button>
           ) : undefined
         }
       />
 
-      <p className="text-muted-foreground text-sm">Organizations you belong to on this platform.</p>
+      <p className="text-muted-foreground text-sm">Tenants you belong to on this platform.</p>
 
       {actionError ? (
         <Alert variant="destructive">
@@ -127,13 +136,15 @@ export function TenantsListPage() {
         ]}
         rows={tenants}
         rowKey={(row) => row.id}
+        onRowClick={(tenant) => navigate(`/tenants/${tenant.id}`)}
         emptyMessage={
           canCreate
-            ? "You are not a member of any organization yet. Create one to get started."
-            : "You are not a member of any organization."
+            ? "You are not a member of any tenant yet. Create one to get started."
+            : "You are not a member of any tenant."
         }
         rowActions={(tenant) => (
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-1">
+            <RowActionLink to={`/tenants/${tenant.id}`}>View</RowActionLink>
             <Button
               type="button"
               variant="outline"
@@ -141,7 +152,7 @@ export function TenantsListPage() {
               disabled={busyId === tenant.id || switching}
               onClick={() => void handleSwitch(tenant)}
             >
-              {tenant.id === activeId ? "Members" : busyId === tenant.id ? "Switching…" : "Open members"}
+              {tenant.id === activeId ? "Open" : busyId === tenant.id ? "Switching…" : "Switch"}
             </Button>
           </div>
         )}
@@ -149,7 +160,7 @@ export function TenantsListPage() {
 
       {canCreate && tenants.length === 0 ? (
         <Button asChild variant="outline">
-          <Link to="/tenants/new">Create organization</Link>
+          <Link to="/tenants/new">Create tenant</Link>
         </Button>
       ) : null}
     </div>

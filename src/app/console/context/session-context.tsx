@@ -91,7 +91,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const next = await postActiveTenant(tenantId);
       setSession(next);
     } catch (error) {
-      setSwitchError(error instanceof Error ? error.message : "Could not switch tenant");
+      setSwitchError(error instanceof Error ? error.message : "Could not switch to that tenant.");
     } finally {
       setSwitching(false);
     }

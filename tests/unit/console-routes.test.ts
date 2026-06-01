@@ -12,19 +12,30 @@ describe("console routes", () => {
     }
   });
 
-  test("members and tenants use splat routes for nested pages", () => {
+  test("members, tenants, users, and profile use splat routes for nested pages", () => {
     expect(routePathForNav("/members")).toBe("/members/*");
     expect(routePathForNav("/tenants")).toBe("/tenants/*");
+    expect(routePathForNav("/users")).toBe("/users/*");
+    expect(routePathForNav("/profile")).toBe("/profile/*");
     const membersRoute = consoleRoutes.find((route) => route.path === "/members/*");
     const tenantsRoute = consoleRoutes.find((route) => route.path === "/tenants/*");
+    const profileRoute = consoleRoutes.find((route) => route.path === "/profile/*");
     expect(membersRoute?.element).toBeDefined();
     expect(tenantsRoute?.element).toBeDefined();
+    expect(profileRoute?.element).toBeDefined();
+  });
+
+  test("legacy security URLs redirect into profile", () => {
+    const accountRedirect = consoleRoutes.find((route) => route.path === "/security/account");
+    const sessionsRedirect = consoleRoutes.find((route) => route.path === "/security/sessions");
+    expect(accountRedirect?.element).toBeDefined();
+    expect(sessionsRedirect?.element).toBeDefined();
   });
 
   test("planned modules still resolve to a route", () => {
-    const sessions = CONSOLE_NAV_ITEMS.find((item) => item.id === "sessions");
-    expect(sessions).toBeDefined();
-    const route = consoleRoutes.find((r) => r.path === sessions!.path);
+    const mfa = CONSOLE_NAV_ITEMS.find((item) => item.id === "mfa");
+    expect(mfa).toBeDefined();
+    const route = consoleRoutes.find((r) => r.path === mfa!.path);
     expect(route?.element).toBeDefined();
   });
 });
