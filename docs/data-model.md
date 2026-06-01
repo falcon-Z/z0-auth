@@ -161,7 +161,7 @@ Start small; expand per module in the validation matrix.
 | Permission | Typical scope |
 |------------|----------------|
 | `platform:manage` | Platform |
-| `tenants:create` | Platform or org (product decision per endpoint) |
+| `tenants:create` | Platform only (`POST /api/v1/tenants`) |
 | `tenants:read` | Org |
 | `users:read` / `users:invite` | Org |
 | `sessions:revoke` | Self + org admin |
@@ -178,7 +178,7 @@ Map existing enum roles to permission bundles in migration seed data.
 | Session API + `POST /api/auth/active-tenant` | — |
 | Console basic layout + session chrome | — |
 | Console: logout (API+CSRF), org switcher, setup/login integration | — |
-| Create organization API + console form | **Deferred P2** — not Phase 1 |
+| Create organization API + console | **P2-M4** — `GET`/`POST /api/v1/tenants` |
 | Invite / accept flow | P1-M3+ |
 
 ---

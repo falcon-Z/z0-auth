@@ -14,6 +14,7 @@ export function tenantPermissionsFromSession(session: SessionResponse): Set<stri
 
   if (session.roles?.some((role) => PLATFORM_ADMIN_ROLES.has(role))) {
     permissions.add("platform:manage");
+    permissions.add("tenants:create");
     permissions.add("users:read");
     permissions.add("users:invite");
     permissions.add("tenants:read");

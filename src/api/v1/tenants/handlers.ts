@@ -1,8 +1,11 @@
 import type { CreateInviteRequest } from "@z0/contracts/invites";
+import type { CreateTenantRequest } from "@z0/contracts/tenants";
 import { parseJsonBody } from "@z0/contracts/validation";
 
 import { requireSession } from "../../lib/auth";
 import { json, problem } from "../../lib/http";
+import { requirePlatformPermission } from "../../lib/permissions";
+import { createOrganization, listTenantsForUser } from "../../lib/tenants-mgmt";
 import {
   createTenantInvite,
   listPendingInvites,
@@ -18,6 +21,26 @@ import { ErrorCodes } from "@z0/contracts/errors";
 
 function tenantIdFrom(req: RoutedRequest): string {
   return req.pathParams?.tenantId ?? "";
+}
+
+export async function handleListTenants(req: RoutedRequest): Promise<Response> {
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+
+  const tenants = await listTenantsForUser(auth.userId);
+  return json({ tenants });
+}
+
+export async function handleCreateTenant(req: RoutedRequest): Promise<Response> {
+  const perm = await requirePlatformPermission(req, "tenants:create");
+  if (!perm.ok) return perm.response;
+
+  const parsed = await parseJsonBody<CreateTenantRequest>(req);
+  if (!parsed.ok) return parsed.response;
+
+  const result = await createOrganization(perm.userId, parsed.body);
+  if (!result.ok) return result.response;
+  return json({ tenant: result.tenant }, { status: 201 });
 }
 
 async function canReadTenantMembers(userId: string, tenantId: string): Promise<boolean> {

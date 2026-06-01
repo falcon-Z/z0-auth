@@ -63,6 +63,10 @@ export const ErrorCodes = {
   LAST_PLATFORM_ADMIN: "last_platform_admin",
   /** Session id not found or not active for the current user. */
   SESSION_NOT_FOUND: "session_not_found",
+  /** Organization slug format is invalid. */
+  INVALID_SLUG: "invalid_slug",
+  /** Organization slug is already in use. */
+  SLUG_TAKEN: "slug_taken",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

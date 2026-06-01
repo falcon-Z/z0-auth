@@ -3,8 +3,10 @@ import { handleAcceptInvite, handleDeclineInvite, handleInvitePreview } from "./
 import { handleListRoles } from "./roles/handlers";
 import {
   handleCreateInvite,
+  handleCreateTenant,
   handleListInvites,
   handleListMembers,
+  handleListTenants,
   handleRemoveMember,
   handleRevokeInvite,
   handleUpdateMemberRoles,
@@ -25,6 +27,7 @@ export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/users", handlers: { GET: handleListUsers } },
   { pattern: "/api/v1/users/:userId", handlers: { GET: handleGetUser, PATCH: handlePatchUser } },
   { pattern: "/api/v1/roles", handlers: { GET: handleListRoles } },
+  { pattern: "/api/v1/tenants", handlers: { GET: handleListTenants, POST: handleCreateTenant } },
   { pattern: "/api/v1/tenants/:tenantId/members", handlers: { GET: handleListMembers } },
   { pattern: "/api/v1/tenants/:tenantId/members/:userId/roles", handlers: { PATCH: handleUpdateMemberRoles } },
   { pattern: "/api/v1/tenants/:tenantId/members/:userId", handlers: { DELETE: handleRemoveMember } },

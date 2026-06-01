@@ -19,6 +19,7 @@ Spec-driven contracts for the JSON API, auth UI, and planned OAuth surface.
 | [references/health.openapi.yaml](./references/health.openapi.yaml) | Health probes |
 | [references/setup.openapi.yaml](./references/setup.openapi.yaml) | Platform setup |
 | [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Session auth |
+| [references/tenants.openapi.yaml](./references/tenants.openapi.yaml) | Organizations (list, create) |
 | [references/oauth.openapi.yaml](./references/oauth.openapi.yaml) | OAuth 2.1 (planned) |
 
 TypeScript mirrors: `src/lib/contracts/`.

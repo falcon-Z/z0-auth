@@ -7,6 +7,7 @@ import { DashboardPage } from "./modules/dashboard/pages/DashboardPage";
 import { MembersModule } from "./modules/members/MembersModule";
 import { AccountSecurityPage } from "./modules/security/pages/AccountSecurityPage";
 import { SessionsPage } from "./modules/security/pages/SessionsPage";
+import { TenantsModule } from "./modules/tenants/TenantsModule";
 import { UsersModule } from "./modules/users/UsersModule";
 
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
@@ -14,6 +15,7 @@ const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/members": <MembersModule />,
   "/clients": <ClientsPage />,
   "/users": <UsersModule />,
+  "/tenants": <TenantsModule />,
   "/security/account": <AccountSecurityPage />,
   "/security/sessions": <SessionsPage />,
 };
@@ -24,13 +26,14 @@ export const WIRED_CONSOLE_NAV_PATHS = [
   "/members",
   "/clients",
   "/users",
+  "/tenants",
   "/security/account",
   "/security/sessions",
 ] as const;
 
 /** Nested module routes need a splat so in-module `<Routes>` match subpaths. */
 export function routePathForNav(path: string): string {
-  if (path === "/members") return "/members/*";
+  if (path === "/members" || path === "/tenants") return `${path}/*`;
   return path;
 }
 

@@ -89,6 +89,8 @@ components:
         - invite_email_mismatch
         - invite_already_member
         - invalid_role
+        - invalid_slug
+        - slug_taken
     ProblemDetail:
       type: object
       required: [type, title, status, requestId]

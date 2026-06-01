@@ -284,6 +284,30 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 
 ---
 
+## `GET /api/v1/tenants`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| Session | Required | — | 401 | Redirect to login | `tenants-management` |
+| Success | Membership list only (not instance-wide) | — | 200 `{ tenants }` | Organizations table | `tenants-management` |
+
+---
+
+## `POST /api/v1/tenants`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
+| Session | Required | — | 401 | Redirect to login | `tenants-management` |
+| Permission | `tenants:create` (platform only) | `permission_denied` | 403 | Hide create actions | `tenants-management` |
+| `name` | Non-empty trimmed string | `required` | 400 | Inline on name | `tenants-management` |
+| `slug` | Non-empty; lowercase `a-z`, `0-9`, hyphens; max 64 | `invalid_slug` | 400 | Inline on slug | `tenants-management` |
+| `slug` | Unique | `slug_taken` | 409 | Inline on slug | `tenants-management` |
+| `joinAsAdmin` | Optional boolean; default false | — | — | Checkbox default off | `tenants-management` |
+| Success | Audit `tenant.created`; optional membership + `tenant.member_joined` | — | 201 `{ tenant }` | Success + invite or members link | `tenants-management` |
+
+---
+
 ## OAuth (planned — enforce before implementation)
 
 | Input | Rule | Code | HTTP |

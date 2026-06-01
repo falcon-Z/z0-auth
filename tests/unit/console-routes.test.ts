@@ -12,11 +12,13 @@ describe("console routes", () => {
     }
   });
 
-  test("members uses a splat route for nested pages", () => {
+  test("members and tenants use splat routes for nested pages", () => {
     expect(routePathForNav("/members")).toBe("/members/*");
+    expect(routePathForNav("/tenants")).toBe("/tenants/*");
     const membersRoute = consoleRoutes.find((route) => route.path === "/members/*");
-    expect(membersRoute).toBeDefined();
+    const tenantsRoute = consoleRoutes.find((route) => route.path === "/tenants/*");
     expect(membersRoute?.element).toBeDefined();
+    expect(tenantsRoute?.element).toBeDefined();
   });
 
   test("planned modules still resolve to a route", () => {
