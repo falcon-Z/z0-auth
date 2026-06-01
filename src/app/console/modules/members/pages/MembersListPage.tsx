@@ -51,6 +51,7 @@ export function MembersListPage() {
   ];
 
   async function handleRemoveMember(member: TenantMember) {
+    if (!tenantId) return;
     const ok = await confirm({
       title: "Remove member",
       description: `Remove ${member.name} from this tenant?`,
@@ -71,6 +72,7 @@ export function MembersListPage() {
   }
 
   async function handleRevokeInvite(invite: PendingInvite) {
+    if (!tenantId) return;
     const ok = await confirm({
       title: "Revoke invitation",
       description: `Revoke the invitation for ${invite.email}?`,
