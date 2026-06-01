@@ -6,7 +6,11 @@ import { json, problem } from "../../lib/http";
 import { validateCsrf } from "../../lib/csrf";
 import { requirePlatformPermission } from "../../lib/permissions";
 import type { RoutedRequest } from "../../lib/path-router";
-import { getPlatformUser, listPlatformUsers, updatePlatformUserStatus } from "../../lib/users";
+import {
+  getPlatformUserDetail,
+  listPlatformUsers,
+  updatePlatformUserStatus,
+} from "../../lib/users";
 
 function userIdFrom(req: RoutedRequest): string {
   return req.pathParams?.userId ?? "";
@@ -24,7 +28,7 @@ export async function handleGetUser(req: RoutedRequest): Promise<Response> {
   const perm = await requirePlatformPermission(req, "platform:users:read");
   if (!perm.ok) return perm.response;
 
-  const user = await getPlatformUser(userIdFrom(req));
+  const user = await getPlatformUserDetail(userIdFrom(req));
   if (!user) {
     return problem(404, "Not Found", "User not found", {
       errors: [

@@ -70,6 +70,17 @@ export async function getTenantForMember(userId: string, tenantId: string): Prom
   return mapTenantRow(row as { id: string; name: string; slug: string; is_default: boolean });
 }
 
+export async function listAllTenants(): Promise<Tenant[]> {
+  const rows = await getDb()`
+    SELECT id, name, slug, is_default
+    FROM tenants
+    ORDER BY is_default DESC, name ASC
+  `;
+  return rows.map((row) =>
+    mapTenantRow(row as { id: string; name: string; slug: string; is_default: boolean }),
+  );
+}
+
 export async function listUserTenants(userId: string): Promise<Tenant[]> {
   const rows = await getDb()`
     SELECT t.id, t.name, t.slug, t.is_default

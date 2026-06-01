@@ -5,12 +5,34 @@ import { ErrorCodes } from "@z0/contracts/errors";
 import { requireSession } from "./auth";
 import { getDb } from "./db";
 import { problem } from "./http";
+
+/** Keys granted only via platform-scoped roles (never implied on every org). */
+export function isPlatformPermissionKey(permissionKey: string): boolean {
+  return permissionKey.startsWith("platform:") || permissionKey === "tenants:create";
+}
+
 export async function userHasPermission(
   userId: string,
   permissionKey: string,
   tenantId?: string,
 ): Promise<boolean> {
-  if (tenantId) {
+  if (tenantId !== undefined) {
+    if (isPlatformPermissionKey(permissionKey)) {
+      const [row] = await getDb()`
+        SELECT 1
+        FROM user_roles ur
+        JOIN roles r ON r.id = ur.role_id
+        JOIN role_permissions rp ON rp.role_id = r.id
+        JOIN permissions p ON p.id = rp.permission_id
+        WHERE ur.user_id = ${userId}
+          AND p.key = ${permissionKey}
+          AND r.scope = 'platform'
+          AND ur.tenant_id IS NULL
+        LIMIT 1
+      `;
+      return Boolean(row);
+    }
+
     const [row] = await getDb()`
       SELECT 1
       FROM user_roles ur
@@ -19,13 +41,15 @@ export async function userHasPermission(
       JOIN permissions p ON p.id = rp.permission_id
       WHERE ur.user_id = ${userId}
         AND p.key = ${permissionKey}
-        AND (
-          (r.scope = 'platform' AND ur.tenant_id IS NULL)
-          OR (r.scope = 'tenant' AND ur.tenant_id = ${tenantId})
-        )
+        AND r.scope = 'tenant'
+        AND ur.tenant_id = ${tenantId}
       LIMIT 1
     `;
     return Boolean(row);
+  }
+
+  if (!isPlatformPermissionKey(permissionKey)) {
+    return false;
   }
 
   const [row] = await getDb()`
@@ -114,10 +138,12 @@ export async function listPlatformPermissionKeys(userId: string): Promise<string
       AND ur.tenant_id IS NULL
     ORDER BY p.key
   `;
-  return rows.map((row) => String((row as { key: string }).key));
+  return rows
+    .map((row) => String((row as { key: string }).key))
+    .filter((key) => isPlatformPermissionKey(key));
 }
 
-export async function listUserPermissionKeys(userId: string, tenantId: string): Promise<string[]> {
+async function listTenantPermissionKeysForOrg(userId: string, tenantId: string): Promise<string[]> {
   const rows = await getDb()`
     SELECT DISTINCT p.key
     FROM user_roles ur
@@ -125,13 +151,17 @@ export async function listUserPermissionKeys(userId: string, tenantId: string): 
     JOIN role_permissions rp ON rp.role_id = r.id
     JOIN permissions p ON p.id = rp.permission_id
     WHERE ur.user_id = ${userId}
-      AND (
-        (r.scope = 'platform' AND ur.tenant_id IS NULL)
-        OR (r.scope = 'tenant' AND ur.tenant_id = ${tenantId})
-      )
+      AND r.scope = 'tenant'
+      AND ur.tenant_id = ${tenantId}
     ORDER BY p.key
   `;
   return rows.map((row) => String((row as { key: string }).key));
+}
+
+export async function listUserPermissionKeys(userId: string, tenantId: string): Promise<string[]> {
+  const platformKeys = await listPlatformPermissionKeys(userId);
+  const tenantKeys = await listTenantPermissionKeysForOrg(userId, tenantId);
+  return [...new Set([...platformKeys, ...tenantKeys])].sort();
 }
 
 export async function sessionIncludesPermission(

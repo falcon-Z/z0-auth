@@ -7,7 +7,8 @@ import { writeAuditEvent } from "./audit";
 import { getDb } from "./db";
 import { problem } from "./http";
 import { assignTenantRole } from "./roles";
-import { listUserTenants, slugifyOrganization, type Tenant } from "./tenant";
+import { listAllTenants, listUserTenants, slugifyOrganization, type Tenant } from "./tenant";
+import { userHasPermission } from "./permissions";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TENANT_SLUG_UNIQUE_INDEX = "tenants_slug_unique";
@@ -53,7 +54,8 @@ export function validateCreateTenantBody(body: CreateTenantRequest): FieldError[
 }
 
 export async function listTenantsForUser(userId: string): Promise<TenantSummary[]> {
-  const tenants = await listUserTenants(userId);
+  const canReadAll = await userHasPermission(userId, "platform:tenants:read");
+  const tenants = canReadAll ? await listAllTenants() : await listUserTenants(userId);
   return tenants.map(mapTenantSummary);
 }
 

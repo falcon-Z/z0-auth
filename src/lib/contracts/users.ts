@@ -9,6 +9,19 @@ export type PlatformUserSummary = {
   platformRoles: string[];
 };
 
+export type UserTenantMembership = {
+  tenantId: string;
+  tenantName: string;
+  tenantSlug: string;
+  roleKeys: string[];
+  joinedAt: string;
+};
+
+export type PlatformUserDetail = PlatformUserSummary & {
+  tenantMemberships: UserTenantMembership[];
+  activeSessionCount: number;
+};
+
 export type PatchPlatformUserRequest = {
   status: UserStatus;
 };

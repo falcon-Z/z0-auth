@@ -57,8 +57,10 @@ describe("console-access", () => {
     });
     const platformAdmin = session({
       roles: ["platform_admin"],
-      permissions: ["tenants:create", "platform:tenants:read", "platform:users:read"],
       organizations: memberMulti.organizations,
+      tenant: { id: "t1", name: "Acme", slug: "acme" },
+      tenantRoles: ["tenant_member"],
+      permissions: ["platform:tenants:read", "platform:users:read", "tenants:read"],
     });
 
     expect(shouldShowTenantsNav(memberMulti)).toBe(false);

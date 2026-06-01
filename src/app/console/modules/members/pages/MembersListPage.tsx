@@ -26,12 +26,12 @@ export function MembersListPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { session } = useSession();
-  const { canInviteMembers } = useTenantPermissions();
-  const tenantId = session.tenant!.id;
+  const { canReadMembers, canInviteMembers } = useTenantPermissions();
+  const tenantId = session.tenant?.id;
 
   const { members, invites, roles, loading, forbidden, error, submitInvite, reload } = useMembersData(
     tenantId,
-    true,
+    canReadMembers,
     canInviteMembers,
   );
 
@@ -90,9 +90,18 @@ export function MembersListPage() {
     }
   }
 
+  if (!tenantId) {
+    return (
+      <div className="space-y-6">
+        <ListPageHeader title="Members" />
+        <PageError title="No organization" message="Choose an active organization to view members." />
+      </div>
+    );
+  }
+
   if (loading) return <ListPageSkeleton />;
 
-  if (forbidden) {
+  if (forbidden || !canReadMembers) {
     return (
       <div className="space-y-6">
         <ListPageHeader title="Members" />

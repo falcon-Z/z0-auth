@@ -56,6 +56,10 @@ config.json
 # Local workspace notes (not committed)
 .local/
 
+# Dev database seed scripts (local QA only — not shipped in repo)
+src/scripts/db-seed-dev.ts
+src/scripts/dev-seed/
+
 # Claude AI files
 .github/copilot-instructions.md
 .claude/claude.md

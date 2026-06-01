@@ -48,7 +48,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PlatformUserSummary"
+                $ref: "#/components/schemas/PlatformUserDetail"
         "404":
           $ref: "common.openapi.yaml#/components/responses/NotFound"
         "403":
@@ -113,6 +113,36 @@ components:
           type: array
           items:
             type: string
+    UserTenantMembership:
+      type: object
+      required: [tenantId, tenantName, tenantSlug, roleKeys, joinedAt]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        tenantName:
+          type: string
+        tenantSlug:
+          type: string
+        roleKeys:
+          type: array
+          items:
+            type: string
+        joinedAt:
+          type: string
+          format: date-time
+    PlatformUserDetail:
+      allOf:
+        - $ref: "#/components/schemas/PlatformUserSummary"
+        - type: object
+          required: [tenantMemberships, activeSessionCount]
+          properties:
+            tenantMemberships:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserTenantMembership"
+            activeSessionCount:
+              type: integer
     PatchPlatformUserRequest:
       type: object
       required: [status]

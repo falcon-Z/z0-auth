@@ -82,7 +82,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Session | Required | — | 401 | Redirect to login | `auth-organization` |
 | CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
 | `tenantId` | Non-empty | `required` | 400 | Inline | `auth-organization` |
-| `tenantId` | User is member of org | `tenant_access_denied` | 403 | Show error | `auth-organization` |
+| `tenantId` | User is member of org (platform operators cannot switch into orgs they do not belong to) | `tenant_access_denied` | 403 | Show error | `auth-organization`, `rbac-tenant-scope` |
 | Success | — | — | 200 session payload; `tenant` updated | Switcher reflects new org | `auth-organization` |
 
 ---
@@ -136,7 +136,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Rule | Code | HTTP | UI |
 |------|------|------|-----|
 | Session | Required | — | 401 | Login |
-| Permission | `users:read` for tenant (platform scope satisfies) | `permission_denied` | 403 | Members page empty state |
+| Permission | `users:read` via **tenant** role on that org only (platform role does not imply) | `permission_denied` | 403 | Members nav hidden | `rbac-tenant-scope` |
 | Tenant | Valid UUID | — | 404 | — |
 
 ---
@@ -146,7 +146,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Field | Rule | Code | HTTP | UI |
 |-------|------|------|------|-----|
 | Session + CSRF | Required | `csrf_invalid` | 403 | — |
-| Permission | `users:invite` | `permission_denied` | 403 | — |
+| Permission | `users:invite` via **tenant** role on that org only | `permission_denied` | 403 | Invites tab hidden | `rbac-tenant-scope` |
 | `email` | Valid email | `invalid_email` | 400 | Inline |
 | `invitedName` | Non-empty | `required` | 400 | Inline |
 | `roleKeys` | ≥1 valid tenant role | `invalid_role` / `required` | 400 | Checkboxes |
@@ -290,7 +290,7 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 | Input | Rule | Code | HTTP | UI | Test |
 |-------|------|------|------|-----|------|
 | Session | Required | — | 401 | Redirect to login | `tenants-management` |
-| Success | Membership list only (not instance-wide) | — | 200 `{ tenants }` | Organizations table | `tenants-management` |
+| Success | Membership list, or **all orgs** when `platform:tenants:read` | — | 200 `{ tenants }` | Organizations table | `tenants-management`, `rbac-tenant-scope` |
 
 ---
 
@@ -328,9 +328,9 @@ See `docs/api/security-contract.md` and `docs/api/references/oauth.openapi.yaml`
 | Rule | Code | HTTP | UI |
 |------|------|------|-----|
 | Session | Required | — | 401 | Login |
-| Tenant metrics | Active tenant + `users:read` | — | 200 (omit `tenant` if not allowed) | Dashboard member/invite counts |
-| Invite count | Included only when `users:invite` | — | 200 | Pending invites metric |
-| Platform metrics | `platform:users:read` | — | 200 (omit `platform` if not allowed) | Platform users metric |
+| Tenant metrics | Active tenant + `users:read` (tenant role on that org) | — | 200 (omit `tenant` if not allowed) | Dashboard org section |
+| Invite count | Included only when `users:invite` on active org | — | 200 | Pending invites metric |
+| Platform metrics | `platform:users:read` / `platform:tenants:read` | — | 200 | Platform users / org totals |
 | Membership | Always | — | 200 | Your tenants count |
 | Sessions | Always (self) | — | 200 | Active sessions count |
 

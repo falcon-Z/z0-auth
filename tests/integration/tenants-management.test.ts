@@ -146,7 +146,13 @@ run("organizations API", () => {
       buildRequest("GET", "/api/v1/tenants", withSession(adminCookie)),
     );
     const list = (await listRes.json()) as { tenants: { id: string }[] };
-    expect(list.tenants.some((t) => t.id === created.tenant.id)).toBe(false);
+    expect(list.tenants.some((t) => t.id === created.tenant.id)).toBe(true);
+
+    const sessionRes = await dispatchApi(
+      buildRequest("GET", "/api/auth/session", withSession(adminCookie)),
+    );
+    const session = (await sessionRes.json()) as { organizations: { id: string }[] };
+    expect(session.organizations.some((t) => t.id === created.tenant.id)).toBe(false);
   });
 
   test("creates organization with joinAsAdmin", async () => {

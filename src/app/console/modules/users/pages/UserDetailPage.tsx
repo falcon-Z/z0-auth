@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import type { PlatformUserSummary } from "@z0/contracts/users";
+import type { PlatformUserDetail } from "@z0/contracts/users";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
@@ -10,7 +10,7 @@ import { ActionNotice } from "../../../components/feedback/ActionNotice";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
-import { fetchPlatformUsers, updateUserStatus } from "../../../lib/users-api";
+import { fetchPlatformUser, updateUserStatus } from "../../../lib/users-api";
 import { formatRoleKey, sessionHasPermission } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
 
@@ -19,7 +19,7 @@ export function UserDetailPage() {
   const confirm = useConfirm();
   const { session } = useSession();
   const canWriteUsers = sessionHasPermission(session, "platform:users:write");
-  const [user, setUser] = useState<PlatformUserSummary | null>(null);
+  const [user, setUser] = useState<PlatformUserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,12 +31,14 @@ export function UserDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const users = await fetchPlatformUsers();
-      const match = users.find((u) => u.id === userId);
-      if (!match) setError("User not found.");
-      else setUser(match);
+      setUser(await fetchPlatformUser(userId));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load user.");
+      if (e instanceof ApiError && e.problem.status === 404) {
+        setError("User not found.");
+      } else {
+        setError(e instanceof ApiError ? e.message : "Could not load user.");
+      }
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -80,7 +82,15 @@ export function UserDetailPage() {
     setNotice(null);
     try {
       const updated = await updateUserStatus(user!.id, nextStatus);
-      setUser(updated);
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: updated.status,
+              activeSessionCount: nextStatus === "disabled" ? 0 : prev.activeSessionCount,
+            }
+          : prev,
+      );
       setNotice(`Account ${nextStatus === "disabled" ? "disabled" : "enabled"}.`);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : `Could not ${verb} user.`);
@@ -113,7 +123,7 @@ export function UserDetailPage() {
 
       {actionError ? <PageError message={actionError} /> : null}
 
-      <dl className="grid max-w-lg gap-4 text-sm">
+      <dl className="grid max-w-2xl gap-4 text-sm">
         <div>
           <dt className="text-muted-foreground">Email</dt>
           <dd>{user.email}</dd>
@@ -141,10 +151,46 @@ export function UserDetailPage() {
           </dd>
         </div>
         <div>
+          <dt className="text-muted-foreground">Active sessions</dt>
+          <dd className="tabular-nums">{user.activeSessionCount}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Member of</dt>
+          <dd className="tabular-nums">{user.tenantMemberships.length} organizations</dd>
+        </div>
+        <div>
           <dt className="text-muted-foreground">Created</dt>
           <dd>{new Date(user.createdAt).toLocaleString()}</dd>
         </div>
       </dl>
+
+      {user.tenantMemberships.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">Organization memberships</h2>
+          <ul className="divide-y rounded-lg border text-sm">
+            {user.tenantMemberships.map((m) => (
+              <li key={m.tenantId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="font-medium">{m.tenantName}</p>
+                  <p className="text-xs text-muted-foreground">{m.tenantSlug}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Joined {new Date(m.joinedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {m.roleKeys.map((role) => (
+                    <Badge key={role} variant="secondary" className="capitalize">
+                      {formatRoleKey(role)}
+                    </Badge>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : (
+        <p className="text-sm text-muted-foreground">This user is not a member of any organization.</p>
+      )}
     </div>
   );
 }

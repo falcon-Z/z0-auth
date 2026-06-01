@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { shouldHideTenantsNav } from "../../../lib/console-access";
+import { sessionHasPermission } from "../../../lib/tenant-permissions";
 
 import type { TenantSummary } from "@z0/contracts/tenants";
 import { Badge } from "@z0/components/ui/badge";
@@ -11,7 +12,6 @@ import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ApiError } from "../../../lib/api";
 import { fetchTenants } from "../../../lib/tenants-api";
-import { sessionHasPermission } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -26,6 +26,7 @@ export function TenantsListPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const canCreate = sessionHasPermission(session, "tenants:create");
+  const platformDirectory = sessionHasPermission(session, "platform:tenants:read");
   const activeId = session.tenant?.id;
 
   const reload = useCallback(async () => {
@@ -82,6 +83,11 @@ export function TenantsListPage() {
     <div className="space-y-6">
       <ListPageHeader
         title="Tenants"
+        description={
+          platformDirectory
+            ? "All organizations on this platform. Your sidebar switcher only lists orgs you belong to."
+            : undefined
+        }
         actions={
           canCreate ? (
             <Button asChild>

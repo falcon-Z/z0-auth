@@ -15,7 +15,7 @@ OAuth **token scopes** (P3+) are separate from console RBAC.
 
 | Role | Permissions |
 |------|-------------|
-| `platform_admin` | All keys in `permissions` table (includes `tenants:create`, `platform:users:write`, …) |
+| `platform_admin` | All `platform:*` keys and `tenants:create` at **platform** scope only (see migration `0009_platform_admin_scope.sql` — no org keys on the platform role row). Org actions (`users:read`, `users:invite`, …) require a **tenant** role on that org. |
 | `platform_manager` | `platform:users:read`, `platform:tenants:read`, `platform:sessions:revoke` — **not** `tenants:create` or `platform:users:write` |
 
 ## Tenant roles
@@ -34,4 +34,4 @@ OAuth **token scopes** (P3+) are separate from console RBAC.
 
 ## Session
 
-`GET /api/auth/session` returns `permissions[]` for the active organization (platform + tenant keys). Console gates must use this list.
+`GET /api/auth/session` returns `permissions[]` for the active organization: `platform:*` keys from platform roles plus tenant keys **only** from roles on that org. Console gates must use this list — platform operators do not inherit `users:invite` on orgs where they are only a member.

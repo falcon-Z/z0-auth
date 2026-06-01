@@ -45,6 +45,7 @@ components:
           type: object
           properties:
             userCount: { type: integer }
+            tenantCount: { type: integer }
         membership:
           type: object
           required: [tenantCount]

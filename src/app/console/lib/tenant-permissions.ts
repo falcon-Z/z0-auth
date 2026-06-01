@@ -2,24 +2,23 @@ import type { SessionResponse } from "@z0/contracts/auth";
 
 import { assignableTenantRoles } from "@z0/lib/rbac/tenant-roles";
 
-/** Fallback when session.permissions is absent (e.g. older tests). Mirrors migration 0008 seeds. */
+/** Fallback when session.permissions is absent (e.g. older tests). */
 const TENANT_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
   tenant_admin: ["tenants:read", "users:read", "users:invite", "sessions:revoke"],
   tenant_manager: ["tenants:read", "users:read", "users:invite", "sessions:revoke"],
   tenant_member: ["tenants:read"],
 };
 
-const PLATFORM_ADMIN_PERMISSIONS = [
-  "platform:users:read",
-  "platform:users:write",
-  "platform:sessions:revoke",
-  "platform:tenants:read",
-  "tenants:create",
-  "tenants:read",
-  "users:read",
-  "users:invite",
-  "sessions:revoke",
-] as const;
+const PLATFORM_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
+  platform_admin: [
+    "platform:users:read",
+    "platform:users:write",
+    "platform:sessions:revoke",
+    "platform:tenants:read",
+    "tenants:create",
+  ],
+  platform_manager: ["platform:users:read", "platform:tenants:read", "platform:sessions:revoke"],
+};
 
 export function tenantPermissionsFromSession(session: SessionResponse): Set<string> {
   if (session.permissions?.length) {
@@ -28,17 +27,10 @@ export function tenantPermissionsFromSession(session: SessionResponse): Set<stri
 
   const permissions = new Set<string>();
 
-  if (session.roles?.includes("platform_admin")) {
-    for (const key of PLATFORM_ADMIN_PERMISSIONS) {
+  for (const role of session.roles ?? []) {
+    for (const key of PLATFORM_ROLE_PERMISSIONS[role] ?? []) {
       permissions.add(key);
     }
-    return permissions;
-  }
-
-  if (session.roles?.includes("platform_manager")) {
-    permissions.add("platform:users:read");
-    permissions.add("platform:tenants:read");
-    permissions.add("platform:sessions:revoke");
   }
 
   for (const role of session.tenantRoles ?? []) {
@@ -55,9 +47,6 @@ export function sessionHasPermission(session: SessionResponse, permission: strin
 }
 
 export function assignableRolesFromSession(session: SessionResponse): readonly string[] {
-  if (session.roles?.includes("platform_admin")) {
-    return assignableTenantRoles(["tenant_admin"]);
-  }
   if (session.permissions?.includes("platform:users:write")) {
     return assignableTenantRoles(["tenant_admin"]);
   }

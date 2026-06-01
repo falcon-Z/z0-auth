@@ -79,6 +79,7 @@ run("console summary", () => {
     expect(body.tenant!.memberCount).toBeGreaterThanOrEqual(1);
     expect(body.platform).toBeDefined();
     expect(body.platform!.userCount).toBeGreaterThanOrEqual(1);
+    expect(body.platform!.tenantCount).toBeGreaterThanOrEqual(1);
     expect(body.sessions.activeCount).toBeGreaterThanOrEqual(1);
   });
 

@@ -6,7 +6,13 @@ import {
   validatePassword,
   validatePasswordConfirm,
 } from "@z0/contracts/password-policy";
-import type { PatchPlatformUserRequest, PlatformUserSummary, UserStatus } from "@z0/contracts/users";
+import type {
+  PatchPlatformUserRequest,
+  PlatformUserDetail,
+  PlatformUserSummary,
+  UserStatus,
+  UserTenantMembership,
+} from "@z0/contracts/users";
 
 import { getDb } from "./db";
 import { problem } from "./http";
@@ -60,6 +66,66 @@ export async function getPlatformUser(userId: string): Promise<PlatformUserSumma
   const userRow = row as UserRow;
   const platformRoles = await getPlatformRoleKeys(userId);
   return mapUserSummary(userRow, platformRoles);
+}
+
+async function listUserTenantMemberships(userId: string): Promise<UserTenantMembership[]> {
+  const rows = await getDb()`
+    SELECT
+      t.id,
+      t.name,
+      t.slug,
+      tm.created_at,
+      COALESCE(
+        array_agg(DISTINCT r.key) FILTER (WHERE r.scope = 'tenant' AND ur.tenant_id = t.id),
+        '{}'
+      ) AS role_keys
+    FROM tenant_memberships tm
+    JOIN tenants t ON t.id = tm.tenant_id
+    LEFT JOIN user_roles ur ON ur.user_id = tm.user_id AND ur.tenant_id = t.id
+    LEFT JOIN roles r ON r.id = ur.role_id AND r.scope = 'tenant'
+    WHERE tm.user_id = ${userId}
+    GROUP BY t.id, t.name, t.slug, tm.created_at
+    ORDER BY t.name ASC
+  `;
+
+  return rows.map((row) => {
+    const r = row as {
+      id: string;
+      name: string;
+      slug: string;
+      created_at: Date;
+      role_keys: string[];
+    };
+    const keys = Array.isArray(r.role_keys) ? r.role_keys.filter(Boolean) : [];
+    return {
+      tenantId: String(r.id),
+      tenantName: r.name,
+      tenantSlug: r.slug,
+      roleKeys: keys.length ? keys : ["tenant_member"],
+      joinedAt: new Date(r.created_at).toISOString(),
+    };
+  });
+}
+
+async function countUserActiveSessions(userId: string): Promise<number> {
+  const [row] = await getDb()`
+    SELECT COUNT(*)::int AS count
+    FROM sessions
+    WHERE user_id = ${userId}
+      AND revoked_at IS NULL
+      AND expires_at > NOW()
+  `;
+  return Number((row as { count: number }).count ?? 0);
+}
+
+export async function getPlatformUserDetail(userId: string): Promise<PlatformUserDetail | null> {
+  const summary = await getPlatformUser(userId);
+  if (!summary) return null;
+  const [tenantMemberships, activeSessionCount] = await Promise.all([
+    listUserTenantMemberships(userId),
+    countUserActiveSessions(userId),
+  ]);
+  return { ...summary, tenantMemberships, activeSessionCount };
 }
 
 async function countActivePlatformAdmins(): Promise<number> {

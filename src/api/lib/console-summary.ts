@@ -24,6 +24,13 @@ async function countPendingInvites(tenantId: string): Promise<number> {
   return Number((row as { count: number }).count ?? 0);
 }
 
+async function countTenants(): Promise<number> {
+  const [row] = await getDb()`
+    SELECT COUNT(*)::int AS count FROM tenants
+  `;
+  return Number((row as { count: number }).count ?? 0);
+}
+
 async function countPlatformUsers(): Promise<number> {
   const [row] = await getDb()`
     SELECT COUNT(*)::int AS count FROM users
@@ -52,8 +59,13 @@ export async function buildConsoleSummary(userId: string): Promise<ConsoleSummar
     sessions,
   };
 
-  if (await userHasPermission(userId, "platform:users:read")) {
-    summary.platform = { userCount: await countPlatformUsers() };
+  const canReadPlatformUsers = await userHasPermission(userId, "platform:users:read");
+  const canReadPlatformTenants = await userHasPermission(userId, "platform:tenants:read");
+  if (canReadPlatformUsers || canReadPlatformTenants) {
+    summary.platform = {
+      ...(canReadPlatformUsers ? { userCount: await countPlatformUsers() } : {}),
+      ...(canReadPlatformTenants ? { tenantCount: await countTenants() } : {}),
+    };
   }
 
   if (activeTenant && (await userHasPermission(userId, "users:read", activeTenant.id))) {
