@@ -1,4 +1,5 @@
 import type { SessionResponse } from "@z0/contracts/auth";
+import { ErrorCodes } from "@z0/contracts/errors";
 
 import { apiFetch } from "./http-client";
 
@@ -25,7 +26,7 @@ export async function loadSession(): Promise<SessionLoadResult> {
 
   if (res.status === 503) {
     const body = (await res.json().catch(() => ({}))) as { code?: string };
-    if (body.code === "DatabaseUnavailable") return { kind: "unavailable" };
+    if (body.code === ErrorCodes.DATABASE_UNAVAILABLE) return { kind: "unavailable" };
     return { kind: "setup" };
   }
   if (!res.ok) return { kind: "login" };

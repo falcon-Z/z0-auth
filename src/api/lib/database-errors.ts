@@ -8,7 +8,7 @@ export { isDatabaseConnectionError, resetDatabaseConnection } from "./db";
 
 export function databaseUnavailableResponse(): Response {
   return problem(503, "Service Unavailable", "Database is unavailable. Try again later.", {
-    code: "DatabaseUnavailable",
+    code: ErrorCodes.DATABASE_UNAVAILABLE,
     errors: [
       {
         field: "_database",
