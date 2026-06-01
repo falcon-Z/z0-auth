@@ -4,23 +4,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { TenantSummary } from "@z0/contracts/tenants";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
 import { TenantDashboardCards } from "../../dashboard/components/TenantDashboardCards";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fetchTenants } from "../../../lib/tenants-api";
 import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
 import { useSession } from "../../../context/session-context";
-import { Skeleton } from "@z0/components/ui/skeleton";
-
-function TenantDetailSkeleton() {
-  return (
-    <div className="space-y-4">
-      <Skeleton className="h-8 w-64" />
-      <Skeleton className="h-48 w-full rounded-lg" />
-    </div>
-  );
-}
 
 export function TenantDetailPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
@@ -69,14 +60,14 @@ export function TenantDetailPage() {
     }
   }
 
-  if (loading) return <TenantDetailSkeleton />;
+  if (loading) return <ListPageSkeleton />;
 
   if (error || !tenant) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Not available</AlertTitle>
-        <AlertDescription>{error ?? "Tenant not found."}</AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <DetailPageHeader backTo="/tenants" backLabel="Tenants" title="Tenant" />
+        <PageError title="Not found" message={error ?? "Tenant not found."} onRetry={() => void reload()} />
+      </div>
     );
   }
 
@@ -106,12 +97,7 @@ export function TenantDetailPage() {
         }
       />
 
-      {actionError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Action failed</AlertTitle>
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      ) : null}
+      {actionError ? <PageError message={actionError} /> : null}
 
       <dl className="grid max-w-lg gap-4 text-sm">
         <div>

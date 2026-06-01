@@ -1,21 +1,23 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { useConfirm } from "../../../components/feedback/ConfirmDialog";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
 import { useMembersData } from "../../../hooks/use-members-data";
 import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
 import { useSession } from "../../../context/session-context";
 import { updateMemberRoles, removeMember } from "../../../lib/members-api";
 import { formatRoleKey } from "../../../lib/tenant-permissions";
-import { MembersListSkeleton } from "../MembersAccessGate";
 import { EditRolesDialog } from "../components/EditRolesDialog";
 
 export function MemberDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { session } = useSession();
   const { canInviteMembers } = useTenantPermissions();
   const tenantId = session.tenant!.id;
@@ -26,19 +28,30 @@ export function MemberDetailPage() {
 
   const member = members.find((m) => m.userId === userId);
 
-  if (loading) return <MembersListSkeleton />;
+  if (loading) return <ListPageSkeleton />;
 
   if (!member) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Not found</AlertTitle>
-        <AlertDescription>Member not found.</AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <DetailPageHeader backTo="/members" backLabel="Members" title="Member" />
+        <PageError title="Not found" message="Member not found.">
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/members">Back to members</Link>
+          </Button>
+        </PageError>
+      </div>
     );
   }
 
   async function handleRemove() {
-    if (!userId || !window.confirm(`Remove ${member!.name} from this tenant?`)) return;
+    const ok = await confirm({
+      title: "Remove member",
+      description: `Remove ${member!.name} from this tenant?`,
+      confirmLabel: "Remove",
+      destructive: true,
+    });
+    if (!ok || !userId) return;
+
     setRemoving(true);
     try {
       await removeMember(tenantId, userId);

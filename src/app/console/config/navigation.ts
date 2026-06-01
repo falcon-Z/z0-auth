@@ -283,6 +283,11 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
 
 export const CONSOLE_NAV_ITEMS: ConsoleNavItem[] = CONSOLE_NAV.flatMap((group) => group.items);
 
+/** Shipped modules only — hide stub/planned from sidebar. */
+export function isConsoleNavItemVisible(item: ConsoleNavItem): boolean {
+  return item.status === "available";
+}
+
 export function findNavItem(pathname: string): ConsoleNavItem | undefined {
   if (pathname === "/") {
     return CONSOLE_NAV_ITEMS.find((item) => item.path === "/");

@@ -65,5 +65,5 @@ export function assignableRolesFromSession(session: SessionResponse): readonly s
 }
 
 export function formatRoleKey(key: string): string {
-  return key.replace(/^tenant_/, "").replace(/_/g, " ");
+  return key.replace(/^(tenant_|platform_)/, "").replace(/_/g, " ");
 }

@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
-import { Skeleton } from "@z0/components/ui/skeleton";
-import { useSession } from "../../context/session-context";
+import { ListPageSkeleton } from "../../components/feedback/ListPageSkeleton";
 import { sessionHasPermission } from "../../lib/tenant-permissions";
+import { useSession } from "../../context/session-context";
 
 export function UsersAccessGate({ children }: { children: ReactNode }) {
   const { session } = useSession();
@@ -12,7 +12,7 @@ export function UsersAccessGate({ children }: { children: ReactNode }) {
     return (
       <Alert>
         <AlertTitle>Access denied</AlertTitle>
-        <AlertDescription>You need platform administrator access to manage users.</AlertDescription>
+        <AlertDescription>Platform administrator access is required.</AlertDescription>
       </Alert>
     );
   }
@@ -20,11 +20,4 @@ export function UsersAccessGate({ children }: { children: ReactNode }) {
   return children;
 }
 
-export function UsersListSkeleton() {
-  return (
-    <div className="space-y-4">
-      <Skeleton className="h-10 w-48" />
-      <Skeleton className="h-64 w-full rounded-lg" />
-    </div>
-  );
-}
+export { ListPageSkeleton as UsersListSkeleton };

@@ -1,7 +1,5 @@
-import type { ReactNode } from "react";
-
 import type { RoleSummary } from "@z0/contracts/invites";
-import { Label } from "@z0/components/ui/label";
+import { FormField } from "../../../components/forms/FormField";
 import {
   Select,
   SelectContent,
@@ -27,7 +25,7 @@ type RoleSelectProps = {
 
 export function RoleSelect({ roles, roleKey, onChange, error }: RoleSelectProps) {
   return (
-    <Field label="Role" error={error}>
+    <FormField label="Role" error={error}>
       <Select value={roleKey} onValueChange={onChange}>
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Select a role" />
@@ -40,7 +38,7 @@ export function RoleSelect({ roles, roleKey, onChange, error }: RoleSelectProps)
           ))}
         </SelectContent>
       </Select>
-    </Field>
+    </FormField>
   );
 }
 
@@ -68,12 +66,5 @@ export function RolePicker({ roles, roleKeys, onChange, error }: RolePickerProps
   );
 }
 
-export function Field({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
-    </div>
-  );
-}
+/** @deprecated Use FormField from components/forms/FormField */
+export { FormField as Field } from "../../../components/forms/FormField";

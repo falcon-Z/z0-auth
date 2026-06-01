@@ -4,18 +4,21 @@ import { useNavigate } from "react-router-dom";
 import type { PlatformUserSummary } from "@z0/contracts/users";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { RowActionLink } from "../../../components/crud/RowActionLink";
+import { useConfirm } from "../../../components/feedback/ConfirmDialog";
+import { ActionNotice } from "../../../components/feedback/ActionNotice";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fetchPlatformUsers, updateUserStatus } from "../../../lib/users-api";
-import { sessionHasPermission } from "../../../lib/tenant-permissions";
+import { formatRoleKey, sessionHasPermission } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
-import { UsersListSkeleton } from "../UsersAccessGate";
 
 export function UsersListPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { session } = useSession();
   const canWriteUsers = sessionHasPermission(session, "platform:users:write");
   const [users, setUsers] = useState<PlatformUserSummary[]>([]);
@@ -23,6 +26,7 @@ export function UsersListPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -43,13 +47,21 @@ export function UsersListPage() {
   async function handleToggleStatus(user: PlatformUserSummary) {
     const nextStatus = user.status === "active" ? "disabled" : "active";
     const verb = nextStatus === "disabled" ? "disable" : "enable";
-    if (!window.confirm(`${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${user.name}?`)) return;
+    const ok = await confirm({
+      title: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} user`,
+      description: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${user.name}?`,
+      confirmLabel: verb.charAt(0).toUpperCase() + verb.slice(1),
+      destructive: nextStatus === "disabled",
+    });
+    if (!ok) return;
 
     setBusyId(user.id);
     setActionError(null);
+    setNotice(null);
     try {
       const updated = await updateUserStatus(user.id, nextStatus);
       setUsers((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+      setNotice(`Account ${nextStatus === "disabled" ? "disabled" : "enabled"}.`);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : `Could not ${verb} user.`);
     } finally {
@@ -57,14 +69,14 @@ export function UsersListPage() {
     }
   }
 
-  if (loading) return <UsersListSkeleton />;
+  if (loading) return <ListPageSkeleton />;
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <ListPageHeader title="Users" />
+        <PageError message={error} onRetry={() => void reload()} />
+      </div>
     );
   }
 
@@ -72,12 +84,9 @@ export function UsersListPage() {
     <div className="space-y-6">
       <ListPageHeader title="Users" />
 
-      {actionError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Action failed</AlertTitle>
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      ) : null}
+      <ActionNotice message={notice} />
+
+      {actionError ? <PageError message={actionError} /> : null}
 
       <DataTable<PlatformUserSummary>
         columns={[
@@ -103,8 +112,8 @@ export function UsersListPage() {
               row.platformRoles.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
                   {row.platformRoles.map((role) => (
-                    <Badge key={role} variant="outline">
-                      {role.replace(/^platform_/, "").replace(/_/g, " ")}
+                    <Badge key={role} variant="outline" className="capitalize">
+                      {formatRoleKey(role)}
                     </Badge>
                   ))}
                 </div>

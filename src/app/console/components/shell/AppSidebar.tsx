@@ -13,11 +13,10 @@ import {
   SidebarRail,
 } from "@z0/components/ui/sidebar";
 import { cn } from "../../lib/utils";
-import { CONSOLE_NAV } from "../../config/navigation";
+import { CONSOLE_NAV, isConsoleNavItemVisible } from "../../config/navigation";
 import { shouldHideTenantsNav } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
 import { sessionHasPermission } from "../../lib/tenant-permissions";
-import { NavStatusBadge } from "../layout/NavStatusBadge";
 import { SidebarWorkspace } from "./SidebarWorkspace";
 
 function isNavItemActive(pathname: string, path: string): boolean {
@@ -37,55 +36,58 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {CONSOLE_NAV.map((group) => (
-          <SidebarGroup key={group.id}>
-            <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  if (item.id === "tenants" && shouldHideTenantsNav(session)) {
-                    return null;
-                  }
+        {CONSOLE_NAV.map((group) => {
+          const items = group.items.filter((item) => {
+            if (!isConsoleNavItemVisible(item)) return false;
+            if (item.id === "tenants" && shouldHideTenantsNav(session)) return false;
+            if (item.requiredPermission && !sessionHasPermission(session, item.requiredPermission)) {
+              return false;
+            }
+            return true;
+          });
 
-                  const missingTenant = item.requiresTenant && !hasTenant;
-                  const missingPermission =
-                    item.requiredPermission && !sessionHasPermission(session, item.requiredPermission);
-                  const hidden = missingPermission && !missingTenant;
-                  if (hidden) return null;
+          if (items.length === 0) return null;
 
-                  const disabled = missingTenant;
-                  const Icon = item.icon;
-                  const isActive = isNavItemActive(location.pathname, item.path);
+          return (
+            <SidebarGroup key={group.id}>
+              <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {items.map((item) => {
+                    const missingTenant = item.requiresTenant && !hasTenant;
+                    const disabled = missingTenant;
+                    const Icon = item.icon;
+                    const isActive = isNavItemActive(location.pathname, item.path);
 
-                  return (
-                    <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={disabled ? "Select a tenant first" : item.title}
-                        className={cn(disabled && "pointer-events-none opacity-50")}
-                      >
-                        <NavLink
-                          to={item.path}
-                          end={item.path === "/"}
-                          aria-disabled={disabled}
-                          tabIndex={disabled ? -1 : undefined}
-                          onClick={(e) => {
-                            if (disabled) e.preventDefault();
-                          }}
+                    return (
+                      <SidebarMenuItem key={item.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive}
+                          tooltip={disabled ? "Choose a tenant" : item.title}
+                          className={cn(disabled && "pointer-events-none opacity-50")}
                         >
-                          <Icon />
-                          <span>{item.title}</span>
-                          <NavStatusBadge status={item.status} className="ml-auto" />
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+                          <NavLink
+                            to={item.path}
+                            end={item.path === "/"}
+                            aria-disabled={disabled}
+                            tabIndex={disabled ? -1 : undefined}
+                            onClick={(e) => {
+                              if (disabled) e.preventDefault();
+                            }}
+                          >
+                            <Icon />
+                            <span>{item.title}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
 
       <SidebarRail />

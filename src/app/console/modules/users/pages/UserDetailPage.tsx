@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import type { PlatformUserSummary } from "@z0/contracts/users";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { useConfirm } from "../../../components/feedback/ConfirmDialog";
+import { ActionNotice } from "../../../components/feedback/ActionNotice";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fetchPlatformUsers, updateUserStatus } from "../../../lib/users-api";
-import { sessionHasPermission } from "../../../lib/tenant-permissions";
+import { formatRoleKey, sessionHasPermission } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
-import { UsersListSkeleton } from "../UsersAccessGate";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
+  const confirm = useConfirm();
   const { session } = useSession();
   const canWriteUsers = sessionHasPermission(session, "platform:users:write");
   const [user, setUser] = useState<PlatformUserSummary | null>(null);
@@ -21,6 +24,7 @@ export function UserDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!userId) return;
@@ -42,14 +46,18 @@ export function UserDetailPage() {
     void reload();
   }, [reload]);
 
-  if (loading) return <UsersListSkeleton />;
+  if (loading) return <ListPageSkeleton />;
 
   if (error || !user) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Not found</AlertTitle>
-        <AlertDescription>{error ?? "User not found."}</AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <DetailPageHeader backTo="/users" backLabel="Users" title="User" />
+        <PageError title="Not found" message={error ?? "User not found."}>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/users">Back to users</Link>
+          </Button>
+        </PageError>
+      </div>
     );
   }
 
@@ -59,13 +67,21 @@ export function UserDetailPage() {
   async function handleToggleStatus() {
     const nextStatus = user!.status === "active" ? "disabled" : "active";
     const verb = nextStatus === "disabled" ? "disable" : "enable";
-    if (!window.confirm(`${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${user!.name}?`)) return;
+    const ok = await confirm({
+      title: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} user`,
+      description: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} ${user!.name}?`,
+      confirmLabel: verb.charAt(0).toUpperCase() + verb.slice(1),
+      destructive: nextStatus === "disabled",
+    });
+    if (!ok) return;
 
     setBusy(true);
     setActionError(null);
+    setNotice(null);
     try {
       const updated = await updateUserStatus(user!.id, nextStatus);
       setUser(updated);
+      setNotice(`Account ${nextStatus === "disabled" ? "disabled" : "enabled"}.`);
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : `Could not ${verb} user.`);
     } finally {
@@ -93,12 +109,9 @@ export function UserDetailPage() {
         }
       />
 
-      {actionError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Action failed</AlertTitle>
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      ) : null}
+      <ActionNotice message={notice} />
+
+      {actionError ? <PageError message={actionError} /> : null}
 
       <dl className="grid max-w-lg gap-4 text-sm">
         <div>
@@ -118,8 +131,8 @@ export function UserDetailPage() {
           <dd className="mt-1 flex flex-wrap gap-1">
             {user.platformRoles.length > 0 ? (
               user.platformRoles.map((role) => (
-                <Badge key={role} variant="outline">
-                  {role.replace(/^platform_/, "").replace(/_/g, " ")}
+                <Badge key={role} variant="outline" className="capitalize">
+                  {formatRoleKey(role)}
                 </Badge>
               ))
             ) : (
@@ -132,10 +145,6 @@ export function UserDetailPage() {
           <dd>{new Date(user.createdAt).toLocaleString()}</dd>
         </div>
       </dl>
-
-      {isSelf ? (
-        <p className="text-muted-foreground text-sm">You cannot change your own account status from this screen.</p>
-      ) : null}
     </div>
   );
 }

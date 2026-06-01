@@ -5,7 +5,8 @@ import { Button } from "@z0/components/ui/button";
 import { Input } from "@z0/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
-import { Field } from "../../members/components/RolePicker";
+import { FormField } from "../../../components/forms/FormField";
+import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { changePassword } from "../../../lib/users-api";
@@ -39,12 +40,14 @@ export function AccountSecurityPage() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitting(true);
     setFieldErrors({});
+    setFormError(null);
     setSuccess(false);
     try {
       await changePassword({ currentPassword, password, passwordConfirm });
@@ -54,7 +57,14 @@ export function AccountSecurityPage() {
       setSuccess(true);
     } catch (e) {
       if (e instanceof ApiError) {
-        setFieldErrors(fieldErrorsFromProblem(e.problem));
+        const fields = fieldErrorsFromProblem(e.problem);
+        if (Object.keys(fields).length > 0) {
+          setFieldErrors(fields);
+        } else {
+          setFormError(e.message);
+        }
+      } else {
+        setFormError("Could not change password.");
       }
     } finally {
       setSubmitting(false);
@@ -65,19 +75,17 @@ export function AccountSecurityPage() {
     <div className="mx-auto max-w-lg space-y-6">
       <DetailPageHeader backTo="/profile" backLabel="Your account" title="Password" />
 
-      <p className="text-sm text-muted-foreground">
-        Change the password for {session.user?.email}. Other signed-in sessions will be signed out.
-      </p>
-
       {success ? (
         <Alert>
           <AlertTitle>Password updated</AlertTitle>
-          <AlertDescription>Your password was changed. Other sessions have been signed out.</AlertDescription>
+          <AlertDescription>Other sessions were signed out.</AlertDescription>
         </Alert>
       ) : null}
 
+      {formError ? <PageError message={formError} /> : null}
+
       <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-        <Field label="Current password" error={fieldErrors.currentPassword}>
+        <FormField label="Current password" error={fieldErrors.currentPassword}>
           <Input
             type="password"
             value={currentPassword}
@@ -85,8 +93,8 @@ export function AccountSecurityPage() {
             autoComplete="current-password"
             required
           />
-        </Field>
-        <Field label="New password" error={fieldErrors.password}>
+        </FormField>
+        <FormField label="New password" error={fieldErrors.password}>
           <Input
             type="password"
             value={password}
@@ -94,9 +102,9 @@ export function AccountSecurityPage() {
             autoComplete="new-password"
             required
           />
-        </Field>
+        </FormField>
         {password.length > 0 ? <PasswordChecklist password={password} /> : null}
-        <Field label="Confirm new password" error={fieldErrors.passwordConfirm}>
+        <FormField label="Confirm new password" error={fieldErrors.passwordConfirm}>
           <Input
             type="password"
             value={passwordConfirm}
@@ -104,7 +112,7 @@ export function AccountSecurityPage() {
             autoComplete="new-password"
             required
           />
-        </Field>
+        </FormField>
         <Button type="submit" disabled={submitting}>
           {submitting ? "Saving…" : "Change password"}
         </Button>

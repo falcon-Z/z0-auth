@@ -12,7 +12,8 @@ import {
 import { Input } from "@z0/components/ui/input";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { Field, RoleSelect } from "./RolePicker";
+import { FormField } from "../../../components/forms/FormField";
+import { RoleSelect } from "./RolePicker";
 
 type InviteFormDialogProps = {
   open: boolean;
@@ -62,12 +63,12 @@ export function InviteFormDialog({ open, onOpenChange, roles, onSubmit, onCreate
             <DialogTitle>Invite</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <Field label="Email" error={fieldErrors.email}>
+            <FormField label="Email" error={fieldErrors.email}>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="off" />
-            </Field>
-            <Field label="Name" error={fieldErrors.invitedName}>
+            </FormField>
+            <FormField label="Name" error={fieldErrors.invitedName}>
               <Input value={invitedName} onChange={(e) => setInvitedName(e.target.value)} required />
-            </Field>
+            </FormField>
             <RoleSelect roles={roles} roleKey={roleKey} onChange={setRoleKey} error={fieldErrors.roleKeys} />
           </div>
           <DialogFooter>
@@ -75,7 +76,7 @@ export function InviteFormDialog({ open, onOpenChange, roles, onSubmit, onCreate
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || !roleKey}>
-              {submitting ? "Saving…" : "Create"}
+              {submitting ? "Sending…" : "Send invite"}
             </Button>
           </DialogFooter>
         </form>

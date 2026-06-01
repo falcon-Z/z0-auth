@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { EmptyState } from "../feedback/EmptyState";
 import { cn } from "../../lib/utils";
 
 export type DataTableColumn<T> = {
@@ -16,6 +17,7 @@ type DataTableProps<T> = {
   onRowClick?: (row: T) => void;
   rowActions?: (row: T) => ReactNode;
   emptyMessage?: string;
+  emptyAction?: ReactNode;
 };
 
 export function DataTable<T>({
@@ -25,9 +27,10 @@ export function DataTable<T>({
   onRowClick,
   rowActions,
   emptyMessage = "No rows",
+  emptyAction,
 }: DataTableProps<T>) {
   if (rows.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>;
+    return <EmptyState message={emptyMessage} action={emptyAction} />;
   }
 
   return (

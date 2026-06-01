@@ -3,9 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import type { SessionSummary } from "@z0/contracts/sessions";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DataTable } from "../../../components/crud/DataTable";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { useConfirm } from "../../../components/feedback/ConfirmDialog";
+import { ActionNotice } from "../../../components/feedback/ActionNotice";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { useSession } from "../../../context/session-context";
 import { fetchSessions, revokeOtherSessions, revokeSession } from "../../../lib/sessions-api";
@@ -20,6 +23,7 @@ function formatWhen(iso: string): string {
 }
 
 export function SessionsPage() {
+  const confirm = useConfirm();
   const { signOut } = useSession();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,16 +31,19 @@ export function SessionsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revokingOthers, setRevokingOthers] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const reload = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       setSessions(await fetchSessions());
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load sessions.");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
 
@@ -46,17 +53,25 @@ export function SessionsPage() {
 
   async function handleRevoke(row: SessionSummary) {
     const label = row.isCurrent ? "this device" : row.clientLabel;
-    if (!window.confirm(`Sign out ${label}?`)) return;
+    const ok = await confirm({
+      title: row.isCurrent ? "Sign out" : "Revoke session",
+      description: `Sign out ${label}?`,
+      confirmLabel: row.isCurrent ? "Sign out" : "Revoke",
+      destructive: true,
+    });
+    if (!ok) return;
 
     setBusyId(row.id);
     setActionError(null);
+    setNotice(null);
     try {
       const result = await revokeSession(row.id);
       if (result.revokedCurrent) {
         await signOut();
         return;
       }
-      await reload();
+      setNotice("Session revoked.");
+      await reload({ silent: true });
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "Could not revoke session.");
     } finally {
@@ -67,19 +82,22 @@ export function SessionsPage() {
   async function handleRevokeOthers() {
     const others = sessions.filter((s) => !s.isCurrent).length;
     if (others === 0) return;
-    if (
-      !window.confirm(
-        `Sign out ${others} other ${others === 1 ? "session" : "sessions"}? This device will stay signed in.`,
-      )
-    ) {
-      return;
-    }
+
+    const ok = await confirm({
+      title: "Sign out other sessions",
+      description: `Sign out ${others} other ${others === 1 ? "session" : "sessions"}? This device stays signed in.`,
+      confirmLabel: "Sign out others",
+      destructive: true,
+    });
+    if (!ok) return;
 
     setRevokingOthers(true);
     setActionError(null);
+    setNotice(null);
     try {
       await revokeOtherSessions();
-      await reload();
+      setNotice("Other sessions signed out.");
+      await reload({ silent: true });
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : "Could not sign out other sessions.");
     } finally {
@@ -91,19 +109,19 @@ export function SessionsPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
-        <p className="text-sm text-muted-foreground">Loading sessions…</p>
+        <ListPageSkeleton />
       </div>
     );
   }
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+        <PageError message={error} onRetry={() => void reload()} />
+      </div>
     );
   }
 
@@ -121,22 +139,15 @@ export function SessionsPage() {
               disabled={revokingOthers}
               onClick={() => void handleRevokeOthers()}
             >
-              Sign out other sessions
+              Sign out others
             </Button>
-          ) : null
+          ) : undefined
         }
       />
 
-      <p className="text-muted-foreground text-sm">
-        Devices where you are signed in. Sign out any session you do not recognize.
-      </p>
+      <ActionNotice message={notice} />
 
-      {actionError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Action failed</AlertTitle>
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      ) : null}
+      {actionError ? <PageError message={actionError} /> : null}
 
       <DataTable<SessionSummary>
         columns={[
@@ -172,7 +183,7 @@ export function SessionsPage() {
         ]}
         rows={sessions}
         rowKey={(row) => row.id}
-        emptyMessage="No active sessions."
+        emptyMessage="No active sessions"
         rowActions={(row) => (
           <Button
             type="button"

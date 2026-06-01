@@ -1,20 +1,23 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { useConfirm } from "../../../components/feedback/ConfirmDialog";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
 import { useMembersData } from "../../../hooks/use-members-data";
 import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
 import { useSession } from "../../../context/session-context";
 import { revokeTenantInvite } from "../../../lib/members-api";
 import { formatRoleKey } from "../../../lib/tenant-permissions";
-import { MembersListSkeleton } from "../MembersAccessGate";
 
 export function InviteDetailPage() {
   const { inviteId } = useParams<{ inviteId: string }>();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { session } = useSession();
   const { canInviteMembers } = useTenantPermissions();
   const tenantId = session.tenant!.id;
@@ -33,19 +36,30 @@ export function InviteDetailPage() {
     );
   }
 
-  if (loading) return <MembersListSkeleton />;
+  if (loading) return <ListPageSkeleton />;
 
   if (!invite) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Not found</AlertTitle>
-        <AlertDescription>Invite not found or no longer pending.</AlertDescription>
-      </Alert>
+      <div className="space-y-6">
+        <DetailPageHeader backTo="/members" backLabel="Members" title="Invitation" />
+        <PageError title="Not found" message="Invitation not found or no longer pending.">
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to="/members">Back to members</Link>
+          </Button>
+        </PageError>
+      </div>
     );
   }
 
   async function handleRevoke() {
-    if (!inviteId || !window.confirm("Revoke this invitation?")) return;
+    const ok = await confirm({
+      title: "Revoke invitation",
+      description: `Revoke the invitation for ${invite!.email}?`,
+      confirmLabel: "Revoke",
+      destructive: true,
+    });
+    if (!ok || !inviteId) return;
+
     setRevoking(true);
     try {
       await revokeTenantInvite(tenantId, inviteId);
