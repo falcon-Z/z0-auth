@@ -5,7 +5,6 @@ import type { TenantSummary } from "@z0/contracts/tenants";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
-import { TenantDashboardCards } from "../../dashboard/components/TenantDashboardCards";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
@@ -113,11 +112,11 @@ export function TenantDetailPage() {
         </div>
       </dl>
 
-      <TenantDashboardCards
-        session={session}
-        tenantId={tenant.id}
-        canReadMembers={canReadMembers && isActive}
-      />
+      {isActive ? (
+        <Button variant="outline" asChild>
+          <Link to="/">Open dashboard</Link>
+        </Button>
+      ) : null}
     </div>
   );
 }

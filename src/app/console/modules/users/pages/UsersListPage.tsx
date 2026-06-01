@@ -74,7 +74,10 @@ export function UsersListPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <ListPageHeader title="Users" />
+        <ListPageHeader
+        title="Platform users"
+        description="Every account that can sign in to this IAM instance."
+      />
         <PageError message={error} onRetry={() => void reload()} />
       </div>
     );
@@ -82,7 +85,10 @@ export function UsersListPage() {
 
   return (
     <div className="space-y-6">
-      <ListPageHeader title="Users" />
+      <ListPageHeader
+        title="Platform users"
+        description="Every account that can sign in to this IAM instance."
+      />
 
       <ActionNotice message={notice} />
 

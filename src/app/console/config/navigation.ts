@@ -28,13 +28,12 @@ export type ConsoleNavItem = {
   path: string;
   icon: LucideIcon;
   status: ConsoleNavStatus;
-  /** Short module id, e.g. P2-M1 */
   module: string;
   summary: string;
-  /** Disable nav when no active tenant is selected */
   requiresTenant?: boolean;
-  /** Hide nav when session lacks this tenant permission (see tenant-permissions.ts) */
   requiredPermission?: string;
+  /** Route exists but is reached from identity / header, not sidebar. */
+  hideFromSidebar?: boolean;
 };
 
 export type ConsoleNavGroup = {
@@ -45,8 +44,8 @@ export type ConsoleNavGroup = {
 
 export const CONSOLE_NAV: ConsoleNavGroup[] = [
   {
-    id: "overview",
-    title: "Overview",
+    id: "workspace",
+    title: "This tenant",
     items: [
       {
         id: "dashboard",
@@ -55,7 +54,34 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: LayoutDashboard,
         status: "available",
         module: "P1-M1",
-        summary: "Platform home for operators; tenant home for members.",
+        summary: "Dashboard for the active tenant or platform.",
+      },
+      {
+        id: "members",
+        title: "Members",
+        path: "/members",
+        icon: Users,
+        status: "available",
+        module: "P2-M1",
+        summary: "People in the active tenant.",
+        requiresTenant: true,
+        requiredPermission: "users:read",
+      },
+    ],
+  },
+  {
+    id: "platform",
+    title: "Platform",
+    items: [
+      {
+        id: "users",
+        title: "Platform users",
+        path: "/users",
+        icon: BadgeCheck,
+        status: "available",
+        module: "P2-M2",
+        summary: "All accounts on this IAM instance.",
+        requiredPermission: "platform:users:read",
       },
       {
         id: "analytics",
@@ -69,29 +95,18 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
     ],
   },
   {
-    id: "tenant",
-    title: "Tenant",
+    id: "administration",
+    title: "Administration",
     items: [
       {
-        id: "members",
-        title: "Members",
-        path: "/members",
-        icon: Users,
+        id: "tenants",
+        title: "All tenants",
+        path: "/tenants",
+        icon: Building2,
         status: "available",
-        module: "P2-M1",
-        summary: "Members and invitations.",
-        requiresTenant: true,
-        requiredPermission: "users:read",
-      },
-      {
-        id: "users",
-        title: "Users",
-        path: "/users",
-        icon: BadgeCheck,
-        status: "available",
-        module: "P2-M2",
-        summary: "Platform user lifecycle — disable and re-enable accounts.",
-        requiredPermission: "platform:users:read",
+        module: "P2-M4",
+        summary: "Tenants you belong to; create when permitted.",
+        requiredPermission: "tenants:read",
       },
       {
         id: "roles",
@@ -102,16 +117,6 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         module: "P2-M1",
         summary: "Tenant role catalog and permission assignments.",
         requiresTenant: true,
-      },
-      {
-        id: "tenants",
-        title: "Tenants",
-        path: "/tenants",
-        icon: Building2,
-        status: "available",
-        module: "P2-M4",
-        summary: "Tenants you belong to; create new ones when permitted.",
-        requiredPermission: "tenants:read",
       },
     ],
   },
@@ -161,7 +166,8 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: CircleUser,
         status: "available",
         module: "P2-UX",
-        summary: "Password, sessions, and other settings for you as a signed-in user.",
+        summary: "Your profile, tenants, password, and sessions.",
+        hideFromSidebar: true,
       },
     ],
   },
@@ -283,14 +289,27 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
 
 export const CONSOLE_NAV_ITEMS: ConsoleNavItem[] = CONSOLE_NAV.flatMap((group) => group.items);
 
-/** Shipped modules only — hide stub/planned from sidebar. */
 export function isConsoleNavItemVisible(item: ConsoleNavItem): boolean {
   return item.status === "available";
 }
 
+const PROFILE_TITLES: Record<string, string> = {
+  "/profile": "Your account",
+  "/profile/security": "Password",
+  "/profile/sessions": "Sessions",
+};
+
 export function findNavItem(pathname: string): ConsoleNavItem | undefined {
+  if (pathname in PROFILE_TITLES) {
+    return CONSOLE_NAV_ITEMS.find((item) => item.path === "/profile");
+  }
   if (pathname === "/") {
     return CONSOLE_NAV_ITEMS.find((item) => item.path === "/");
   }
   return CONSOLE_NAV_ITEMS.find((item) => item.path !== "/" && pathname.startsWith(item.path));
+}
+
+export function pageTitleForPath(pathname: string): string {
+  if (pathname in PROFILE_TITLES) return PROFILE_TITLES[pathname]!;
+  return findNavItem(pathname)?.title ?? "Console";
 }

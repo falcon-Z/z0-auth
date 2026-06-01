@@ -22,8 +22,10 @@ import {
   handleRevokeOtherSessions,
   handleRevokeSession,
 } from "./sessions/handlers";
+import { handleConsoleSummary } from "./console/handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
+  { pattern: "/api/v1/console/summary", handlers: { GET: handleConsoleSummary } },
   { pattern: "/api/v1/users", handlers: { GET: handleListUsers } },
   { pattern: "/api/v1/users/:userId", handlers: { GET: handleGetUser, PATCH: handlePatchUser } },
   { pattern: "/api/v1/roles", handlers: { GET: handleListRoles } },

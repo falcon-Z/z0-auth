@@ -17,7 +17,9 @@ import { CONSOLE_NAV, isConsoleNavItemVisible } from "../../config/navigation";
 import { shouldHideTenantsNav } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
 import { sessionHasPermission } from "../../lib/tenant-permissions";
-import { SidebarWorkspace } from "./SidebarWorkspace";
+import { SidebarAccountFooter } from "./SidebarAccountFooter";
+import { SidebarIdentity } from "./SidebarIdentity";
+import { SidebarTenantSwitcher } from "./SidebarTenantSwitcher";
 
 function isNavItemActive(pathname: string, path: string): boolean {
   if (path === "/") return pathname === "/";
@@ -31,13 +33,15 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      <SidebarHeader>
-        <SidebarWorkspace />
+      <SidebarHeader className="gap-3 border-b pb-3">
+        <SidebarIdentity />
+        <SidebarTenantSwitcher />
       </SidebarHeader>
 
       <SidebarContent>
         {CONSOLE_NAV.map((group) => {
           const items = group.items.filter((item) => {
+            if (item.hideFromSidebar) return false;
             if (!isConsoleNavItemVisible(item)) return false;
             if (item.id === "tenants" && shouldHideTenantsNav(session)) return false;
             if (item.requiredPermission && !sessionHasPermission(session, item.requiredPermission)) {
@@ -90,6 +94,7 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
+      <SidebarAccountFooter />
       <SidebarRail />
     </Sidebar>
   );

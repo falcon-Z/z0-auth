@@ -93,7 +93,7 @@ export function UserDetailPage() {
     <div className="space-y-6">
       <DetailPageHeader
         backTo="/users"
-        backLabel="Users"
+        backLabel="Platform users"
         title={user.name}
         actions={
           canWriteUsers && !isSelf ? (

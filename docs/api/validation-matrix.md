@@ -323,6 +323,21 @@ See `docs/api/security-contract.md` and `docs/api/references/oauth.openapi.yaml`
 
 ---
 
+## `GET /api/v1/console/summary`
+
+| Rule | Code | HTTP | UI |
+|------|------|------|-----|
+| Session | Required | — | 401 | Login |
+| Tenant metrics | Active tenant + `users:read` | — | 200 (omit `tenant` if not allowed) | Dashboard member/invite counts |
+| Invite count | Included only when `users:invite` | — | 200 | Pending invites metric |
+| Platform metrics | `platform:users:read` | — | 200 (omit `platform` if not allowed) | Platform users metric |
+| Membership | Always | — | 200 | Your tenants count |
+| Sessions | Always (self) | — | 200 | Active sessions count |
+
+**Success:** 200 `ConsoleSummaryResponse`. **Test:** `console-summary`.
+
+---
+
 ## Password policy reference
 
 Constants: `PASSWORD_MIN_LENGTH` = 14, `PASSWORD_MAX_LENGTH` = 128.
