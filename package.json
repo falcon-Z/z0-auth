@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:reset": "bun src/scripts/db-reset.ts",
+    "db:migrate": "bun src/scripts/db-migrate.ts",
     "db:setup": "bun src/scripts/db-reset.ts"
   },
   "dependencies": {

@@ -251,6 +251,39 @@ When adding an endpoint, add a row here and a test in `tests/integration/`.
 
 ---
 
+## `GET /api/v1/sessions`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| Session | Required | — | 401 | Redirect to login | `sessions-management` |
+| Scope | Current user only (no admin revoke others in v1) | — | 200 | Sessions table | `sessions-management` |
+| Success | `{ sessions[] }` with `clientLabel`, `ipDisplay`, `isCurrent` | — | 200 | Device column | `sessions-management` |
+
+---
+
+## `DELETE /api/v1/sessions/:sessionId`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
+| Session | Required | — | 401 | Redirect to login | `sessions-management` |
+| `sessionId` | Active session owned by user | `session_not_found` | 404 | Inline error | `sessions-management` |
+| Current session | Revoke + clear cookie | — | 200 `{ revokedCurrent: true }` | Redirect to login | `sessions-management` |
+| Other session | Revoke only | — | 200 `{ revokedCurrent: false }` | Row removed | `sessions-management` |
+| Success | Audit `session.revoked` / `session.revoked_current` | — | 200 | — | `sessions-management` |
+
+---
+
+## `POST /api/v1/sessions/revoke-others`
+
+| Input | Rule | Code | HTTP | UI | Test |
+|-------|------|------|------|-----|------|
+| CSRF | Valid | `csrf_invalid` | 403 | Refresh CSRF | — |
+| Session | Required | — | 401 | Redirect to login | `sessions-management` |
+| Success | Revokes all except current; audit `session.revoked_others` | — | 200 `{ revokedCount }` | Confirm dialog | `sessions-management` |
+
+---
+
 ## OAuth (planned — enforce before implementation)
 
 | Input | Rule | Code | HTTP |

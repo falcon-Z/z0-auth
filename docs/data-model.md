@@ -99,7 +99,7 @@ Platform admins may have platform roles without belonging to every org; org APIs
 
 | Table | Purpose |
 |-------|---------|
-| `sessions` | `user_id`, token hash, expiry, revocation, device metadata. No `tenant_id`. |
+| `sessions` | `user_id`, token hash, expiry, revocation, `ip_hash` / `user_agent_hash`, display fields `client_label` (e.g. "Chrome on Windows") and `ip_display` (masked IPv4). No `tenant_id`. |
 | `user_preferences` | `active_tenant_id` (nullable) for console org switcher. |
 
 ### OAuth (planned tables, implement structure in P1-M1)

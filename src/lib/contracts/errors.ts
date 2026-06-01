@@ -61,6 +61,8 @@ export const ErrorCodes = {
   CANNOT_DISABLE_SELF: "cannot_disable_self",
   /** Cannot disable the last active platform administrator. */
   LAST_PLATFORM_ADMIN: "last_platform_admin",
+  /** Session id not found or not active for the current user. */
+  SESSION_NOT_FOUND: "session_not_found",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

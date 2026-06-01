@@ -53,6 +53,7 @@ When you propose a feature, share your idea and push back where useful. I should
 - Prefer **minimal or no external dependencies**; Bun covers most needs.
 - If a third-party library is needed, explain **why** and **how** so we can discuss before adding it.
 - **Implementation order:** OpenAPI spec → data model → handlers → integration tests (edge cases), following existing repo patterns.
+- **Migrations:** after tests pass, run `bun run db:migrate` on **dev** before closing the task — see `.cursor/rules/database-migrations.mdc`.
 
 ## UI
 

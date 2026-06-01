@@ -15,6 +15,11 @@ import {
   handleListUsers,
   handlePatchUser,
 } from "./users/handlers";
+import {
+  handleListSessions,
+  handleRevokeOtherSessions,
+  handleRevokeSession,
+} from "./sessions/handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/users", handlers: { GET: handleListUsers } },
@@ -28,4 +33,7 @@ export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/invites/:token", handlers: { GET: handleInvitePreview } },
   { pattern: "/api/v1/invites/:token/accept", handlers: { POST: handleAcceptInvite } },
   { pattern: "/api/v1/invites/:token/decline", handlers: { POST: handleDeclineInvite } },
+  { pattern: "/api/v1/sessions", handlers: { GET: handleListSessions } },
+  { pattern: "/api/v1/sessions/revoke-others", handlers: { POST: handleRevokeOtherSessions } },
+  { pattern: "/api/v1/sessions/:sessionId", handlers: { DELETE: handleRevokeSession } },
 ];

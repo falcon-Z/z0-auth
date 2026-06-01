@@ -1,0 +1,36 @@
+---
+description: Apply SQL migrations to dev DB before closing tasks; never leave dev schema behind tests
+alwaysApply: true
+---
+
+# Database migrations
+
+Integration tests reset **TEST_DATABASE_URL** and apply all files under `src/scripts/sql/migrations/`. The **dev** database (`DATABASE_URL` in `.env`) does **not** update automatically.
+
+## When this applies
+
+Any work that adds or changes files in `src/scripts/sql/migrations/`, or code that depends on new columns/tables.
+
+## Before marking a module/task done
+
+1. **Tests** — integration tests green (they prove migrations apply cleanly on a fresh schema).
+2. **Dev database** — run pending migrations on dev:
+   ```bash
+   bun run db:migrate
+   ```
+   Use the repo root `.env` `DATABASE_URL` (not the test DB).
+3. **Verify** — confirm the migration is recorded and the app works against dev (e.g. hit the new API or page; no `column does not exist` / missing table errors in the dev server log).
+4. **Todoist close comment** — note that dev was migrated (e.g. `bun run db:migrate` applied `0007_…`).
+
+## Do not
+
+- Close a task or say the module is done while dev still lacks the new schema.
+- Tell the user to “refresh” without migrating dev when the failure is a schema mismatch.
+- Use `db:reset` on dev unless the user explicitly asks (it wipes data).
+
+## Commands
+
+| Command | Use |
+|---------|-----|
+| `bun run db:migrate` | Apply **pending** migrations to dev (default after shipping schema changes) |
+| `bun run db:reset` | Wipe and rebuild dev + test-style full schema (destructive) |

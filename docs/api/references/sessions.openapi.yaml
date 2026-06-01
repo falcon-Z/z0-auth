@@ -1,0 +1,125 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Sessions API
+  version: 0.1.0
+  description: Self-service session list and revocation for the signed-in user.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Sessions
+paths:
+  /api/v1/sessions:
+    get:
+      tags: [Sessions]
+      summary: List active sessions for the current user
+      operationId: listSessions
+      responses:
+        "200":
+          description: Sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListSessionsResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /api/v1/sessions/revoke-others:
+    post:
+      tags: [Sessions]
+      summary: Revoke all sessions except the current one
+      operationId: revokeOtherSessions
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeOtherSessionsResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/sessions/{sessionId}:
+    delete:
+      tags: [Sessions]
+      summary: Revoke one session
+      operationId: revokeSession
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeSessionResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+components:
+  schemas:
+    SessionSummary:
+      type: object
+      required: [id, clientLabel, lastSeenAt, createdAt, isCurrent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientLabel:
+          type: string
+          example: Chrome on Windows
+        ipDisplay:
+          type: string
+          nullable: true
+          example: 203.0.113.x
+        lastSeenAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        isCurrent:
+          type: boolean
+    ListSessionsResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionSummary"
+    RevokeSessionResponse:
+      type: object
+      required: [ok, revokedCurrent]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        revokedCurrent:
+          type: boolean
+    RevokeOtherSessionsResponse:
+      type: object
+      required: [ok, revokedCount]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        revokedCount:
+          type: integer
+          minimum: 0

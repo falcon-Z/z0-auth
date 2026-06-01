@@ -36,9 +36,10 @@ All must be true:
 
 1. OpenAPI + validation matrix rows for this module are **done** (not stub/planned).
 2. Integration tests cover happy path and key denials/errors.
-3. **UI** (if in scope): real pages registered in `routes.tsx`, no dev placeholder shown for that nav item.
-4. Manual smoke or automated check that the primary user journey works end-to-end.
-5. Subtasks created during the module are completed or explicitly moved to follow-up tasks.
-6. Comment on the Todoist task with what shipped and how it was verified — then complete.
+3. **SQL migrations** (if any): `bun run db:migrate` on **dev** (`DATABASE_URL`); dev smoke passes — see `.cursor/rules/database-migrations.mdc`.
+4. **UI** (if in scope): real pages registered in `routes.tsx`, no dev placeholder shown for that nav item.
+5. Manual smoke or automated check that the primary user journey works end-to-end.
+6. Subtasks created during the module are completed or explicitly moved to follow-up tasks.
+7. Comment on the Todoist task with what shipped and how it was verified (include dev migrate when applicable) — then complete.
 
 **API-only green tests ≠ module done** when the task includes UI.

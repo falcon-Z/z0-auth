@@ -1,6 +1,7 @@
 import type { BunRequest } from "bun";
 
 import { sha256Hex, randomToken } from "./crypto";
+import { maskIpForDisplay, parseClientLabel } from "./client-hint";
 import { getDb } from "./db";
 import { loadConfig } from "./config";
 
@@ -14,13 +15,32 @@ export async function createSession(
   const token = randomToken(32);
   const tokenHash = await sha256Hex(token);
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  const ipHash = await sha256Hex(clientIp(req));
+  const ip = clientIp(req);
+  const ipHash = await sha256Hex(ip);
   const ua = req.headers.get("user-agent") ?? "";
   const userAgentHash = await sha256Hex(ua);
+  const clientLabel = parseClientLabel(ua);
+  const ipDisplay = maskIpForDisplay(ip);
 
   await getDb()`
-    INSERT INTO sessions (user_id, token_hash, expires_at, ip_hash, user_agent_hash)
-    VALUES (${userId}, ${tokenHash}, ${expiresAt}, ${ipHash}, ${userAgentHash})
+    INSERT INTO sessions (
+      user_id,
+      token_hash,
+      expires_at,
+      ip_hash,
+      user_agent_hash,
+      client_label,
+      ip_display
+    )
+    VALUES (
+      ${userId},
+      ${tokenHash},
+      ${expiresAt},
+      ${ipHash},
+      ${userAgentHash},
+      ${clientLabel},
+      ${ipDisplay}
+    )
   `;
 
   return { token, expiresAt };

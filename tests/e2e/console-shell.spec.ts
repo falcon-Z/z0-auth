@@ -26,9 +26,9 @@ test.describe("console shell", () => {
     expect(bg).not.toBe("transparent");
   });
 
-  test("navigates to a planned module placeholder", async ({ page }) => {
+  test("loads sessions page when signed in", async ({ page }) => {
     await page.goto("/security/sessions");
     await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-    await expect(page.getByText("Not available yet")).toBeVisible();
+    await expect(page.getByText("Not available yet")).not.toBeVisible();
   });
 });

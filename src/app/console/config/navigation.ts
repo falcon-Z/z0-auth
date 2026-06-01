@@ -159,7 +159,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         title: "Sessions",
         path: "/security/sessions",
         icon: MonitorSmartphone,
-        status: "planned",
+        status: "available",
         module: "P2-M3",
         summary: "List active sessions, revoke one, or revoke all other devices.",
       },
