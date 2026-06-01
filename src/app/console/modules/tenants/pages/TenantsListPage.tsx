@@ -12,6 +12,7 @@ import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ApiError } from "../../../lib/api";
 import { fetchTenants } from "../../../lib/tenants-api";
+import { isSessionMemberOfTenant } from "../../../lib/tenant-membership";
 import { useSession } from "../../../context/session-context";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -51,18 +52,22 @@ export function TenantsListPage() {
     }
   }, [navigate, session]);
 
-  async function handleSwitch(tenant: TenantSummary) {
-    if (tenant.id === activeId) {
+  async function openTenant(tenant: TenantSummary) {
+    if (!isSessionMemberOfTenant(session, tenant.id)) {
       navigate(`/tenants/${tenant.id}`);
       return;
     }
+
+    if (tenant.id === activeId) {
+      navigate("/");
+      return;
+    }
+
     setBusyId(tenant.id);
     setActionError(null);
     try {
-      await switchOrganization(tenant.id);
-      navigate(`/tenants/${tenant.id}`);
-    } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Could not switch tenant.");
+      const ok = await switchOrganization(tenant.id);
+      if (ok) navigate("/");
     } finally {
       setBusyId(null);
     }
@@ -85,7 +90,7 @@ export function TenantsListPage() {
         title="Tenants"
         description={
           platformDirectory
-            ? "All organizations on this platform. Your sidebar switcher only lists orgs you belong to."
+            ? "All tenants on this platform. Your sidebar switcher only lists tenants you belong to."
             : undefined
         }
         actions={
@@ -126,20 +131,23 @@ export function TenantsListPage() {
         ]}
         rows={tenants}
         rowKey={(row) => row.id}
-        onRowClick={(tenant) => navigate(`/tenants/${tenant.id}`)}
+        onRowClick={(tenant) => void openTenant(tenant)}
         emptyMessage={canCreate ? "No tenants yet" : "No tenants"}
         rowActions={(tenant) => (
           <div className="flex flex-wrap justify-end gap-1">
-            <RowActionLink to={`/tenants/${tenant.id}`}>View</RowActionLink>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busyId === tenant.id || switching}
-              onClick={() => void handleSwitch(tenant)}
-            >
-              {tenant.id === activeId ? "Open" : busyId === tenant.id ? "Switching…" : "Switch"}
-            </Button>
+            {isSessionMemberOfTenant(session, tenant.id) ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busyId === tenant.id || switching}
+                onClick={() => void openTenant(tenant)}
+              >
+                {tenant.id === activeId ? "Dashboard" : busyId === tenant.id ? "Switching…" : "Open"}
+              </Button>
+            ) : (
+              <RowActionLink to={`/tenants/${tenant.id}`}>View</RowActionLink>
+            )}
           </div>
         )}
       />

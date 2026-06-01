@@ -18,7 +18,7 @@ type SessionContextValue = {
   session: SessionResponse;
   refreshSession: () => Promise<void>;
   signOut: () => Promise<void>;
-  switchOrganization: (tenantId: string) => Promise<void>;
+  switchOrganization: (tenantId: string) => Promise<boolean>;
   switchError: string | null;
   switching: boolean;
 };
@@ -84,14 +84,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.location.href = "/auth/login";
   }, []);
 
-  const switchOrganization = useCallback(async (tenantId: string) => {
+  const switchOrganization = useCallback(async (tenantId: string): Promise<boolean> => {
     setSwitchError(null);
     setSwitching(true);
     try {
       const next = await postActiveTenant(tenantId);
       setSession(next);
+      return true;
     } catch (error) {
       setSwitchError(error instanceof Error ? error.message : "Could not switch to that tenant.");
+      return false;
     } finally {
       setSwitching(false);
     }

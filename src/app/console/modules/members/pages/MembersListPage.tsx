@@ -96,7 +96,7 @@ export function MembersListPage() {
     return (
       <div className="space-y-6">
         <ListPageHeader title="Members" />
-        <PageError title="No organization" message="Choose an active organization to view members." />
+        <PageError title="No tenant" message="Choose an active tenant to view members." />
       </div>
     );
   }

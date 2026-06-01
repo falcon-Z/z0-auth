@@ -33,7 +33,12 @@ function PasswordChecklist({ password }: { password: string }) {
   );
 }
 
-export function AccountSecurityPage() {
+type AccountSecurityPageProps = {
+  /** Render inside profile tab layout (no duplicate back header). */
+  embedded?: boolean;
+};
+
+export function AccountSecurityPage({ embedded = false }: AccountSecurityPageProps) {
   const { session } = useSession();
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
@@ -72,8 +77,14 @@ export function AccountSecurityPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <DetailPageHeader backTo="/profile" backLabel="Your account" title="Password" />
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-lg space-y-6"}>
+      {!embedded ? (
+        <DetailPageHeader backTo="/profile" backLabel="Your account" title="Password" />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Update your password. Other sessions are signed out when you save.
+        </p>
+      )}
 
       {success ? (
         <Alert>

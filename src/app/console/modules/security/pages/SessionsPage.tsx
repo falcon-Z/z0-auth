@@ -22,7 +22,11 @@ function formatWhen(iso: string): string {
   });
 }
 
-export function SessionsPage() {
+type SessionsPageProps = {
+  embedded?: boolean;
+};
+
+export function SessionsPage({ embedded = false }: SessionsPageProps) {
   const confirm = useConfirm();
   const { signOut } = useSession();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -107,10 +111,24 @@ export function SessionsPage() {
 
   const otherCount = sessions.filter((s) => !s.isCurrent).length;
 
+  const revokeOthersAction =
+    otherCount > 0 ? (
+      <Button
+        type="button"
+        variant="outline"
+        disabled={revokingOthers}
+        onClick={() => void handleRevokeOthers()}
+      >
+        Sign out others
+      </Button>
+    ) : undefined;
+
   if (loading) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+        {!embedded ? (
+          <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+        ) : null}
         <ListPageSkeleton />
       </div>
     );
@@ -119,7 +137,9 @@ export function SessionsPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+        {!embedded ? (
+          <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+        ) : null}
         <PageError message={error} onRetry={() => void reload()} />
       </div>
     );
@@ -127,23 +147,22 @@ export function SessionsPage() {
 
   return (
     <div className="space-y-6">
-      <DetailPageHeader
-        backTo="/profile"
-        backLabel="Your account"
-        title="Sessions"
-        actions={
-          otherCount > 0 ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={revokingOthers}
-              onClick={() => void handleRevokeOthers()}
-            >
-              Sign out others
-            </Button>
-          ) : undefined
-        }
-      />
+      {!embedded ? (
+        <DetailPageHeader
+          backTo="/profile"
+          backLabel="Your account"
+          title="Sessions"
+          actions={revokeOthersAction}
+        />
+      ) : revokeOthersAction ? (
+        <div className="flex justify-end">{revokeOthersAction}</div>
+      ) : null}
+
+      {embedded ? (
+        <p className="text-sm text-muted-foreground">
+          Devices and browsers where you are signed in to this account.
+        </p>
+      ) : null}
 
       <ActionNotice message={notice} />
 

@@ -1,0 +1,82 @@
+import { useCallback, useEffect, useState } from "react";
+
+import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
+import { fetchConsoleSummary } from "../../../lib/console-summary-api";
+import { ApiError } from "../../../lib/api";
+import { formatRoleKey } from "../../../lib/tenant-permissions";
+import { useSession } from "../../../context/session-context";
+import { Badge } from "@z0/components/ui/badge";
+
+export function ProfileOverviewPage() {
+  const { session } = useSession();
+  const [summary, setSummary] = useState<ConsoleSummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setSummary(await fetchConsoleSummary());
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Could not load profile.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  if (loading) return <ListPageSkeleton />;
+  if (error) return <PageError message={error} onRetry={() => void reload()} />;
+
+  return (
+    <div className="space-y-6">
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium">About you</h2>
+        <dl className="grid gap-3 rounded-lg border px-4 py-3 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Name</dt>
+            <dd className="text-right font-medium">{session.user.name}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Email</dt>
+            <dd className="text-right">{session.user.email}</dd>
+          </div>
+          {(session.roles?.length ?? 0) > 0 ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+              <dt className="text-muted-foreground">Platform roles</dt>
+              <dd className="flex flex-wrap justify-end gap-1">
+                {session.roles!.map((role) => (
+                  <Badge key={role} variant="secondary" className="capitalize">
+                    {formatRoleKey(role)}
+                  </Badge>
+                ))}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      </section>
+
+      {summary ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">At a glance</h2>
+          <dl className="grid gap-3 rounded-lg border px-4 py-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Tenants</dt>
+              <dd className="mt-0.5 tabular-nums font-medium">{summary.membership.tenantCount}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Active sessions</dt>
+              <dd className="mt-0.5 tabular-nums font-medium">{summary.sessions.activeCount}</dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
+    </div>
+  );
+}

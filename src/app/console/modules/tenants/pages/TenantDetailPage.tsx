@@ -1,27 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import type { TenantSummary } from "@z0/contracts/tenants";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayout";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fetchTenants } from "../../../lib/tenants-api";
-import { useTenantPermissions } from "../../../hooks/use-tenant-permissions";
+import { isSessionMemberOfTenant } from "../../../lib/tenant-membership";
 import { useSession } from "../../../context/session-context";
 
 export function TenantDetailPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const navigate = useNavigate();
-  const { session, switchOrganization, switching } = useSession();
-  const { canReadMembers } = useTenantPermissions();
+  const { session, switchOrganization, switching, switchError } = useSession();
   const [tenant, setTenant] = useState<TenantSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
 
+  const isMember = tenantId ? isSessionMemberOfTenant(session, tenantId) : false;
   const isActive = tenantId === session.tenant?.id;
 
   const reload = useCallback(async () => {
@@ -32,7 +32,7 @@ export function TenantDetailPage() {
       const tenants = await fetchTenants();
       const match = tenants.find((t) => t.id === tenantId);
       if (!match) {
-        setError("Tenant not found or you are not a member.");
+        setError("Tenant not found or you cannot view it.");
         setTenant(null);
       } else {
         setTenant(match);
@@ -48,75 +48,84 @@ export function TenantDetailPage() {
     void reload();
   }, [reload]);
 
-  async function handleSwitch() {
-    if (!tenantId || isActive) return;
-    setActionError(null);
-    try {
-      await switchOrganization(tenantId);
-      navigate(`/tenants/${tenantId}`, { replace: true });
-    } catch (e) {
-      setActionError(e instanceof ApiError ? e.message : "Could not switch tenant.");
-    }
-  }
+  useEffect(() => {
+    if (loading || !tenant || !tenantId || !isMember) return;
 
-  if (loading) return <ListPageSkeleton />;
+    if (isActive) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    setOpening(true);
+    void switchOrganization(tenantId).then((ok) => {
+      if (cancelled) return;
+      if (ok) {
+        navigate("/", { replace: true });
+      } else {
+        setOpening(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, tenant, tenantId, isMember, isActive, navigate, switchOrganization]);
+
+  if (loading || opening || switching) {
+    return <ListPageSkeleton />;
+  }
 
   if (error || !tenant) {
     return (
-      <div className="space-y-6">
-        <DetailPageHeader backTo="/tenants" backLabel="Tenants" title="Tenant" />
+      <EntityDetailLayout backTo="/tenants" backLabel="Tenants" name="Tenant" tabs={[]}>
         <PageError title="Not found" message={error ?? "Tenant not found."} onRetry={() => void reload()} />
-      </div>
+      </EntityDetailLayout>
     );
   }
 
+  if (isMember) {
+    if (switchError) {
+      return (
+        <EntityDetailLayout backTo="/tenants" backLabel="Tenants" name={tenant.name} subtitle={tenant.slug}>
+          <PageError message={switchError} onRetry={() => void reload()} />
+        </EntityDetailLayout>
+      );
+    }
+    return <ListPageSkeleton />;
+  }
+
   return (
-    <div className="space-y-8">
-      <DetailPageHeader
-        backTo="/tenants"
-        backLabel="Tenants"
-        title={tenant.name}
-        actions={
-          <div className="flex flex-wrap gap-2">
-            {!isActive ? (
-              <Button type="button" disabled={switching} onClick={() => void handleSwitch()}>
-                {switching ? "Switching…" : "Switch to this tenant"}
-              </Button>
-            ) : (
-              <Badge variant="secondary" className="h-9 px-3">
-                Active tenant
-              </Badge>
-            )}
-            {canReadMembers && isActive ? (
-              <Button variant="outline" asChild>
-                <Link to="/members">Members</Link>
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
+    <EntityDetailLayout
+      backTo="/tenants"
+      backLabel="Tenants"
+      name={tenant.name}
+      subtitle={tenant.slug}
+      badges={
+        <>
+          {tenant.isDefault ? <Badge variant="outline">Default</Badge> : null}
+          <Badge variant="outline">View only</Badge>
+        </>
+      }
+    >
+      {switchError ? <PageError message={switchError} /> : null}
 
-      {actionError ? <PageError message={actionError} /> : null}
+      <p className="text-sm text-muted-foreground">
+        You are not a member of this tenant. Join via invite to access its dashboard and members.
+      </p>
 
-      <dl className="grid max-w-lg gap-4 text-sm">
+      <dl className="mt-6 grid max-w-lg gap-4 text-sm">
         <div>
           <dt className="text-muted-foreground">Slug</dt>
           <dd>{tenant.slug}</dd>
         </div>
-        <div>
-          <dt className="text-muted-foreground">Status</dt>
-          <dd className="flex flex-wrap gap-1">
-            {isActive ? <Badge variant="secondary">Active</Badge> : null}
-            {tenant.isDefault ? <Badge variant="outline">Default</Badge> : null}
-          </dd>
-        </div>
       </dl>
 
-      {isActive ? (
-        <Button variant="outline" asChild>
-          <Link to="/">Open dashboard</Link>
+      <div className="pt-4">
+        <Button type="button" variant="outline" onClick={() => navigate("/tenants")}>
+          Back to directory
         </Button>
-      ) : null}
-    </div>
+      </div>
+    </EntityDetailLayout>
   );
 }

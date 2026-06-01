@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayout";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -27,19 +27,19 @@ export function MemberDetailPage() {
   const [removing, setRemoving] = useState(false);
 
   const member = members.find((m) => m.userId === userId);
+  const isSelf = userId === session.user?.id;
 
   if (loading) return <ListPageSkeleton />;
 
   if (!member) {
     return (
-      <div className="space-y-6">
-        <DetailPageHeader backTo="/members" backLabel="Members" title="Member" />
+      <EntityDetailLayout backTo="/members" backLabel="Members" name="Member" tabs={[]}>
         <PageError title="Not found" message="Member not found.">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/members">Back to members</Link>
           </Button>
         </PageError>
-      </div>
+      </EntityDetailLayout>
     );
   }
 
@@ -62,26 +62,35 @@ export function MemberDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <DetailPageHeader
-        backTo="/members"
-        backLabel="Members"
-        title={member.name}
-        actions={
-          canInviteMembers ? (
-            <>
-              <Button variant="outline" onClick={() => setEditOpen(true)}>
-                Edit roles
-              </Button>
-              <Button variant="destructive" disabled={removing} onClick={() => void handleRemove()}>
-                Remove
-              </Button>
-            </>
-          ) : undefined
-        }
-      />
-
-      <dl className="grid max-w-lg gap-4 text-sm">
+    <EntityDetailLayout
+      backTo="/members"
+      backLabel="Members"
+      name={member.name}
+      subtitle={member.email}
+      badges={
+        <>
+          {isSelf ? <Badge variant="outline">You</Badge> : null}
+          {member.roleKeys.map((key) => (
+            <Badge key={key} variant="secondary" className="capitalize">
+              {formatRoleKey(key)}
+            </Badge>
+          ))}
+        </>
+      }
+      actions={
+        canInviteMembers && !isSelf ? (
+          <>
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              Edit roles
+            </Button>
+            <Button variant="destructive" disabled={removing} onClick={() => void handleRemove()}>
+              Remove
+            </Button>
+          </>
+        ) : undefined
+      }
+    >
+      <dl className="grid gap-4 text-sm">
         <div>
           <dt className="text-muted-foreground">Email</dt>
           <dd>{member.email}</dd>
@@ -114,6 +123,6 @@ export function MemberDetailPage() {
           }}
         />
       ) : null}
-    </div>
+    </EntityDetailLayout>
   );
 }

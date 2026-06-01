@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import type { PlatformUserDetail } from "@z0/contracts/users";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayout";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ActionNotice } from "../../../components/feedback/ActionNotice";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
@@ -25,6 +25,7 @@ export function UserDetailPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<"overview" | "tenants">("overview");
 
   const reload = useCallback(async () => {
     if (!userId) return;
@@ -53,12 +54,13 @@ export function UserDetailPage() {
   if (error || !user) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader backTo="/users" backLabel="Users" title="User" />
-        <PageError title="Not found" message={error ?? "User not found."}>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/users">Back to users</Link>
-          </Button>
-        </PageError>
+        <EntityDetailLayout backTo="/users" backLabel="Platform users" name="User" tabs={[]}>
+          <PageError title="Not found" message={error ?? "User not found."}>
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link to="/users">Back to users</Link>
+            </Button>
+          </PageError>
+        </EntityDetailLayout>
       </div>
     );
   }
@@ -99,98 +101,104 @@ export function UserDetailPage() {
     }
   }
 
+  const tabs = [
+    { id: "overview" as const, label: "Overview" },
+    { id: "tenants" as const, label: "Tenants" },
+  ];
+
   return (
-    <div className="space-y-6">
-      <DetailPageHeader
-        backTo="/users"
-        backLabel="Platform users"
-        title={user.name}
-        actions={
-          canWriteUsers && !isSelf ? (
-            <Button
-              type="button"
-              variant={disabling ? "destructive" : "outline"}
-              disabled={busy}
-              onClick={() => void handleToggleStatus()}
-            >
-              {disabling ? "Disable account" : "Enable account"}
-            </Button>
-          ) : undefined
-        }
-      />
-
+    <EntityDetailLayout
+      backTo="/users"
+      backLabel="Platform users"
+      name={user.name}
+      subtitle={user.email}
+      badges={
+        <Badge variant={user.status === "active" ? "secondary" : "outline"} className="capitalize">
+          {user.status}
+        </Badge>
+      }
+      tabs={tabs}
+      activeTabId={tab}
+      onTabChange={(id) => setTab(id as "overview" | "tenants")}
+      actions={
+        canWriteUsers && !isSelf ? (
+          <Button
+            type="button"
+            variant={disabling ? "destructive" : "outline"}
+            disabled={busy}
+            onClick={() => void handleToggleStatus()}
+          >
+            {disabling ? "Disable account" : "Enable account"}
+          </Button>
+        ) : undefined
+      }
+    >
       <ActionNotice message={notice} />
-
       {actionError ? <PageError message={actionError} /> : null}
 
-      <dl className="grid max-w-2xl gap-4 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Email</dt>
-          <dd>{user.email}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Status</dt>
-          <dd>
-            <Badge variant={user.status === "active" ? "secondary" : "outline"} className="capitalize">
-              {user.status}
-            </Badge>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Platform roles</dt>
-          <dd className="mt-1 flex flex-wrap gap-1">
-            {user.platformRoles.length > 0 ? (
-              user.platformRoles.map((role) => (
-                <Badge key={role} variant="outline" className="capitalize">
-                  {formatRoleKey(role)}
-                </Badge>
-              ))
-            ) : (
-              "—"
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Active sessions</dt>
-          <dd className="tabular-nums">{user.activeSessionCount}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Member of</dt>
-          <dd className="tabular-nums">{user.tenantMemberships.length} organizations</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Created</dt>
-          <dd>{new Date(user.createdAt).toLocaleString()}</dd>
-        </div>
-      </dl>
-
-      {user.tenantMemberships.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium">Organization memberships</h2>
-          <ul className="divide-y rounded-lg border text-sm">
-            {user.tenantMemberships.map((m) => (
-              <li key={m.tenantId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <p className="font-medium">{m.tenantName}</p>
-                  <p className="text-xs text-muted-foreground">{m.tenantSlug}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Joined {new Date(m.joinedAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {m.roleKeys.map((role) => (
-                    <Badge key={role} variant="secondary" className="capitalize">
-                      {formatRoleKey(role)}
-                    </Badge>
-                  ))}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {tab === "overview" ? (
+        <dl className="grid gap-4 text-sm">
+          <div>
+            <dt className="text-muted-foreground">Email</dt>
+            <dd>{user.email}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Platform roles</dt>
+            <dd className="mt-1 flex flex-wrap gap-1">
+              {user.platformRoles.length > 0 ? (
+                user.platformRoles.map((role) => (
+                  <Badge key={role} variant="outline" className="capitalize">
+                    {formatRoleKey(role)}
+                  </Badge>
+                ))
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Active sessions</dt>
+            <dd className="tabular-nums">{user.activeSessionCount}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Member of</dt>
+            <dd className="tabular-nums">
+              {user.tenantMemberships.length}{" "}
+              {user.tenantMemberships.length === 1 ? "tenant" : "tenants"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Created</dt>
+            <dd>{new Date(user.createdAt).toLocaleString()}</dd>
+          </div>
+        </dl>
+      ) : user.tenantMemberships.length > 0 ? (
+        <ul className="divide-y rounded-lg border text-sm">
+          {user.tenantMemberships.map((m) => (
+            <li
+              key={m.tenantId}
+              className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">{m.tenantName}</p>
+                <p className="text-xs text-muted-foreground">{m.tenantSlug}</p>
+                <p className="text-xs text-muted-foreground">
+                  Joined {new Date(m.joinedAt).toLocaleDateString()}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {m.roleKeys.map((role) => (
+                  <Badge key={role} variant="secondary" className="capitalize">
+                    {formatRoleKey(role)}
+                  </Badge>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">This user is not a member of any organization.</p>
+        <p className="text-sm text-muted-foreground">This user is not a member of any tenant.</p>
       )}
-    </div>
+    </EntityDetailLayout>
   );
 }

@@ -3,14 +3,8 @@ import { ChevronRight } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@z0/components/ui/sidebar";
+import { initialsFromName } from "../../lib/initials";
 import { useSession } from "../../context/session-context";
-
-function initials(text: string): string {
-  const parts = text.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
-}
 
 /** Primary account entry — users expect the name row to open their profile. */
 export function SidebarIdentity() {
@@ -25,7 +19,7 @@ export function SidebarIdentity() {
           <Link to="/profile" aria-label="Your account">
             <Avatar className="size-8 rounded-lg">
               <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                {initials(name)}
+                {initialsFromName(name)}
               </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
