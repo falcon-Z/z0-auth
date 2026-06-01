@@ -1,5 +1,7 @@
 import type { SessionResponse } from "@z0/contracts/auth";
 
+import { sessionHasPermission } from "./tenant-permissions";
+
 /** User has at least one platform-scoped role (instance operator). */
 export function hasPlatformConsoleAccess(session: SessionResponse): boolean {
   return (session.roles?.length ?? 0) > 0;
@@ -16,7 +18,18 @@ export function tenantMembershipCount(session: SessionResponse): number {
   return session.tenant ? 1 : 0;
 }
 
-/** Single-tenant members do not need a tenants list in the sidebar. */
+/**
+ * Cross-tenant directory (sidebar /tenants). Not the same as `tenants:read` on the active org.
+ * Plain tenant members use the switcher only; platform operators and org creators use the list.
+ */
+export function shouldShowTenantsNav(session: SessionResponse): boolean {
+  if (!session.authenticated) return false;
+  if (sessionHasPermission(session, "platform:tenants:read")) return true;
+  if (sessionHasPermission(session, "tenants:create")) return true;
+  return false;
+}
+
+/** @deprecated Prefer shouldShowTenantsNav; kept for call sites that gate on hide. */
 export function shouldHideTenantsNav(session: SessionResponse): boolean {
-  return isTenantOnlyConsoleUser(session) && tenantMembershipCount(session) <= 1;
+  return !shouldShowTenantsNav(session);
 }

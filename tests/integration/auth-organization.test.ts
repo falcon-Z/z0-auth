@@ -152,6 +152,102 @@ run("organization context", () => {
     expect(back.tenant?.id).toBe(primaryTenantId);
     expect(back.tenantRoles).toContain("tenant_admin");
   });
+
+  test("tenant-only user permissions follow active tenant roles", async () => {
+    const adminToken = await login();
+    const adminSessionRes = await dispatchApi(
+      buildRequest("GET", "/api/auth/session", { cookies: { [SESSION_COOKIE]: adminToken } }),
+    );
+    const adminSession = (await adminSessionRes.json()) as SessionResponse;
+    const primaryTenantId = adminSession.tenant!.id;
+
+    const memberEmail = "member-roles@example.com";
+    const memberPassword = makeStrongPassword();
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const inviteRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${primaryTenantId}/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: adminToken },
+        body: {
+          email: memberEmail,
+          invitedName: "Role Test Member",
+          roleKeys: ["tenant_member"],
+        },
+      }),
+    );
+    expect(inviteRes.status).toBe(201);
+    const invite = (await inviteRes.json()) as { inviteUrl: string };
+    const token = new URL(invite.inviteUrl).pathname.split("/").pop() ?? "";
+    const acceptRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/invites/${token}/accept`, {
+        csrfToken: csrf,
+        body: {
+          name: "Role Test Member",
+          password: memberPassword,
+          passwordConfirm: memberPassword,
+        },
+      }),
+    );
+    expect(acceptRes.status).toBe(200);
+
+    const memberLogin = await dispatchApi(
+      buildRequest("POST", "/api/auth/login", {
+        csrfToken: csrf,
+        body: { email: memberEmail, password: memberPassword },
+      }),
+    );
+    expect(memberLogin.status).toBe(200);
+    const memberCookie = sessionCookieFromResponse(memberLogin)!;
+
+    const memberSessionRes = await dispatchApi(
+      buildRequest("GET", "/api/auth/session", { cookies: { [SESSION_COOKIE]: memberCookie } }),
+    );
+    const memberSession = (await memberSessionRes.json()) as SessionResponse;
+    const memberUserId = memberSession.user!.id;
+    expect(memberSession.permissions).toEqual(["tenants:read"]);
+
+    const secondaryTenantId = await addSecondOrganization(memberUserId);
+    const [adminRole] = await getDb()`
+      SELECT id FROM roles WHERE key = 'tenant_admin' AND scope = 'tenant'
+    `;
+    await getDb()`
+      DELETE FROM user_roles
+      WHERE user_id = ${memberUserId} AND tenant_id = ${secondaryTenantId}
+    `;
+    await getDb()`
+      INSERT INTO user_roles (user_id, role_id, tenant_id)
+      VALUES (${memberUserId}, ${(adminRole as { id: string }).id}, ${secondaryTenantId})
+    `;
+    await getDb()`
+      UPDATE tenant_memberships
+      SET role = 'tenant_admin'
+      WHERE user_id = ${memberUserId} AND tenant_id = ${secondaryTenantId}
+    `;
+
+    const onAdminTenant = await dispatchApi(
+      buildRequest("POST", "/api/auth/active-tenant", {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: memberCookie },
+        body: { tenantId: secondaryTenantId },
+      }),
+    );
+    const adminCtx = (await onAdminTenant.json()) as SessionResponse;
+    expect(adminCtx.tenantRoles).toContain("tenant_admin");
+    expect(adminCtx.permissions).toContain("users:read");
+    expect(adminCtx.permissions).not.toContain("platform:users:read");
+
+    const onMemberTenant = await dispatchApi(
+      buildRequest("POST", "/api/auth/active-tenant", {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: memberCookie },
+        body: { tenantId: primaryTenantId },
+      }),
+    );
+    const memberCtx = (await onMemberTenant.json()) as SessionResponse;
+    expect(memberCtx.tenantRoles).toEqual(["tenant_member"]);
+    expect(memberCtx.permissions).toEqual(["tenants:read"]);
+    expect(memberCtx.permissions).not.toContain("users:read");
+  });
 });
 
 afterAll(async () => {

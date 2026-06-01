@@ -72,16 +72,51 @@ export function ProfileHomePage() {
           </section>
 
           <section className="space-y-3">
+            <h2 className="text-sm font-medium">Security</h2>
+            <p className="text-xs text-muted-foreground">
+              Password and sign-in sessions for your account only.
+            </p>
+            <div className="divide-y rounded-lg border">
+              <Link
+                to="/profile/security"
+                className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
+              >
+                <span>
+                  <span className="font-medium">Change password</span>
+                </span>
+                <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+              </Link>
+              <Link
+                to="/profile/sessions"
+                className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
+              >
+                <span>
+                  <span className="font-medium">Sessions</span>
+                  {summary ? (
+                    <span className="ml-2 text-muted-foreground tabular-nums">
+                      {summary.sessions.activeCount} active
+                    </span>
+                  ) : null}
+                </span>
+                <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+              </Link>
+            </div>
+          </section>
+
+          <section className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-medium">Tenants</h2>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {summary?.membership.tenantCount ?? tenants.length}
               </span>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Switch the active tenant from the sidebar or here.
+            </p>
             {tenants.length === 0 ? (
               <p className="text-sm text-muted-foreground">You are not a member of any tenant.</p>
             ) : (
-              <ul className="divide-y rounded-lg border">
+              <ul className="max-h-72 divide-y overflow-y-auto rounded-lg border">
                 {tenants.map((tenant) => {
                   const isActive = tenant.id === session.tenant?.id;
                   return (
@@ -116,35 +151,6 @@ export function ProfileHomePage() {
               </ul>
             )}
             {switchError ? <p className="text-sm text-destructive">{switchError}</p> : null}
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-sm font-medium">Security</h2>
-            <div className="divide-y rounded-lg border">
-              <Link
-                to="/profile/security"
-                className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
-              >
-                <span>
-                  <span className="font-medium">Change password</span>
-                </span>
-                <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
-              </Link>
-              <Link
-                to="/profile/sessions"
-                className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/40"
-              >
-                <span>
-                  <span className="font-medium">Sessions</span>
-                  {summary ? (
-                    <span className="ml-2 text-muted-foreground tabular-nums">
-                      {summary.sessions.activeCount} active
-                    </span>
-                  ) : null}
-                </span>
-                <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
-              </Link>
-            </div>
           </section>
         </div>
       )}

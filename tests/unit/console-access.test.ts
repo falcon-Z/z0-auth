@@ -5,6 +5,7 @@ import {
   hasPlatformConsoleAccess,
   isTenantOnlyConsoleUser,
   shouldHideTenantsNav,
+  shouldShowTenantsNav,
   tenantMembershipCount,
 } from "../../src/app/console/lib/console-access";
 
@@ -38,22 +39,32 @@ describe("console-access", () => {
     expect(isTenantOnlyConsoleUser(s)).toBe(true);
   });
 
-  test("hide tenants nav for single-tenant members only", () => {
-    const single = session({
-      organizations: [{ id: "t1", name: "Acme", slug: "acme" }],
-      tenant: { id: "t1", name: "Acme", slug: "acme" },
-    });
-    const multi = session({
+  test("tenants directory nav follows active-tenant permissions, not membership count", () => {
+    const memberMulti = session({
       organizations: [
         { id: "t1", name: "Acme", slug: "acme" },
         { id: "t2", name: "Beta", slug: "beta" },
       ],
+      tenant: { id: "t1", name: "Acme", slug: "acme" },
+      tenantRoles: ["tenant_member"],
+      permissions: ["tenants:read"],
     });
-    expect(shouldHideTenantsNav(single)).toBe(true);
-    expect(shouldHideTenantsNav(multi)).toBe(false);
-    expect(shouldHideTenantsNav(session({ roles: ["platform_admin"], organizations: single.organizations }))).toBe(
-      false,
-    );
+    const adminOnActive = session({
+      organizations: memberMulti.organizations,
+      tenant: { id: "t2", name: "Beta", slug: "beta" },
+      tenantRoles: ["tenant_admin"],
+      permissions: ["tenants:read", "users:read", "users:invite", "sessions:revoke"],
+    });
+    const platformAdmin = session({
+      roles: ["platform_admin"],
+      permissions: ["tenants:create", "platform:tenants:read", "platform:users:read"],
+      organizations: memberMulti.organizations,
+    });
+
+    expect(shouldShowTenantsNav(memberMulti)).toBe(false);
+    expect(shouldHideTenantsNav(memberMulti)).toBe(true);
+    expect(shouldShowTenantsNav(adminOnActive)).toBe(false);
+    expect(shouldShowTenantsNav(platformAdmin)).toBe(true);
   });
 
   test("tenantMembershipCount uses organizations list", () => {

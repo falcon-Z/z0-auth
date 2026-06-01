@@ -18,7 +18,6 @@ import { shouldHideTenantsNav } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
 import { sessionHasPermission } from "../../lib/tenant-permissions";
 import { SidebarAccountFooter } from "./SidebarAccountFooter";
-import { SidebarIdentity } from "./SidebarIdentity";
 import { SidebarTenantSwitcher } from "./SidebarTenantSwitcher";
 
 function isNavItemActive(pathname: string, path: string): boolean {
@@ -34,7 +33,6 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader className="gap-3 border-b pb-3">
-        <SidebarIdentity />
         <SidebarTenantSwitcher />
       </SidebarHeader>
 
@@ -54,7 +52,7 @@ export function AppSidebar() {
 
           return (
             <SidebarGroup key={group.id}>
-              <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
+              {group.title ? <SidebarGroupLabel>{group.title}</SidebarGroupLabel> : null}
               <SidebarGroupContent>
                 <SidebarMenu>
                   {items.map((item) => {

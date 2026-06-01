@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { isTenantOnlyConsoleUser, tenantMembershipCount } from "../../../lib/console-access";
+import { shouldHideTenantsNav } from "../../../lib/console-access";
 
 import type { TenantSummary } from "@z0/contracts/tenants";
 import { Badge } from "@z0/components/ui/badge";
@@ -45,7 +45,7 @@ export function TenantsListPage() {
   }, [reload]);
 
   useEffect(() => {
-    if (isTenantOnlyConsoleUser(session) && tenantMembershipCount(session) === 1 && session.tenant) {
+    if (shouldHideTenantsNav(session)) {
       navigate("/", { replace: true });
     }
   }, [navigate, session]);

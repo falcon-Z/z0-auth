@@ -6,8 +6,7 @@ import { ConsolePage } from "../../../components/layout/ConsolePage";
 import { PageError } from "../../../components/feedback/PageError";
 import { fetchConsoleSummary } from "../../../lib/console-summary-api";
 import { ApiError } from "../../../lib/api";
-import { hasPlatformConsoleAccess } from "../../../lib/console-access";
-import { sessionHasPermission } from "../../../lib/tenant-permissions";
+import { hasPlatformConsoleAccess, shouldShowTenantsNav } from "../../../lib/console-access";
 import { useSession } from "../../../context/session-context";
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
 import { DashboardMetrics } from "../components/DashboardMetrics";
@@ -34,13 +33,11 @@ export function DashboardPage() {
     void reload();
   }, [reload, session.tenant?.id]);
 
-  const title = hasPlatformConsoleAccess(session)
-    ? "Platform"
-    : session.tenant?.name ?? "Dashboard";
+  const title = session.tenant?.name ?? (hasPlatformConsoleAccess(session) ? "Platform" : "Dashboard");
 
   const tenant = session.tenant;
   if (!tenant && !hasPlatformConsoleAccess(session)) {
-    const canOpenTenants = sessionHasPermission(session, "tenants:read");
+    const canOpenTenants = shouldShowTenantsNav(session);
 
     return (
       <ConsolePage title="Dashboard">

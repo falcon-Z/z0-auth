@@ -44,8 +44,8 @@ export type ConsoleNavGroup = {
 
 export const CONSOLE_NAV: ConsoleNavGroup[] = [
   {
-    id: "workspace",
-    title: "This tenant",
+    id: "home",
+    title: "",
     items: [
       {
         id: "dashboard",
@@ -55,17 +55,6 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "available",
         module: "P1-M1",
         summary: "Dashboard for the active tenant or platform.",
-      },
-      {
-        id: "members",
-        title: "Members",
-        path: "/members",
-        icon: Users,
-        status: "available",
-        module: "P2-M1",
-        summary: "People in the active tenant.",
-        requiresTenant: true,
-        requiredPermission: "users:read",
       },
     ],
   },
@@ -84,6 +73,15 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         requiredPermission: "platform:users:read",
       },
       {
+        id: "tenants",
+        title: "All tenants",
+        path: "/tenants",
+        icon: Building2,
+        status: "available",
+        module: "P2-M4",
+        summary: "Cross-tenant directory for operators and org creators (sidebar gated in console-access).",
+      },
+      {
         id: "analytics",
         title: "Analytics",
         path: "/analytics",
@@ -95,18 +93,19 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
     ],
   },
   {
-    id: "administration",
-    title: "Administration",
+    id: "workspace",
+    title: "This tenant",
     items: [
       {
-        id: "tenants",
-        title: "All tenants",
-        path: "/tenants",
-        icon: Building2,
+        id: "members",
+        title: "Members",
+        path: "/members",
+        icon: Users,
         status: "available",
-        module: "P2-M4",
-        summary: "Tenants you belong to; create when permitted.",
-        requiredPermission: "tenants:read",
+        module: "P2-M1",
+        summary: "People in the active tenant.",
+        requiresTenant: true,
+        requiredPermission: "users:read",
       },
       {
         id: "roles",
