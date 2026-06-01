@@ -17,7 +17,7 @@ bun install
 Start Postgres (Docker Desktop with WSL integration enabled):
 
 ```bash
-docker start z0auth-postgres 2>/dev/null || docker run -d --name z0auth-postgres \
+docker start z0-auth-postgres 2>/dev/null || docker start z0auth-postgres 2>/dev/null || docker run -d --name z0-auth-postgres \
   -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=z0auth \
   -p 5432:5432 postgres:16
 ```

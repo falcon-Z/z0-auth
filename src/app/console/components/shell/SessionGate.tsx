@@ -1,6 +1,18 @@
+import { Button } from "@z0/components/ui/button";
 import { Skeleton } from "@z0/components/ui/skeleton";
 
-export function SessionGate() {
+export function SessionGate({ message }: { message?: string }) {
+  if (message) {
+    return (
+      <div className="flex min-h-svh flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <p className="max-w-md text-sm text-muted-foreground">{message}</p>
+        <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+          Refresh
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-svh flex-col bg-background">
       <div className="flex h-14 items-center gap-3 border-b bg-card px-4">

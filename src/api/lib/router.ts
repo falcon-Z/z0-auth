@@ -1,5 +1,6 @@
 import type { BunRequest } from "bun";
 
+import { handleDatabaseConnectionError } from "./database-errors";
 import type { MethodHandlers, RouteHandler } from "./http";
 import { methodNotAllowed } from "./http";
 import { dispatchPatternRoutes, type PathRoute } from "./path-router";
@@ -9,9 +10,15 @@ type RouteMap = Record<string, MethodHandlers | RouteHandler>;
 
 function wrapHandler(pathname: string, handler: RouteHandler): RouteHandler {
   return async (req: BunRequest) => {
-    const guard = await checkSetupGuard(pathname);
-    if (guard) return guard;
-    return handler(req);
+    try {
+      const guard = await checkSetupGuard(pathname);
+      if (guard) return guard;
+      return await handler(req);
+    } catch (error) {
+      const response = await handleDatabaseConnectionError(error);
+      if (response) return response;
+      throw error;
+    }
   };
 }
 

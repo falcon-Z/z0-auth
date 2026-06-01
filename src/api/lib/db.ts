@@ -11,6 +11,30 @@ export type DatabaseHealth = {
 
 let db: SQL | null = null;
 
+const CONNECTION_ERROR_CODES = new Set([
+  "ERR_POSTGRES_CONNECTION_CLOSED",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+]);
+
+export function isDatabaseConnectionError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as Error & { code?: string }).code;
+  if (code && CONNECTION_ERROR_CODES.has(code)) return true;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("connection closed") ||
+    message.includes("connection refused") ||
+    message.includes("connect econnrefused") ||
+    message.includes("socket hang up")
+  );
+}
+
+export async function resetDatabaseConnection(): Promise<void> {
+  await closeDatabase();
+}
+
 /** Lazily initialize the Postgres client from DATABASE_URL. */
 export function getDb(): SQL {
   if (!db) {
@@ -35,6 +59,7 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
       version: String((row as { version: string }).version),
     };
   } catch (error) {
+    if (isDatabaseConnectionError(error)) await resetDatabaseConnection();
     return {
       ok: false,
       latencyMs: Math.round(performance.now() - started),

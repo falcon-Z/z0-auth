@@ -25,7 +25,7 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionResponse | null>(null);
-  const [gate, setGate] = useState<"loading" | "ready">("loading");
+  const [gate, setGate] = useState<"loading" | "ready" | "unavailable">("loading");
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
 
@@ -38,6 +38,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (result.kind === "authenticated") {
       setSession(result.session);
       setGate("ready");
+      return;
+    }
+    if (result.kind === "unavailable") {
+      setGate("unavailable");
       return;
     }
     redirectForGate(result.kind);
@@ -76,6 +80,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       switching,
     };
   }, [session, refreshSession, signOut, switchOrganization, switchError, switching]);
+
+  if (gate === "unavailable") {
+    return (
+      <SessionGate
+        message="The database is unavailable. Start PostgreSQL, then refresh this page."
+      />
+    );
+  }
 
   if (gate === "loading" || !value) {
     return <SessionGate />;

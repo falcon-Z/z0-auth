@@ -14,7 +14,8 @@ export {
 export type SessionLoadResult =
   | { kind: "authenticated"; session: SessionResponse }
   | { kind: "login" }
-  | { kind: "setup" };
+  | { kind: "setup" }
+  | { kind: "unavailable" };
 
 export async function loadSession(): Promise<SessionLoadResult> {
   const res = await fetch("/api/auth/session", {
@@ -22,7 +23,11 @@ export async function loadSession(): Promise<SessionLoadResult> {
     headers: { Accept: "application/json" },
   });
 
-  if (res.status === 503) return { kind: "setup" };
+  if (res.status === 503) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string };
+    if (body.code === "DatabaseUnavailable") return { kind: "unavailable" };
+    return { kind: "setup" };
+  }
   if (!res.ok) return { kind: "login" };
 
   const session = (await res.json()) as SessionResponse;

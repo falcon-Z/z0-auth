@@ -29,6 +29,8 @@ export const ErrorCodes = {
   INSTALL_TOKEN_REQUIRED: "install_token_required",
   INSTALL_TOKEN_INVALID: "install_token_invalid",
   PASSWORD_RESET_UNAVAILABLE: "password_reset_unavailable",
+  /** Postgres unreachable or connection dropped. */
+  DATABASE_UNAVAILABLE: "database_unavailable",
   /** OAuth: redirect_uri must match a registered value exactly (see security-contract.md). */
   INVALID_REDIRECT_URI: "invalid_redirect_uri",
   /** OAuth: requested scopes must be a subset of client-allowed scopes. */

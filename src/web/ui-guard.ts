@@ -1,5 +1,6 @@
 import type { BunRequest } from "bun";
 
+import { handleDatabaseConnectionError } from "../api/lib/database-errors";
 import { isSetupComplete } from "../api/lib/platform";
 import { resolveSession } from "../api/lib/session";
 
@@ -36,7 +37,9 @@ export async function redirectForAuthPage(
 
     return null;
   } catch (error) {
-    console.error("UI guard failed:", error);
+    const unavailable = await handleDatabaseConnectionError(error);
+    if (unavailable) return null;
+    console.error("UI guard failed:", error instanceof Error ? error.message : error);
     if (page === "setup") return null;
     return Response.redirect(new URL("/auth/setup", url), 302);
   }

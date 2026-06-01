@@ -1,5 +1,6 @@
 import type { BunRequest } from "bun";
 
+import { withDatabaseErrorHandling } from "../../api/lib/database-errors";
 import { problem } from "../../api/lib/http";
 import { resolveSession } from "../../api/lib/session";
 
@@ -74,7 +75,7 @@ async function getResume(req: BunRequest): Promise<Response> {
 
 export const oauthWebRoutes = {
   "/oauth/authorize": {
-    GET: getAuthorize,
+    GET: withDatabaseErrorHandling(getAuthorize),
   },
   "/oauth/resume": {
     GET: getResume,
