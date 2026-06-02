@@ -20,10 +20,6 @@ paths:
       description: |
         Returns authentication state for the console and API clients. Does not require CSRF.
         Subject to setup guard (503 when setup incomplete).
-
-        When the user belongs to more than one organization, `canSwitchOrganization` is `true`
-        and `organizations` lists every membership. The console must show an organization switcher
-        in that case. Active organization is returned as `tenant` (tenant id in storage).
       operationId: getAuthSession
       responses:
         "200":
@@ -32,40 +28,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SessionResponse"
-        "503":
-          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
-  /api/auth/active-tenant:
-    post:
-      tags: [Auth]
-      summary: Set active organization
-      description: |
-        Updates the signed-in user's active organization context. Requires session cookie and CSRF.
-        The user must be a member of the organization (`tenantId` in the request body).
-      operationId: postAuthActiveTenant
-      security:
-        - CsrfHeader: []
-          CsrfCookie: []
-      parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SetActiveTenantRequest"
-      responses:
-        "200":
-          description: Updated session payload (same shape as GET session when authenticated)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthenticatedSession"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "503":
           $ref: "common.openapi.yaml#/components/responses/SetupRequired"
   /api/auth/login:
@@ -137,12 +99,37 @@ paths:
   /api/auth/register:
     post:
       tags: [Auth]
-      summary: Self-service registration (disabled)
-      description: Platform registration is disabled; use admin provisioning flows.
+      summary: Account owner signup
+      description: |
+        Creates the first account owner profile for the instance and signs them in.
+        This endpoint is only valid before initial setup is complete.
+        Once an owner already exists, requests are rejected with 409 Conflict.
+        Includes organization profile details used in console branding and defaults.
       operationId: postAuthRegister
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
       responses:
+        "201":
+          description: Signed up and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticatedSession"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
         "403":
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
         "503":
           $ref: "common.openapi.yaml#/components/responses/SetupRequired"
   /api/auth/forgot-password:
@@ -233,7 +220,7 @@ components:
           format: email
         name:
           type: string
-    SessionTenant:
+    SessionOrganization:
       type: object
       required: [id, name, slug]
       properties:
@@ -243,13 +230,21 @@ components:
           type: string
         slug:
           type: string
-    SetActiveTenantRequest:
+    RegisterRequest:
       type: object
-      required: [tenantId]
+      required: [name, email, password, passwordConfirm, organizationName]
       properties:
-        tenantId:
+        name:
           type: string
-          description: Organization id (tenant id in storage)
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        passwordConfirm:
+          type: string
+        organizationName:
+          type: string
     ChangePasswordRequest:
       type: object
       required: [currentPassword, password, passwordConfirm]
@@ -268,31 +263,19 @@ components:
           type: boolean
         user:
           $ref: "#/components/schemas/SessionUser"
-        roles:
-          type: array
-          description: Platform-scoped role keys
-          items:
-            type: string
-        tenantRoles:
-          type: array
-          description: Role keys in the active organization
-          items:
-            type: string
-        tenant:
-          $ref: "#/components/schemas/SessionTenant"
-        organizations:
-          type: array
-          description: All organizations the user belongs to
-          items:
-            $ref: "#/components/schemas/SessionTenant"
-        canSwitchOrganization:
-          type: boolean
-          description: True when organizations.length > 1; UI must show organization switcher
+        organization:
+          $ref: "#/components/schemas/SessionOrganization"
+        accountType:
+          type: string
+          enum: [owner, app_user]
+        managedAppCount:
+          type: integer
+          minimum: 0
     AuthenticatedSession:
       allOf:
         - $ref: "#/components/schemas/SessionResponse"
         - type: object
-          required: [authenticated, user, roles, tenantRoles, organizations, canSwitchOrganization]
+          required: [authenticated, user, organization, accountType]
           properties:
             authenticated:
               type: boolean

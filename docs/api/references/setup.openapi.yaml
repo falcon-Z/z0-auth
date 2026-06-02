@@ -2,13 +2,13 @@ openapi: 3.1.0
 info:
   title: z0-auth Setup API
   version: 0.1.0
-  description: One-time platform provisioning (super admin + default tenant).
+  description: One-time instance setup (owner account + organization profile).
 servers:
   - url: http://localhost:3000
     description: Local development
 tags:
   - name: Setup
-    description: Platform bootstrap
+    description: Instance bootstrap
 paths:
   /api/setup/status:
     get:
@@ -35,7 +35,8 @@ paths:
       tags: [Setup]
       summary: Complete one-time platform setup
       description: |
-        Creates default tenant, super admin user, and platform memberships. Idempotent only by conflict — second call returns 409.
+        Creates owner account, organization profile, and base instance settings.
+        Idempotent only by conflict — second call returns 409.
         Rate limit: 3 attempts per client IP per hour.
       operationId: postSetup
       security:
@@ -112,7 +113,7 @@ components:
           format: email
         name:
           type: string
-    SetupTenant:
+    SetupOrganization:
       type: object
       required: [id, name, slug]
       properties:
@@ -125,11 +126,11 @@ components:
           type: string
     SetupResponse:
       type: object
-      required: [user, organizationName, tenant]
+      required: [user, organizationName, organization]
       properties:
         user:
           $ref: "#/components/schemas/SetupUser"
         organizationName:
           type: string
-        tenant:
-          $ref: "#/components/schemas/SetupTenant"
+        organization:
+          $ref: "#/components/schemas/SetupOrganization"

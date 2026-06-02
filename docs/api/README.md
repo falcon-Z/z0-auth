@@ -1,6 +1,6 @@
 # z0-auth API documentation
 
-Spec-driven contracts for the JSON API, auth UI, and planned OAuth surface.
+Spec-driven contracts for the single-account IAM model.
 
 ## Start here
 
@@ -17,9 +17,8 @@ Spec-driven contracts for the JSON API, auth UI, and planned OAuth surface.
 |------|--------|
 | [references/common.openapi.yaml](./references/common.openapi.yaml) | Shared errors and security components |
 | [references/health.openapi.yaml](./references/health.openapi.yaml) | Health probes |
-| [references/setup.openapi.yaml](./references/setup.openapi.yaml) | Platform setup |
-| [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Session auth |
-| [references/tenants.openapi.yaml](./references/tenants.openapi.yaml) | Organizations (list, create) |
+| [references/setup.openapi.yaml](./references/setup.openapi.yaml) | Instance setup |
+| [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Signup, login, session |
 | [references/oauth.openapi.yaml](./references/oauth.openapi.yaml) | OAuth 2.1 (planned) |
 
 TypeScript mirrors: `src/lib/contracts/`.
@@ -30,5 +29,10 @@ TypeScript mirrors: `src/lib/contracts/`.
 2. New error code → `ErrorCodes`, `common.openapi.yaml` enum, matrix row.  
 3. State-changing request → CSRF per [security-contract.md](./security-contract.md).  
 4. Return errors via `problem()` only.
+
+Deprecated after pivot:
+
+- Tenant-specific OpenAPI specs and routes.
+- Internal platform RBAC role/scope contract docs.
 
 See also [ARCHITECTURE.md](../ARCHITECTURE.md) for routing and repo layout.

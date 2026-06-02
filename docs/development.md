@@ -55,7 +55,7 @@ Integration tests use **`TEST_DATABASE_URL`** (`z0auth_test` on the same Postgre
 | `z0auth` | `DATABASE_URL` | `bun dev`, manual browser work |
 | `z0auth_test` | `TEST_DATABASE_URL` | `bun test`, Playwright e2e |
 
-Tests still create platform admins with **dynamic passwords** (full setup → user flows). That state is ephemeral — wiped on every test run and discarded when CI finishes. It never touches your dev database.
+Tests still create owner accounts with **dynamic passwords** (full setup → user flows). That state is ephemeral — wiped on every test run and discarded when CI finishes. It never touches your dev database.
 
 If `TEST_DATABASE_URL` matches `DATABASE_URL`, test resets fail fast instead of wiping dev data.
 
@@ -68,7 +68,7 @@ The management console talks to the same JSON API as external clients. Shared pi
 | Module | Role |
 |--------|------|
 | `http-client.ts` | `apiFetch()` — cookies, CSRF on mutations, `ApiError` from problem+json |
-| `api.ts` | Session helpers (`loadSession`, `postLogout`, `postActiveTenant`) |
+| `api.ts` | Session helpers (`loadSession`, `postLogout`) |
 | `form-errors.ts` | Map `errors[].field` from API responses to form state |
 
 Contracts and error codes: `src/lib/contracts/` and [api/README.md](./api/README.md).

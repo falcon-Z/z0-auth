@@ -17,7 +17,7 @@ Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.m
 ## Setup flow
 
 1. User opens `/auth/setup`.
-2. `POST /auth/setup` with CSRF — creates org, tenant, super admin.
+2. `POST /auth/setup` with CSRF — creates owner account and organization profile.
 3. Server **303** redirect to `/auth/login?setup=complete&org=...`.
 4. User signs in → `POST /auth/login` → **303** to `/`.
 
@@ -29,9 +29,9 @@ Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.m
 | `GET /auth/login` | **302** `/` when already signed in |
 | Sign out | `POST /auth/logout` → **303** `/auth/login` |
 
-## Organization invite
+## App user invite (planned)
 
-1. Admin creates invite in console → receives **invite URL** (copy or `mailto:`).
+1. Account owner creates invite in console → receives **invite URL** (copy or `mailto:`).
 2. Invitee opens `GET /auth/invite/:token`.
 3. **New user:** set name + password → accept → session → console.
 4. **Existing user:** sign in (must match invite email) → **Accept** or **Decline**.

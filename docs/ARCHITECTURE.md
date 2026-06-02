@@ -38,7 +38,7 @@ The server runtime uses Bun built-ins (`Bun.serve`, `bun:sql`, native Request/Re
 
 - Connection via `DATABASE_URL` (PostgreSQL).
 - `bun run db:reset` drops `public`, applies `src/scripts/sql/schema.sql`, then ordered migrations.
-- **Data model and tenancy:** [data-model.md](./data-model.md) (org = tenant in code; global user per instance).
+- **Data model:** [data-model.md](./data-model.md) (single-account instance model; no internal multi-tenancy).
 
 ## Security model (phase 1)
 

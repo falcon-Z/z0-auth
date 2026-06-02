@@ -81,9 +81,9 @@ If I ask you to add rules or instructions, write them like this document: simple
 
 | Term | Meaning |
 |------|---------|
-| **platform** | The entire IAM service. **Platform admin** controls everything on the platform. |
-| **tenant** / **organization** | Same thing. In code and UI always **tenant**. I may say org or tenant interchangeably in chat. |
+| **platform** | The IAM service instance running for one account owner. |
+| **organization** | The account owner's organization profile created at signup. No multi-tenant model inside one instance. |
 | **user** | Someone using the platform (ambiguous — clarify if needed). |
 | **developer** | Registers to use the platform with their app (console). |
 | **app** | Application registered with the platform; uses it for authentication and authorization. |
-| **app user** | Belongs to an app only. No access to tenant or platform resources; uses the platform only to sign in to apps registered on it. |
+| **app user** | End user of a registered app; signs in through this IAM service. |
