@@ -125,9 +125,6 @@ export function MembersListPage() {
     <div className="space-y-6">
       <ListPageHeader
         title="Members"
-        description={
-          session.tenant?.name ? `People in ${session.tenant.name}.` : undefined
-        }
         actions={
           canInviteMembers ? (
             <Button onClick={() => setInviteOpen(true)}>Invite</Button>

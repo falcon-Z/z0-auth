@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@z0/components/ui/button";
+import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { ConsolePage } from "../../../components/layout/ConsolePage";
 import { PageError } from "../../../components/feedback/PageError";
 import { fetchConsoleSummary } from "../../../lib/console-summary-api";
@@ -17,6 +18,7 @@ export function DashboardPage() {
   const [summary, setSummary] = useState<ConsoleSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"tenant" | "platform">("tenant");
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -35,7 +37,7 @@ export function DashboardPage() {
   }, [reload, session.tenant?.id]);
 
   const description = useMemo(() => {
-    const scope = dashboardScopeForSession(session);
+    const scope = view;
     if (scope === "tenant" && session.tenant?.name) {
       return `Metrics for ${session.tenant.name}.`;
     }
@@ -43,7 +45,32 @@ export function DashboardPage() {
       return "Metrics across the entire platform.";
     }
     return undefined;
-  }, [session]);
+  }, [session, view]);
+
+  const dashboardTabs = useMemo(() => {
+    const tabs: Array<{ id: "tenant" | "platform"; label: string }> = [];
+    if (summary?.tenant) tabs.push({ id: "tenant", label: "Tenant" });
+    if (summary?.platform) tabs.push({ id: "platform", label: "Platform" });
+    return tabs;
+  }, [summary]);
+
+  useEffect(() => {
+    if (!summary) return;
+    const scope = dashboardScopeForSession(session);
+    const defaultView: "tenant" | "platform" = scope === "platform" ? "platform" : "tenant";
+    const hasDefault = (defaultView === "tenant" && Boolean(summary.tenant)) || (defaultView === "platform" && Boolean(summary.platform));
+    if (hasDefault) {
+      setView(defaultView);
+      return;
+    }
+    if (summary.tenant) {
+      setView("tenant");
+      return;
+    }
+    if (summary.platform) {
+      setView("platform");
+    }
+  }, [summary, session]);
 
   const tenant = session.tenant;
   if (!tenant && !hasPlatformConsoleAccess(session)) {
@@ -64,12 +91,20 @@ export function DashboardPage() {
 
   return (
     <ConsolePage title="Dashboard" description={description}>
+      {dashboardTabs.length > 1 ? (
+        <ResourceTabs
+          tabs={dashboardTabs}
+          activeId={view}
+          onChange={(id) => setView(id as "tenant" | "platform")}
+        />
+      ) : null}
       <DashboardMetrics
         session={session}
         summary={summary}
         loading={loading}
         error={error}
         onRetry={() => void reload()}
+        view={view}
       />
     </ConsolePage>
   );

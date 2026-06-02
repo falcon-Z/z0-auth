@@ -13,15 +13,16 @@ type DashboardMetricsProps = {
   loading: boolean;
   error: string | null;
   onRetry: () => void;
+  view?: "tenant" | "platform";
 };
 
-export function DashboardMetrics({ session, summary, loading, error, onRetry }: DashboardMetricsProps) {
+export function DashboardMetrics({ session, summary, loading, error, onRetry, view }: DashboardMetricsProps) {
   if (loading) return <ListPageSkeleton />;
   if (error || !summary) {
     return <PageError message={error ?? "Could not load dashboard."} onRetry={onRetry} />;
   }
 
-  const scope = dashboardScopeForSession(session);
+  const scope = view ?? dashboardScopeForSession(session);
 
   if (scope === "tenant") {
     return <TenantMetricsSection session={session} summary={summary} />;
