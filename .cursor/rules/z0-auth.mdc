@@ -64,6 +64,7 @@ When you propose a feature, share your idea and push back where useful. I should
 - Stack: **React + shadcn**; add components via shadcn when needed.
 - For modules that include UI: **after backend is stable**, plan user flow → implement → verify (smoke or e2e).
 - Do not ship dev/planning copy in screens. Unbuilt nav items: minimal empty state only.
+- Keep UI text product-facing and concise. Do not include backend/internal implementation details in page copy (e.g., permission mechanics, scope resolution, switcher internals, or what APIs return).
 
 ## Adding agent instructions
 

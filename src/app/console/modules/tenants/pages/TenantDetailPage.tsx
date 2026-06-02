@@ -110,9 +110,7 @@ export function TenantDetailPage() {
     >
       {switchError ? <PageError message={switchError} /> : null}
 
-      <p className="text-sm text-muted-foreground">
-        You are not a member of this tenant. Join via invite to access its dashboard and members.
-      </p>
+      <p className="text-sm text-muted-foreground">You are not a member of this tenant.</p>
 
       <dl className="mt-6 grid max-w-lg gap-4 text-sm">
         <div>

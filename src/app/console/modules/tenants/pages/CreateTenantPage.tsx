@@ -156,7 +156,7 @@ export function CreateTenantPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Create tenant</h1>
         <p className="text-muted-foreground text-sm">
-          Provision a new tenant on this platform. You can join as administrator or invite someone else to manage it.
+          Add a tenant.
         </p>
       </div>
 

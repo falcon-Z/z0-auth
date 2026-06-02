@@ -89,9 +89,7 @@ export function TenantsListPage() {
       <ListPageHeader
         title="Tenants"
         description={
-          platformDirectory
-            ? "All tenants on this platform. Your sidebar switcher only lists tenants you belong to."
-            : undefined
+          platformDirectory ? "All tenants on this platform." : undefined
         }
         actions={
           canCreate ? (

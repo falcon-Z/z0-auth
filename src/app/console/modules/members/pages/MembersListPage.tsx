@@ -126,9 +126,7 @@ export function MembersListPage() {
       <ListPageHeader
         title="Members"
         description={
-          session.tenant?.name
-            ? `People who belong to ${session.tenant.name} — not everyone on the platform.`
-            : undefined
+          session.tenant?.name ? `People in ${session.tenant.name}.` : undefined
         }
         actions={
           canInviteMembers ? (
