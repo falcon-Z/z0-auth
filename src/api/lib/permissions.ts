@@ -11,6 +11,33 @@ export function isPlatformPermissionKey(permissionKey: string): boolean {
   return permissionKey.startsWith("platform:") || permissionKey === "tenants:create";
 }
 
+async function hasPlatformTenantManagementPermission(userId: string): Promise<boolean> {
+  const [row] = await getDb()`
+    SELECT 1
+    FROM user_roles ur
+    JOIN roles r ON r.id = ur.role_id
+    JOIN role_permissions rp ON rp.role_id = r.id
+    JOIN permissions p ON p.id = rp.permission_id
+    WHERE ur.user_id = ${userId}
+      AND p.key = 'platform:tenants:manage'
+      AND r.scope = 'platform'
+      AND ur.tenant_id IS NULL
+    LIMIT 1
+  `;
+  return Boolean(row);
+}
+
+async function listTenantPermissionCatalogKeys(): Promise<string[]> {
+  const rows = await getDb()`
+    SELECT key
+    FROM permissions
+    ORDER BY key
+  `;
+  return rows
+    .map((row) => String((row as { key: string }).key))
+    .filter((key) => !isPlatformPermissionKey(key));
+}
+
 export async function userHasPermission(
   userId: string,
   permissionKey: string,
@@ -45,7 +72,10 @@ export async function userHasPermission(
         AND ur.tenant_id = ${tenantId}
       LIMIT 1
     `;
-    return Boolean(row);
+    if (Boolean(row)) {
+      return true;
+    }
+    return hasPlatformTenantManagementPermission(userId);
   }
 
   if (!isPlatformPermissionKey(permissionKey)) {
@@ -155,7 +185,12 @@ async function listTenantPermissionKeysForOrg(userId: string, tenantId: string):
       AND ur.tenant_id = ${tenantId}
     ORDER BY p.key
   `;
-  return rows.map((row) => String((row as { key: string }).key));
+  const tenantKeys = rows.map((row) => String((row as { key: string }).key));
+  if (!(await hasPlatformTenantManagementPermission(userId))) {
+    return tenantKeys;
+  }
+  const catalogKeys = await listTenantPermissionCatalogKeys();
+  return [...new Set([...tenantKeys, ...catalogKeys])].sort();
 }
 
 export async function listUserPermissionKeys(userId: string, tenantId: string): Promise<string[]> {

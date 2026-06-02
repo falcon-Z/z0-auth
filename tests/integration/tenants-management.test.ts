@@ -155,6 +155,32 @@ run("organizations API", () => {
     expect(session.organizations.some((t) => t.id === created.tenant.id)).toBe(false);
   });
 
+  test("can invite first admin after create-without-join", async () => {
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const createRes = await dispatchApi(
+      buildRequest("POST", "/api/v1/tenants", {
+        csrfToken: csrf,
+        ...withSession(adminCookie),
+        body: { name: "Bootstrap Org", slug: "bootstrap-org" },
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()) as { tenant: { id: string } };
+
+    const inviteRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/tenants/${created.tenant.id}/invites`, {
+        csrfToken: csrf,
+        ...withSession(adminCookie),
+        body: {
+          email: "bootstrap-admin@example.com",
+          invitedName: "Bootstrap Admin",
+          roleKeys: ["tenant_admin"],
+        },
+      }),
+    );
+    expect(inviteRes.status).toBe(201);
+  });
+
   test("creates organization with joinAsAdmin", async () => {
     const csrf = await fetchCsrfToken(dispatchApi);
     const createRes = await dispatchApi(

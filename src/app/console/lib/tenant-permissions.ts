@@ -15,6 +15,7 @@ const PLATFORM_ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     "platform:users:write",
     "platform:sessions:revoke",
     "platform:tenants:read",
+    "platform:tenants:manage",
     "tenants:create",
   ],
   platform_manager: ["platform:users:read", "platform:tenants:read", "platform:sessions:revoke"],
@@ -47,7 +48,10 @@ export function sessionHasPermission(session: SessionResponse, permission: strin
 }
 
 export function assignableRolesFromSession(session: SessionResponse): readonly string[] {
-  if (session.permissions?.includes("platform:users:write")) {
+  if (
+    session.permissions?.includes("platform:users:write") ||
+    session.permissions?.includes("platform:tenants:manage")
+  ) {
     return assignableTenantRoles(["tenant_admin"]);
   }
   return assignableTenantRoles(session.tenantRoles ?? []);

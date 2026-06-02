@@ -17,6 +17,10 @@ export async function assignableTenantRoleKeysForActor(
 ): Promise<string[]> {
   const tenantRoles = await getTenantRoleKeys(actorUserId, tenantId);
   const platformUserWrite = await userHasPermission(actorUserId, "platform:users:write");
+  const platformTenantManage = await userHasPermission(actorUserId, "platform:tenants:manage");
+  if (platformTenantManage) {
+    return [...TENANT_ROLE_KEYS];
+  }
   if (tenantRoles.length > 0) {
     return [...assignableTenantRoles(tenantRoles)];
   }
@@ -33,7 +37,9 @@ export async function assertCanAssignTenantRoles(
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
   const tenantRoles = await getTenantRoleKeys(actorUserId, tenantId);
   const platformUserWrite = await userHasPermission(actorUserId, "platform:users:write");
-  if (!canAssignTenantRoles(tenantRoles, targetRoleKeys, { platformUserWrite })) {
+  const platformTenantManage = await userHasPermission(actorUserId, "platform:tenants:manage");
+  const canAssign = platformTenantManage || canAssignTenantRoles(tenantRoles, targetRoleKeys, { platformUserWrite });
+  if (!canAssign) {
     return {
       ok: false,
       response: problem(403, "Forbidden", "You cannot assign one or more of these roles", {

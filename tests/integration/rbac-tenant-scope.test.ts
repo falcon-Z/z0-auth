@@ -123,7 +123,7 @@ run("RBAC tenant scope for platform admin", () => {
     expect(body.tenants.some((t) => t.id === memberOnlyTenantId)).toBe(true);
   });
 
-  test("session on member-only org omits users:invite", async () => {
+  test("session on member-only org includes tenant management via platform override", async () => {
     const res = await dispatchApi(
       buildRequest("GET", "/api/auth/session", withSession(adminCookie)),
     );
@@ -135,8 +135,9 @@ run("RBAC tenant scope for platform admin", () => {
     expect(body.tenant?.id).toBe(memberOnlyTenantId);
     expect(body.tenantRoles).toEqual(["tenant_member"]);
     expect(body.permissions).toBeDefined();
-    expect(body.permissions).not.toContain("users:invite");
-    expect(body.permissions).not.toContain("users:read");
+    expect(body.permissions).toContain("users:invite");
+    expect(body.permissions).toContain("users:read");
+    expect(body.permissions).toContain("platform:tenants:manage");
   });
 
   test("cannot switch active tenant to org without membership", async () => {
@@ -151,7 +152,7 @@ run("RBAC tenant scope for platform admin", () => {
     expect(res.status).toBe(403);
   });
 
-  test("cannot create invite as tenant_member on that org", async () => {
+  test("can create invite on member-only org via platform override", async () => {
     const csrf = await fetchCsrfToken(dispatchApi);
     const res = await dispatchApi(
       buildRequest("POST", `/api/v1/tenants/${memberOnlyTenantId}/invites`, {
@@ -164,7 +165,7 @@ run("RBAC tenant scope for platform admin", () => {
         },
       }),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(201);
   });
 
   test("session still includes tenants:read for tenant_member on active org", async () => {
@@ -176,19 +177,19 @@ run("RBAC tenant scope for platform admin", () => {
     expect(body.permissions).toContain("platform:tenants:read");
   });
 
-  test("cannot list members or invites as tenant_member on that org", async () => {
+  test("can list members and invites on member-only org via platform override", async () => {
     const membersRes = await dispatchApi(
       buildRequest("GET", `/api/v1/tenants/${memberOnlyTenantId}/members`, withSession(adminCookie)),
     );
-    expect(membersRes.status).toBe(403);
+    expect(membersRes.status).toBe(200);
 
     const invitesRes = await dispatchApi(
       buildRequest("GET", `/api/v1/tenants/${memberOnlyTenantId}/invites`, withSession(adminCookie)),
     );
-    expect(invitesRes.status).toBe(403);
+    expect(invitesRes.status).toBe(200);
   });
 
-  test("console summary omits tenant member metrics without users:read", async () => {
+  test("console summary includes tenant metrics with platform override", async () => {
     const res = await dispatchApi(
       buildRequest("GET", "/api/v1/console/summary", withSession(adminCookie)),
     );
@@ -197,7 +198,7 @@ run("RBAC tenant scope for platform admin", () => {
       tenant?: { memberCount: number };
       platform?: { tenantCount?: number; userCount?: number };
     };
-    expect(body.tenant).toBeUndefined();
+    expect(body.tenant?.memberCount).toBeGreaterThanOrEqual(1);
     expect(body.platform?.tenantCount).toBeGreaterThanOrEqual(2);
     expect(body.platform?.userCount).toBeGreaterThanOrEqual(1);
   });
