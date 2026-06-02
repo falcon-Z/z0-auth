@@ -40,7 +40,7 @@ export function SidebarTenantSwitcher() {
 
   if (!showSwitcher) {
     return (
-      <p className="px-2 text-xs text-muted-foreground">No tenant selected</p>
+      <p className="px-2 text-xs text-muted-foreground">No tenant membership</p>
     );
   }
 

@@ -3,7 +3,6 @@ import { Navigate } from "react-router-dom";
 
 import { CONSOLE_NAV_ITEMS } from "./config/navigation";
 import { ModulePlaceholderPage } from "./components/layout/ModulePlaceholderPage";
-import { ClientsPage } from "./modules/clients/pages/ClientsPage";
 import { DashboardPage } from "./modules/dashboard/pages/DashboardPage";
 import { MembersModule } from "./modules/members/MembersModule";
 import { ProfileModule } from "./modules/profile/ProfileModule";
@@ -13,7 +12,6 @@ import { UsersModule } from "./modules/users/UsersModule";
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/": <DashboardPage />,
   "/members": <MembersModule />,
-  "/clients": <ClientsPage />,
   "/users": <UsersModule />,
   "/tenants": <TenantsModule />,
   "/profile": <ProfileModule />,
@@ -23,7 +21,6 @@ const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
 export const WIRED_CONSOLE_NAV_PATHS = [
   "/",
   "/members",
-  "/clients",
   "/users",
   "/tenants",
   "/profile",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@z0/components/ui/button";
@@ -10,6 +10,7 @@ import { hasPlatformConsoleAccess, shouldShowTenantsNav } from "../../../lib/con
 import { useSession } from "../../../context/session-context";
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
 import { DashboardMetrics } from "../components/DashboardMetrics";
+import { dashboardScopeForSession } from "../lib/dashboard-scopes";
 
 export function DashboardPage() {
   const { session } = useSession();
@@ -33,7 +34,16 @@ export function DashboardPage() {
     void reload();
   }, [reload, session.tenant?.id]);
 
-  const title = session.tenant?.name ?? (hasPlatformConsoleAccess(session) ? "Platform" : "Dashboard");
+  const description = useMemo(() => {
+    const scope = dashboardScopeForSession(session);
+    if (scope === "tenant" && session.tenant?.name) {
+      return `Metrics for ${session.tenant.name}.`;
+    }
+    if (scope === "platform") {
+      return "Metrics across the entire platform.";
+    }
+    return undefined;
+  }, [session]);
 
   const tenant = session.tenant;
   if (!tenant && !hasPlatformConsoleAccess(session)) {
@@ -53,7 +63,7 @@ export function DashboardPage() {
   }
 
   return (
-    <ConsolePage title={title}>
+    <ConsolePage title="Dashboard" description={description}>
       <DashboardMetrics
         session={session}
         summary={summary}

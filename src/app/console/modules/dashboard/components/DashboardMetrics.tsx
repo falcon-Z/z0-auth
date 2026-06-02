@@ -1,10 +1,11 @@
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
 import { MetricCard } from "../../../components/dashboard/MetricCard";
+import { EmptyState } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
-import { hasPlatformConsoleAccess } from "../../../lib/console-access";
 import { sessionHasPermission } from "../../../lib/tenant-permissions";
 import type { SessionResponse } from "@z0/contracts/auth";
+import { dashboardScopeForSession } from "../lib/dashboard-scopes";
 
 type DashboardMetricsProps = {
   session: SessionResponse;
@@ -20,64 +21,73 @@ export function DashboardMetrics({ session, summary, loading, error, onRetry }: 
     return <PageError message={error ?? "Could not load dashboard."} onRetry={onRetry} />;
   }
 
-  const activeTenant = session.tenant;
-  const isTenantDashboard = Boolean(activeTenant);
-  const isPlatformDashboard = !activeTenant && hasPlatformConsoleAccess(session);
+  const scope = dashboardScopeForSession(session);
 
-  const platform = summary.platform;
-  const tenantMetrics = summary.tenant;
-  const canInvite = sessionHasPermission(session, "users:invite");
-
-  if (isTenantDashboard) {
-    if (!tenantMetrics) {
-      return (
-        <p className="text-sm text-muted-foreground">
-          No tenant metrics are available with your current permissions.
-        </p>
-      );
-    }
-
-    return (
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">{tenantMetrics.name}</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Members" value={tenantMetrics.memberCount} to="/members" />
-          {canInvite ? (
-            <MetricCard label="Pending invites" value={tenantMetrics.pendingInviteCount} to="/members" />
-          ) : null}
-        </div>
-      </section>
-    );
+  if (scope === "tenant") {
+    return <TenantMetricsSection session={session} summary={summary} />;
   }
 
-  if (isPlatformDashboard && platform) {
-    const hasPlatformMetrics =
-      platform.tenantCount !== undefined || platform.userCount !== undefined;
+  if (scope === "platform") {
+    return <PlatformMetricsSection summary={summary} />;
+  }
 
-    if (!hasPlatformMetrics) {
-      return (
-        <p className="text-sm text-muted-foreground">
-          No platform metrics are available with your current permissions.
-        </p>
-      );
-    }
+  return <EmptyState message="No dashboard metrics are available right now." />;
+}
 
+function TenantMetricsSection({
+  session,
+  summary,
+}: {
+  session: SessionResponse;
+  summary: ConsoleSummaryResponse;
+}) {
+  const tenantMetrics = summary.tenant;
+  const canInvite = sessionHasPermission(session, "users:invite");
+  const tenantName = session.tenant?.name ?? tenantMetrics?.name;
+
+  if (!tenantMetrics) {
     return (
-      <section className="space-y-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Platform</h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {platform.tenantCount !== undefined ? (
-            <MetricCard label="Tenants" value={platform.tenantCount} to="/tenants" />
-          ) : null}
-          {platform.userCount !== undefined ? (
-            <MetricCard label="Platform users" value={platform.userCount} to="/users" />
-          ) : null}
-        </div>
-      </section>
+      <EmptyState message="No tenant metrics are available with your current permissions." />
     );
   }
 
   return (
-    <p className="text-sm text-muted-foreground">No dashboard metrics are available right now.</p>
+    <section className="space-y-3" aria-label={tenantName ? `${tenantName} overview` : "Tenant overview"}>
+      {tenantName ? (
+        <h2 className="text-sm font-medium text-muted-foreground">{tenantName}</h2>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Members" value={tenantMetrics.memberCount} to="/members" />
+        {canInvite ? (
+          <MetricCard label="Pending invites" value={tenantMetrics.pendingInviteCount} to="/members" />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function PlatformMetricsSection({ summary }: { summary: ConsoleSummaryResponse }) {
+  const platform = summary.platform;
+  const hasPlatformMetrics =
+    platform && (platform.tenantCount !== undefined || platform.userCount !== undefined);
+
+  if (!hasPlatformMetrics) {
+    return (
+      <EmptyState message="No platform metrics are available with your current permissions." />
+    );
+  }
+
+  return (
+    <section className="space-y-3" aria-label="Platform overview">
+      <h2 className="text-sm font-medium text-muted-foreground">Platform</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {platform!.tenantCount !== undefined ? (
+          <MetricCard label="Tenants" value={platform!.tenantCount} to="/tenants" />
+        ) : null}
+        {platform!.userCount !== undefined ? (
+          <MetricCard label="Platform users" value={platform!.userCount} to="/users" />
+        ) : null}
+      </div>
+    </section>
   );
 }

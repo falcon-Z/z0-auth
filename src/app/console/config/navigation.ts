@@ -54,7 +54,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: LayoutDashboard,
         status: "available",
         module: "P1-M1",
-        summary: "Dashboard for the active tenant or platform.",
+        summary: "Metrics for the active tenant.",
       },
     ],
   },
@@ -79,7 +79,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: Building2,
         status: "available",
         module: "P2-M4",
-        summary: "Cross-tenant directory for operators and org creators (sidebar gated in console-access).",
+        summary: "Browse and manage tenants across the platform.",
       },
       {
         id: "analytics",

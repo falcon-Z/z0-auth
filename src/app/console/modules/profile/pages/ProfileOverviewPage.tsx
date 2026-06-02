@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
+import { MetricCard } from "../../../components/dashboard/MetricCard";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { fetchConsoleSummary } from "../../../lib/console-summary-api";
@@ -64,17 +65,22 @@ export function ProfileOverviewPage() {
 
       {summary ? (
         <section className="space-y-3">
-          <h2 className="text-sm font-medium">At a glance</h2>
-          <dl className="grid gap-3 rounded-lg border px-4 py-3 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-muted-foreground">Tenants</dt>
-              <dd className="mt-0.5 tabular-nums font-medium">{summary.membership.tenantCount}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Active sessions</dt>
-              <dd className="mt-0.5 tabular-nums font-medium">{summary.sessions.activeCount}</dd>
-            </div>
-          </dl>
+          <h2 className="text-sm font-medium">Your activity</h2>
+          <p className="text-sm text-muted-foreground">
+            Personal counts for your account — not platform or tenant totals.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <MetricCard
+              label="Tenant memberships"
+              value={summary.membership.tenantCount}
+              to="/profile/tenants"
+            />
+            <MetricCard
+              label="Active sessions"
+              value={summary.sessions.activeCount}
+              to="/profile/sessions"
+            />
+          </div>
         </section>
       ) : null}
     </div>
