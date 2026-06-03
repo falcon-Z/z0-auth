@@ -4,21 +4,23 @@ import { Navigate } from "react-router-dom";
 import { CONSOLE_NAV_ITEMS } from "./config/navigation";
 import { ModulePlaceholderPage } from "./components/layout/ModulePlaceholderPage";
 import { DashboardPage } from "./modules/dashboard/pages/DashboardPage";
+import { AppsModule } from "./modules/apps/AppsModule";
 import { MembersModule } from "./modules/members/MembersModule";
 import { ProfileModule } from "./modules/profile/ProfileModule";
 
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/": <DashboardPage />,
   "/members": <MembersModule />,
+  "/apps": <AppsModule />,
   "/profile": <ProfileModule />,
 };
 
 /** Nav paths wired to real pages — keep in sync with `IMPLEMENTED_PAGES`. */
-export const WIRED_CONSOLE_NAV_PATHS = ["/", "/members", "/profile"] as const;
+export const WIRED_CONSOLE_NAV_PATHS = ["/", "/members", "/apps", "/profile"] as const;
 
 /** Nested module routes need a splat so in-module `<Routes>` match subpaths. */
 export function routePathForNav(path: string): string {
-  if (path === "/members" || path === "/profile") {
+  if (path === "/members" || path === "/apps" || path === "/profile") {
     return `${path}/*`;
   }
   return path;

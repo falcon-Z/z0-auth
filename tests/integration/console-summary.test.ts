@@ -73,6 +73,7 @@ run("console summary", () => {
         memberCount: number;
         pendingInviteCount: number;
         userCount: number;
+        appCount: number;
       };
       sessions: { activeCount: number };
     };
@@ -80,6 +81,7 @@ run("console summary", () => {
     expect(body.instance.organizationName).toBe("Acme Corp");
     expect(body.instance.memberCount).toBeGreaterThanOrEqual(1);
     expect(body.instance.userCount).toBeGreaterThanOrEqual(1);
+    expect(body.instance.appCount).toBe(0);
     expect(body.sessions.activeCount).toBeGreaterThanOrEqual(1);
   });
 

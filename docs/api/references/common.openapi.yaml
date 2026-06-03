@@ -91,6 +91,10 @@ components:
         - invalid_role
         - invalid_slug
         - slug_taken
+        - app_not_found
+        - credential_not_found
+        - app_disabled
+        - last_active_credential
     ProblemDetail:
       type: object
       required: [type, title, status, requestId]

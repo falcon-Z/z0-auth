@@ -92,14 +92,31 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST …/accept` | Existing user | Session email matches invite | `invite_email_mismatch` | 409 | Wrong account message |
 | `POST …/decline` | CSRF | Valid pending invite | `invite_invalid` | 404 | Invalid state |
 
-## Planned app-management APIs (next rewrite wave)
+## Applications (`/api/v1/apps`)
 
-| Endpoint | Primary validation focus |
-|----------|--------------------------|
-| `GET /api/v1/apps` | Session required |
-| `POST /api/v1/apps` | Name required, slug uniqueness, redirect URI validation |
-| `POST /api/v1/apps/:appId/credentials` | Ownership + credential policy |
-| `GET /api/v1/apps/:appId/users` | Ownership + pagination/filter validation |
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| All | Session | Caller is instance member | `permission_denied` | 403 | Access denied |
+| `GET /api/v1/apps` | — | — | — | 200 | Applications list |
+| `POST /api/v1/apps` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `POST /api/v1/apps` | `name` | Non-empty trimmed | `required` | 400 | Inline on name |
+| `POST /api/v1/apps` | `redirectUris` | ≥1 valid http(s) URI; production requires https (except localhost) | `required` / `invalid_redirect_uri` | 400 | Inline on URIs |
+| `POST /api/v1/apps` | `name` | Slug derivable from name | `invalid_slug` | 400 | Inline on name |
+| `GET /api/v1/apps/:appId` | `appId` | App exists | `app_not_found` | 404 | Not found state |
+| `PATCH /api/v1/apps/:appId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `PATCH /api/v1/apps/:appId` | `name` / `redirectUris` / `status` | Same rules as create when provided | see above | 400 | Inline |
+| `PATCH /api/v1/apps/:appId` | `appId` | App exists | `app_not_found` | 404 | Not found |
+| `GET …/credentials` | `appId` | App exists | `app_not_found` | 404 | Not found |
+| `POST …/credentials` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `POST …/credentials` | `appId` | App active | `app_disabled` | 409 | Inline / banner |
+| `POST …/credentials` | — | Returns `clientSecret` once | — | 201 | One-time copy dialog |
+| `DELETE …/credentials/:credentialId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `DELETE …/credentials/:credentialId` | — | Not last active cred on active app | `last_active_credential` | 409 | Confirm + error |
+| `DELETE …/credentials/:credentialId` | — | Credential exists | `credential_not_found` | 404 | Refresh list |
+| `POST …/credentials/:credentialId/rotate` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `POST …/rotate` | `appId` | App active | `app_disabled` | 409 | Banner |
+| `POST …/rotate` | — | Active credential | `credential_not_found` | 404 | Refresh list |
+| `POST …/rotate` | — | New `clientSecret` once | — | 200 | One-time copy dialog |
 
 ## Notes
 

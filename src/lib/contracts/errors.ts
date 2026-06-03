@@ -71,6 +71,14 @@ export const ErrorCodes = {
   INVALID_SLUG: "invalid_slug",
   /** Organization slug is already in use. */
   SLUG_TAKEN: "slug_taken",
+  /** Application id is unknown. */
+  APP_NOT_FOUND: "app_not_found",
+  /** Credential id is unknown for the application. */
+  CREDENTIAL_NOT_FOUND: "credential_not_found",
+  /** Application is disabled. */
+  APP_DISABLED: "app_disabled",
+  /** Cannot revoke the last active credential on an active application. */
+  LAST_ACTIVE_CREDENTIAL: "last_active_credential",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

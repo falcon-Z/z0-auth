@@ -5,6 +5,7 @@ export type ConsoleSummaryResponse = {
     memberCount: number;
     pendingInviteCount: number;
     userCount: number;
+    appCount: number;
   };
   sessions: {
     activeCount: number;

@@ -1,6 +1,7 @@
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
 
 import { getDb } from "./db";
+import { countApps } from "./apps";
 import { getInstanceSettings } from "./instance";
 
 async function countInstanceMembers(): Promise<number> {
@@ -43,6 +44,7 @@ export async function buildConsoleSummary(_userId: string): Promise<ConsoleSumma
       memberCount: await countInstanceMembers(),
       pendingInviteCount: await countPendingInvites(),
       userCount: await countUsers(),
+      appCount: await countApps(),
     },
     sessions: {
       activeCount: await countActiveSessions(_userId),

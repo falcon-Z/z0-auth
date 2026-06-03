@@ -84,13 +84,23 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
     title: "Applications",
     items: [
       {
+        id: "apps",
+        title: "Applications",
+        path: "/apps",
+        icon: AppWindow,
+        status: "available",
+        module: "M03",
+        summary: "Register apps, redirect URIs, and client credentials.",
+      },
+      {
         id: "clients",
         title: "OAuth clients",
         path: "/clients",
         icon: AppWindow,
-        status: "stub",
-        module: "P3-M3",
-        summary: "Register redirect URIs, rotate secrets, and scope client credentials.",
+        status: "planned",
+        module: "M09",
+        summary: "OAuth authorization settings per application (Phase 4).",
+        hideFromSidebar: true,
       },
       {
         id: "app-users",

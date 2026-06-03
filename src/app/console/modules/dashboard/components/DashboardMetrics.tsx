@@ -32,6 +32,7 @@ export function DashboardMetrics({ session, summary, loading, error, onRetry }: 
       <h2 className="text-sm font-medium text-muted-foreground">{orgLabel}</h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard label="Members" value={instance.memberCount} to="/members" />
+        <MetricCard label="Applications" value={instance.appCount} to="/apps" />
         <MetricCard label="Pending invites" value={instance.pendingInviteCount} to="/members" />
         <MetricCard label="Your sessions" value={summary.sessions.activeCount} to="/profile/sessions" />
       </div>

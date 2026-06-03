@@ -1,0 +1,320 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Applications API
+  version: 0.1.0
+  description: |
+    Instance-scoped registered applications and client credentials (M03).
+    All routes require a signed-in instance member.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Applications
+paths:
+  /api/v1/apps:
+    get:
+      tags: [Applications]
+      summary: List applications
+      operationId: listApps
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Applications for this instance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apps]
+                properties:
+                  apps:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AppSummary"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Applications]
+      summary: Register application
+      operationId: createApp
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppRequest"
+      responses:
+        "201":
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/apps/{appId}:
+    get:
+      tags: [Applications]
+      summary: Get application
+      operationId: getApp
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Application detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppDetail"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Applications]
+      summary: Update application
+      operationId: patchApp
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchAppRequest"
+      responses:
+        "200":
+          description: Updated application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/v1/apps/{appId}/credentials:
+    get:
+      tags: [Applications]
+      summary: List client credentials
+      operationId: listAppCredentials
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Credentials (secrets never returned)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [credentials]
+                properties:
+                  credentials:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AppCredentialSummary"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    post:
+      tags: [Applications]
+      summary: Create client credential
+      operationId: createAppCredential
+      description: Returns `clientSecret` once; it cannot be retrieved again.
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCredentialRequest"
+      responses:
+        "201":
+          description: Credential created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateCredentialResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Application disabled
+  /api/v1/apps/{appId}/credentials/{credentialId}:
+    delete:
+      tags: [Applications]
+      summary: Revoke client credential
+      operationId: revokeAppCredential
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/CredentialId"
+      responses:
+        "200":
+          description: Credential revoked
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Last active credential or app disabled
+  /api/v1/apps/{appId}/credentials/{credentialId}/rotate:
+    post:
+      tags: [Applications]
+      summary: Rotate client secret
+      operationId: rotateAppCredential
+      description: Replaces the secret for the same `clientId`. Returns the new secret once.
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/CredentialId"
+      responses:
+        "200":
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotateCredentialResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Application disabled
+components:
+  parameters:
+    AppId:
+      name: appId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CredentialId:
+      name: credentialId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    AppStatus:
+      type: string
+      enum: [active, disabled]
+    AppSummary:
+      type: object
+      required:
+        - id
+        - name
+        - slug
+        - status
+        - redirectUris
+        - activeCredentialCount
+        - createdAt
+        - updatedAt
+        - disabledAt
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        status: { $ref: "#/components/schemas/AppStatus" }
+        redirectUris:
+          type: array
+          items: { type: string, format: uri }
+        activeCredentialCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        disabledAt: { type: string, format: date-time, nullable: true }
+    AppDetail:
+      $ref: "#/components/schemas/AppSummary"
+    CreateAppRequest:
+      type: object
+      required: [name, redirectUris]
+      properties:
+        name: { type: string }
+        redirectUris:
+          type: array
+          minItems: 1
+          items: { type: string, format: uri }
+    PatchAppRequest:
+      type: object
+      properties:
+        name: { type: string }
+        redirectUris:
+          type: array
+          items: { type: string, format: uri }
+        status: { $ref: "#/components/schemas/AppStatus" }
+    CredentialStatus:
+      type: string
+      enum: [active, revoked]
+    AppCredentialSummary:
+      type: object
+      required: [id, clientId, label, status, createdAt, revokedAt]
+      properties:
+        id: { type: string, format: uuid }
+        clientId: { type: string }
+        label: { type: string }
+        status: { $ref: "#/components/schemas/CredentialStatus" }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time, nullable: true }
+    CreateCredentialRequest:
+      type: object
+      properties:
+        label: { type: string }
+    CreateCredentialResponse:
+      type: object
+      required: [credential, clientSecret]
+      properties:
+        credential: { $ref: "#/components/schemas/AppCredentialSummary" }
+        clientSecret: { type: string }
+    RotateCredentialResponse:
+      $ref: "#/components/schemas/CreateCredentialResponse"

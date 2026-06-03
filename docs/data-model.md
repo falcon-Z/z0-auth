@@ -62,15 +62,38 @@ Accepting an invite inserts `instance_members` (no roles).
 | `password_credentials` | Password hashes |
 | `sessions` | Session tokens |
 
-### Apps (unchanged intent for later modules)
+### `apps` (M03)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `name` | TEXT | Display name |
+| `slug` | TEXT | Unique URL-safe id (from name; suffix on conflict) |
+| `redirect_uris` | TEXT[] | OAuth redirect allow-list (exact match at authorize time) |
+| `status` | TEXT | `active`, `disabled` |
+| `disabled_at` | TIMESTAMPTZ | Set when disabled |
+| `created_at`, `updated_at` | TIMESTAMPTZ | |
+
+### `app_credentials` (M03)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `app_id` | UUID → `apps` | CASCADE delete |
+| `client_id` | TEXT | Unique public id (`z0_…`) |
+| `client_secret_hash` | TEXT | Argon2id; plaintext shown once on create/rotate |
+| `label` | TEXT | Default `Default` |
+| `status` | TEXT | `active`, `revoked` |
+| `revoked_at` | TIMESTAMPTZ | |
+| `created_at` | TIMESTAMPTZ | |
+
+### Later modules
 
 | Table | Purpose |
 |-------|---------|
-| `apps` | Registered applications |
-| `app_credentials` | Client credentials |
-| `app_memberships` | App user ↔ app |
-| `smtp_settings` | SMTP config |
-| `audit_events` | Audit trail (`tenant_id` column unused, always NULL in v1) |
+| `app_memberships` | App user ↔ app (M05) |
+| `smtp_settings` | SMTP config (M08) |
+| `audit_events` | Audit trail (`tenant_id` unused, NULL in v1) |
 
 ## Setup flow
 
@@ -85,12 +108,13 @@ Accepting an invite inserts `instance_members` (no roles).
 - `permissions`, `roles`, `role_permissions`, `user_roles`
 - `user_preferences` (active tenant)
 
-## API shape (M01)
+## API shape
 
 | Area | Routes |
 |------|--------|
-| Members | `GET/POST /api/v1/members`, `GET /api/v1/members/invites`, `DELETE /api/v1/members/invites/:id`, `DELETE /api/v1/members/:userId` |
+| Members (M01) | `GET/POST /api/v1/members`, `GET /api/v1/members/invites`, `DELETE /api/v1/members/invites/:id`, `DELETE /api/v1/members/:userId` |
 | Invites (public token) | `GET /api/v1/invites/:token`, `POST accept/decline` |
+| Applications (M03) | `GET/POST /api/v1/apps`, `GET/PATCH /api/v1/apps/:appId`, credential CRUD under `…/credentials` |
 | Session | `isInstanceMember`, `organizationName` — no tenant or permissions |
 
 ## Related docs

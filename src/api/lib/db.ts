@@ -49,6 +49,11 @@ export function query(strings: TemplateStringsArray, ...values: unknown[]) {
   return getDb()(strings, ...values);
 }
 
+/** PostgreSQL `TEXT[]` parameter for Bun SQL (see bun.com/docs/runtime/sql#sql-array-helper). */
+export function pgTextArray(values: string[]) {
+  return getDb().array(values, "TEXT");
+}
+
 export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
   const started = performance.now();
   try {
