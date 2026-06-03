@@ -6,20 +6,12 @@ export type PlatformUserSummary = {
   name: string;
   status: UserStatus;
   createdAt: string;
-  platformRoles: string[];
-};
-
-export type UserTenantMembership = {
-  tenantId: string;
-  tenantName: string;
-  tenantSlug: string;
-  roleKeys: string[];
-  joinedAt: string;
+  isInstanceMember: boolean;
 };
 
 export type PlatformUserDetail = PlatformUserSummary & {
-  tenantMemberships: UserTenantMembership[];
   activeSessionCount: number;
+  isBootstrap: boolean;
 };
 
 export type PatchPlatformUserRequest = {

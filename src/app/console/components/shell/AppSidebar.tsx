@@ -12,13 +12,10 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@z0/components/ui/sidebar";
-import { cn } from "../../lib/utils";
 import { CONSOLE_NAV, isConsoleNavItemVisible } from "../../config/navigation";
-import { shouldHideTenantsNav } from "../../lib/console-access";
+import { hasConsoleAccess } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
-import { sessionHasPermission } from "../../lib/tenant-permissions";
 import { SidebarAccountFooter } from "./SidebarAccountFooter";
-import { SidebarTenantSwitcher } from "./SidebarTenantSwitcher";
 
 function isNavItemActive(pathname: string, path: string): boolean {
   if (path === "/") return pathname === "/";
@@ -28,12 +25,14 @@ function isNavItemActive(pathname: string, path: string): boolean {
 export function AppSidebar() {
   const location = useLocation();
   const { session } = useSession();
-  const hasTenant = Boolean(session.tenant?.id);
+  const canAccess = hasConsoleAccess(session);
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      <SidebarHeader className="gap-3 border-b pb-3">
-        <SidebarTenantSwitcher />
+      <SidebarHeader className="gap-1 border-b pb-3">
+        <p className="truncate px-2 text-sm font-medium text-sidebar-foreground">
+          {session.organizationName || "Console"}
+        </p>
       </SidebarHeader>
 
       <SidebarContent>
@@ -41,10 +40,7 @@ export function AppSidebar() {
           const items = group.items.filter((item) => {
             if (item.hideFromSidebar) return false;
             if (!isConsoleNavItemVisible(item)) return false;
-            if (item.id === "tenants" && shouldHideTenantsNav(session)) return false;
-            if (item.requiredPermission && !sessionHasPermission(session, item.requiredPermission)) {
-              return false;
-            }
+            if (!canAccess && item.id !== "profile") return false;
             return true;
           });
 
@@ -56,28 +52,13 @@ export function AppSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {items.map((item) => {
-                    const missingTenant = item.requiresTenant && !hasTenant;
-                    const disabled = missingTenant;
                     const Icon = item.icon;
                     const isActive = isNavItemActive(location.pathname, item.path);
 
                     return (
                       <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive}
-                          tooltip={disabled ? "Choose a tenant" : item.title}
-                          className={cn(disabled && "pointer-events-none opacity-50")}
-                        >
-                          <NavLink
-                            to={item.path}
-                            end={item.path === "/"}
-                            aria-disabled={disabled}
-                            tabIndex={disabled ? -1 : undefined}
-                            onClick={(e) => {
-                              if (disabled) e.preventDefault();
-                            }}
-                          >
+                        <SidebarMenuButton asChild isActive={isActive} tooltip={item.title}>
+                          <NavLink to={item.path} end={item.path === "/"}>
                             <Icon />
                             <span>{item.title}</span>
                           </NavLink>

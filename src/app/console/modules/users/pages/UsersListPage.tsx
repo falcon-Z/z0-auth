@@ -13,14 +13,14 @@ import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton"
 import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fetchPlatformUsers, updateUserStatus } from "../../../lib/users-api";
-import { formatRoleKey, sessionHasPermission } from "../../../lib/tenant-permissions";
+import { hasConsoleAccess } from "../../../lib/console-access";
 import { useSession } from "../../../context/session-context";
 
 export function UsersListPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { session } = useSession();
-  const canWriteUsers = sessionHasPermission(session, "platform:users:write");
+  const canWriteUsers = hasConsoleAccess(session);
   const [users, setUsers] = useState<PlatformUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,17 +112,11 @@ export function UsersListPage() {
             ),
           },
           {
-            id: "roles",
-            header: "Platform roles",
+            id: "member",
+            header: "Console",
             cell: (row) =>
-              row.platformRoles.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {row.platformRoles.map((role) => (
-                    <Badge key={role} variant="outline" className="capitalize">
-                      {formatRoleKey(role)}
-                    </Badge>
-                  ))}
-                </div>
+              row.isInstanceMember ? (
+                <Badge variant="secondary">Team member</Badge>
               ) : (
                 "—"
               ),

@@ -3,7 +3,7 @@ import { parseJsonBody } from "@z0/contracts/validation";
 
 import { validateCsrf } from "../../lib/csrf";
 import { json } from "../../lib/http";
-import { acceptTenantInvite, buildInvitePreview, declineTenantInvite } from "../../lib/invites";
+import { acceptInstanceInvite, buildInvitePreview, declineInstanceInvite } from "../../lib/invites";
 import type { RoutedRequest } from "../../lib/path-router";
 
 function tokenFrom(req: RoutedRequest): string {
@@ -23,23 +23,20 @@ export async function handleAcceptInvite(req: RoutedRequest): Promise<Response> 
   const parsed = await parseJsonBody<AcceptInviteRequest>(req);
   if (!parsed.ok) return parsed.response;
 
-  const result = await acceptTenantInvite(req, tokenFrom(req), parsed.body);
+  const result = await acceptInstanceInvite(req, tokenFrom(req), parsed.body);
   if (!result.ok) return result.response;
 
   const headers = new Headers({ "Content-Type": "application/json; charset=utf-8" });
   if (result.setCookie) headers.set("Set-Cookie", result.setCookie);
 
-  return new Response(
-    JSON.stringify({ ok: true, userId: result.userId, tenantId: result.tenantId }),
-    { status: 200, headers },
-  );
+  return new Response(JSON.stringify({ ok: true, userId: result.userId }), { status: 200, headers });
 }
 
 export async function handleDeclineInvite(req: RoutedRequest): Promise<Response> {
   const csrfError = validateCsrf(req);
   if (csrfError) return csrfError;
 
-  const result = await declineTenantInvite(req, tokenFrom(req));
+  const result = await declineInstanceInvite(req, tokenFrom(req));
   if (!result.ok) return result.response;
   return json({ ok: true });
 }

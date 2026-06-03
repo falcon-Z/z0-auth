@@ -13,8 +13,6 @@ import { clientIp } from "../lib/rate-limit";
 import { getDb } from "../lib/db";
 import { problem } from "../lib/http";
 import { hashPassword } from "../lib/password";
-import { assignPlatformRole, assignTenantRole } from "../lib/roles";
-import { uniqueTenantSlug } from "../lib/tenant";
 import { checkRateLimit } from "../lib/rate-limit";
 
 export type SetupResult =
@@ -93,7 +91,7 @@ export async function runSetup(req: BunRequest, body: SetupRequest): Promise<Set
     const result = await db.begin(async (tx) => {
       const [settings] = await tx`
         SELECT setup_completed_at
-        FROM platform_settings
+        FROM instance_settings
         WHERE id = 1
         FOR UPDATE
       `;
@@ -103,15 +101,6 @@ export async function runSetup(req: BunRequest, body: SetupRequest): Promise<Set
       }
 
       const organizationName = body.organizationName.trim();
-      const slug = await uniqueTenantSlug(organizationName, tx);
-
-      const [tenant] = await tx`
-        INSERT INTO tenants (name, slug, is_default)
-        VALUES (${organizationName}, ${slug}, true)
-        RETURNING id, name, slug
-      `;
-
-      const tenantId = String((tenant as { id: string }).id);
 
       const [user] = await tx`
         INSERT INTO users (email, name, email_verified_at)
@@ -127,33 +116,19 @@ export async function runSetup(req: BunRequest, body: SetupRequest): Promise<Set
       `;
 
       await tx`
-        INSERT INTO platform_memberships (user_id, role)
-        VALUES (${userId}, 'platform_admin')
+        INSERT INTO instance_members (user_id, is_bootstrap)
+        VALUES (${userId}, true)
       `;
 
       await tx`
-        INSERT INTO tenant_memberships (user_id, tenant_id, role)
-        VALUES (${userId}, ${tenantId}, 'tenant_admin')
-      `;
-
-      await assignPlatformRole(userId, "platform_admin", tx);
-      await assignTenantRole(userId, tenantId, "tenant_admin", tx);
-
-      await tx`
-        INSERT INTO user_preferences (user_id, active_tenant_id)
-        VALUES (${userId}, ${tenantId})
-      `;
-
-      await tx`
-        UPDATE platform_settings
-        SET platform_name = ${organizationName},
-            default_tenant_id = ${tenantId},
+        UPDATE instance_settings
+        SET organization_name = ${organizationName},
             setup_completed_at = NOW(),
             updated_at = NOW()
         WHERE id = 1
       `;
 
-      return { conflict: false as const, user, userId, tenant };
+      return { conflict: false as const, user, userId, organizationName };
     });
 
     if (result.conflict) {
@@ -172,19 +147,13 @@ export async function runSetup(req: BunRequest, body: SetupRequest): Promise<Set
         email: (result.user as { email: string }).email,
         name: (result.user as { name: string }).name,
       },
-      organizationName: body.organizationName.trim(),
-      tenant: {
-        id: String((result.tenant as { id: string }).id),
-        name: (result.tenant as { name: string }).name,
-        slug: (result.tenant as { slug: string }).slug,
-      },
+      organizationName: result.organizationName,
     };
 
     console.info(
       JSON.stringify({
         event: "setup.completed",
         userId: result.userId,
-        tenantId: responseBody.tenant.id,
       }),
     );
 

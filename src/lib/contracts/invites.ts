@@ -2,9 +2,8 @@ export type InvitePreviewResponse = {
   status: "pending" | "accepted" | "declined" | "revoked" | "expired";
   email: string;
   invitedName: string;
-  organization: { id: string; name: string; slug: string };
+  organizationName: string;
   expiresAt: string;
-  /** True when a user row exists for the invite email. */
   accountExists: boolean;
   viewer: {
     authenticated: boolean;
@@ -16,7 +15,6 @@ export type InvitePreviewResponse = {
 export type CreateInviteRequest = {
   email: string;
   invitedName: string;
-  roleKeys: string[];
 };
 
 export type CreateInviteResponse = {
@@ -25,42 +23,41 @@ export type CreateInviteResponse = {
   expiresAt: string;
   email: string;
   invitedName: string;
-  roleKeys: string[];
 };
 
 export type AcceptInviteRequest = {
-  /** Required when creating a new account from the invite. */
   password?: string;
   passwordConfirm?: string;
-  /** Required for new accounts when not prefilled on the invite. */
   name?: string;
 };
 
 export type AcceptInviteResponse = {
   ok: true;
   userId: string;
-  tenantId: string;
 };
 
-export type TenantMember = {
+export type InstanceMember = {
   userId: string;
   email: string;
   name: string;
-  roleKeys: string[];
   joinedAt: string;
+  isBootstrap: boolean;
 };
 
 export type PendingInvite = {
   id: string;
   email: string;
   invitedName: string;
-  roleKeys: string[];
   expiresAt: string;
   createdAt: string;
 };
 
+/** @deprecated M01 removed role catalog */
 export type RoleSummary = {
   key: string;
   scope: "platform" | "tenant";
   description: string;
 };
+
+/** @deprecated Use InstanceMember */
+export type TenantMember = InstanceMember;

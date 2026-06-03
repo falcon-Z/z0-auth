@@ -1,6 +1,6 @@
 import type { BunRequest } from "bun";
 
-import type { ChangePasswordRequest, LoginRequest, SetActiveTenantRequest } from "@z0/contracts/auth";
+import type { ChangePasswordRequest, LoginRequest } from "@z0/contracts/auth";
 import { ErrorCodes } from "@z0/contracts/errors";
 import { parseJsonBody } from "@z0/contracts/validation";
 
@@ -13,7 +13,6 @@ import {
   revokeSessionByToken,
   SESSION_COOKIE,
 } from "../lib/session";
-import { setActiveTenant } from "../lib/tenant";
 import { changePassword } from "../lib/users";
 import { runLogin } from "./service";
 
@@ -49,40 +48,6 @@ export async function handleLogout(req: BunRequest): Promise<Response> {
 export async function handleSession(req: BunRequest): Promise<Response> {
   const session = await buildSessionResponse(req);
   return json(session);
-}
-
-export async function handleSetActiveTenant(req: BunRequest): Promise<Response> {
-  const csrfError = validateCsrf(req);
-  if (csrfError) return csrfError;
-
-  const auth = await requireSession(req);
-  if (!auth.ok) return auth.response;
-
-  const parsed = await parseJsonBody<SetActiveTenantRequest>(req);
-  if (!parsed.ok) return parsed.response;
-
-  const tenantId = parsed.body.tenantId?.trim() ?? "";
-  if (!tenantId) {
-    return problem(400, "Validation Error", "Invalid request", {
-      errors: [{ field: "tenantId", code: ErrorCodes.REQUIRED, message: "Organization is required" }],
-    });
-  }
-
-  const updated = await setActiveTenant(auth.userId, tenantId);
-  if (!updated) {
-    return problem(403, "Forbidden", "You do not have access to this organization", {
-      errors: [
-        {
-          field: "tenantId",
-          code: ErrorCodes.TENANT_ACCESS_DENIED,
-          message: "You do not have access to this organization",
-        },
-      ],
-    });
-  }
-
-  const payload = await buildAuthenticatedSessionPayload(auth.userId);
-  return json(payload);
 }
 
 export async function handlePasswordResetUnavailable(): Promise<Response> {

@@ -57,7 +57,7 @@ run("console summary", () => {
     await closeDatabase();
   });
 
-  test("GET /api/v1/console/summary returns tenant and platform metrics for admin", async () => {
+  test("GET /api/v1/console/summary returns instance metrics", async () => {
     const cookie = await login();
     expect(cookie).toBeDefined();
 
@@ -68,18 +68,18 @@ run("console summary", () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      membership: { tenantCount: number };
-      tenant?: { memberCount: number; pendingInviteCount: number };
-      platform?: { userCount: number };
+      instance: {
+        organizationName: string;
+        memberCount: number;
+        pendingInviteCount: number;
+        userCount: number;
+      };
       sessions: { activeCount: number };
     };
 
-    expect(body.membership.tenantCount).toBeGreaterThanOrEqual(1);
-    expect(body.tenant).toBeDefined();
-    expect(body.tenant!.memberCount).toBeGreaterThanOrEqual(1);
-    expect(body.platform).toBeDefined();
-    expect(body.platform!.userCount).toBeGreaterThanOrEqual(1);
-    expect(body.platform!.tenantCount).toBeGreaterThanOrEqual(1);
+    expect(body.instance.organizationName).toBe("Acme Corp");
+    expect(body.instance.memberCount).toBeGreaterThanOrEqual(1);
+    expect(body.instance.userCount).toBeGreaterThanOrEqual(1);
     expect(body.sessions.activeCount).toBeGreaterThanOrEqual(1);
   });
 

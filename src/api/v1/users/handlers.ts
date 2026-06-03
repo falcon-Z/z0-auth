@@ -4,7 +4,7 @@ import { parseJsonBody } from "@z0/contracts/validation";
 
 import { json, problem } from "../../lib/http";
 import { validateCsrf } from "../../lib/csrf";
-import { requirePlatformPermission } from "../../lib/permissions";
+import { requireInstanceMember } from "../../lib/instance-members";
 import type { RoutedRequest } from "../../lib/path-router";
 import {
   getPlatformUserDetail,
@@ -17,16 +17,16 @@ function userIdFrom(req: RoutedRequest): string {
 }
 
 export async function handleListUsers(req: RoutedRequest): Promise<Response> {
-  const perm = await requirePlatformPermission(req, "platform:users:read");
-  if (!perm.ok) return perm.response;
+  const auth = await requireInstanceMember(req);
+  if (!auth.ok) return auth.response;
 
   const users = await listPlatformUsers();
   return json({ users });
 }
 
 export async function handleGetUser(req: RoutedRequest): Promise<Response> {
-  const perm = await requirePlatformPermission(req, "platform:users:read");
-  if (!perm.ok) return perm.response;
+  const auth = await requireInstanceMember(req);
+  if (!auth.ok) return auth.response;
 
   const user = await getPlatformUserDetail(userIdFrom(req));
   if (!user) {
@@ -47,13 +47,13 @@ export async function handlePatchUser(req: RoutedRequest): Promise<Response> {
   const csrfError = validateCsrf(req);
   if (csrfError) return csrfError;
 
-  const perm = await requirePlatformPermission(req, "platform:users:write");
-  if (!perm.ok) return perm.response;
+  const auth = await requireInstanceMember(req);
+  if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<PatchPlatformUserRequest>(req);
   if (!parsed.ok) return parsed.response;
 
-  const result = await updatePlatformUserStatus(perm.userId, userIdFrom(req), parsed.body);
+  const result = await updatePlatformUserStatus(auth.userId, userIdFrom(req), parsed.body);
   if (!result.ok) return result.response;
   return json(result.user);
 }

@@ -1,67 +1,39 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { CreateInviteRequest, CreateInviteResponse, PendingInvite, RoleSummary, TenantMember } from "@z0/contracts/invites";
+import type { CreateInviteRequest, CreateInviteResponse, InstanceMember, PendingInvite } from "@z0/contracts/invites";
 
 import { ApiError } from "../lib/api";
 import {
-  createTenantInvite,
+  createInstanceInvite,
+  fetchInstanceMembers,
   fetchPendingInvites,
-  fetchTenantMembers,
-  fetchTenantRoles,
-  revokeTenantInvite,
+  revokeInstanceInvite,
 } from "../lib/members-api";
 
 type MembersDataState = {
-  members: TenantMember[];
+  members: InstanceMember[];
   invites: PendingInvite[];
-  roles: RoleSummary[];
   loading: boolean;
-  forbidden: boolean;
   error: string | null;
 };
 
-export function useMembersData(tenantId: string | undefined, canReadMembers: boolean, canInviteMembers: boolean) {
+export function useMembersData() {
   const [state, setState] = useState<MembersDataState>({
     members: [],
     invites: [],
-    roles: [],
     loading: true,
-    forbidden: false,
     error: null,
   });
 
   const reload = useCallback(async () => {
-    if (!tenantId || !canReadMembers) {
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        forbidden: !tenantId ? false : !canReadMembers,
-        members: [],
-        invites: [],
-      }));
-      return;
-    }
-
-    setState((prev) => ({ ...prev, loading: true, forbidden: false, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const membersPromise = fetchTenantMembers(tenantId);
-      const rolesPromise = fetchTenantRoles();
-      const invitesPromise = canInviteMembers
-        ? fetchPendingInvites(tenantId).catch((e) => {
-            if (e instanceof ApiError && e.problem.status === 403) return [];
-            throw e;
-          })
-        : Promise.resolve([]);
-
-      const [members, roles, invites] = await Promise.all([membersPromise, rolesPromise, invitesPromise]);
-
+      const [members, invites] = await Promise.all([fetchInstanceMembers(), fetchPendingInvites()]);
       setState({
         members,
         invites,
-        roles,
         loading: false,
-        forbidden: false,
         error: null,
       });
     } catch (e) {
@@ -69,10 +41,8 @@ export function useMembersData(tenantId: string | undefined, canReadMembers: boo
         setState({
           members: [],
           invites: [],
-          roles: [],
           loading: false,
-          forbidden: true,
-          error: null,
+          error: "You do not have access to members.",
         });
         return;
       }
@@ -82,7 +52,7 @@ export function useMembersData(tenantId: string | undefined, canReadMembers: boo
         error: e instanceof Error ? e.message : "Could not load members",
       }));
     }
-  }, [tenantId, canReadMembers, canInviteMembers]);
+  }, []);
 
   useEffect(() => {
     void reload();
@@ -90,21 +60,19 @@ export function useMembersData(tenantId: string | undefined, canReadMembers: boo
 
   const submitInvite = useCallback(
     async (body: CreateInviteRequest): Promise<CreateInviteResponse> => {
-      if (!tenantId) throw new Error("No active tenant");
-      const result = await createTenantInvite(tenantId, body);
+      const result = await createInstanceInvite(body);
       await reload();
       return result;
     },
-    [tenantId, reload],
+    [reload],
   );
 
   const revokeInvite = useCallback(
     async (inviteId: string) => {
-      if (!tenantId) return;
-      await revokeTenantInvite(tenantId, inviteId);
+      await revokeInstanceInvite(inviteId);
       await reload();
     },
-    [tenantId, reload],
+    [reload],
   );
 
   return { ...state, reload, submitInvite, revokeInvite };

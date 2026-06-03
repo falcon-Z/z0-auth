@@ -12,20 +12,17 @@ import {
 import { useLocation } from "react-router-dom";
 
 import { SessionGate } from "../components/shell/SessionGate";
-import { loadSession, postActiveTenant, postLogout } from "../lib/api";
+import { loadSession, postLogout } from "../lib/api";
+import { hasConsoleAccess } from "../lib/console-access";
 
 type SessionContextValue = {
   session: SessionResponse;
   refreshSession: () => Promise<void>;
   signOut: () => Promise<void>;
-  switchOrganization: (tenantId: string) => Promise<boolean>;
-  switchError: string | null;
-  switching: boolean;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-/** Re-check session with the server after in-app navigation or tab focus (revoked cookies). */
 function SessionRevalidator({ onRevalidate }: { onRevalidate: () => Promise<void> }) {
   const { pathname } = useLocation();
   const initialPath = useRef(pathname);
@@ -50,8 +47,6 @@ function SessionRevalidator({ onRevalidate }: { onRevalidate: () => Promise<void
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [gate, setGate] = useState<"loading" | "ready" | "unavailable">("loading");
-  const [switching, setSwitching] = useState(false);
-  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const redirectForGate = useCallback((kind: "login" | "setup") => {
     window.location.href = kind === "setup" ? "/auth/setup" : "/auth/login";
@@ -60,6 +55,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const refreshSession = useCallback(async () => {
     const result = await loadSession();
     if (result.kind === "authenticated") {
+      if (!hasConsoleAccess(result.session)) {
+        redirectForGate("login");
+        return;
+      }
       setSession(result.session);
       setGate("ready");
       return;
@@ -79,24 +78,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       await postLogout();
     } catch {
-      // Idempotent: cookie may already be cleared (e.g. revoke current session).
+      // Idempotent: cookie may already be cleared.
     }
     window.location.href = "/auth/login";
-  }, []);
-
-  const switchOrganization = useCallback(async (tenantId: string): Promise<boolean> => {
-    setSwitchError(null);
-    setSwitching(true);
-    try {
-      const next = await postActiveTenant(tenantId);
-      setSession(next);
-      return true;
-    } catch (error) {
-      setSwitchError(error instanceof Error ? error.message : "Could not switch to that tenant.");
-      return false;
-    } finally {
-      setSwitching(false);
-    }
   }, []);
 
   const value = useMemo((): SessionContextValue | null => {
@@ -105,11 +89,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       session,
       refreshSession,
       signOut,
-      switchOrganization,
-      switchError,
-      switching,
     };
-  }, [session, refreshSession, signOut, switchOrganization, switchError, switching]);
+  }, [session, refreshSession, signOut]);
 
   if (gate === "unavailable") {
     return (

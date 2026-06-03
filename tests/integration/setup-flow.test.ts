@@ -28,7 +28,7 @@ run("setup flow", () => {
     expect(body.completed).toBe(false);
   });
 
-  test("POST /api/setup creates admin, default tenant, and memberships", async () => {
+  test("POST /api/setup creates bootstrap member and organization", async () => {
     const csrf = await fetchCsrfToken(dispatchApi);
     const res = await dispatchApi(
       buildRequest("POST", "/api/setup", {
@@ -46,10 +46,7 @@ run("setup flow", () => {
     const body = (await res.json()) as SetupResponse;
     expect(body.user.email).toBe("admin@example.com");
     expect(body.organizationName).toBe("Acme IAM");
-    expect(body.tenant.name).toBe("Acme IAM");
-    expect(body.tenant.slug).toBe("acme-iam");
     expect(body.user.id).toBeTruthy();
-    expect(body.tenant.id).toBeTruthy();
   });
 
   test("POST /api/setup again returns 409", async () => {

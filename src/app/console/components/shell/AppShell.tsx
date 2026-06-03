@@ -20,7 +20,7 @@ export function AppShell() {
             <AppHeader />
             <div
               className="flex flex-1 flex-col gap-4 p-4 pt-0 md:p-6"
-              key={location.pathname + (session.tenant?.id ?? "")}
+              key={location.pathname}
             >
               <Outlet />
             </div>

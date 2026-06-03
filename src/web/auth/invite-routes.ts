@@ -3,7 +3,7 @@ import type { BunRequest } from "bun";
 import type { InvitePreviewResponse } from "@z0/contracts/invites";
 
 import { runLogin } from "../../api/auth/service";
-import { acceptTenantInvite, buildInvitePreview, declineTenantInvite } from "../../api/lib/invites";
+import { acceptInstanceInvite, buildInvitePreview, declineInstanceInvite } from "../../api/lib/invites";
 import { validateFormCsrf } from "../../api/lib/csrf";
 import { authFormErrorStatus, htmxAuthErrorHeaders } from "../htmx";
 import { parseFormBody } from "../forms";
@@ -56,7 +56,7 @@ function renderInviteStatusPage(
   message: string,
   preview?: InvitePreviewResponse,
 ): string {
-  const org = preview ? `<p class="auth-footer">Organization: <strong>${escapeHtml(preview.organization.name)}</strong></p>` : "";
+  const org = preview ? `<p class="auth-footer">Organization: <strong>${escapeHtml(preview.organizationName)}</strong></p>` : "";
   return renderAuthPage({
     title,
     description: "Organization invitation",
@@ -83,7 +83,7 @@ function renderExistingUserInvite(
     csrfToken,
     body: `
       <div class="auth-card">
-        <h2>Join ${escapeHtml(preview.organization.name)}</h2>
+        <h2>Join ${escapeHtml(preview.organizationName)}</h2>
         <p class="auth-footer">
           Signed in as <strong>${escapeHtml(preview.viewer.email ?? "")}</strong>.
           You were invited to join this organization as a member.
@@ -150,11 +150,11 @@ function renderNewUserAccept(
   const v = (key: string) => values[key] ?? preview.invitedName ?? "";
   return renderAuthPage({
     title: "Create your account",
-    description: `Join ${preview.organization.name}`,
+    description: `Join ${preview.organizationName}`,
     csrfToken,
     body: `
       <form method="post" action="${escapeHtml(inviteReturnPath(token))}" class="auth-card" data-validate>
-        <h2>Join ${escapeHtml(preview.organization.name)}</h2>
+        <h2>Join ${escapeHtml(preview.organizationName)}</h2>
         <p class="auth-footer">Set a password for <strong>${escapeHtml(preview.email)}</strong>.</p>
         ${formErrorsSummary(errors)}
         <input type="hidden" name="intent" value="accept" />
@@ -291,7 +291,7 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
   }
 
   if (intent === "decline") {
-    const result = await declineTenantInvite(req, token);
+    const result = await declineInstanceInvite(req, token);
     if (!result.ok) {
       const errors = await problemFieldErrors(result.response);
       const preview = await loadPreview(req, token);
@@ -308,7 +308,7 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
     );
   }
 
-  const acceptResult = await acceptTenantInvite(req, token, {
+  const acceptResult = await acceptInstanceInvite(req, token, {
     name: form.name,
     password: form.password,
     passwordConfirm: form.passwordConfirm,

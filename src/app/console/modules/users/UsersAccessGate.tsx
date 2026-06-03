@@ -2,17 +2,17 @@ import type { ReactNode } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { ListPageSkeleton } from "../../components/feedback/ListPageSkeleton";
-import { sessionHasPermission } from "../../lib/tenant-permissions";
+import { hasConsoleAccess } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
 
 export function UsersAccessGate({ children }: { children: ReactNode }) {
   const { session } = useSession();
 
-  if (!sessionHasPermission(session, "platform:users:read")) {
+  if (!hasConsoleAccess(session)) {
     return (
       <Alert>
         <AlertTitle>Access denied</AlertTitle>
-        <AlertDescription>Platform administrator access is required.</AlertDescription>
+        <AlertDescription>You need to be a team member to view users.</AlertDescription>
       </Alert>
     );
   }

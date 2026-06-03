@@ -17,14 +17,7 @@ export type SetupUser = {
   name: string;
 };
 
-export type SetupTenant = {
-  id: string;
-  name: string;
-  slug: string;
-};
-
 export type SetupResponse = {
   user: SetupUser;
   organizationName: string;
-  tenant: SetupTenant;
 };

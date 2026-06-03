@@ -6,7 +6,7 @@ import { parseJsonBody } from "@z0/contracts/validation";
 import { csrfCookieHeader, ensureCsrfToken, validateCsrf } from "../lib/csrf";
 import { loadConfig } from "../lib/config";
 import { json, problem } from "../lib/http";
-import { getPlatformSettings } from "../lib/platform";
+import { getInstanceSettings } from "../lib/instance";
 import { runSetup } from "./service";
 
 function appendSetCookie(response: Response, cookie: string): Response {
@@ -23,7 +23,7 @@ function appendSetCookie(response: Response, cookie: string): Response {
 export const setupApiRoutes = {
   "/api/setup/status": {
     async GET(req: BunRequest) {
-      const settings = await getPlatformSettings();
+      const settings = await getInstanceSettings();
       const body: SetupStatus = {
         completed: settings.setupCompleted,
         ...(settings.setupCompleted && settings.organizationName

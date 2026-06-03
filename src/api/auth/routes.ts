@@ -5,7 +5,6 @@ import {
   handleRegister,
   handlePasswordResetUnavailable,
   handleSession,
-  handleSetActiveTenant,
 } from "./handlers";
 
 /**
@@ -34,10 +33,6 @@ export const authApiRoutes = {
 
   "/api/auth/session": {
     GET: handleSession,
-  },
-
-  "/api/auth/active-tenant": {
-    POST: handleSetActiveTenant,
   },
 
   "/api/auth/change-password": {

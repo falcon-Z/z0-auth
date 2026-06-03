@@ -6,9 +6,7 @@ import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton"
 import { PageError } from "../../../components/feedback/PageError";
 import { fetchConsoleSummary } from "../../../lib/console-summary-api";
 import { ApiError } from "../../../lib/api";
-import { formatRoleKey } from "../../../lib/tenant-permissions";
 import { useSession } from "../../../context/session-context";
-import { Badge } from "@z0/components/ui/badge";
 
 export function ProfileOverviewPage() {
   const { session } = useSession();
@@ -42,22 +40,16 @@ export function ProfileOverviewPage() {
         <dl className="grid gap-3 rounded-lg border px-4 py-3 text-sm">
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">Name</dt>
-            <dd className="text-right font-medium">{session.user.name}</dd>
+            <dd className="text-right font-medium">{session.user!.name}</dd>
           </div>
           <div className="flex justify-between gap-4">
             <dt className="text-muted-foreground">Email</dt>
-            <dd className="text-right">{session.user.email}</dd>
+            <dd className="text-right">{session.user!.email}</dd>
           </div>
-          {(session.roles?.length ?? 0) > 0 ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
-              <dt className="text-muted-foreground">Platform roles</dt>
-              <dd className="flex flex-wrap justify-end gap-1">
-                {session.roles!.map((role) => (
-                  <Badge key={role} variant="secondary" className="capitalize">
-                    {formatRoleKey(role)}
-                  </Badge>
-                ))}
-              </dd>
+          {session.organizationName ? (
+            <div className="flex justify-between gap-4">
+              <dt className="text-muted-foreground">Organization</dt>
+              <dd className="text-right">{session.organizationName}</dd>
             </div>
           ) : null}
         </dl>
@@ -66,15 +58,7 @@ export function ProfileOverviewPage() {
       {summary ? (
         <section className="space-y-3">
           <h2 className="text-sm font-medium">Your activity</h2>
-          <p className="text-sm text-muted-foreground">
-            Personal counts for your account — not platform or tenant totals.
-          </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <MetricCard
-              label="Tenant memberships"
-              value={summary.membership.tenantCount}
-              to="/profile/tenants"
-            />
             <MetricCard
               label="Active sessions"
               value={summary.sessions.activeCount}

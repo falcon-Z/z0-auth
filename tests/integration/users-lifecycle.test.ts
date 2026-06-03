@@ -70,17 +70,14 @@ run("platform user lifecycle", () => {
     adminUserId = session.user.id;
 
     const csrf = await fetchCsrfToken(dispatchApi);
-    const [tenant] = await getDb()`SELECT id FROM tenants LIMIT 1`;
-    const tenantId = String((tenant as { id: string }).id);
 
     const inviteRes = await dispatchApi(
-      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+      buildRequest("POST", "/api/v1/members/invites", {
         csrfToken: csrf,
         ...withSession(adminCookie),
         body: {
           email: "bob@example.com",
           invitedName: "Bob User",
-          roleKeys: ["tenant_member"],
         },
       }),
     );
@@ -118,12 +115,12 @@ run("platform user lifecycle", () => {
     expect(body.users.some((u) => u.email === "bob@example.com")).toBe(true);
   });
 
-  test("denies user list without platform:users:read", async () => {
+  test("instance member can list users", async () => {
     const { cookie } = await login("bob@example.com", bobPassword);
     const res = await dispatchApi(
       buildRequest("GET", "/api/v1/users", withSession(cookie)),
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   test("admin disables user and login fails", async () => {
@@ -162,7 +159,8 @@ run("platform user lifecycle", () => {
     expect(body.errors?.some((e) => e.code === "cannot_disable_self")).toBe(true);
   });
 
-  test("cannot disable last platform administrator", async () => {
+  test("cannot disable last active instance member", async () => {
+    await getDb()`DELETE FROM instance_members WHERE user_id = ${bobUserId}`;
     await getDb()`UPDATE users SET status = 'active' WHERE id = ${bobUserId}`;
 
     const actorId = "00000000-0000-0000-0000-000000000099";

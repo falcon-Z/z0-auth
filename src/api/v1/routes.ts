@@ -10,7 +10,7 @@ export const v1ApiRoutes = {
     GET() {
       return json({
         version: "v1",
-        modules: ["me", "console", "roles", "tenants", "invites", "users"],
+        modules: ["me", "console", "members", "invites", "users", "sessions"],
         message: "Resource APIs are mounted under /api/v1/<resource>.",
       });
     },

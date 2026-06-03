@@ -5,9 +5,9 @@ import type {
   AcceptInviteRequest,
   CreateInviteRequest,
   CreateInviteResponse,
+  InstanceMember,
   InvitePreviewResponse,
   PendingInvite,
-  TenantMember,
 } from "@z0/contracts/invites";
 import { ErrorCodes } from "@z0/contracts/errors";
 import {
@@ -21,21 +21,17 @@ import { writeAuditEvent } from "./audit";
 import { sha256Hex, randomToken } from "./crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
+import { getInstanceSettings } from "./instance";
 import { hashPassword } from "./password";
 import { resolveSession } from "./session";
-import { assertCanAssignTenantRoles, assertNotLastTenantAdmin } from "./rbac";
-import { assignTenantRole } from "./roles";
-import { getTenantForMember } from "./tenant";
 import { createSession, sessionCookieHeader } from "./session";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type InviteRow = {
   id: string;
-  tenant_id: string;
   email: string;
   invited_name: string;
-  role_keys: string[];
   token_hash: string;
   status: string;
   invited_by_user_id: string | null;
@@ -50,46 +46,33 @@ function inviteStatus(row: InviteRow): InvitePreviewResponse["status"] {
   return row.status as InvitePreviewResponse["status"];
 }
 
-function primaryMembershipRole(roleKeys: string[]): string {
-  if (roleKeys.includes("tenant_admin")) return "tenant_admin";
-  if (roleKeys.includes("tenant_manager")) return "tenant_manager";
-  return "tenant_member";
-}
-
 export function inviteUrlFromRequest(req: Request, rawToken: string): string {
   const origin = new URL(req.url).origin;
   return `${origin}/auth/invite/${rawToken}`;
 }
 
-async function findInviteByToken(rawToken: string): Promise<(InviteRow & { tenant_name: string; tenant_slug: string }) | null> {
+async function findInviteByToken(rawToken: string): Promise<InviteRow | null> {
   const tokenHash = await sha256Hex(rawToken);
   const [row] = await getDb()`
     SELECT
-      i.id,
-      i.tenant_id,
-      i.email,
-      i.invited_name,
-      i.role_keys,
-      i.token_hash,
-      i.status,
-      i.invited_by_user_id,
-      i.expires_at,
-      i.accepted_at,
-      i.declined_at,
-      i.created_at,
-      t.name AS tenant_name,
-      t.slug AS tenant_slug
-    FROM tenant_invites i
-    JOIN tenants t ON t.id = i.tenant_id
-    WHERE i.token_hash = ${tokenHash}
+      id,
+      email,
+      invited_name,
+      token_hash,
+      status,
+      invited_by_user_id,
+      expires_at,
+      accepted_at,
+      declined_at,
+      created_at
+    FROM instance_invites
+    WHERE token_hash = ${tokenHash}
   `;
   if (!row) return null;
-  const r = row as InviteRow & { tenant_name: string; tenant_slug: string };
+  const r = row as InviteRow;
   return {
     ...r,
     id: String(r.id),
-    tenant_id: String(r.tenant_id),
-    role_keys: Array.isArray(r.role_keys) ? r.role_keys.map(String) : [],
     expires_at: new Date(r.expires_at),
     accepted_at: r.accepted_at ? new Date(r.accepted_at) : null,
     declined_at: r.declined_at ? new Date(r.declined_at) : null,
@@ -104,6 +87,17 @@ async function userExistsByEmail(email: string): Promise<boolean> {
   return Boolean(row);
 }
 
+async function isMemberByEmail(email: string): Promise<boolean> {
+  const [row] = await getDb()`
+    SELECT 1
+    FROM instance_members m
+    JOIN users u ON u.id = m.user_id
+    WHERE lower(u.email) = ${email}
+    LIMIT 1
+  `;
+  return Boolean(row);
+}
+
 export async function buildInvitePreview(req: Request, rawToken: string): Promise<InvitePreviewResponse | Response> {
   const invite = await findInviteByToken(rawToken);
   if (!invite) {
@@ -112,6 +106,7 @@ export async function buildInvitePreview(req: Request, rawToken: string): Promis
     });
   }
 
+  const settings = await getInstanceSettings();
   const status = inviteStatus(invite);
   const session = await resolveSession(req);
   const sessionUser = session ? await getUserById(session.userId) : null;
@@ -121,11 +116,7 @@ export async function buildInvitePreview(req: Request, rawToken: string): Promis
     status,
     email: invite.email,
     invitedName: invite.invited_name,
-    organization: {
-      id: invite.tenant_id,
-      name: invite.tenant_name,
-      slug: invite.tenant_slug,
-    },
+    organizationName: settings.organizationName,
     expiresAt: invite.expires_at.toISOString(),
     accountExists: await userExistsByEmail(invite.email),
     viewer: {
@@ -136,36 +127,14 @@ export async function buildInvitePreview(req: Request, rawToken: string): Promis
   };
 }
 
-export async function validateTenantRoleKeys(roleKeys: string[]): Promise<{ field: string; code: string; message: string }[]> {
-  const errors: { field: string; code: string; message: string }[] = [];
-  if (!roleKeys.length) {
-    errors.push({ field: "roleKeys", code: ErrorCodes.REQUIRED, message: "Select at least one role" });
-    return errors;
-  }
-
-  const sql = getDb();
-  const rows = await sql`
-    SELECT key FROM roles WHERE scope = 'tenant' AND key IN ${sql(roleKeys)}
-  `;
-  const valid = new Set(rows.map((r) => String((r as { key: string }).key)));
-  for (const key of roleKeys) {
-    if (!valid.has(key)) {
-      errors.push({ field: "roleKeys", code: ErrorCodes.INVALID_ROLE, message: `Unknown role: ${key}` });
-    }
-  }
-  return errors;
-}
-
-export async function createTenantInvite(
+export async function createInstanceInvite(
   req: BunRequest,
-  tenantId: string,
   invitedByUserId: string,
   body: CreateInviteRequest,
 ): Promise<{ ok: true; data: CreateInviteResponse } | { ok: false; response: Response }> {
   const errors = [
     ...validateEmail(body.email),
     ...validateRequiredString(body.invitedName, "invitedName", "Name"),
-    ...(await validateTenantRoleKeys(body.roleKeys ?? [])),
   ];
   if (errors.length) {
     return { ok: false, response: problem(400, "Validation Error", "Invalid invite request", { errors }) };
@@ -173,29 +142,20 @@ export async function createTenantInvite(
 
   const email = normalizeEmail(body.email);
   const invitedName = body.invitedName.trim();
-  const roleKeys = [...new Set(body.roleKeys)];
 
-  const roleAssignment = await assertCanAssignTenantRoles(invitedByUserId, tenantId, roleKeys);
-  if (!roleAssignment.ok) return roleAssignment;
-
-  const [userRow] = await getDb()`SELECT id FROM users WHERE lower(email) = ${email} LIMIT 1`;
-  if (userRow) {
-    const userId = String((userRow as { id: string }).id);
-    const member = await getTenantForMember(userId, tenantId);
-    if (member) {
-      return {
-        ok: false,
-        response: problem(409, "Conflict", "This person is already a member of the organization.", {
-          errors: [
-            {
-              field: "email",
-              code: ErrorCodes.INVITE_ALREADY_MEMBER,
-              message: "Already a member of this organization",
-            },
-          ],
-        }),
-      };
-    }
+  if (await isMemberByEmail(email)) {
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "This person is already a member.", {
+        errors: [
+          {
+            field: "email",
+            code: ErrorCodes.INVITE_ALREADY_MEMBER,
+            message: "Already a member",
+          },
+        ],
+      }),
+    };
   }
 
   const rawToken = randomToken(32);
@@ -203,22 +163,17 @@ export async function createTenantInvite(
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
 
   try {
-    const sql = getDb();
-    const [inserted] = await sql`
-      INSERT INTO tenant_invites (
-        tenant_id,
+    const [inserted] = await getDb()`
+      INSERT INTO instance_invites (
         email,
         invited_name,
-        role_keys,
         token_hash,
         invited_by_user_id,
         expires_at
       )
       VALUES (
-        ${tenantId},
         ${email},
         ${invitedName},
-        ${sql.array(roleKeys, "TEXT")},
         ${tokenHash},
         ${invitedByUserId},
         ${expiresAt}
@@ -228,12 +183,11 @@ export async function createTenantInvite(
 
     const id = String((inserted as { id: string }).id);
     await writeAuditEvent({
-      tenantId,
       actorUserId: invitedByUserId,
       action: "invite.created",
-      resourceType: "tenant_invite",
+      resourceType: "instance_invite",
       resourceId: id,
-      payload: { email, roleKeys },
+      payload: { email },
     });
 
     return {
@@ -244,7 +198,6 @@ export async function createTenantInvite(
         expiresAt: expiresAt.toISOString(),
         email,
         invitedName,
-        roleKeys,
       },
     };
   } catch (error) {
@@ -260,33 +213,25 @@ export async function createTenantInvite(
   }
 }
 
-async function applyInviteMembership(
-  tx: SQL,
-  invite: InviteRow & { tenant_name: string; tenant_slug: string },
-  userId: string,
-): Promise<void> {
-  const membershipRole = primaryMembershipRole(invite.role_keys);
+async function applyInviteMembership(tx: SQL, invite: InviteRow, userId: string): Promise<void> {
   await tx`
-    INSERT INTO tenant_memberships (user_id, tenant_id, role)
-    VALUES (${userId}, ${invite.tenant_id}, ${membershipRole})
-    ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = ${membershipRole}
+    INSERT INTO instance_members (user_id)
+    VALUES (${userId})
+    ON CONFLICT (user_id) DO NOTHING
   `;
-  for (const roleKey of invite.role_keys) {
-    await assignTenantRole(userId, invite.tenant_id, roleKey, tx);
-  }
   await tx`
-    UPDATE tenant_invites
+    UPDATE instance_invites
     SET status = 'accepted', accepted_at = NOW()
     WHERE id = ${invite.id}
   `;
 }
 
-export async function acceptTenantInvite(
+export async function acceptInstanceInvite(
   req: BunRequest,
   rawToken: string,
   body: AcceptInviteRequest,
 ): Promise<
-  | { ok: true; userId: string; tenantId: string; setCookie?: string }
+  | { ok: true; userId: string; setCookie?: string }
   | { ok: false; response: Response }
 > {
   const invite = await findInviteByToken(rawToken);
@@ -338,11 +283,10 @@ export async function acceptTenantInvite(
     }
 
     const userId = user.id;
-    const existing = await getTenantForMember(userId, invite.tenant_id);
-    if (existing) {
+    if (await isMemberByEmail(invite.email)) {
       return {
         ok: false,
-        response: problem(409, "Conflict", "You are already a member of this organization.", {
+        response: problem(409, "Conflict", "You are already a member.", {
           errors: [
             {
               field: "_invite",
@@ -358,10 +302,9 @@ export async function acceptTenantInvite(
       await applyInviteMembership(tx, invite, userId);
       await writeAuditEvent(
         {
-          tenantId: invite.tenant_id,
           actorUserId: userId,
           action: "invite.accepted",
-          resourceType: "tenant_invite",
+          resourceType: "instance_invite",
           resourceId: invite.id,
           payload: { email: invite.email },
         },
@@ -369,7 +312,7 @@ export async function acceptTenantInvite(
       );
     });
 
-    return { ok: true, userId, tenantId: invite.tenant_id };
+    return { ok: true, userId };
   }
 
   const name = (body.name?.trim() || invite.invited_name).trim();
@@ -397,17 +340,11 @@ export async function acceptTenantInvite(
         VALUES (${userId}, ${passwordHash})
       `;
       await applyInviteMembership(tx, invite, userId);
-      await tx`
-        INSERT INTO user_preferences (user_id, active_tenant_id)
-        VALUES (${userId}, ${invite.tenant_id})
-        ON CONFLICT (user_id) DO UPDATE SET active_tenant_id = ${invite.tenant_id}, updated_at = NOW()
-      `;
       await writeAuditEvent(
         {
-          tenantId: invite.tenant_id,
           actorUserId: userId,
           action: "invite.accepted",
-          resourceType: "tenant_invite",
+          resourceType: "instance_invite",
           resourceId: invite.id,
           payload: { email: invite.email, createdUser: true },
         },
@@ -420,7 +357,6 @@ export async function acceptTenantInvite(
     return {
       ok: true,
       userId: result,
-      tenantId: invite.tenant_id,
       setCookie: sessionCookieHeader(token, expiresAt),
     };
   } catch (error) {
@@ -436,7 +372,7 @@ export async function acceptTenantInvite(
   }
 }
 
-export async function declineTenantInvite(
+export async function declineInstanceInvite(
   req: BunRequest,
   rawToken: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
@@ -490,16 +426,15 @@ export async function declineTenantInvite(
   }
 
   await getDb()`
-    UPDATE tenant_invites
+    UPDATE instance_invites
     SET status = 'declined', declined_at = NOW()
     WHERE id = ${invite.id}
   `;
 
   await writeAuditEvent({
-    tenantId: invite.tenant_id,
     actorUserId: session?.userId ?? null,
     action: "invite.declined",
-    resourceType: "tenant_invite",
+    resourceType: "instance_invite",
     resourceId: invite.id,
     payload: { email: invite.email },
   });
@@ -507,45 +442,36 @@ export async function declineTenantInvite(
   return { ok: true };
 }
 
-export async function listTenantMembers(tenantId: string): Promise<TenantMember[]> {
+export async function listInstanceMembersForApi(): Promise<InstanceMember[]> {
   const rows = await getDb()`
     SELECT
       u.id,
       u.email,
       u.name,
-      tm.created_at,
-      COALESCE(
-        array_agg(DISTINCT r.key) FILTER (WHERE r.scope = 'tenant' AND ur.tenant_id = ${tenantId}),
-        '{}'
-      ) AS role_keys
-    FROM tenant_memberships tm
-    JOIN users u ON u.id = tm.user_id
-    LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.tenant_id = ${tenantId}
-    LEFT JOIN roles r ON r.id = ur.role_id AND r.scope = 'tenant'
-    WHERE tm.tenant_id = ${tenantId}
-    GROUP BY u.id, u.email, u.name, tm.created_at
+      m.joined_at,
+      m.is_bootstrap
+    FROM instance_members m
+    JOIN users u ON u.id = m.user_id
     ORDER BY u.name ASC
   `;
 
   return rows.map((row) => {
-    const r = row as { id: string; email: string; name: string; created_at: Date; role_keys: string[] };
-    const keys = Array.isArray(r.role_keys) ? r.role_keys.filter(Boolean) : [];
+    const r = row as { id: string; email: string; name: string; joined_at: Date; is_bootstrap: boolean };
     return {
       userId: String(r.id),
       email: r.email,
       name: r.name,
-      roleKeys: keys.length ? keys : ["tenant_member"],
-      joinedAt: new Date(r.created_at).toISOString(),
+      joinedAt: new Date(r.joined_at).toISOString(),
+      isBootstrap: Boolean(r.is_bootstrap),
     };
   });
 }
 
-export async function listPendingInvites(tenantId: string): Promise<PendingInvite[]> {
+export async function listPendingInstanceInvites(): Promise<PendingInvite[]> {
   const rows = await getDb()`
-    SELECT id, email, invited_name, role_keys, expires_at, created_at
-    FROM tenant_invites
-    WHERE tenant_id = ${tenantId}
-      AND status = 'pending'
+    SELECT id, email, invited_name, expires_at, created_at
+    FROM instance_invites
+    WHERE status = 'pending'
       AND expires_at > NOW()
     ORDER BY created_at DESC
   `;
@@ -555,7 +481,6 @@ export async function listPendingInvites(tenantId: string): Promise<PendingInvit
       id: string;
       email: string;
       invited_name: string;
-      role_keys: string[];
       expires_at: Date;
       created_at: Date;
     };
@@ -563,23 +488,20 @@ export async function listPendingInvites(tenantId: string): Promise<PendingInvit
       id: String(r.id),
       email: r.email,
       invitedName: r.invited_name,
-      roleKeys: Array.isArray(r.role_keys) ? r.role_keys.map(String) : [],
       expiresAt: new Date(r.expires_at).toISOString(),
       createdAt: new Date(r.created_at).toISOString(),
     };
   });
 }
 
-export async function revokeTenantInvite(
-  tenantId: string,
+export async function revokeInstanceInvite(
   inviteId: string,
   actorUserId: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
   const [row] = await getDb()`
-    UPDATE tenant_invites
+    UPDATE instance_invites
     SET status = 'revoked'
     WHERE id = ${inviteId}
-      AND tenant_id = ${tenantId}
       AND status = 'pending'
     RETURNING id
   `;
@@ -593,131 +515,12 @@ export async function revokeTenantInvite(
   }
 
   await writeAuditEvent({
-    tenantId,
     actorUserId,
     action: "invite.revoked",
-    resourceType: "tenant_invite",
+    resourceType: "instance_invite",
     resourceId: inviteId,
   });
 
   return { ok: true };
 }
 
-export async function updateMemberRoles(
-  tenantId: string,
-  targetUserId: string,
-  roleKeys: string[],
-  actorUserId: string,
-): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const roleErrors = await validateTenantRoleKeys(roleKeys);
-  if (roleErrors.length) {
-    return { ok: false, response: problem(400, "Validation Error", "Invalid roles", { errors: roleErrors }) };
-  }
-
-  const member = await getTenantForMember(targetUserId, tenantId);
-  if (!member) {
-    return {
-      ok: false,
-      response: problem(404, "Not Found", "Member not found", {
-        errors: [{ field: "userId", code: ErrorCodes.INVITE_INVALID, message: "Not a member" }],
-      }),
-    };
-  }
-
-  const keys = [...new Set(roleKeys)];
-  const roleAssignment = await assertCanAssignTenantRoles(actorUserId, tenantId, keys);
-  if (!roleAssignment.ok) return roleAssignment;
-
-  const lastAdmin = await assertNotLastTenantAdmin(tenantId, targetUserId, keys);
-  if (!lastAdmin.ok) return lastAdmin;
-
-  const membershipRole = primaryMembershipRole(keys);
-
-  await getDb().begin(async (tx) => {
-    await tx`
-      DELETE FROM user_roles ur
-      USING roles r
-      WHERE ur.user_id = ${targetUserId}
-        AND ur.tenant_id = ${tenantId}
-        AND ur.role_id = r.id
-        AND r.scope = 'tenant'
-    `;
-    for (const roleKey of keys) {
-      await assignTenantRole(targetUserId, tenantId, roleKey, tx);
-    }
-    await tx`
-      UPDATE tenant_memberships
-      SET role = ${membershipRole}
-      WHERE user_id = ${targetUserId} AND tenant_id = ${tenantId}
-    `;
-    await writeAuditEvent(
-      {
-        tenantId,
-        actorUserId,
-        action: "member.roles_updated",
-        resourceType: "user",
-        resourceId: targetUserId,
-        payload: { roleKeys: keys },
-      },
-      tx,
-    );
-  });
-
-  return { ok: true };
-}
-
-export async function removeTenantMember(
-  tenantId: string,
-  targetUserId: string,
-  actorUserId: string,
-): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const member = await getTenantForMember(targetUserId, tenantId);
-  if (!member) {
-    return {
-      ok: false,
-      response: problem(404, "Not Found", "Member not found", {
-        errors: [{ field: "userId", code: ErrorCodes.INVITE_INVALID, message: "Not a member" }],
-      }),
-    };
-  }
-
-  const lastAdmin = await assertNotLastTenantAdmin(tenantId, targetUserId);
-  if (!lastAdmin.ok) return lastAdmin;
-
-  await getDb().begin(async (tx) => {
-    await tx`
-      DELETE FROM user_roles
-      WHERE user_id = ${targetUserId} AND tenant_id = ${tenantId}
-    `;
-    await tx`
-      DELETE FROM tenant_memberships
-      WHERE user_id = ${targetUserId} AND tenant_id = ${tenantId}
-    `;
-    await writeAuditEvent(
-      {
-        tenantId,
-        actorUserId,
-        action: "member.removed",
-        resourceType: "user",
-        resourceId: targetUserId,
-      },
-      tx,
-    );
-  });
-
-  return { ok: true };
-}
-
-export async function listTenantRoles(): Promise<{ key: string; scope: string; description: string }[]> {
-  const rows = await getDb()`
-    SELECT key, scope, description
-    FROM roles
-    WHERE scope = 'tenant'
-    ORDER BY key ASC
-  `;
-  return rows.map((row) => ({
-    key: String((row as { key: string }).key),
-    scope: String((row as { scope: string }).scope),
-    description: String((row as { description: string }).description),
-  }));
-}

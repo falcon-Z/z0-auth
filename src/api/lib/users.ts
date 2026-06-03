@@ -11,13 +11,11 @@ import type {
   PlatformUserDetail,
   PlatformUserSummary,
   UserStatus,
-  UserTenantMembership,
 } from "@z0/contracts/users";
 
 import { getDb } from "./db";
 import { problem } from "./http";
 import { hashPassword, verifyPassword } from "./password";
-import { getPlatformRoleKeys } from "./roles";
 import { revokeAllUserSessions, revokeOtherUserSessions } from "./session";
 import { writeAuditEvent } from "./audit";
 
@@ -29,14 +27,26 @@ type UserRow = {
   created_at: Date | string;
 };
 
-function mapUserSummary(row: UserRow, platformRoles: string[]): PlatformUserSummary {
+async function userIsInstanceMember(userId: string): Promise<boolean> {
+  const [row] = await getDb()`SELECT 1 FROM instance_members WHERE user_id = ${userId} LIMIT 1`;
+  return Boolean(row);
+}
+
+async function userBootstrapFlag(userId: string): Promise<boolean> {
+  const [row] = await getDb()`
+    SELECT is_bootstrap FROM instance_members WHERE user_id = ${userId}
+  `;
+  return Boolean((row as { is_bootstrap: boolean } | undefined)?.is_bootstrap);
+}
+
+function mapUserSummary(row: UserRow, isInstanceMember: boolean): PlatformUserSummary {
   return {
     id: String(row.id),
     email: row.email,
     name: row.name,
     status: row.status,
     createdAt: new Date(row.created_at).toISOString(),
-    platformRoles,
+    isInstanceMember,
   };
 }
 
@@ -50,8 +60,8 @@ export async function listPlatformUsers(): Promise<PlatformUserSummary[]> {
   const users: PlatformUserSummary[] = [];
   for (const row of rows) {
     const userRow = row as UserRow;
-    const platformRoles = await getPlatformRoleKeys(String(userRow.id));
-    users.push(mapUserSummary(userRow, platformRoles));
+    const id = String(userRow.id);
+    users.push(mapUserSummary(userRow, await userIsInstanceMember(id)));
   }
   return users;
 }
@@ -64,47 +74,7 @@ export async function getPlatformUser(userId: string): Promise<PlatformUserSumma
   `;
   if (!row) return null;
   const userRow = row as UserRow;
-  const platformRoles = await getPlatformRoleKeys(userId);
-  return mapUserSummary(userRow, platformRoles);
-}
-
-async function listUserTenantMemberships(userId: string): Promise<UserTenantMembership[]> {
-  const rows = await getDb()`
-    SELECT
-      t.id,
-      t.name,
-      t.slug,
-      tm.created_at,
-      COALESCE(
-        array_agg(DISTINCT r.key) FILTER (WHERE r.scope = 'tenant' AND ur.tenant_id = t.id),
-        '{}'
-      ) AS role_keys
-    FROM tenant_memberships tm
-    JOIN tenants t ON t.id = tm.tenant_id
-    LEFT JOIN user_roles ur ON ur.user_id = tm.user_id AND ur.tenant_id = t.id
-    LEFT JOIN roles r ON r.id = ur.role_id AND r.scope = 'tenant'
-    WHERE tm.user_id = ${userId}
-    GROUP BY t.id, t.name, t.slug, tm.created_at
-    ORDER BY t.name ASC
-  `;
-
-  return rows.map((row) => {
-    const r = row as {
-      id: string;
-      name: string;
-      slug: string;
-      created_at: Date;
-      role_keys: string[];
-    };
-    const keys = Array.isArray(r.role_keys) ? r.role_keys.filter(Boolean) : [];
-    return {
-      tenantId: String(r.id),
-      tenantName: r.name,
-      tenantSlug: r.slug,
-      roleKeys: keys.length ? keys : ["tenant_member"],
-      joinedAt: new Date(r.created_at).toISOString(),
-    };
-  });
+  return mapUserSummary(userRow, await userIsInstanceMember(userId));
 }
 
 async function countUserActiveSessions(userId: string): Promise<number> {
@@ -121,34 +91,19 @@ async function countUserActiveSessions(userId: string): Promise<number> {
 export async function getPlatformUserDetail(userId: string): Promise<PlatformUserDetail | null> {
   const summary = await getPlatformUser(userId);
   if (!summary) return null;
-  const [tenantMemberships, activeSessionCount] = await Promise.all([
-    listUserTenantMemberships(userId),
-    countUserActiveSessions(userId),
-  ]);
-  return { ...summary, tenantMemberships, activeSessionCount };
+  const activeSessionCount = await countUserActiveSessions(userId);
+  const isBootstrap = summary.isInstanceMember ? await userBootstrapFlag(userId) : false;
+  return { ...summary, activeSessionCount, isBootstrap };
 }
 
-async function countActivePlatformAdmins(): Promise<number> {
+async function countActiveInstanceMembers(): Promise<number> {
   const [row] = await getDb()`
-    SELECT COUNT(DISTINCT ur.user_id)::int AS count
-    FROM user_roles ur
-    JOIN roles r ON r.id = ur.role_id
-    JOIN users u ON u.id = ur.user_id
-    WHERE r.key = 'platform_admin'
-      AND r.scope = 'platform'
-      AND ur.tenant_id IS NULL
-      AND u.status = 'active'
+    SELECT COUNT(*)::int AS count
+    FROM instance_members m
+    JOIN users u ON u.id = m.user_id
+    WHERE u.status = 'active'
   `;
   return Number((row as { count: number }).count ?? 0);
-}
-
-async function userIsActivePlatformAdmin(userId: string): Promise<boolean> {
-  const roles = await getPlatformRoleKeys(userId);
-  if (!roles.includes("platform_admin")) return false;
-  const [row] = await getDb()`
-    SELECT status FROM users WHERE id = ${userId}
-  `;
-  return (row as { status: UserStatus } | undefined)?.status === "active";
 }
 
 export type UpdateUserStatusResult =
@@ -207,17 +162,17 @@ export async function updatePlatformUserStatus(
     };
   }
 
-  if (status === "disabled" && (await userIsActivePlatformAdmin(targetUserId))) {
-    const adminCount = await countActivePlatformAdmins();
-    if (adminCount <= 1) {
+  if (status === "disabled" && existing.isInstanceMember) {
+    const memberCount = await countActiveInstanceMembers();
+    if (memberCount <= 1) {
       return {
         ok: false,
-        response: problem(403, "Forbidden", "Cannot disable the last platform administrator", {
+        response: problem(403, "Forbidden", "Cannot disable the last active instance member", {
           errors: [
             {
               field: "status",
               code: ErrorCodes.LAST_PLATFORM_ADMIN,
-              message: "Cannot disable the last platform administrator",
+              message: "Cannot disable the last instance member",
             },
           ],
         }),

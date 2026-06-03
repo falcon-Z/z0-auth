@@ -58,7 +58,6 @@ async function completeSetup() {
 }
 
 run("invite HTML flow", () => {
-  let tenantId = "";
   let inviteToken = "";
 
   beforeAll(async () => {
@@ -73,21 +72,18 @@ run("invite HTML flow", () => {
         body: { email: "admin@example.com", password: adminPassword },
       }),
     );
-    const loginBody = (await loginRes.json()) as { tenant?: { id: string } };
-    tenantId = loginBody.tenant?.id ?? "";
 
     const sessionCookie = loginRes.headers.getSetCookie?.().find((c) => c.startsWith(`${SESSION_COOKIE}=`));
     const cookie = sessionCookie?.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`))?.[1];
     if (!cookie) throw new Error("session cookie missing");
 
     const createRes = await dispatchApi(
-      buildRequest("POST", `/api/v1/tenants/${tenantId}/invites`, {
+      buildRequest("POST", "/api/v1/members/invites", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: decodeURIComponent(cookie) },
         body: {
           email: "html-invitee@example.com",
           invitedName: "HTML Invitee",
-          roleKeys: ["tenant_member"],
         },
       }),
     );

@@ -40,9 +40,3 @@ export async function postLogout(): Promise<void> {
   await apiFetch<void>("/api/auth/logout", { method: "POST" });
 }
 
-export async function postActiveTenant(tenantId: string): Promise<SessionResponse> {
-  return apiFetch<SessionResponse>("/api/auth/active-tenant", {
-    method: "POST",
-    body: { tenantId },
-  });
-}
