@@ -10,6 +10,7 @@ test.describe("console shell", () => {
 
     await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Members" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Users" })).not.toBeVisible();
     await expect(page.getByRole("link", { name: "OAuth clients" })).not.toBeVisible();
 
     await expect(page.getByRole("heading", { name: "Dashboard", level: 1 })).toBeVisible();

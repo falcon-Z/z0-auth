@@ -12,15 +12,12 @@ describe("console routes", () => {
     }
   });
 
-  test("members, users, and profile use splat routes for nested pages", () => {
+  test("members and profile use splat routes for nested pages", () => {
     expect(routePathForNav("/members")).toBe("/members/*");
-    expect(routePathForNav("/users")).toBe("/users/*");
     expect(routePathForNav("/profile")).toBe("/profile/*");
     const membersRoute = consoleRoutes.find((route) => route.path === "/members/*");
-    const usersRoute = consoleRoutes.find((route) => route.path === "/users/*");
     const profileRoute = consoleRoutes.find((route) => route.path === "/profile/*");
     expect(membersRoute?.element).toBeDefined();
-    expect(usersRoute?.element).toBeDefined();
     expect(profileRoute?.element).toBeDefined();
   });
 

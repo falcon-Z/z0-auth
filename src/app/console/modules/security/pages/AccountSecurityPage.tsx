@@ -9,7 +9,7 @@ import { FormField } from "../../../components/forms/FormField";
 import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { changePassword } from "../../../lib/users-api";
+import { changePassword } from "../../../lib/account-api";
 import { useSession } from "../../../context/session-context";
 
 function PasswordChecklist({ password }: { password: string }) {

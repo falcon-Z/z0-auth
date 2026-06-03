@@ -16,6 +16,7 @@ import { CONSOLE_NAV, isConsoleNavItemVisible } from "../../config/navigation";
 import { hasConsoleAccess } from "../../lib/console-access";
 import { useSession } from "../../context/session-context";
 import { SidebarAccountFooter } from "./SidebarAccountFooter";
+import { SidebarInstanceHeader } from "./SidebarInstanceHeader";
 
 function isNavItemActive(pathname: string, path: string): boolean {
   if (path === "/") return pathname === "/";
@@ -29,10 +30,8 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      <SidebarHeader className="gap-1 border-b pb-3">
-        <p className="truncate px-2 text-sm font-medium text-sidebar-foreground">
-          {session.organizationName || "Console"}
-        </p>
+      <SidebarHeader className="border-b pb-3 group-data-[collapsible=icon]:px-1">
+        <SidebarInstanceHeader organizationName={session.organizationName} />
       </SidebarHeader>
 
       <SidebarContent>
