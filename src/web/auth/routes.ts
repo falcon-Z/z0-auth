@@ -63,7 +63,7 @@ function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { f
   const v = (key: string) => values[key] ?? "";
   const body = `
     <form method="post" action="/auth/setup" class="auth-card" data-validate hx-post="/auth/setup" hx-target="#auth-root" hx-select="#auth-root" hx-swap="outerHTML">
-      <h2>Initial setup</h2>
+      <h2>Create your account</h2>
       ${formErrorsSummary(errors)}
       ${renderAuthField({
         id: "organizationName",
@@ -72,7 +72,7 @@ function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { f
         value: v("organizationName"),
         required: true,
         autocomplete: "organization",
-        hint: "Creates your default tenant and platform name.",
+        hint: "Shown in the console and on invitations.",
         error: fieldErrorFor(errors, "organizationName"),
         msgRequired: "Enter your organization name",
       })}
@@ -125,8 +125,8 @@ function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { f
     </form>`;
 
   return renderAuthPage({
-    title: "Platform setup",
-    description: "Create your organization and super admin account",
+    title: "Create account",
+    description: "Set up your organization and the first console account for this instance.",
     csrfToken,
     body,
   });
@@ -176,7 +176,7 @@ export function renderLoginForm(
 
   return renderAuthPage({
     title: "Sign in",
-    description: "Authenticate to your z0-auth platform",
+    description: "Sign in to the console for this instance.",
     csrfToken,
     body,
     flash,
@@ -244,8 +244,8 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
     flash = {
       variant: "success",
       message: org
-        ? `Setup complete for ${decodeURIComponent(org)}. Sign in with your super admin account.`
-        : "Setup complete. Sign in with your super admin account.",
+        ? `Setup complete for ${decodeURIComponent(org)}. Sign in with the account you just created.`
+        : "Setup complete. Sign in with the account you just created.",
     };
   }
 
@@ -302,7 +302,7 @@ async function getRegisterPage(req: BunRequest): Promise<Response> {
     "Invitation only",
     "New accounts are created through an organization invitation.",
     token,
-    `<p class="auth-footer">If you were invited, open the link from your invitation email. Otherwise contact your platform administrator.</p>
+    `<p class="auth-footer">If you were invited, open the link from your invitation. Otherwise ask an existing team member for an invite.</p>
      <div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div>`,
   );
   return withSetCookie(htmlResponse(html), setCookie);

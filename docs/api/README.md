@@ -19,6 +19,10 @@ Spec-driven contracts for the single-account IAM model.
 | [references/health.openapi.yaml](./references/health.openapi.yaml) | Health probes |
 | [references/setup.openapi.yaml](./references/setup.openapi.yaml) | Instance setup |
 | [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Signup, login, session |
+| [references/members & invites](./references/invites.openapi.yaml) | Instance members and invites (M01) |
+| [references/console.openapi.yaml](./references/console.openapi.yaml) | Dashboard summary |
+| [references/users.openapi.yaml](./references/users.openapi.yaml) | User directory (instance members) |
+| [references/sessions.openapi.yaml](./references/sessions.openapi.yaml) | Session management |
 | [references/oauth.openapi.yaml](./references/oauth.openapi.yaml) | OAuth 2.1 (planned) |
 
 TypeScript mirrors: `src/lib/contracts/`.
@@ -30,9 +34,8 @@ TypeScript mirrors: `src/lib/contracts/`.
 3. State-changing request → CSRF per [security-contract.md](./security-contract.md).  
 4. Return errors via `problem()` only.
 
-Deprecated after pivot:
+Removed after pivot (see [tenants.openapi.yaml](./references/tenants.openapi.yaml) stub):
 
-- Tenant-specific OpenAPI specs and routes.
-- Internal platform RBAC role/scope contract docs.
+- `/api/v1/tenants/*`, `/api/v1/roles`, tenant-scoped invites, platform RBAC.
 
 See also [ARCHITECTURE.md](../ARCHITECTURE.md) for routing and repo layout.

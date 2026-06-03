@@ -45,7 +45,7 @@ Every list and detail handles: **loading** (skeleton), **empty**, **error**, **f
 
 ## Permissions
 
-Gate nav and actions with session roles (`lib/tenant-permissions.ts`). Hide nav items the user cannot use.
+Gate console access with `hasConsoleAccess` (`lib/console-access.ts`) — instance members only in v1.
 
 ## Before shipping UI
 

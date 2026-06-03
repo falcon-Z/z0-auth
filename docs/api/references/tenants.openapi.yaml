@@ -1,98 +1,17 @@
 openapi: 3.1.0
 info:
-  title: z0-auth Organizations API
-  version: 0.1.0
-  description: List organizations the user belongs to; platform operators with `tenants:create` may provision new organizations.
-servers:
-  - url: http://localhost:3000
-tags:
-  - name: Tenants
-paths:
-  /api/v1/tenants:
-    get:
-      tags: [Tenants]
-      summary: List organizations for the current user
-      operationId: listTenants
-      description: Returns every organization the signed-in user is a member of. Not an instance-wide list.
-      security:
-        - SessionCookie: []
-      responses:
-        "200":
-          description: Organizations
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [tenants]
-                properties:
-                  tenants:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/TenantSummary"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-    post:
-      tags: [Tenants]
-      summary: Create organization
-      operationId: createTenant
-      description: Requires `tenants:create` (platform-scoped). Tenant users cannot create organizations.
-      security:
-        - SessionCookie: []
-          CsrfHeader: []
-          CsrfCookie: []
-      parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateTenantRequest"
-      responses:
-        "201":
-          description: Created organization
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [tenant]
-                properties:
-                  tenant:
-                    $ref: "#/components/schemas/TenantSummary"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "409":
-          $ref: "common.openapi.yaml#/components/responses/Conflict"
-components:
-  schemas:
-    TenantSummary:
-      type: object
-      required: [id, name, slug, isDefault]
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        slug:
-          type: string
-        isDefault:
-          type: boolean
-    CreateTenantRequest:
-      type: object
-      required: [name, slug]
-      properties:
-        name:
-          type: string
-          minLength: 1
-        slug:
-          type: string
-          minLength: 1
-        joinAsAdmin:
-          type: boolean
-          default: false
-          description: When true, the creator is added as tenant_admin on the new organization.
+  title: z0-auth Tenants API (removed)
+  version: 0.0.0
+  description: |
+    **Removed in M01 (migration `0011_instance_pivot`).**
+
+    Multi-organization tenants, tenant-scoped invites, platform RBAC, and `/api/v1/roles`
+    are no longer part of the product. Use [invites.openapi.yaml](./invites.openapi.yaml)
+    for instance members and invites.
+
+    Historical paths (not implemented):
+    - `GET/POST /api/v1/tenants`
+    - `GET /api/v1/tenants/{tenantId}/members`
+    - `POST /api/v1/tenants/{tenantId}/invites`
+    - `GET /api/v1/roles?scope=tenant`
+paths: {}

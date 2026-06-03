@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
+import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { closeDatabase } from "../../src/api/lib/db";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
@@ -47,7 +48,7 @@ run("web auth pages", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/html");
     const html = await res.text();
-    expect(html).toContain("Platform setup");
+    expect(html).toContain("Create your account");
     expect(html).toContain('name="organizationName"');
     expect(html).toContain('data-validate');
     expect(html).toContain("/static/auth-forms.js");
@@ -76,7 +77,7 @@ run("web auth pages", () => {
     const body = new URLSearchParams({
       _csrf: csrf,
       organizationName: "Acme IAM",
-      name: "Super Admin",
+      name: "Owner User",
       email: "admin@example.com",
       password: strongPassword,
       passwordConfirm: strongPassword,
@@ -215,6 +216,76 @@ run("web auth pages", () => {
     const html = await res.text();
     expect(html).toContain("auth-form-error");
     expect(html).toContain("Invalid email or password");
+  });
+
+  test("POST /auth/logout redirects to login and clears session", async () => {
+    await resetTestDatabase();
+    resetRateLimitsForTests();
+    const csrf = await fetchSetupCsrf();
+    await dispatchWeb(
+      new Request("http://localhost/auth/setup", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(csrf)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: csrf,
+          organizationName: "Acme",
+          name: "Owner",
+          email: "logout@example.com",
+          password: strongPassword,
+          passwordConfirm: strongPassword,
+        }).toString(),
+      }),
+    );
+
+    const loginPage = await dispatchWeb(new Request("http://localhost/auth/login"));
+    const loginHtml = await loginPage.text();
+    const loginCsrf = extractCsrfFromHtml(loginHtml)!;
+    const cookie = extractCsrfFromSetCookie(loginPage) ?? loginCsrf;
+
+    const loginRes = await dispatchWeb(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(cookie)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: loginCsrf,
+          email: "logout@example.com",
+          password: strongPassword,
+        }).toString(),
+      }),
+    );
+    expect(loginRes.status).toBe(303);
+    const sessionCookies = loginRes.headers.getSetCookie?.() ?? [];
+    const sessionRaw = sessionCookies.find((c) => c.startsWith(`${SESSION_COOKIE}=`));
+    const sessionValue = sessionRaw?.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`))?.[1];
+    expect(sessionValue).toBeTruthy();
+
+    const logoutRes = await dispatchWeb(
+      new Request("http://localhost/auth/logout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(cookie)}; ${SESSION_COOKIE}=${sessionValue}`,
+        },
+        body: new URLSearchParams({ _csrf: loginCsrf }).toString(),
+      }),
+    );
+
+    expect(logoutRes.status).toBe(303);
+    expect(logoutRes.headers.get("location")).toContain("/auth/login");
+    const cleared = logoutRes.headers.getSetCookie?.().some((c) => c.includes(`${SESSION_COOKIE}=`) && c.includes("Max-Age=0"));
+    expect(cleared).toBe(true);
   });
 });
 

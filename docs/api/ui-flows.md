@@ -29,15 +29,18 @@ Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.m
 | `GET /auth/login` | **302** `/` when already signed in |
 | Sign out | `POST /auth/logout` → **303** `/auth/login` |
 
-## App user invite (planned)
+## Instance member invite
 
-1. Account owner creates invite in console → receives **invite URL** (copy or `mailto:`).
+1. Instance member creates invite in console → receives **invite URL** (copy or `mailto:`).
 2. Invitee opens `GET /auth/invite/:token`.
-3. **New user:** set name + password → accept → session → console.
+3. **New user:** set name + password → accept → session → console (`/`).
 4. **Existing user:** sign in (must match invite email) → **Accept** or **Decline**.
 5. Wrong signed-in account → sign out and sign in with invited email.
 
-JSON: `GET /api/v1/invites/:token`, `POST .../accept`, `POST .../decline`.
+JSON: `GET /api/v1/invites/:token`, `POST .../accept`, `POST .../decline`.  
+Console: `GET/POST /api/v1/members/invites`, `GET /api/v1/members`.
+
+Non-members with a valid session are denied console APIs (**403**).
 
 ## Password reset
 

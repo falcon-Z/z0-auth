@@ -104,7 +104,7 @@ run("platform user lifecycle", () => {
     await closeDatabase();
   });
 
-  test("lists users for platform admin", async () => {
+  test("lists users for instance member", async () => {
     const { cookie } = await login("admin@example.com", adminPassword);
     const res = await dispatchApi(
       buildRequest("GET", "/api/v1/users", withSession(cookie)),

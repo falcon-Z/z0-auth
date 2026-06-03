@@ -3,7 +3,6 @@ import {
   Activity,
   AppWindow,
   BadgeCheck,
-  Building2,
   CircleUser,
   Fingerprint,
   KeyRound,
@@ -30,8 +29,6 @@ export type ConsoleNavItem = {
   status: ConsoleNavStatus;
   module: string;
   summary: string;
-  requiresTenant?: boolean;
-  requiredPermission?: string;
   /** Route exists but is reached from identity / header, not sidebar. */
   hideFromSidebar?: boolean;
 };
@@ -112,7 +109,6 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "planned",
         module: "P4-M1",
         summary: "Scope registry and consent configuration for applications.",
-        requiresTenant: true,
       },
       {
         id: "oidc",
@@ -136,7 +132,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: CircleUser,
         status: "available",
         module: "P2-UX",
-        summary: "Your profile, tenants, password, and sessions.",
+        summary: "Your profile, password, and sessions.",
         hideFromSidebar: true,
       },
     ],
@@ -185,8 +181,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: ShieldCheck,
         status: "planned",
         module: "P4-M2",
-        summary: "Tenant identity provider configuration and login policies.",
-        requiresTenant: true,
+        summary: "Identity provider configuration and login policies.",
       },
       {
         id: "app-groups",
@@ -196,7 +191,6 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "planned",
         module: "P4-M2",
         summary: "Group OAuth clients and enforce SSO allow or deny rules.",
-        requiresTenant: true,
       },
     ],
   },
@@ -211,8 +205,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         icon: ScrollText,
         status: "planned",
         module: "P4-M3",
-        summary: "Searchable security and admin events for the active tenant.",
-        requiresTenant: true,
+        summary: "Searchable security and admin events for this instance.",
       },
     ],
   },

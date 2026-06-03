@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: z0-auth Console API
-  version: 0.1.0
-  description: Console-only helpers (dashboard metrics).
+  version: 0.2.0
+  description: Console-only helpers (dashboard metrics). Requires instance membership.
 servers:
   - url: http://localhost:3000
 tags:
@@ -13,10 +13,7 @@ paths:
       tags: [Console]
       summary: Console dashboard summary
       operationId: getConsoleSummary
-      description: |
-        Returns counts for the signed-in user, scoped by permission.
-        Tenant metrics require an active tenant and `users:read`.
-        Platform user count requires `platform:users:read`.
+      description: Returns instance-wide counts for signed-in instance members.
       security:
         - SessionCookie: []
       responses:
@@ -28,29 +25,22 @@ paths:
                 $ref: "#/components/schemas/ConsoleSummaryResponse"
         "401":
           $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
 components:
   schemas:
     ConsoleSummaryResponse:
       type: object
-      required: [membership, sessions]
+      required: [instance, sessions]
       properties:
-        tenant:
+        instance:
           type: object
+          required: [organizationName, memberCount, pendingInviteCount, userCount]
           properties:
-            id: { type: string }
-            name: { type: string }
+            organizationName: { type: string }
             memberCount: { type: integer }
             pendingInviteCount: { type: integer }
-        platform:
-          type: object
-          properties:
             userCount: { type: integer }
-            tenantCount: { type: integer }
-        membership:
-          type: object
-          required: [tenantCount]
-          properties:
-            tenantCount: { type: integer }
         sessions:
           type: object
           required: [activeCount]

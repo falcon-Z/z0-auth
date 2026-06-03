@@ -34,7 +34,7 @@ run("setup flow", () => {
       buildRequest("POST", "/api/setup", {
         csrfToken: csrf,
         body: {
-          name: "Super Admin",
+          name: "Owner User",
           email: "admin@example.com",
           password: strongPassword,
           passwordConfirm: strongPassword,

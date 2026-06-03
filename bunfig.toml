@@ -1,3 +1,6 @@
+[test]
+exclude = ["tests/e2e/**"]
+
 [run]
 tsconfig = "tsconfig.json"
 

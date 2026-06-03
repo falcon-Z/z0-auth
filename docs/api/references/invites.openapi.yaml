@@ -1,68 +1,139 @@
 openapi: 3.1.0
 info:
-  title: z0-auth Invites & Members API
-  version: 0.1.0
-  description: Organization invites (invite-only onboarding) and member listing.
+  title: z0-auth Instance Members & Invites API
+  version: 0.2.0
+  description: |
+    Instance-scoped console members and invite-only onboarding.
+    All `/api/v1/members/*` routes require a signed-in instance member.
 servers:
   - url: http://localhost:3000
 tags:
-  - name: Invites
   - name: Members
+  - name: Invites
 paths:
-  /api/v1/roles:
-    get:
-      tags: [Invites]
-      summary: List assignable tenant roles
-      operationId: listTenantRoles
-      parameters:
-        - name: scope
-          in: query
-          schema:
-            type: string
-            enum: [tenant]
-      responses:
-        "200":
-          description: Role catalog
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-  /api/v1/tenants/{tenantId}/members:
+  /api/v1/members:
     get:
       tags: [Members]
-      summary: List organization members
-      operationId: listTenantMembers
-      parameters:
-        - name: tenantId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      summary: List instance members
+      operationId: listInstanceMembers
+      security:
+        - SessionCookie: []
       responses:
         "200":
-          description: Members
+          description: Active instance members
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InstanceMember"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
         "403":
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
-  /api/v1/tenants/{tenantId}/invites:
-    post:
-      tags: [Invites]
-      summary: Create invitation
-      operationId: createTenantInvite
+  /api/v1/members/{userId}:
+    delete:
+      tags: [Members]
+      summary: Remove instance member
+      operationId: removeInstanceMember
       security:
         - CsrfHeader: []
           CsrfCookie: []
+          SessionCookie: []
       parameters:
         - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - name: tenantId
+        - name: userId
           in: path
           required: true
           schema:
             type: string
             format: uuid
       responses:
-        "201":
-          description: Invite created (manual delivery via link or mailto)
+        "200":
+          description: Member removed
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
         "403":
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Cannot remove last member
+  /api/v1/members/invites:
+    get:
+      tags: [Members]
+      summary: List pending instance invites
+      operationId: listInstanceInvites
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Pending invites
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Members]
+      summary: Create instance invitation
+      operationId: createInstanceInvite
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInviteRequest"
+      responses:
+        "201":
+          description: Invite created (deliver via returned link or mailto)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateInviteResponse"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "409":
+          description: Already a member or duplicate pending invite
+  /api/v1/members/invites/{inviteId}:
+    delete:
+      tags: [Members]
+      summary: Revoke pending invitation
+      operationId: revokeInstanceInvite
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Invite revoked
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
   /api/v1/invites/{token}:
     get:
       tags: [Invites]
@@ -89,9 +160,27 @@ paths:
           CsrfCookie: []
       parameters:
         - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptInviteRequest"
       responses:
         "200":
-          description: Accepted
+          description: Accepted (session cookie set for new accounts)
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          description: Existing account must sign in first
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Invite not pending, expired, or email mismatch
   /api/v1/invites/{token}/decline:
     post:
       tags: [Invites]
@@ -100,6 +189,47 @@ paths:
       security:
         - CsrfHeader: []
           CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
       responses:
         "200":
           description: Declined
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+components:
+  schemas:
+    InstanceMember:
+      type: object
+      required: [userId, email, name, joinedAt, isBootstrap]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        joinedAt: { type: string, format: date-time }
+        isBootstrap: { type: boolean }
+    CreateInviteRequest:
+      type: object
+      required: [email, invitedName]
+      properties:
+        email: { type: string, format: email }
+        invitedName: { type: string }
+    CreateInviteResponse:
+      type: object
+      required: [id, inviteUrl, expiresAt, email, invitedName]
+      properties:
+        id: { type: string, format: uuid }
+        inviteUrl: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        email: { type: string, format: email }
+        invitedName: { type: string }
+    AcceptInviteRequest:
+      type: object
+      properties:
+        name: { type: string }
+        password: { type: string }
+        passwordConfirm: { type: string }

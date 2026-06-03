@@ -52,12 +52,3 @@ export type PendingInvite = {
   createdAt: string;
 };
 
-/** @deprecated M01 removed role catalog */
-export type RoleSummary = {
-  key: string;
-  scope: "platform" | "tenant";
-  description: string;
-};
-
-/** @deprecated Use InstanceMember */
-export type TenantMember = InstanceMember;
