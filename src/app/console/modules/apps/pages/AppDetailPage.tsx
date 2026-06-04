@@ -254,7 +254,7 @@ export function AppDetailPage() {
               },
             ]}
             rows={credentials}
-            getRowId={(row) => row.id}
+            rowKey={(row) => row.id}
           />
         )}
       </div>

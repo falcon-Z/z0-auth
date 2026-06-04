@@ -71,7 +71,7 @@ export function AppsListPage() {
             },
           ]}
           rows={apps}
-          getRowId={(row) => row.id}
+          rowKey={(row) => row.id}
         />
       )}
 
