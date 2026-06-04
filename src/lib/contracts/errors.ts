@@ -83,6 +83,10 @@ export const ErrorCodes = {
   APP_DISABLED: "app_disabled",
   /** Cannot revoke the last active credential on an active application. */
   LAST_ACTIVE_CREDENTIAL: "last_active_credential",
+  /** Scope name already registered for the application. */
+  SCOPE_TAKEN: "scope_taken",
+  /** Scope id is unknown for the application. */
+  SCOPE_NOT_FOUND: "scope_not_found",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

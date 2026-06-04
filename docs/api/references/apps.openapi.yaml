@@ -3,7 +3,7 @@ info:
   title: z0-auth Applications API
   version: 0.1.0
   description: |
-    Instance-scoped registered applications and client credentials (M03).
+    Instance-scoped registered applications, client credentials (M03), and app scopes (M04).
     All routes require a signed-in instance member.
 servers:
   - url: http://localhost:3000
@@ -230,6 +230,125 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/NotFound"
         "409":
           description: Application disabled
+  /api/v1/apps/{appId}/scopes:
+    get:
+      tags: [Applications]
+      summary: List application scopes
+      operationId: listAppScopes
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Scopes registered for the application
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scopes]
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AppScopeSummary"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    post:
+      tags: [Applications]
+      summary: Register application scope
+      operationId: createAppScope
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppScopeRequest"
+      responses:
+        "201":
+          description: Scope created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppScopeSummary"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Scope name already exists for this application
+  /api/v1/apps/{appId}/scopes/{scopeId}:
+    patch:
+      tags: [Applications]
+      summary: Update application scope
+      operationId: patchAppScope
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/ScopeId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchAppScopeRequest"
+      responses:
+        "200":
+          description: Scope updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppScopeSummary"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          description: Scope name already exists for this application
+    delete:
+      tags: [Applications]
+      summary: Delete application scope
+      operationId: deleteAppScope
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/AppId"
+        - $ref: "#/components/parameters/ScopeId"
+      responses:
+        "200":
+          description: Scope deleted
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
 components:
   parameters:
     AppId:
@@ -241,6 +360,13 @@ components:
         format: uuid
     CredentialId:
       name: credentialId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ScopeId:
+      name: scopeId
       in: path
       required: true
       schema:
@@ -318,3 +444,26 @@ components:
         clientSecret: { type: string }
     RotateCredentialResponse:
       $ref: "#/components/schemas/CreateCredentialResponse"
+    AppScopeSummary:
+      type: object
+      required: [id, appId, name, description, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        appId: { type: string, format: uuid }
+        name:
+          type: string
+          description: Lowercase scope identifier (e.g. `read:orders`, `openid`).
+        description: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateAppScopeRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    PatchAppScopeRequest:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }

@@ -20,7 +20,7 @@ Spec-driven contracts for the single-account IAM model.
 | [references/setup.openapi.yaml](./references/setup.openapi.yaml) | Instance setup |
 | [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Signup, login, session |
 | [references/members & invites](./references/invites.openapi.yaml) | Instance members and invites (M01) |
-| [references/applications](./references/apps.openapi.yaml) | Applications and credentials (M03) |
+| [references/applications](./references/apps.openapi.yaml) | Applications, credentials (M03), scopes (M04) |
 | [references/settings](./references/settings.openapi.yaml) | SMTP and email settings (M08) |
 | [references/console.openapi.yaml](./references/console.openapi.yaml) | Dashboard summary |
 | [references/users.openapi.yaml](./references/users.openapi.yaml) | User directory (instance members) |

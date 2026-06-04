@@ -87,7 +87,7 @@ async function reserveUniqueSlug(base: string): Promise<string> {
   }
 }
 
-async function findAppRow(appId: string): Promise<AppRow | null> {
+export async function findAppRow(appId: string): Promise<AppRow | null> {
   const [row] = await getDb()`
     SELECT id, name, slug, redirect_uris, status, disabled_at, created_at, updated_at
     FROM apps

@@ -95,6 +95,8 @@ components:
         - credential_not_found
         - app_disabled
         - last_active_credential
+        - scope_taken
+        - scope_not_found
     ProblemDetail:
       type: object
       required: [type, title, status, requestId]

@@ -192,6 +192,14 @@ export function AppDetailPage() {
             ))}
           </dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Scopes</dt>
+          <dd className="mt-1">
+            <Button variant="link" className="h-auto p-0" asChild>
+              <Link to={`/scopes/${appId}`}>Manage scopes</Link>
+            </Button>
+          </dd>
+        </div>
       </dl>
 
       <div className="space-y-4">

@@ -133,6 +133,24 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST …/email/test` | — | SMTP enabled and configured | `smtp_not_configured` | 409 | Banner |
 | `POST …/email/test` | — | Delivery succeeds | `smtp_delivery_failed` | 502 | Banner |
 
+## Application scopes (`/api/v1/apps/:appId/scopes`)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| All | Session | Instance member | `permission_denied` | 403 | Access denied |
+| All | `appId` | App exists | `app_not_found` | 404 | Not found |
+| `GET …/scopes` | — | — | — | 200 | Scopes list |
+| `POST …/scopes` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `POST …/scopes` | `name` | Non-empty; lowercase; `^[a-z][a-z0-9._:/-]{0,63}$` | `required` / `invalid_scope` | 400 | Inline on name |
+| `POST …/scopes` | `name` | Unique per app | `scope_taken` | 409 | Inline on name |
+| `POST …/scopes` | `description` | Optional; max 256 chars | `required` | 400 | Inline on description |
+| `PATCH …/scopes/:scopeId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `PATCH …/scopes/:scopeId` | `scopeId` | Scope exists for app | `scope_not_found` | 404 | Refresh list |
+| `PATCH …/scopes/:scopeId` | `name` | Same rules as create when provided | see above | 400/409 | Inline |
+| `PATCH …/scopes/:scopeId` | `description` | Nullable clears note; max 256 when set | `required` | 400 | Inline |
+| `DELETE …/scopes/:scopeId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `DELETE …/scopes/:scopeId` | `scopeId` | Scope exists | `scope_not_found` | 404 | Refresh list |
+
 ## Password reset (`/api/auth/forgot-password`, `/api/auth/reset-password`)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

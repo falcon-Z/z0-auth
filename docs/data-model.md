@@ -74,6 +74,18 @@ Accepting an invite inserts `instance_members` (no roles).
 | `disabled_at` | TIMESTAMPTZ | Set when disabled |
 | `created_at`, `updated_at` | TIMESTAMPTZ | |
 
+### `app_scopes` (M04)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `app_id` | UUID → `apps` | CASCADE delete |
+| `name` | TEXT | Lowercase identifier (`read:orders`, `openid`); unique per app |
+| `description` | TEXT | Optional operator note (max 256 chars in API) |
+| `created_at`, `updated_at` | TIMESTAMPTZ | |
+
+Unique `(app_id, name)`. Used as the allow-list for OAuth `scope` requests (Phase 4).
+
 ### `app_credentials` (M03)
 
 | Column | Type | Notes |
@@ -140,6 +152,7 @@ Singleton row (`id = 1`). Outbound email for password reset and test send.
 | Members (M01) | `GET/POST /api/v1/members`, `GET /api/v1/members/invites`, `DELETE /api/v1/members/invites/:id`, `DELETE /api/v1/members/:userId` |
 | Invites (public token) | `GET /api/v1/invites/:token`, `POST accept/decline` |
 | Applications (M03) | `GET/POST /api/v1/apps`, `GET/PATCH /api/v1/apps/:appId`, credential CRUD under `…/credentials` |
+| App scopes (M04) | `GET/POST /api/v1/apps/:appId/scopes`, `PATCH/DELETE …/scopes/:scopeId` |
 | Email settings (M08) | `GET/PUT /api/v1/settings/email`, `POST …/email/test` |
 | Password reset (M08) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (when SMTP enabled) |
 | Session | `isInstanceMember`, `organizationName` — no tenant or permissions |

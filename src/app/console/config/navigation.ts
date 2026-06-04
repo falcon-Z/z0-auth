@@ -116,9 +116,9 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         title: "Scopes",
         path: "/scopes",
         icon: ListTree,
-        status: "planned",
-        module: "P4-M1",
-        summary: "Scope registry and consent configuration for applications.",
+        status: "available",
+        module: "M04",
+        summary: "Permission scopes each application can request at sign-in.",
       },
       {
         id: "oidc",

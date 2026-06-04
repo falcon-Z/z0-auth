@@ -29,6 +29,12 @@ import {
   handleRotateCredential,
 } from "./apps/handlers";
 import {
+  handleCreateScope,
+  handleDeleteScope,
+  handleListScopes,
+  handlePatchScope,
+} from "./apps/scopes-handlers";
+import {
   handleGetEmailSettings,
   handlePutEmailSettings,
   handleTestEmail,
@@ -50,6 +56,14 @@ export const v1PatternRoutes: PathRoute[] = [
   {
     pattern: "/api/v1/apps/:appId/credentials/:credentialId/rotate",
     handlers: { POST: handleRotateCredential },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/scopes",
+    handlers: { GET: handleListScopes, POST: handleCreateScope },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/scopes/:scopeId",
+    handlers: { PATCH: handlePatchScope, DELETE: handleDeleteScope },
   },
   { pattern: "/api/v1/console/summary", handlers: { GET: handleConsoleSummary } },
   { pattern: "/api/v1/users", handlers: { GET: handleListUsers } },
