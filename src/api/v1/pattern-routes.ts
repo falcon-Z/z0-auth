@@ -28,8 +28,15 @@ import {
   handleRevokeCredential,
   handleRotateCredential,
 } from "./apps/handlers";
+import {
+  handleGetEmailSettings,
+  handlePutEmailSettings,
+  handleTestEmail,
+} from "./settings/handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
+  { pattern: "/api/v1/settings/email/test", handlers: { POST: handleTestEmail } },
+  { pattern: "/api/v1/settings/email", handlers: { GET: handleGetEmailSettings, PUT: handlePutEmailSettings } },
   { pattern: "/api/v1/apps", handlers: { GET: handleListApps, POST: handleCreateApp } },
   { pattern: "/api/v1/apps/:appId", handlers: { GET: handleGetApp, PATCH: handlePatchApp } },
   {

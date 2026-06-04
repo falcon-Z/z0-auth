@@ -94,9 +94,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   if (gate === "unavailable") {
     return (
-      <SessionGate
-        message="The database is unavailable. Start PostgreSQL, then refresh this page."
-      />
+      <SessionGate message="The database became unavailable. Fix DATABASE_URL or Postgres, then refresh." />
     );
   }
 

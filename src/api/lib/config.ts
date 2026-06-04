@@ -8,7 +8,8 @@ export type AppConfig = {
   port: number;
   /** Loopback bind address (not the machine hostname). */
   bindAddress: string;
-  databaseUrl: string;
+  /** Null when DATABASE_URL is unset — server starts; console shows setup guidance. */
+  databaseUrl: string | null;
   appName: string;
   /** When set, POST /api/setup requires X-Install-Token header. */
   installToken?: string;
@@ -16,12 +17,9 @@ export type AppConfig = {
   allowIncompleteSetup: boolean;
 };
 
-function requireEnv(name: string, fallback?: string): string {
-  const value = process.env[name] ?? fallback;
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
+/** True when DATABASE_URL is set to a non-empty value. */
+export function isDatabaseConfigured(): boolean {
+  return Boolean(process.env.DATABASE_URL?.trim());
 }
 
 function defaultBindAddress(nodeEnv: string): string {
@@ -43,7 +41,7 @@ export function loadConfig(): AppConfig {
     nodeEnv,
     port: Number(process.env.PORT ?? "3000"),
     bindAddress: resolveBindAddress(nodeEnv),
-    databaseUrl: requireEnv("DATABASE_URL"),
+    databaseUrl: process.env.DATABASE_URL?.trim() || null,
     appName: process.env.APP_NAME ?? "z0-auth",
     installToken: process.env.INSTALL_TOKEN,
     allowIncompleteSetup: process.env.ALLOW_INCOMPLETE_SETUP === "true",

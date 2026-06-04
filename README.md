@@ -24,6 +24,8 @@ bun dev
 
 Local setup (Postgres, env, console API helpers): [docs/development.md](docs/development.md).
 
+Production / Docker / cloud hosting (database URL, encryption keys, checklist UI): [docs/deployment.md](docs/deployment.md).
+
 ## URL contract
 
 - `/auth/*` server HTML auth pages

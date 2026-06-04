@@ -1,0 +1,172 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Instance Settings API
+  version: 0.1.0
+  description: |
+    Instance email (SMTP) settings (M08). Requires a signed-in instance member.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Settings
+paths:
+  /api/v1/settings/email:
+    get:
+      tags: [Settings]
+      summary: Get SMTP settings
+      operationId: getEmailSettings
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: SMTP settings (password never returned)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    put:
+      tags: [Settings]
+      summary: Update SMTP settings
+      operationId: putEmailSettings
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutEmailSettingsRequest"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/settings/email/test:
+    post:
+      tags: [Settings]
+      summary: Send SMTP test email
+      operationId: postEmailTest
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Test message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, verifiedAt]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  verifiedAt:
+                    type: string
+                    format: date-time
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+        "502":
+          description: SMTP delivery failed
+components:
+  schemas:
+    EmailSettings:
+      type: object
+      required:
+        - configured
+        - enabled
+        - host
+        - port
+        - encryption
+        - hasPassword
+        - fromAddress
+      properties:
+        configured:
+          type: boolean
+        enabled:
+          type: boolean
+        host:
+          type: string
+        port:
+          type: integer
+        encryption:
+          type: string
+          enum: [none, starttls, tls]
+        username:
+          type: string
+          nullable: true
+        hasPassword:
+          type: boolean
+        fromAddress:
+          type: string
+        fromName:
+          type: string
+          nullable: true
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+    PutEmailSettingsRequest:
+      type: object
+      required: [host, port, encryption, fromAddress, enabled]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+        encryption:
+          type: string
+          enum: [none, starttls, tls]
+        username:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+          description: Omit or empty to keep existing password
+        fromAddress:
+          type: string
+        fromName:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean

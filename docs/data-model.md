@@ -87,12 +87,37 @@ Accepting an invite inserts `instance_members` (no roles).
 | `revoked_at` | TIMESTAMPTZ | |
 | `created_at` | TIMESTAMPTZ | |
 
+### `smtp_settings` (M08)
+
+Singleton row (`id = 1`). Outbound email for password reset and test send.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `host` | TEXT | SMTP server |
+| `port` | INTEGER | Default 587 |
+| `encryption` | TEXT | `none`, `starttls`, `tls` |
+| `username` | TEXT | Optional |
+| `password_ciphertext` | TEXT | AES-GCM; never returned by API |
+| `from_address` | TEXT | From header |
+| `from_name` | TEXT | Optional display name |
+| `enabled` | BOOLEAN | Master switch |
+| `verified_at` | TIMESTAMPTZ | Set after successful test send |
+
+### `password_reset_tokens` (M08)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `user_id` | UUID → `users` | |
+| `token_hash` | TEXT | Reset `jti` (matches signed token payload; signature verified with instance Ed25519 public key) |
+| `expires_at` | TIMESTAMPTZ | 1 hour TTL |
+| `used_at` | TIMESTAMPTZ | Single-use |
+
 ### Later modules
 
 | Table | Purpose |
 |-------|---------|
 | `app_memberships` | App user ↔ app (M05) |
-| `smtp_settings` | SMTP config (M08) |
 | `audit_events` | Audit trail (`tenant_id` unused, NULL in v1) |
 
 ## Setup flow
@@ -115,6 +140,8 @@ Accepting an invite inserts `instance_members` (no roles).
 | Members (M01) | `GET/POST /api/v1/members`, `GET /api/v1/members/invites`, `DELETE /api/v1/members/invites/:id`, `DELETE /api/v1/members/:userId` |
 | Invites (public token) | `GET /api/v1/invites/:token`, `POST accept/decline` |
 | Applications (M03) | `GET/POST /api/v1/apps`, `GET/PATCH /api/v1/apps/:appId`, credential CRUD under `…/credentials` |
+| Email settings (M08) | `GET/PUT /api/v1/settings/email`, `POST …/email/test` |
+| Password reset (M08) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (when SMTP enabled) |
 | Session | `isInstanceMember`, `organizationName` — no tenant or permissions |
 
 ## Related docs

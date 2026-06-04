@@ -2,6 +2,7 @@ import { isSetupComplete } from "./platform";
 import { problem } from "./http";
 
 const ALLOWED_WHEN_INCOMPLETE = new Set([
+  "/api/deploy/status",
   "/api/setup/status",
   "/api/health",
   "/api/live",

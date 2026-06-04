@@ -44,7 +44,7 @@ This creates `z0auth_test` alongside `z0auth` (same container, different databas
 bun dev
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000).
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). If `DATABASE_URL` or instance keys are missing, the console shows a setup checklist instead of the dashboard — see [deployment.md](./deployment.md).
 
 ## Tests and the dev database
 

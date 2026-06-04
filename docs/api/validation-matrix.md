@@ -118,6 +118,35 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST …/rotate` | — | Active credential | `credential_not_found` | 404 | Refresh list |
 | `POST …/rotate` | — | New `clientSecret` once | — | 200 | One-time copy dialog |
 
+## Email settings (`/api/v1/settings/email`)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| All | Session | Instance member | `permission_denied` | 403 | Access denied |
+| `GET …/email` | — | Password never in response | — | 200 | Email settings form |
+| `PUT …/email` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `PUT …/email` | `host`, `port`, `encryption`, `fromAddress` | Valid values | `required` / `invalid_email` | 400 | Inline |
+| `PUT …/email` | `encryption` | `none` disallowed in production | `required` | 400 | Inline |
+| `PUT …/email` | `password` | Required when enabling with no stored password | `required` | 400 | Inline |
+| `POST …/email/test` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `POST …/email/test` | `to` | Valid email | `invalid_email` | 400 | Inline on test field |
+| `POST …/email/test` | — | SMTP enabled and configured | `smtp_not_configured` | 409 | Banner |
+| `POST …/email/test` | — | Delivery succeeds | `smtp_delivery_failed` | 502 | Banner |
+
+## Password reset (`/api/auth/forgot-password`, `/api/auth/reset-password`)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| Both | SMTP | Enabled and configured | `password_reset_unavailable` | 503 | Forgot page info / API |
+| `POST forgot` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh |
+| `POST forgot` | `email` | Valid format | `required` / `invalid_email` | 400 | Inline |
+| `POST forgot` | Rate limit | Per IP / per email | `rate_limited` | 429 | Retry message |
+| `POST forgot` | — | Always generic success when format valid | — | 200 | Check your email |
+| `POST reset` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh |
+| `POST reset` | `token` | Pending, not expired | `reset_token_invalid` | 400 | Invalid link |
+| `POST reset` | `password` | Policy + confirm match | `password_policy` / `password_mismatch` | 400 | Checklist + inline |
+| `POST reset` | Success | Revokes all sessions for user | — | 200 | Redirect to login |
+
 ## Notes
 
 - Multi-tenant rules are removed.

@@ -135,9 +135,42 @@ paths:
   /api/auth/forgot-password:
     post:
       tags: [Auth]
-      summary: Request password reset (unavailable)
+      summary: Request password reset email
       operationId: postAuthForgotPassword
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
       responses:
+        "200":
+          description: Generic success (no account enumeration)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, message]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  message:
+                    type: string
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
         "503":
           description: SMTP not configured, or platform setup incomplete
           content:
@@ -149,9 +182,41 @@ paths:
   /api/auth/reset-password:
     post:
       tags: [Auth]
-      summary: Complete password reset (unavailable)
+      summary: Complete password reset with token from email
       operationId: postAuthResetPassword
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password, passwordConfirm]
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+                passwordConfirm:
+                  type: string
       responses:
+        "200":
+          description: Password updated; all sessions revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
         "503":
           $ref: "common.openapi.yaml#/components/responses/ServiceUnavailable"
   /api/auth/change-password:

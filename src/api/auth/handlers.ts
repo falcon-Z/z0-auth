@@ -1,7 +1,7 @@
 import type { BunRequest } from "bun";
 
 import type { ChangePasswordRequest, LoginRequest } from "@z0/contracts/auth";
-import { ErrorCodes } from "@z0/contracts/errors";
+import type { ForgotPasswordRequest, ResetPasswordRequest } from "@z0/contracts/email-settings";
 import { parseJsonBody } from "@z0/contracts/validation";
 
 import { buildSessionResponse, requireSession } from "../lib/auth";
@@ -13,6 +13,7 @@ import {
   revokeSessionByToken,
   SESSION_COOKIE,
 } from "../lib/session";
+import { completePasswordReset, requestPasswordReset } from "../lib/password-reset";
 import { changePassword } from "../lib/users";
 import { runLogin } from "./service";
 
@@ -50,21 +51,24 @@ export async function handleSession(req: BunRequest): Promise<Response> {
   return json(session);
 }
 
-export async function handlePasswordResetUnavailable(): Promise<Response> {
-  return problem(
-    503,
-    "Service Unavailable",
-    "Password reset is not available until email (SMTP) is configured.",
-    {
-      errors: [
-        {
-          field: "_reset",
-          code: ErrorCodes.PASSWORD_RESET_UNAVAILABLE,
-          message: "Password reset is not available until email (SMTP) is configured.",
-        },
-      ],
-    },
-  );
+export async function handleForgotPassword(req: BunRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
+  const parsed = await parseJsonBody<ForgotPasswordRequest>(req);
+  if (!parsed.ok) return parsed.response;
+
+  return requestPasswordReset(req, parsed.body);
+}
+
+export async function handleResetPassword(req: BunRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
+  const parsed = await parseJsonBody<ResetPasswordRequest>(req);
+  if (!parsed.ok) return parsed.response;
+
+  return completePasswordReset(req, parsed.body);
 }
 
 export async function handleRegister(): Promise<Response> {

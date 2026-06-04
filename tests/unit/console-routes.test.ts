@@ -15,6 +15,7 @@ describe("console routes", () => {
   test("members, apps, and profile use splat routes for nested pages", () => {
     expect(routePathForNav("/members")).toBe("/members/*");
     expect(routePathForNav("/apps")).toBe("/apps/*");
+    expect(routePathForNav("/communications/email")).toBe("/communications/email/*");
     expect(routePathForNav("/profile")).toBe("/profile/*");
     const membersRoute = consoleRoutes.find((route) => route.path === "/members/*");
     const appsRoute = consoleRoutes.find((route) => route.path === "/apps/*");

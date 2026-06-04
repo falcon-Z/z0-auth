@@ -46,8 +46,12 @@ Non-members with a valid session are denied console APIs (**403**).
 
 | Surface | Behavior |
 |---------|----------|
-| `/auth/forgot-password` | Informational HTML until SMTP is configured |
-| `POST /api/auth/reset-password` | **503** until SMTP |
+| `GET /auth/forgot-password` | Email form when SMTP enabled; otherwise informational HTML |
+| `POST /auth/forgot-password` | Sends reset email (generic success); HTML + JSON API |
+| `GET /auth/reset-password/:token` | New password form when SMTP enabled |
+| `POST /auth/reset-password/:token` | Updates password → **303** `/auth/login?reset=complete` |
+| `POST /api/auth/forgot-password` | JSON; **503** when SMTP off |
+| `POST /api/auth/reset-password` | JSON body with `token`, `password`, `passwordConfirm`; **503** when SMTP off |
 
 ## HTTP status codes (auth/setup)
 

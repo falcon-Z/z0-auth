@@ -1,12 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./components/shell/AppShell";
+import { DeployProvider } from "./context/deploy-context";
 import { SessionProvider } from "./context/session-context";
 import { consoleRoutes } from "./routes";
 
 export function App() {
   return (
     <BrowserRouter>
+      <DeployProvider>
       <SessionProvider>
         <Routes>
           <Route element={<AppShell />}>
@@ -17,6 +19,7 @@ export function App() {
           </Route>
         </Routes>
       </SessionProvider>
+      </DeployProvider>
     </BrowserRouter>
   );
 }

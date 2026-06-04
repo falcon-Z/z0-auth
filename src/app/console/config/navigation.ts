@@ -228,9 +228,9 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         title: "Email & SMTP",
         path: "/communications/email",
         icon: Mail,
-        status: "planned",
-        module: "P5-M3",
-        summary: "SMTP inheritance, test send, and forgot-password delivery.",
+        status: "available",
+        module: "M08",
+        summary: "SMTP settings, test send, and password reset email.",
       },
       {
         id: "templates",

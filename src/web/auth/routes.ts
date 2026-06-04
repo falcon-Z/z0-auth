@@ -278,21 +278,6 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
   return htmlFormRedirect(req, location, { setCookie: result.setCookie });
 }
 
-async function getForgotPasswordPage(req: BunRequest): Promise<Response> {
-  const redirect = await redirectForAuthPage(req, "forgot-password");
-  if (redirect) return redirect;
-
-  const { token, setCookie } = preparePageCsrf(req);
-  const html = renderStaticMessagePage(
-    "Reset password",
-    "Email-based reset will be available when SMTP is configured.",
-    token,
-    `<p class="auth-footer">Self-service password reset is not enabled. Contact your platform operator if you are locked out.</p>
-     <div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div>`,
-  );
-  return withSetCookie(htmlResponse(html), setCookie);
-}
-
 async function getRegisterPage(req: BunRequest): Promise<Response> {
   const redirect = await redirectForAuthPage(req, "register");
   if (redirect) return redirect;
@@ -372,9 +357,6 @@ export const authWebRoutes = {
   },
   "/auth/register": {
     GET: getRegisterPage,
-  },
-  "/auth/forgot-password": {
-    GET: getForgotPasswordPage,
   },
   "/auth/logout": {
     POST: postLogoutPage,

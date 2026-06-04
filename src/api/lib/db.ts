@@ -4,6 +4,7 @@ import { loadConfig } from "./config";
 
 export type DatabaseHealth = {
   ok: boolean;
+  configured: boolean;
   latencyMs: number;
   version?: string;
   error?: string;
@@ -39,6 +40,9 @@ export async function resetDatabaseConnection(): Promise<void> {
 export function getDb(): SQL {
   if (!db) {
     const { databaseUrl } = loadConfig();
+    if (!databaseUrl) {
+      throw new Error("DATABASE_URL is not configured");
+    }
     db = new SQL(databaseUrl);
   }
   return db;
@@ -56,10 +60,21 @@ export function pgTextArray(values: string[]) {
 
 export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
   const started = performance.now();
+  const { databaseUrl } = loadConfig();
+  if (!databaseUrl) {
+    return {
+      ok: false,
+      configured: false,
+      latencyMs: 0,
+      error: "DATABASE_URL is not set",
+    };
+  }
+
   try {
     const [row] = await getDb()`SELECT version() AS version`;
     return {
       ok: true,
+      configured: true,
       latencyMs: Math.round(performance.now() - started),
       version: String((row as { version: string }).version),
     };
@@ -67,6 +82,7 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
     if (isDatabaseConnectionError(error)) await resetDatabaseConnection();
     return {
       ok: false,
+      configured: true,
       latencyMs: Math.round(performance.now() - started),
       error: error instanceof Error ? error.message : String(error),
     };
