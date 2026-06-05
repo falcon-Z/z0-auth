@@ -1,8 +1,8 @@
-import { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { closeDatabase } from "../../src/api/lib/db";
+import { createPgSql } from "../../src/api/lib/create-pg-sql";
 
 export function getTestDatabaseUrl(): string | null {
   return process.env.TEST_DATABASE_URL?.trim() || null;
@@ -32,7 +32,7 @@ export async function resetTestDatabase(): Promise<void> {
   const migrationsDir = path.join(sqlDir, "migrations");
   const migrationFiles = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
 
-  const db = new SQL(url);
+  const db = createPgSql(url);
   await db.unsafe(resetSql);
   await db.unsafe(schemaSql);
   for (const file of migrationFiles) {

@@ -25,7 +25,16 @@ One z0-auth deployment serves one account owner team and their registered apps. 
 
 Console and instance APIs: signed in **and** `instance_members`.
 
-App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no cross-app access.
+App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no cross-app access. App users may **self-register** (not invite-only) when signing in with app context (`client_id`).
+
+**Hosted auth (one UI, two realms):** Same `/auth/*` pages and form patterns as console login. **Realm** is chosen by context:
+
+| Context | How resolved | Identity table | Session cookie |
+|---------|--------------|----------------|----------------|
+| Console | No `client_id` / no app context | `users` | `z0_session` → `sessions` |
+| App user | `client_id` on authorize/login/register (→ `app_id`) | `app_users` | `z0_app_session` → `app_user_sessions` |
+
+Matches common IAM products (Auth0 Universal Login, Clerk hosted): one authentication layer; app context selects the user directory.
 
 No role tiers, permission matrix, or organization switcher.
 
@@ -169,6 +178,23 @@ Unique `(app_id, lower(email))`. No FK to `users`.
 
 Accept creates a row in `app_users` only. Unique pending invite per `(app_id, email)`.
 
+Self-registration (M06) also creates `app_users` directly when `client_id` resolves to the app — same uniqueness rules as console-created users.
+
+### `app_user_sessions` (M06)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `app_user_id` | UUID → `app_users` | CASCADE delete |
+| `app_id` | UUID → `apps` | Denormalized for enforcement; must match `app_users.app_id` |
+| `token_hash` | TEXT | Unique |
+| `expires_at` | TIMESTAMPTZ | 14-day absolute lifetime (same as console) |
+| `created_at`, `last_seen_at` | TIMESTAMPTZ | |
+| `revoked_at` | TIMESTAMPTZ | Logout / security revoke |
+| `ip_hash`, `user_agent_hash`, `client_label`, `ip_display` | TEXT | Same display pattern as `sessions` |
+
+Cookie `z0_app_session` (HttpOnly, SameSite=Lax). OAuth and `/auth` resume read this cookie — not `z0_session`. A browser may hold both cookies when an operator tests an app while signed into the console.
+
 ### `app_memberships` (0015 — superseded)
 
 Bridged global `users` to apps. **Do not build on this.** Removed in migration `0016` when Option B ships.
@@ -204,7 +230,9 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 | App user invites (public) | `GET /api/v1/app-invites/:token`, `POST accept/decline` |
 | Email settings (M08) | `GET/PUT /api/v1/settings/email`, `POST …/email/test` |
 | Password reset (M08) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (when SMTP enabled) |
-| Session | `isInstanceMember`, `organizationName` — no tenant or permissions |
+| App user hosted auth (M06) | `/auth/login`, `/auth/register` with `client_id`; `/auth/app-invite/:token` |
+| Console session | `z0_session` — `isInstanceMember`, `organizationName` |
+| App user session | `z0_app_session` — scoped to one `app_id`; no console access |
 
 ## Related docs
 

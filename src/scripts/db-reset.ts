@@ -4,10 +4,10 @@
  * Usage: bun run db:reset
  */
 
-import { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { createPgSql } from "../api/lib/create-pg-sql";
 import { loadRootEnv } from "../lib/load-root-env";
 
 loadRootEnv();
@@ -25,7 +25,7 @@ const migrationsDir = path.join(sqlDir, "migrations");
 const resetSql = await Bun.file(path.join(sqlDir, "reset.sql")).text();
 const schemaSql = await Bun.file(path.join(sqlDir, "schema.sql")).text();
 
-const db = new SQL(databaseUrl);
+const db = createPgSql(databaseUrl);
 
 console.log("Resetting database (DROP SCHEMA public CASCADE)…");
 await db.unsafe(resetSql);

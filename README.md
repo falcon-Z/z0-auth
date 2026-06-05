@@ -1,6 +1,8 @@
 # z0-auth
 
-Authentication server and management console built as a single Bun monolith.
+Self-hosted **identity and access management** for developers: register applications, send end users through our hosted sign-in, and return them to your app with OAuth/OIDC—similar in role to Auth0 or Clerk. One Bun monolith serves the JSON API, hosted auth pages, authorization server, and React management console.
+
+Product overview: [docs/product.md](docs/product.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Structure
 

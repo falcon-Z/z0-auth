@@ -4,9 +4,9 @@
  * Usage: bun run db:test:init
  */
 
-import { SQL } from "bun";
 import path from "node:path";
 
+import { createPgSql } from "../api/lib/create-pg-sql";
 import { loadEnvFile, loadRootEnv } from "../lib/load-root-env";
 
 loadRootEnv();
@@ -36,7 +36,7 @@ function adminUrlFromDatabaseUrl(url: string): string {
 const databaseName = databaseNameFromUrl(testDatabaseUrl);
 const adminUrl = adminUrlFromDatabaseUrl(testDatabaseUrl);
 
-const db = new SQL(adminUrl);
+const db = createPgSql(adminUrl);
 const existing = await db`
   SELECT 1 AS ok FROM pg_database WHERE datname = ${databaseName}
 `;

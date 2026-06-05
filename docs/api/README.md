@@ -1,6 +1,6 @@
 # z0-auth API documentation
 
-Spec-driven contracts for the single-account IAM model.
+Spec-driven contracts for the single-account IAM model. Product context: [../product.md](../product.md).
 
 ## Start here
 

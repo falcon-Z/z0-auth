@@ -1,7 +1,7 @@
 import { serve } from "bun";
 
 import { apiRouteMap, dispatchApiRequest } from "./api/dispatch";
-import { checkDatabaseHealth } from "./api/lib/db";
+import { checkDatabaseHealth, closeDatabase } from "./api/lib/db";
 import { loadConfig } from "./api/lib/config";
 import { loadRootEnv } from "./lib/load-root-env";
 
@@ -41,5 +41,26 @@ const server = serve({
 });
 
 printStartupSummary(config, dbHealth);
+
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+async function shutdown(): Promise<void> {
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error("Shutdown timeout")), SHUTDOWN_TIMEOUT_MS);
+  });
+
+  try {
+    await Promise.race([Promise.all([closeDatabase(), server.stop()]), timeout]);
+  } catch (error) {
+    console.error("Error during shutdown:", error);
+  }
+}
+
+process.on("SIGINT", () => {
+  void shutdown().finally(() => process.exit(0));
+});
+process.on("SIGTERM", () => {
+  void shutdown().finally(() => process.exit(0));
+});
 
 void server;

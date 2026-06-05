@@ -4,10 +4,10 @@
  * Usage: bun run db:migrate
  */
 
-import { SQL } from "bun";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { createPgSql } from "../api/lib/create-pg-sql";
 import { loadRootEnv } from "../lib/load-root-env";
 
 loadRootEnv();
@@ -19,7 +19,7 @@ if (!databaseUrl) {
 }
 
 const migrationsDir = path.join(import.meta.dir, "sql", "migrations");
-const db = new SQL(databaseUrl);
+const db = createPgSql(databaseUrl);
 
 const appliedRows = await db`SELECT version FROM schema_migrations`;
 const applied = new Set(appliedRows.map((r) => String((r as { version: string }).version)));

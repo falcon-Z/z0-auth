@@ -1,6 +1,7 @@
 import { SQL } from "bun";
 
 import { loadConfig } from "./config";
+import { createPgSql } from "./create-pg-sql";
 
 export type DatabaseHealth = {
   ok: boolean;
@@ -10,7 +11,8 @@ export type DatabaseHealth = {
   error?: string;
 };
 
-let db: SQL | null = null;
+/** Survives `bun --hot` reloads so old pools are not left open on the server. */
+const GLOBAL_DB_KEY = "__z0_auth_pg_sql__";
 
 const CONNECTION_ERROR_CODES = new Set([
   "ERR_POSTGRES_CONNECTION_CLOSED",
@@ -18,6 +20,10 @@ const CONNECTION_ERROR_CODES = new Set([
   "ECONNRESET",
   "ETIMEDOUT",
 ]);
+
+function globalDbSlot(): typeof globalThis & Record<typeof GLOBAL_DB_KEY, SQL | undefined> {
+  return globalThis as typeof globalThis & Record<typeof GLOBAL_DB_KEY, SQL | undefined>;
+}
 
 export function isDatabaseConnectionError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -28,7 +34,8 @@ export function isDatabaseConnectionError(error: unknown): boolean {
     message.includes("connection closed") ||
     message.includes("connection refused") ||
     message.includes("connect econnrefused") ||
-    message.includes("socket hang up")
+    message.includes("socket hang up") ||
+    message.includes("too many clients")
   );
 }
 
@@ -38,14 +45,15 @@ export async function resetDatabaseConnection(): Promise<void> {
 
 /** Lazily initialize the Postgres client from DATABASE_URL. */
 export function getDb(): SQL {
-  if (!db) {
+  const slot = globalDbSlot();
+  if (!slot[GLOBAL_DB_KEY]) {
     const { databaseUrl } = loadConfig();
     if (!databaseUrl) {
       throw new Error("DATABASE_URL is not configured");
     }
-    db = new SQL(databaseUrl);
+    slot[GLOBAL_DB_KEY] = createPgSql(databaseUrl);
   }
-  return db;
+  return slot[GLOBAL_DB_KEY]!;
 }
 
 /** Tagged template helper bound to the app database connection. */
@@ -90,8 +98,10 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
 }
 
 export async function closeDatabase(): Promise<void> {
-  if (db) {
-    await db.close();
-    db = null;
+  const slot = globalDbSlot();
+  const existing = slot[GLOBAL_DB_KEY];
+  if (existing) {
+    await existing.close();
+    delete slot[GLOBAL_DB_KEY];
   }
 }

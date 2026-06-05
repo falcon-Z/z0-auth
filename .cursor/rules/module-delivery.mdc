@@ -18,7 +18,7 @@ Follow existing repo patterns. Flow for every module:
 | Implement | Handlers, migrations, UI wired to real routes |
 | Test | Integration tests + UI route/smoke where applicable |
 
-## API + UI modules (e.g. P2-M1)
+## API + UI modules (e.g. M05, M09)
 
 1. **Backend first** — spec, data, handlers, integration tests green and stable.
 2. **Then UI** — wire console and/or `/auth/*` to those APIs; register routes correctly (no placeholder fallback for shipped modules).

@@ -21,7 +21,7 @@ Console placeholders for **unbuilt** nav items: minimal empty state only (e.g. "
 
 ## Todoist task shape
 
-- **Parent module tasks** — high level (e.g. "P2-M1: RBAC + invites API + UI").
+- **Parent module tasks** — high level (e.g. "M09: OAuth authorization server").
 - **When starting work** — read the task, write a **detailed plan** in chat and/or as **subtasks** with concrete next steps.
 - **More scope discovered** — add subtasks or follow-up tasks in Todoist; do not expand scope silently or document it in code.
 - **Before closing a task** — every subtask done; plan in Todoist matches what shipped.

@@ -1,5 +1,7 @@
 # z0-auth architecture
 
+Single Bun deployment: IAM for customer apps (OAuth/OIDC, hosted `/auth`, operator console). Product summary: [product.md](./product.md).
+
 ## Layout
 
 | Path | Role |

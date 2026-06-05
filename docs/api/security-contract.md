@@ -8,18 +8,36 @@ Normative rules for sessions, CSRF, cookies, and OAuth. All new API and UI work 
 
 ## Sessions
 
+Two session cookies — same lifetime and CSRF rules, different identity realms (Auth0/Clerk-style hosted auth).
+
+### Console (`z0_session`)
+
 | Rule | Value / behavior |
 |------|------------------|
 | Cookie name | `z0_session` |
-| Storage | HttpOnly cookie; token stored hashed in `sessions` table |
-| Issuance | After successful login; previous session cookie revoked on new login |
+| Storage | HttpOnly cookie; token stored hashed in `sessions` table (`user_id` → `users`) |
+| Issuance | After successful **console** login or setup — no `client_id` / app context on the request |
 | Absolute lifetime | **14 days** from creation (`expires_at` in DB and cookie `Max-Age`) |
 | Idle timeout | **Not enforced yet** — `last_seen_at` is updated on each valid request; future: configurable idle window (document target: 30 minutes idle, 14 days absolute) |
 | Revocation | Logout sets `revoked_at`; invalid/expired tokens return unauthenticated session |
 | Production cookie | `Secure` flag when `NODE_ENV=production` |
 | SameSite | `Lax` |
 
-**Future APIs** that accept bearer tokens must document their own lifetime and revocation; browser console continues to use the session cookie unless stated otherwise.
+### App user (`z0_app_session`)
+
+| Rule | Value / behavior |
+|------|------------------|
+| Cookie name | `z0_app_session` |
+| Storage | HttpOnly cookie; token stored hashed in `app_user_sessions` (`app_user_id` → `app_users`, `app_id` enforced) |
+| Issuance | After successful **app** login, self-registration, or invite accept — request must carry app context (`client_id` on authorize/login/register, or invite token → `app_id`) |
+| Absolute lifetime | **14 days** (same as console) |
+| Revocation | App logout sets `revoked_at` on the app session only; does not clear `z0_session` |
+| OAuth | `/oauth/authorize` and `/oauth/resume` use **app** session when returning from hosted auth |
+| Cross-app | Session valid for **one `app_id` only**; new login for another app replaces the app session cookie |
+
+**Realm routing on `/auth/*`:** If the request includes a resolvable `client_id` (query or preserved in `z0_oauth_return`), authenticate against `app_users` and issue `z0_app_session`. Otherwise authenticate against `users` and issue `z0_session`. Same HTML forms and CSRF; different handler branch.
+
+**Future APIs** that accept bearer tokens must document their own lifetime and revocation; browser console continues to use `z0_session` unless stated otherwise.
 
 ---
 
@@ -167,7 +185,8 @@ Reserved error codes: `invalid_client`, `unauthorized_client` (see `ErrorCodes` 
 
 | Cookie | HttpOnly | SameSite | Purpose |
 |--------|----------|----------|---------|
-| `z0_session` | yes | Lax | Session token |
+| `z0_session` | yes | Lax | Console operator session |
+| `z0_app_session` | yes | Lax | App end-user session (one app) |
 | `z0_csrf` | no | Lax | CSRF double-submit |
 | `z0_oauth_return` | yes | Lax | Resume OAuth after login (10 min) |
 

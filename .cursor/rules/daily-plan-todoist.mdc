@@ -21,4 +21,4 @@ When I ask for **today's plan**, **plan for today**, **check today's task**, or 
 ## Dates
 
 - Due dates in Todoist are **for tracking and ordering**, not hard deadlines or blockers.
-- If P2-M1 is due tomorrow but incomplete, treat it as **today's dev focus** until done.
+- If the next Auth module is due but incomplete, treat it as **today's dev focus** until done.

@@ -3,7 +3,9 @@
  * overriding variables already set in the shell (e.g. CI).
  */
 import path from "node:path";
+import { afterAll } from "bun:test";
 
+import { closeDatabase } from "../src/api/lib/db";
 import { initializeInstanceKeys } from "../src/api/lib/instance-keys";
 import { loadEnvFile, loadRootEnv } from "../src/lib/load-root-env";
 
@@ -36,3 +38,7 @@ if (testDatabaseUrl) {
   }
   process.env.DATABASE_URL = testDatabaseUrl;
 }
+
+afterAll(async () => {
+  await closeDatabase();
+});
