@@ -1,5 +1,4 @@
 import type { BunRequest } from "bun";
-import type { SQL } from "bun";
 
 import type {
   AcceptAppUserInviteRequest,
@@ -20,32 +19,24 @@ import {
 } from "@z0/contracts/password-policy";
 import { normalizeEmail, validateEmail, validateRequiredString } from "@z0/contracts/validation";
 
-import { getUserById } from "./auth";
 import { writeAuditEvent } from "./audit";
 import { findAppRow } from "./apps";
 import { sha256Hex, randomToken } from "./crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
-import { isInstanceMember } from "./instance-members";
 import { hashPassword } from "./password";
-import { resolveSession } from "./session";
-import { createSession, sessionCookieHeader } from "./session";
 import { normalizeMetadata, validateAppUserMetadata } from "./app-user-metadata";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-type MembershipRow = {
-  user_id: string;
-  app_id: string;
-  status: AppUserMembershipStatus;
-  metadata: Record<string, unknown> | null;
-  joined_at: Date;
-};
-
-type UserRow = {
+type AppUserRow = {
   id: string;
+  app_id: string;
   email: string;
   name: string;
+  status: AppUserMembershipStatus;
+  metadata: Record<string, unknown> | null;
+  created_at: Date;
 };
 
 type AppUserInviteRow = {
@@ -62,6 +53,27 @@ type AppUserInviteRow = {
   created_at: Date;
 };
 
+function mapAppUserRow(row: AppUserRow): AppUserSummary {
+  return {
+    userId: String(row.id),
+    appId: String(row.app_id),
+    email: row.email,
+    name: row.name,
+    membershipStatus: row.status,
+    joinedAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+function normalizeAppUserRow(row: AppUserRow): AppUserRow {
+  return {
+    ...row,
+    id: String(row.id),
+    app_id: String(row.app_id),
+    metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    created_at: new Date(row.created_at),
+  };
+}
+
 async function appNotFoundResponse(): Promise<Response> {
   return problem(404, "Not Found", "Application not found.", {
     errors: [{ field: "appId", code: ErrorCodes.APP_NOT_FOUND, message: "Application not found" }],
@@ -76,43 +88,26 @@ async function appUserNotFoundResponse(): Promise<Response> {
   });
 }
 
-async function findMembership(appId: string, userId: string): Promise<MembershipRow | null> {
+async function findAppUser(appId: string, userId: string): Promise<AppUserRow | null> {
   const [row] = await getDb()`
-    SELECT user_id, app_id, status, metadata, joined_at
-    FROM app_memberships
+    SELECT id, app_id, email, name, status, metadata, created_at
+    FROM app_users
     WHERE app_id = ${appId}
-      AND user_id = ${userId}
+      AND id = ${userId}
   `;
   if (!row) return null;
-  const r = row as MembershipRow;
-  return {
-    ...r,
-    user_id: String(r.user_id),
-    app_id: String(r.app_id),
-    metadata: (r.metadata as Record<string, unknown> | null) ?? null,
-    joined_at: new Date(r.joined_at),
-  };
+  return normalizeAppUserRow(row as AppUserRow);
 }
 
-async function mapAppUserSummary(appId: string, userId: string): Promise<AppUserSummary | null> {
-  const membership = await findMembership(appId, userId);
-  if (!membership) return null;
-
-  const [user] = await getDb()`
-    SELECT id, email, name FROM users WHERE id = ${userId}
+async function appUserExistsForEmail(appId: string, email: string): Promise<boolean> {
+  const [row] = await getDb()`
+    SELECT 1
+    FROM app_users
+    WHERE app_id = ${appId}
+      AND lower(email) = ${email}
+    LIMIT 1
   `;
-  if (!user) return null;
-  const u = user as UserRow;
-
-  return {
-    userId: String(u.id),
-    appId,
-    email: u.email,
-    name: u.name,
-    membershipStatus: membership.status,
-    isInstanceMember: await isInstanceMember(userId),
-    joinedAt: membership.joined_at.toISOString(),
-  };
+  return Boolean(row);
 }
 
 export async function listAppUsersForApi(
@@ -127,55 +122,23 @@ export async function listAppUsersForApi(
 
   const rows = pattern
     ? await getDb()`
-        SELECT m.user_id, m.app_id, m.status, m.joined_at, u.email, u.name
-        FROM app_memberships m
-        JOIN users u ON u.id = m.user_id
-        WHERE m.app_id = ${appId}
-          AND (u.email ILIKE ${pattern} OR u.name ILIKE ${pattern})
-        ORDER BY u.name ASC
+        SELECT id, app_id, email, name, status, metadata, created_at
+        FROM app_users
+        WHERE app_id = ${appId}
+          AND (email ILIKE ${pattern} OR name ILIKE ${pattern})
+        ORDER BY name ASC
       `
     : await getDb()`
-        SELECT m.user_id, m.app_id, m.status, m.joined_at, u.email, u.name
-        FROM app_memberships m
-        JOIN users u ON u.id = m.user_id
-        WHERE m.app_id = ${appId}
-        ORDER BY u.name ASC
+        SELECT id, app_id, email, name, status, metadata, created_at
+        FROM app_users
+        WHERE app_id = ${appId}
+        ORDER BY name ASC
       `;
 
-  const users: AppUserSummary[] = [];
-  for (const row of rows) {
-    const r = row as {
-      user_id: string;
-      app_id: string;
-      status: AppUserMembershipStatus;
-      joined_at: Date;
-      email: string;
-      name: string;
-    };
-    const userId = String(r.user_id);
-    users.push({
-      userId,
-      appId: String(r.app_id),
-      email: r.email,
-      name: r.name,
-      membershipStatus: r.status,
-      isInstanceMember: await isInstanceMember(userId),
-      joinedAt: new Date(r.joined_at).toISOString(),
-    });
-  }
-
-  return { ok: true, users };
-}
-
-async function countUserActiveSessions(userId: string): Promise<number> {
-  const [row] = await getDb()`
-    SELECT COUNT(*)::int AS count
-    FROM sessions
-    WHERE user_id = ${userId}
-      AND revoked_at IS NULL
-      AND expires_at > NOW()
-  `;
-  return Number((row as { count: number }).count ?? 0);
+  return {
+    ok: true,
+    users: rows.map((row) => mapAppUserRow(normalizeAppUserRow(row as AppUserRow))),
+  };
 }
 
 export async function getAppUserDetailForApi(
@@ -185,32 +148,17 @@ export async function getAppUserDetailForApi(
   const app = await findAppRow(appId);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
 
-  const membership = await findMembership(appId, userId);
-  if (!membership) return { ok: false, response: await appUserNotFoundResponse() };
-
-  const summary = await mapAppUserSummary(appId, userId);
-  if (!summary) return { ok: false, response: await appUserNotFoundResponse() };
+  const appUser = await findAppUser(appId, userId);
+  if (!appUser) return { ok: false, response: await appUserNotFoundResponse() };
 
   return {
     ok: true,
     user: {
-      ...summary,
-      metadata: membership.metadata,
-      activeSessionCount: await countUserActiveSessions(userId),
+      ...mapAppUserRow(appUser),
+      metadata: appUser.metadata,
+      activeSessionCount: 0,
     },
   };
-}
-
-async function membershipExistsForEmail(appId: string, email: string): Promise<boolean> {
-  const [row] = await getDb()`
-    SELECT 1
-    FROM app_memberships m
-    JOIN users u ON u.id = m.user_id
-    WHERE m.app_id = ${appId}
-      AND lower(u.email) = ${email}
-    LIMIT 1
-  `;
-  return Boolean(row);
 }
 
 export async function createAppUserForApi(
@@ -233,26 +181,18 @@ export async function createAppUserForApi(
   const name = body.name.trim();
   const metadata = normalizeMetadata(body.metadata ?? null);
 
-  const [existingUser] = await getDb()`
-    SELECT id FROM users WHERE lower(email) = ${email}
-  `;
-
   const errors = [
     ...validateEmail(body.email),
     ...validateRequiredString(body.name, "name", "Name"),
     ...validateAppUserMetadata(body.metadata),
+    ...validatePassword(body.password ?? "", { email, name }),
+    ...validatePasswordConfirm(body.password ?? "", body.passwordConfirm ?? ""),
   ];
-  if (!existingUser) {
-    errors.push(
-      ...validatePassword(body.password ?? "", { email, name }),
-      ...validatePasswordConfirm(body.password ?? "", body.passwordConfirm ?? ""),
-    );
-  }
   if (errors.length) {
     return { ok: false, response: problem(400, "Validation Error", "Invalid request", { errors }) };
   }
 
-  if (await membershipExistsForEmail(appId, email)) {
+  if (await appUserExistsForEmail(appId, email)) {
     return {
       ok: false,
       response: problem(409, "Conflict", "This person is already a user of this application.", {
@@ -267,60 +207,36 @@ export async function createAppUserForApi(
     };
   }
 
-  const passwordHash = existingUser ? null : await hashPassword(body.password);
+  const passwordHash = await hashPassword(body.password!);
 
   try {
     const userId = await getDb().begin(async (tx) => {
-      let userId: string;
-      if (existingUser) {
-        userId = String((existingUser as { id: string }).id);
-        const hasMembership = await tx`
-          SELECT 1 FROM app_memberships WHERE app_id = ${appId} AND user_id = ${userId}
-        `;
-        if (hasMembership) {
-          throw new Error("app_user_exists");
-        }
-        await tx`
-          UPDATE users SET name = ${name}, updated_at = NOW()
-          WHERE id = ${userId}
-        `;
-      } else {
-        const [user] = await tx`
-          INSERT INTO users (email, name, email_verified_at)
-          VALUES (${email}, ${name}, NOW())
-          RETURNING id
-        `;
-        userId = String((user as { id: string }).id);
-        await tx`
-          INSERT INTO password_credentials (user_id, password_hash)
-          VALUES (${userId}, ${passwordHash})
-        `;
-      }
-
-      await tx`
-        INSERT INTO app_memberships (user_id, app_id, metadata)
-        VALUES (${userId}, ${appId}, ${metadata})
+      const [inserted] = await tx`
+        INSERT INTO app_users (app_id, email, name, password_hash, metadata, email_verified_at)
+        VALUES (${appId}, ${email}, ${name}, ${passwordHash}, ${metadata}, NOW())
+        RETURNING id
       `;
+      const id = String((inserted as { id: string }).id);
 
       await writeAuditEvent(
         {
           actorUserId,
           action: "app_user.created",
-          resourceType: "app_membership",
-          resourceId: `${appId}:${userId}`,
-          payload: { appId, email, linkedExistingUser: Boolean(existingUser) },
+          resourceType: "app_user",
+          resourceId: id,
+          payload: { appId, email },
         },
         tx,
       );
 
-      return userId;
+      return id;
     });
 
     const detail = await getAppUserDetailForApi(appId, userId);
     if (!detail.ok) return detail;
     return { ok: true, user: detail.user };
   } catch (error) {
-    if (error instanceof Error && error.message === "app_user_exists") {
+    if (error instanceof Error && error.message.includes("unique")) {
       return {
         ok: false,
         response: problem(409, "Conflict", "This person is already a user of this application.", {
@@ -347,8 +263,8 @@ export async function patchAppUserForApi(
   const app = await findAppRow(appId);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
 
-  const membership = await findMembership(appId, userId);
-  if (!membership) return { ok: false, response: await appUserNotFoundResponse() };
+  const appUser = await findAppUser(appId, userId);
+  if (!appUser) return { ok: false, response: await appUserNotFoundResponse() };
 
   if (
     body.name === undefined &&
@@ -375,35 +291,27 @@ export async function patchAppUserForApi(
     return { ok: false, response: problem(400, "Validation Error", "Invalid request", { errors }) };
   }
 
-  if (body.name !== undefined) {
-    await getDb()`
-      UPDATE users SET name = ${body.name.trim()}, updated_at = NOW()
-      WHERE id = ${userId}
-    `;
-  }
-
   const metadata =
-    body.metadata === undefined
-      ? membership.metadata
-      : normalizeMetadata(body.metadata);
-
-  const status = body.membershipStatus ?? membership.status;
+    body.metadata === undefined ? appUser.metadata : normalizeMetadata(body.metadata);
+  const status = body.membershipStatus ?? appUser.status;
+  const name = body.name !== undefined ? body.name.trim() : appUser.name;
 
   await getDb()`
-    UPDATE app_memberships
+    UPDATE app_users
     SET
+      name = ${name},
       status = ${status},
       metadata = ${metadata},
       updated_at = NOW()
     WHERE app_id = ${appId}
-      AND user_id = ${userId}
+      AND id = ${userId}
   `;
 
   await writeAuditEvent({
     actorUserId,
     action: status === "disabled" ? "app_user.disabled" : "app_user.updated",
-    resourceType: "app_membership",
-    resourceId: `${appId}:${userId}`,
+    resourceType: "app_user",
+    resourceId: userId,
     payload: { appId, membershipStatus: status },
   });
 
@@ -453,15 +361,8 @@ async function findAppUserInviteByToken(rawToken: string): Promise<AppUserInvite
   };
 }
 
-async function userExistsByEmail(email: string): Promise<boolean> {
-  const [row] = await getDb()`
-    SELECT id FROM users WHERE lower(email) = ${email} AND status = 'active'
-  `;
-  return Boolean(row);
-}
-
 export async function buildAppUserInvitePreview(
-  req: Request,
+  _req: Request,
   rawToken: string,
 ): Promise<AppUserInvitePreviewResponse | Response> {
   const invite = await findAppUserInviteByToken(rawToken);
@@ -479,9 +380,6 @@ export async function buildAppUserInvitePreview(
   }
 
   const status = inviteStatus(invite);
-  const session = await resolveSession(req);
-  const sessionUser = session ? await getUserById(session.userId) : null;
-  const emailMatches = Boolean(sessionUser && normalizeEmail(sessionUser.email) === invite.email);
 
   return {
     status,
@@ -490,11 +388,10 @@ export async function buildAppUserInvitePreview(
     appId: invite.app_id,
     appName: app.name,
     expiresAt: invite.expires_at.toISOString(),
-    accountExists: await userExistsByEmail(invite.email),
+    accountExists: await appUserExistsForEmail(invite.app_id, invite.email),
     viewer: {
-      authenticated: Boolean(sessionUser),
-      emailMatches,
-      email: sessionUser?.email,
+      authenticated: false,
+      emailMatches: false,
     },
   };
 }
@@ -519,7 +416,7 @@ export async function createAppUserInviteForApi(
   const email = normalizeEmail(body.email);
   const invitedName = body.invitedName.trim();
 
-  if (await membershipExistsForEmail(appId, email)) {
+  if (await appUserExistsForEmail(appId, email)) {
     return {
       ok: false,
       response: problem(409, "Conflict", "This person is already a user of this application.", {
@@ -591,28 +488,11 @@ export async function createAppUserInviteForApi(
   }
 }
 
-async function applyAppUserMembership(
-  tx: SQL,
-  invite: AppUserInviteRow,
-  userId: string,
-): Promise<void> {
-  await tx`
-    INSERT INTO app_memberships (user_id, app_id)
-    VALUES (${userId}, ${invite.app_id})
-    ON CONFLICT (user_id, app_id) DO NOTHING
-  `;
-  await tx`
-    UPDATE app_user_invites
-    SET status = 'accepted', accepted_at = NOW()
-    WHERE id = ${invite.id}
-  `;
-}
-
 export async function acceptAppUserInvite(
-  req: BunRequest,
+  _req: BunRequest,
   rawToken: string,
   body: AcceptAppUserInviteRequest,
-): Promise<{ ok: true; userId: string; setCookie?: string } | { ok: false; response: Response }> {
+): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
   const invite = await findAppUserInviteByToken(rawToken);
   if (!invite) {
     return {
@@ -633,65 +513,19 @@ export async function acceptAppUserInvite(
     };
   }
 
-  const accountExists = await userExistsByEmail(invite.email);
-  const session = await resolveSession(req);
-
-  if (accountExists) {
-    if (!session) {
-      return {
-        ok: false,
-        response: problem(401, "Unauthorized", "Sign in to accept this invitation.", {
-          code: "AuthenticationRequired",
-        }),
-      };
-    }
-    const user = await getUserById(session.userId);
-    if (!user || normalizeEmail(user.email) !== invite.email) {
-      return {
-        ok: false,
-        response: problem(403, "Forbidden", "Sign in with the email address that received this invitation.", {
-          errors: [
-            {
-              field: "_auth",
-              code: ErrorCodes.INVITE_EMAIL_MISMATCH,
-              message: "Signed-in account does not match this invitation",
-            },
-          ],
-        }),
-      };
-    }
-
-    if (await membershipExistsForEmail(invite.app_id, invite.email)) {
-      return {
-        ok: false,
-        response: problem(409, "Conflict", "You are already a user of this application.", {
-          errors: [
-            {
-              field: "_invite",
-              code: ErrorCodes.APP_USER_EXISTS,
-              message: "Already registered for this application",
-            },
-          ],
-        }),
-      };
-    }
-
-    const userId = user.id;
-    await getDb().begin(async (tx) => {
-      await applyAppUserMembership(tx, invite, userId);
-      await writeAuditEvent(
-        {
-          actorUserId: userId,
-          action: "app_user_invite.accepted",
-          resourceType: "app_user_invite",
-          resourceId: invite.id,
-          payload: { appId: invite.app_id, email: invite.email },
-        },
-        tx,
-      );
-    });
-
-    return { ok: true, userId };
+  if (await appUserExistsForEmail(invite.app_id, invite.email)) {
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "You are already a user of this application.", {
+        errors: [
+          {
+            field: "_invite",
+            code: ErrorCodes.APP_USER_EXISTS,
+            message: "Already registered for this application",
+          },
+        ],
+      }),
+    };
   }
 
   const name = (body.name?.trim() || invite.invited_name).trim();
@@ -707,42 +541,40 @@ export async function acceptAppUserInvite(
   const passwordHash = await hashPassword(body.password!);
 
   try {
-    const result = await getDb().begin(async (tx) => {
-      const [user] = await tx`
-        INSERT INTO users (email, name, email_verified_at)
-        VALUES (${invite.email}, ${name}, NOW())
+    const userId = await getDb().begin(async (tx) => {
+      const [inserted] = await tx`
+        INSERT INTO app_users (app_id, email, name, password_hash, email_verified_at)
+        VALUES (${invite.app_id}, ${invite.email}, ${name}, ${passwordHash}, NOW())
         RETURNING id
       `;
-      const userId = String((user as { id: string }).id);
+      const id = String((inserted as { id: string }).id);
+
       await tx`
-        INSERT INTO password_credentials (user_id, password_hash)
-        VALUES (${userId}, ${passwordHash})
+        UPDATE app_user_invites
+        SET status = 'accepted', accepted_at = NOW()
+        WHERE id = ${invite.id}
       `;
-      await applyAppUserMembership(tx, invite, userId);
+
       await writeAuditEvent(
         {
-          actorUserId: userId,
+          actorUserId: null,
           action: "app_user_invite.accepted",
           resourceType: "app_user_invite",
           resourceId: invite.id,
-          payload: { appId: invite.app_id, email: invite.email, createdUser: true },
+          payload: { appId: invite.app_id, email: invite.email, appUserId: id },
         },
         tx,
       );
-      return userId;
+
+      return id;
     });
 
-    const { token, expiresAt } = await createSession(result, req);
-    return {
-      ok: true,
-      userId: result,
-      setCookie: sessionCookieHeader(token, expiresAt),
-    };
+    return { ok: true, userId };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
       return {
         ok: false,
-        response: problem(409, "Conflict", "An account with this email already exists. Sign in to accept the invitation.", {
+        response: problem(409, "Conflict", "An account with this email already exists for this application.", {
           errors: [{ field: "email", code: ErrorCodes.APP_USER_EXISTS, message: "Account already exists" }],
         }),
       };
@@ -752,7 +584,7 @@ export async function acceptAppUserInvite(
 }
 
 export async function declineAppUserInvite(
-  req: BunRequest,
+  _req: BunRequest,
   rawToken: string,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
   const invite = await findAppUserInviteByToken(rawToken);
@@ -775,35 +607,6 @@ export async function declineAppUserInvite(
     };
   }
 
-  const accountExists = await userExistsByEmail(invite.email);
-  const session = await resolveSession(req);
-
-  if (accountExists) {
-    if (!session) {
-      return {
-        ok: false,
-        response: problem(401, "Unauthorized", "Sign in to decline this invitation.", {
-          code: "AuthenticationRequired",
-        }),
-      };
-    }
-    const user = await getUserById(session.userId);
-    if (!user || normalizeEmail(user.email) !== invite.email) {
-      return {
-        ok: false,
-        response: problem(403, "Forbidden", "Sign in with the email address that received this invitation.", {
-          errors: [
-            {
-              field: "_auth",
-              code: ErrorCodes.INVITE_EMAIL_MISMATCH,
-              message: "Signed-in account does not match this invitation",
-            },
-          ],
-        }),
-      };
-    }
-  }
-
   await getDb()`
     UPDATE app_user_invites
     SET status = 'declined', declined_at = NOW()
@@ -811,7 +614,7 @@ export async function declineAppUserInvite(
   `;
 
   await writeAuditEvent({
-    actorUserId: session?.userId ?? null,
+    actorUserId: null,
     action: "app_user_invite.declined",
     resourceType: "app_user_invite",
     resourceId: invite.id,

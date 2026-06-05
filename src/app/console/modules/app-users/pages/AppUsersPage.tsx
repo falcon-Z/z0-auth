@@ -192,16 +192,6 @@ export function AppUsersPage() {
                 ),
               },
               {
-                id: "console",
-                header: "Console",
-                cell: (row) =>
-                  row.isInstanceMember ? (
-                    <span className="text-muted-foreground text-sm">Also on team</span>
-                  ) : (
-                    "—"
-                  ),
-              },
-              {
                 id: "actions",
                 header: "",
                 cell: (row) =>

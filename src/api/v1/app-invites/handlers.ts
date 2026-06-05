@@ -30,10 +30,7 @@ export async function handleAcceptAppUserInvite(req: RoutedRequest): Promise<Res
   const result = await acceptAppUserInvite(req, tokenFrom(req), parsed.body);
   if (!result.ok) return result.response;
 
-  const headers = new Headers({ "Content-Type": "application/json; charset=utf-8" });
-  if (result.setCookie) headers.set("Set-Cookie", result.setCookie);
-
-  return new Response(JSON.stringify({ ok: true, userId: result.userId }), { status: 200, headers });
+  return json({ ok: true, userId: result.userId });
 }
 
 export async function handleDeclineAppUserInvite(req: RoutedRequest): Promise<Response> {

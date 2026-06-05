@@ -193,11 +193,12 @@ components:
       enum: [active, disabled]
     AppUserSummary:
       type: object
-      required: [userId, appId, email, name, membershipStatus, isInstanceMember, joinedAt]
+      required: [userId, appId, email, name, membershipStatus, joinedAt]
       properties:
         userId:
           type: string
           format: uuid
+          description: App-local identity (`app_users.id`), not a console `users.id`.
         appId:
           type: string
           format: uuid
@@ -208,9 +209,6 @@ components:
           type: string
         membershipStatus:
           $ref: "#/components/schemas/AppUserMembershipStatus"
-        isInstanceMember:
-          type: boolean
-          description: True when this person can also access the console (separate auth).
         joinedAt:
           type: string
           format: date-time
@@ -228,7 +226,7 @@ components:
               type: integer
     CreateAppUserRequest:
       type: object
-      required: [email, name]
+      required: [email, name, password, passwordConfirm]
       properties:
         email:
           type: string

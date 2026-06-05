@@ -42,15 +42,12 @@ export function CreateAppUserDialog({ appId, open, onOpenChange, onCreated }: Pr
     setSubmitting(true);
     setFieldErrors({});
     try {
-      const body: Parameters<typeof createAppUser>[1] = {
+      await createAppUser(appId, {
         email: email.trim(),
         name: name.trim(),
-      };
-      if (password) {
-        body.password = password;
-        body.passwordConfirm = passwordConfirm;
-      }
-      await createAppUser(appId, body);
+        password,
+        passwordConfirm,
+      });
       reset();
       onOpenChange(false);
       onCreated();
@@ -71,8 +68,8 @@ export function CreateAppUserDialog({ appId, open, onOpenChange, onCreated }: Pr
             <DialogTitle>Add app user</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            For a new email, set a password they can use to sign in. For an existing email, leave
-            password blank to link them to this app only.
+            Each application has its own user accounts. Set a password this person will use to sign
+            in to this app only.
           </p>
           <div className="grid gap-4 py-4">
             <FormField label="Name" htmlFor="name" error={fieldErrors.name}>
@@ -94,6 +91,7 @@ export function CreateAppUserDialog({ appId, open, onOpenChange, onCreated }: Pr
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
+                required
               />
             </FormField>
             <FormField label="Confirm password" htmlFor="passwordConfirm" error={fieldErrors.passwordConfirm}>
@@ -103,6 +101,7 @@ export function CreateAppUserDialog({ appId, open, onOpenChange, onCreated }: Pr
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
                 autoComplete="new-password"
+                required
               />
             </FormField>
           </div>

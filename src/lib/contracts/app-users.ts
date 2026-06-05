@@ -6,7 +6,6 @@ export type AppUserSummary = {
   email: string;
   name: string;
   membershipStatus: AppUserMembershipStatus;
-  isInstanceMember: boolean;
   joinedAt: string;
 };
 
@@ -18,9 +17,8 @@ export type AppUserDetail = AppUserSummary & {
 export type CreateAppUserRequest = {
   email: string;
   name: string;
-  /** Required when creating a new identity; omit when linking an existing email. */
-  password?: string;
-  passwordConfirm?: string;
+  password: string;
+  passwordConfirm: string;
   metadata?: Record<string, unknown> | null;
 };
 

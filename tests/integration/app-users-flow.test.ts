@@ -12,6 +12,7 @@ const run = hasTestDatabase() ? describe : describe.skip;
 
 const ownerPassword = makeStrongPassword();
 const appUserPassword = makeStrongPassword();
+const appBPassword = makeStrongPassword();
 const REDIRECT = "http://localhost:3000/oauth/callback";
 
 function sessionCookieFromResponse(res: Response): string | undefined {
@@ -48,12 +49,12 @@ async function login() {
   return { csrf, cookie: sessionCookieFromResponse(res)! };
 }
 
-async function createApp(csrf: string, cookie: string) {
+async function createApp(csrf: string, cookie: string, name: string) {
   const res = await dispatchApi(
     buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: cookie },
-      body: { name: "Users App", redirectUris: [REDIRECT] },
+      body: { name, redirectUris: [REDIRECT] },
     }),
   );
   expect(res.status).toBe(201);
@@ -61,8 +62,9 @@ async function createApp(csrf: string, cookie: string) {
   return body.id;
 }
 
-run("M05 app users", () => {
+run("M05 app users (Option B)", () => {
   let appId = "";
+  let appBId = "";
   let userId = "";
   let inviteToken = "";
 
@@ -71,7 +73,8 @@ run("M05 app users", () => {
     resetRateLimitsForTests();
     await completeSetup();
     const { csrf, cookie } = await login();
-    appId = await createApp(csrf, cookie);
+    appId = await createApp(csrf, cookie, "Users App A");
+    appBId = await createApp(csrf, cookie, "Users App B");
   });
 
   afterAll(async () => {
@@ -80,7 +83,7 @@ run("M05 app users", () => {
 
   test("non-member cannot list app users", async () => {
     const res = await dispatchApi(buildRequest("GET", `/api/v1/apps/${appId}/users`));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   test("create app user", async () => {
@@ -125,21 +128,24 @@ run("M05 app users", () => {
     expect(search.users.length).toBe(1);
   });
 
-  test("instance member can also be added as app user", async () => {
+  test("same email on another app creates separate account", async () => {
     const { csrf, cookie } = await login();
     const res = await dispatchApi(
-      buildRequest("POST", `/api/v1/apps/${appId}/users`, {
+      buildRequest("POST", `/api/v1/apps/${appBId}/users`, {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
         body: {
-          email: "owner@example.com",
-          name: "Owner User",
+          email: "enduser@example.com",
+          name: "End User B",
+          password: appBPassword,
+          passwordConfirm: appBPassword,
         },
       }),
     );
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { isInstanceMember: boolean };
-    expect(body.isInstanceMember).toBe(true);
+    const body = (await res.json()) as { userId: string; appId: string };
+    expect(body.appId).toBe(appBId);
+    expect(body.userId).not.toBe(userId);
   });
 
   test("disable app user membership", async () => {
@@ -173,6 +179,8 @@ run("M05 app users", () => {
       buildRequest("GET", `/api/v1/app-invites/${inviteToken}`),
     );
     expect(previewRes.status).toBe(200);
+    const preview = (await previewRes.json()) as { accountExists: boolean };
+    expect(preview.accountExists).toBe(false);
 
     const invitedPassword = makeStrongPassword();
     const acceptCsrf = await fetchCsrfToken(dispatchApi);
