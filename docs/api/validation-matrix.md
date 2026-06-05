@@ -151,6 +151,37 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `DELETE …/scopes/:scopeId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
 | `DELETE …/scopes/:scopeId` | `scopeId` | Scope exists | `scope_not_found` | 404 | Refresh list |
 
+## App users (`/api/v1/apps/:appId/users`)
+
+> **Option B (locked):** End-user `userId` = `app_users.id`. Email unique per `appId` only. Rows below describe current code (`app_memberships` + global `users`) — **superseded**; update when M05 Option B rewrite ships.
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| All | Session | Instance member | `permission_denied` | 403 | Access denied |
+| All | `appId` | App exists | `app_not_found` | 404 | Not found |
+| `GET …/users` | `q` | Optional search on email/name | — | 200 | Search + table |
+| `POST …/users` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `POST …/users` | `email`, `name` | Valid email + non-empty name | `required` / `invalid_email` | 400 | Inline |
+| `POST …/users` | `password` | Required for new email; policy + confirm | `password_policy` / `password_mismatch` | 400 | Checklist |
+| `POST …/users` | `email` | Not already on this app | `app_user_exists` | 409 | Inline on email |
+| `POST …/users` | `metadata` | Optional JSON object ≤ 4 KB | `invalid_metadata` | 400 | Inline |
+| `GET …/users/:userId` | — | Membership exists | `app_user_not_found` | 404 | Not found |
+| `PATCH …/users/:userId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
+| `PATCH …/users/:userId` | `membershipStatus` | `active` or `disabled` | `required` | 400 | Inline |
+| `GET …/users/invites` | — | Pending non-expired | — | 200 | Invites list |
+| `POST …/users/invites` | `email`, `invitedName` | Valid + not already on app | `app_user_exists` / `invite_invalid` | 409 | Inline |
+| `DELETE …/invites/:id` | CSRF | Pending invite for app | `invite_invalid` | 404 | Refresh list |
+
+## App user invites (`/api/v1/app-invites/:token`)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| `GET …/:token` | `token` | Known invite | `invite_invalid` | 404 | Invalid invite (M06 HTML) |
+| `POST …/accept` | CSRF | Required | `csrf_invalid` | 403 | Refresh token |
+| `POST …/accept` | New user | `name`, password policy | `password_policy` | 400 | Checklist |
+| `POST …/accept` | Existing user | Session + email match | `invite_email_mismatch` | 403 | Wrong account |
+| `POST …/decline` | CSRF | Valid pending invite | `invite_invalid` | 404 | Invalid state |
+
 ## Password reset (`/api/auth/forgot-password`, `/api/auth/reset-password`)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

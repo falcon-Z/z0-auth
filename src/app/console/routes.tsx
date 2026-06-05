@@ -9,6 +9,7 @@ import { MembersModule } from "./modules/members/MembersModule";
 import { ProfileModule } from "./modules/profile/ProfileModule";
 import { CommunicationsModule } from "./modules/communications/CommunicationsModule";
 import { ScopesModule } from "./modules/scopes/ScopesModule";
+import { AppUsersModule } from "./modules/app-users/AppUsersModule";
 
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/": <DashboardPage />,
@@ -16,6 +17,7 @@ const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/apps": <AppsModule />,
   "/communications/email": <CommunicationsModule />,
   "/scopes": <ScopesModule />,
+  "/app-users": <AppUsersModule />,
   "/profile": <ProfileModule />,
 };
 
@@ -26,6 +28,7 @@ export const WIRED_CONSOLE_NAV_PATHS = [
   "/apps",
   "/communications/email",
   "/scopes",
+  "/app-users",
   "/profile",
 ] as const;
 
@@ -36,6 +39,7 @@ export function routePathForNav(path: string): string {
     path === "/apps" ||
     path === "/communications/email" ||
     path === "/scopes" ||
+    path === "/app-users" ||
     path === "/profile"
   ) {
     return `${path}/*`;

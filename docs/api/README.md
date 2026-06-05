@@ -23,7 +23,8 @@ Spec-driven contracts for the single-account IAM model.
 | [references/applications](./references/apps.openapi.yaml) | Applications, credentials (M03), scopes (M04) |
 | [references/settings](./references/settings.openapi.yaml) | SMTP and email settings (M08) |
 | [references/console.openapi.yaml](./references/console.openapi.yaml) | Dashboard summary |
-| [references/users.openapi.yaml](./references/users.openapi.yaml) | User directory (instance members) |
+| [references/app-users.openapi.yaml](./references/app-users.openapi.yaml) | App end users per application (M05) |
+| [references/users.openapi.yaml](./references/users.openapi.yaml) | **Removed** — was global user directory (POC); use app-users + members |
 | [references/sessions.openapi.yaml](./references/sessions.openapi.yaml) | Session management |
 | [references/oauth.openapi.yaml](./references/oauth.openapi.yaml) | OAuth 2.1 (planned) |
 

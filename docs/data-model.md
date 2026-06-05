@@ -10,11 +10,22 @@ One z0-auth deployment serves one account owner team and their registered apps. 
 | instance member | Console operator with full platform access in v1 |
 | organization | Display name stored on the instance (from setup) |
 | app | Registered client application |
-| app user | End user who signs in through `/auth` for an app |
+| app user | End user who signs in through `/auth` for **one** app — isolated from other apps and from console |
+
+## Two identity realms (locked)
+
+| Realm | Who | Storage | Email unique |
+|-------|-----|---------|--------------|
+| **Console** | Developers operating this IAM instance | `users` + `password_credentials` + `instance_members` | Globally on `users` |
+| **App** | End users of a registered app | `app_users` per `app_id` | Per app: `(app_id, email)` |
+
+**Option B:** Apps do not share end-user identities. The same email on App A and App B is **two accounts**, two passwords, two sign-in flows. Console `users` are not used for app sign-in.
 
 ## Authorization (v1)
 
-Console and instance APIs: user is signed in **and** has a row in `instance_members`.
+Console and instance APIs: signed in **and** `instance_members`.
+
+App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no cross-app access.
 
 No role tiers, permission matrix, or organization switcher.
 
@@ -125,11 +136,47 @@ Singleton row (`id = 1`). Outbound email for password reset and test send.
 | `expires_at` | TIMESTAMPTZ | 1 hour TTL |
 | `used_at` | TIMESTAMPTZ | Single-use |
 
+### `app_users` (M05 — target, Option B)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | App-local identity (not `users.id`) |
+| `app_id` | UUID → `apps` | CASCADE delete |
+| `email` | TEXT | Lowercase; **unique per app** with `app_id` |
+| `name` | TEXT | |
+| `password_hash` | TEXT | Argon2id; belongs to this app account only |
+| `status` | TEXT | `active`, `disabled` |
+| `metadata` | JSONB | Optional (max 4 KB in API) |
+| `email_verified_at` | TIMESTAMPTZ | Optional |
+| `created_at`, `updated_at` | TIMESTAMPTZ | |
+
+Unique `(app_id, lower(email))`. No FK to `users`.
+
+### `app_user_invites` (M05)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | |
+| `app_id` | UUID → `apps` | |
+| `email` | TEXT | Lowercase; pending invite for this app only |
+| `invited_name` | TEXT | |
+| `token_hash` | TEXT | Unique |
+| `status` | TEXT | `pending`, `accepted`, `declined`, `revoked` |
+| `invited_by_user_id` | UUID → `users` | Console operator who sent invite |
+| `expires_at` | TIMESTAMPTZ | |
+| `accepted_at`, `declined_at` | TIMESTAMPTZ | |
+| `created_at` | TIMESTAMPTZ | |
+
+Accept creates a row in `app_users` only. Unique pending invite per `(app_id, email)`.
+
+### `app_memberships` (0015 — superseded)
+
+Bridged global `users` to apps. **Do not build on this.** Removed in migration `0016` when Option B ships.
+
 ### Later modules
 
 | Table | Purpose |
 |-------|---------|
-| `app_memberships` | App user ↔ app (M05) |
 | `audit_events` | Audit trail (`tenant_id` unused, NULL in v1) |
 
 ## Setup flow
@@ -153,6 +200,8 @@ Singleton row (`id = 1`). Outbound email for password reset and test send.
 | Invites (public token) | `GET /api/v1/invites/:token`, `POST accept/decline` |
 | Applications (M03) | `GET/POST /api/v1/apps`, `GET/PATCH /api/v1/apps/:appId`, credential CRUD under `…/credentials` |
 | App scopes (M04) | `GET/POST /api/v1/apps/:appId/scopes`, `PATCH/DELETE …/scopes/:scopeId` |
+| App users (M05) | `GET/POST /api/v1/apps/:appId/users` — `userId` is `app_users.id`, not global `users.id` |
+| App user invites (public) | `GET /api/v1/app-invites/:token`, `POST accept/decline` |
 | Email settings (M08) | `GET/PUT /api/v1/settings/email`, `POST …/email/test` |
 | Password reset (M08) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (when SMTP enabled) |
 | Session | `isInstanceMember`, `organizationName` — no tenant or permissions |

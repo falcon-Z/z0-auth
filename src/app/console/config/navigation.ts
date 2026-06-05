@@ -107,7 +107,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         title: "App users",
         path: "/app-users",
         icon: BadgeCheck,
-        status: "planned",
+        status: "available",
         module: "M05",
         summary: "End users who sign in through your registered apps.",
       },

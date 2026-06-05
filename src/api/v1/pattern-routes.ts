@@ -8,10 +8,19 @@ import {
   handleRevokeInvite,
 } from "./members/handlers";
 import {
-  handleGetUser,
-  handleListUsers,
-  handlePatchUser,
-} from "./users/handlers";
+  handleAcceptAppUserInvite,
+  handleAppUserInvitePreview,
+  handleDeclineAppUserInvite,
+} from "./app-invites/handlers";
+import {
+  handleCreateAppUser,
+  handleCreateAppUserInvite,
+  handleGetAppUser,
+  handleListAppUserInvites,
+  handleListAppUsers,
+  handlePatchAppUser,
+  handleRevokeAppUserInvite,
+} from "./apps/app-users-handlers";
 import {
   handleListSessions,
   handleRevokeOtherSessions,
@@ -65,9 +74,26 @@ export const v1PatternRoutes: PathRoute[] = [
     pattern: "/api/v1/apps/:appId/scopes/:scopeId",
     handlers: { PATCH: handlePatchScope, DELETE: handleDeleteScope },
   },
+  {
+    pattern: "/api/v1/apps/:appId/users/invites",
+    handlers: { GET: handleListAppUserInvites, POST: handleCreateAppUserInvite },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users/invites/:inviteId",
+    handlers: { DELETE: handleRevokeAppUserInvite },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users",
+    handlers: { GET: handleListAppUsers, POST: handleCreateAppUser },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users/:userId",
+    handlers: { GET: handleGetAppUser, PATCH: handlePatchAppUser },
+  },
   { pattern: "/api/v1/console/summary", handlers: { GET: handleConsoleSummary } },
-  { pattern: "/api/v1/users", handlers: { GET: handleListUsers } },
-  { pattern: "/api/v1/users/:userId", handlers: { GET: handleGetUser, PATCH: handlePatchUser } },
+  { pattern: "/api/v1/app-invites/:token", handlers: { GET: handleAppUserInvitePreview } },
+  { pattern: "/api/v1/app-invites/:token/accept", handlers: { POST: handleAcceptAppUserInvite } },
+  { pattern: "/api/v1/app-invites/:token/decline", handlers: { POST: handleDeclineAppUserInvite } },
   { pattern: "/api/v1/members", handlers: { GET: handleListMembers } },
   { pattern: "/api/v1/members/invites", handlers: { GET: handleListInvites, POST: handleCreateInvite } },
   { pattern: "/api/v1/members/invites/:inviteId", handlers: { DELETE: handleRevokeInvite } },

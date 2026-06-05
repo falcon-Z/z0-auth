@@ -1,0 +1,330 @@
+openapi: 3.1.0
+info:
+  title: z0-auth App Users API
+  version: 0.1.0
+  description: |
+    End users of a registered application (not console instance members).
+    All console routes require a signed-in instance member.
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: AppUsers
+paths:
+  /api/v1/apps/{appId}/users:
+    get:
+      tags: [AppUsers]
+      summary: List app users
+      operationId: listAppUsers
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: App users for this application
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AppUserSummary"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    post:
+      tags: [AppUsers]
+      summary: Create or link app user
+      operationId: createAppUser
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppUserRequest"
+      responses:
+        "201":
+          description: App user created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUserDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+  /api/v1/apps/{appId}/users/{userId}:
+    get:
+      tags: [AppUsers]
+      summary: Get app user
+      operationId: getAppUser
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: App user detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUserDetail"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    patch:
+      tags: [AppUsers]
+      summary: Update app user
+      operationId: patchAppUser
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchAppUserRequest"
+      responses:
+        "200":
+          description: Updated app user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUserDetail"
+  /api/v1/apps/{appId}/users/invites:
+    get:
+      tags: [AppUsers]
+      summary: List pending app user invites
+      operationId: listAppUserInvites
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+      responses:
+        "200":
+          description: Pending invites
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PendingAppUserInvite"
+    post:
+      tags: [AppUsers]
+      summary: Invite app user
+      operationId: createAppUserInvite
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppUserInviteRequest"
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAppUserInviteResponse"
+  /api/v1/app-invites/{token}:
+    get:
+      tags: [AppUsers]
+      summary: Preview app user invite
+      operationId: previewAppUserInvite
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invite preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUserInvitePreviewResponse"
+components:
+  schemas:
+    AppUserMembershipStatus:
+      type: string
+      enum: [active, disabled]
+    AppUserSummary:
+      type: object
+      required: [userId, appId, email, name, membershipStatus, isInstanceMember, joinedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        appId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        membershipStatus:
+          $ref: "#/components/schemas/AppUserMembershipStatus"
+        isInstanceMember:
+          type: boolean
+          description: True when this person can also access the console (separate auth).
+        joinedAt:
+          type: string
+          format: date-time
+    AppUserDetail:
+      allOf:
+        - $ref: "#/components/schemas/AppUserSummary"
+        - type: object
+          required: [metadata, activeSessionCount]
+          properties:
+            metadata:
+              type: object
+              nullable: true
+              additionalProperties: true
+            activeSessionCount:
+              type: integer
+    CreateAppUserRequest:
+      type: object
+      required: [email, name]
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+        passwordConfirm:
+          type: string
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+    PatchAppUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        membershipStatus:
+          $ref: "#/components/schemas/AppUserMembershipStatus"
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+    CreateAppUserInviteRequest:
+      type: object
+      required: [email, invitedName]
+      properties:
+        email:
+          type: string
+          format: email
+        invitedName:
+          type: string
+    CreateAppUserInviteResponse:
+      type: object
+      required: [id, inviteUrl, expiresAt, email, invitedName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        inviteUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        email:
+          type: string
+        invitedName:
+          type: string
+    PendingAppUserInvite:
+      type: object
+      required: [id, email, invitedName, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        invitedName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    AppUserInvitePreviewResponse:
+      type: object
+      required: [status, email, invitedName, appId, appName, expiresAt, accountExists, viewer]
+      properties:
+        status:
+          type: string
+          enum: [pending, accepted, declined, revoked, expired]
+        email:
+          type: string
+        invitedName:
+          type: string
+        appId:
+          type: string
+          format: uuid
+        appName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        accountExists:
+          type: boolean
+        viewer:
+          type: object
+          required: [authenticated, emailMatches]
+          properties:
+            authenticated:
+              type: boolean
+            emailMatches:
+              type: boolean
+            email:
+              type: string

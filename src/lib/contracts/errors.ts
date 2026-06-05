@@ -87,6 +87,12 @@ export const ErrorCodes = {
   SCOPE_TAKEN: "scope_taken",
   /** Scope id is unknown for the application. */
   SCOPE_NOT_FOUND: "scope_not_found",
+  /** User is not registered for this application. */
+  APP_USER_NOT_FOUND: "app_user_not_found",
+  /** Email already has membership on this application. */
+  APP_USER_EXISTS: "app_user_exists",
+  /** Optional metadata JSON is invalid or too large. */
+  INVALID_METADATA: "invalid_metadata",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

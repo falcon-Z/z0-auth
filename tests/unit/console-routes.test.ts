@@ -12,19 +12,22 @@ describe("console routes", () => {
     }
   });
 
-  test("members, apps, scopes, and profile use splat routes for nested pages", () => {
+  test("members, apps, scopes, app-users, and profile use splat routes for nested pages", () => {
     expect(routePathForNav("/members")).toBe("/members/*");
     expect(routePathForNav("/apps")).toBe("/apps/*");
     expect(routePathForNav("/scopes")).toBe("/scopes/*");
+    expect(routePathForNav("/app-users")).toBe("/app-users/*");
     expect(routePathForNav("/communications/email")).toBe("/communications/email/*");
     expect(routePathForNav("/profile")).toBe("/profile/*");
     const membersRoute = consoleRoutes.find((route) => route.path === "/members/*");
     const appsRoute = consoleRoutes.find((route) => route.path === "/apps/*");
     const scopesRoute = consoleRoutes.find((route) => route.path === "/scopes/*");
+    const appUsersRoute = consoleRoutes.find((route) => route.path === "/app-users/*");
     const profileRoute = consoleRoutes.find((route) => route.path === "/profile/*");
     expect(membersRoute?.element).toBeDefined();
     expect(appsRoute?.element).toBeDefined();
     expect(scopesRoute?.element).toBeDefined();
+    expect(appUsersRoute?.element).toBeDefined();
     expect(profileRoute?.element).toBeDefined();
   });
 
