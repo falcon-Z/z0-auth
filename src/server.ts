@@ -10,6 +10,7 @@ import { initializeInstanceKeys } from "./api/lib/instance-keys";
 import { printStartupSummary } from "./api/lib/startup-log";
 await initializeInstanceKeys();
 import { authWebRoutes } from "./web/auth/routes";
+import { appInviteWebRoutes } from "./web/auth/app-invite-routes";
 import { inviteWebRoutes } from "./web/auth/invite-routes";
 import { passwordResetWebRoutes } from "./web/auth/password-reset-routes";
 import { oauthWebRoutes } from "./web/oauth/routes";
@@ -24,6 +25,7 @@ const server = serve({
   routes: {
     ...authWebRoutes,
     ...inviteWebRoutes,
+    ...appInviteWebRoutes,
     ...passwordResetWebRoutes,
     ...oauthWebRoutes,
     ...apiRouteMap,

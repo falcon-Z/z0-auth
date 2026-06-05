@@ -24,6 +24,7 @@ import { findAppRow } from "./apps";
 import { sha256Hex, randomToken } from "./crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
+import { countActiveAppUserSessions } from "./app-session";
 import { hashPassword } from "./password";
 import { normalizeMetadata, validateAppUserMetadata } from "./app-user-metadata";
 
@@ -151,12 +152,14 @@ export async function getAppUserDetailForApi(
   const appUser = await findAppUser(appId, userId);
   if (!appUser) return { ok: false, response: await appUserNotFoundResponse() };
 
+  const activeSessionCount = await countActiveAppUserSessions(userId);
+
   return {
     ok: true,
     user: {
       ...mapAppUserRow(appUser),
       metadata: appUser.metadata,
-      activeSessionCount: 0,
+      activeSessionCount,
     },
   };
 }

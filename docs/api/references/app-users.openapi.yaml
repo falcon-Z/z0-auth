@@ -42,7 +42,7 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/NotFound"
     post:
       tags: [AppUsers]
-      summary: Create or link app user
+      summary: Create app user
       operationId: createAppUser
       security:
         - CsrfHeader: []

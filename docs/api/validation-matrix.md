@@ -181,6 +181,26 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST …/accept` | — | `name`, password policy; creates `app_users` row | `password_policy` / `app_user_exists` | 400 / 409 | Checklist |
 | `POST …/decline` | CSRF | Valid pending invite | `invite_invalid` | 404 | Invalid state |
 
+## App hosted auth (`/auth/login`, `/auth/register`, `/auth/app-invite/:token`)
+
+> **Realm:** `client_id` (query, form, or `z0_oauth_return`) → app sign-in (`app_users`, `z0_app_session`). No `client_id` → console sign-in (`users`, `z0_session`).
+
+| Page / action | Input | Rule | Code | HTTP | UI |
+|---------------|-------|------|------|------|-----|
+| `GET /auth/login` | `client_id` | Resolves to active credential + active app | — | 200 / error page | App name in lead |
+| `GET /auth/login` | `client_id` | Unknown or disabled app | — | 200 error card | Sign-in unavailable |
+| `POST /auth/login` | App realm | Authenticates `app_users` for resolved `app_id` | `invalid_credentials` | 401 | Generic form error |
+| `POST /auth/login` | App realm | Disabled app user | `invalid_credentials` | 401 | Generic form error |
+| `POST /auth/login` | App realm | Success issues `z0_app_session` | — | 303 / HX-Redirect | Resume OAuth or `return_to` |
+| `GET /auth/register` | No `client_id` | Console invite-only message | — | 200 | Invitation only |
+| `GET /auth/register` | `client_id` | Self-registration form | — | 200 | Create account |
+| `POST /auth/register` | `client_id` | Email unique per app | `app_user_exists` | 409 | Inline on email |
+| `POST /auth/register` | Password | Policy + confirm | `password_policy` / `password_mismatch` | 400 | Checklist |
+| `POST /auth/register` | Success | Creates `app_users` + `z0_app_session` | — | 303 | OAuth resume |
+| `GET /oauth/authorize` | — | No app session → login with `client_id` | — | 302 | Hosted login |
+| `GET /oauth/authorize` | — | App session for same app → code redirect | — | 302 | Back to app |
+| Cross-app | Same email | Separate `app_users` rows; A password fails on B `client_id` | `invalid_credentials` | 401 | — |
+
 ## Password reset (`/api/auth/forgot-password`, `/api/auth/reset-password`)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

@@ -1,8 +1,10 @@
 import type { BunRequest } from "bun";
 
+import { clientIdFromAuthorizePath, resolveAuthRealm } from "../../api/lib/auth-realm";
 import { withDatabaseErrorHandling } from "../../api/lib/database-errors";
+import { resolveAppSession } from "../../api/lib/app-session";
+import { getDb } from "../../api/lib/db";
 import { problem } from "../../api/lib/http";
-import { resolveSession } from "../../api/lib/session";
 
 const OAUTH_RETURN_COOKIE = "z0_oauth_return";
 
@@ -36,6 +38,17 @@ function validateAuthorizeRequest(url: URL): Response | null {
   return null;
 }
 
+async function findAppIdForClient(clientId: string): Promise<string | null> {
+  const [row] = await getDb()`
+    SELECT app_id
+    FROM app_credentials
+    WHERE client_id = ${clientId}
+      AND status = 'active'
+    LIMIT 1
+  `;
+  return row ? String((row as { app_id: string }).app_id) : null;
+}
+
 function redirectWithCode(url: URL): Response {
   const redirectUri = url.searchParams.get("redirect_uri")!;
   const state = url.searchParams.get("state");
@@ -48,18 +61,34 @@ function redirectWithCode(url: URL): Response {
   return new Response(null, { status: 302, headers });
 }
 
+function loginRedirectForAuthorize(req: BunRequest, authorizePath: string): Response {
+  const clientId = clientIdFromAuthorizePath(authorizePath);
+  const params = new URLSearchParams({
+    return_to: authorizePath,
+  });
+  if (clientId) params.set("client_id", clientId);
+
+  const headers = new Headers({
+    Location: `/auth/login?${params.toString()}`,
+  });
+  headers.append("Set-Cookie", setReturnCookie(authorizePath));
+  return new Response(null, { status: 302, headers });
+}
+
 async function getAuthorize(req: BunRequest): Promise<Response> {
   const url = new URL(req.url);
   const invalid = validateAuthorizeRequest(url);
   if (invalid) return invalid;
 
-  const session = await resolveSession(req);
-  if (!session) {
-    const headers = new Headers({
-      Location: `/auth/login?return_to=${encodeURIComponent(`${url.pathname}${url.search}`)}`,
-    });
-    headers.append("Set-Cookie", setReturnCookie(`${url.pathname}${url.search}`));
-    return new Response(null, { status: 302, headers });
+  const clientId = url.searchParams.get("client_id")!;
+  const appId = await findAppIdForClient(clientId);
+  if (!appId) {
+    return problem(400, "Bad Request", "Unknown client_id");
+  }
+
+  const appSession = await resolveAppSession(req);
+  if (!appSession || appSession.appId !== appId) {
+    return loginRedirectForAuthorize(req, `${url.pathname}${url.search}`);
   }
 
   return redirectWithCode(url);
@@ -70,6 +99,15 @@ async function getResume(req: BunRequest): Promise<Response> {
   if (!pending) {
     return Response.redirect(new URL("/", req.url), 302);
   }
+
+  const realm = await resolveAuthRealm(req, { returnTo: pending });
+  if (realm.mode === "app") {
+    const appSession = await resolveAppSession(req);
+    if (!appSession || appSession.appId !== realm.appId) {
+      return loginRedirectForAuthorize(req, pending);
+    }
+  }
+
   return Response.redirect(new URL(pending, req.url), 302);
 }
 

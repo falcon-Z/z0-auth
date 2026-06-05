@@ -38,3 +38,7 @@ CREATE UNIQUE INDEX app_user_invites_pending_app_email_unique
 
 CREATE INDEX app_user_invites_app_status_expires_idx
   ON app_user_invites (app_id, status, expires_at);
+
+INSERT INTO schema_migrations (version)
+VALUES ('0015_app_users')
+ON CONFLICT (version) DO NOTHING;

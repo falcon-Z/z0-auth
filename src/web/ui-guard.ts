@@ -1,16 +1,26 @@
 import type { BunRequest } from "bun";
 
+import type { AppAuthRealm, AuthRealm } from "../api/lib/auth-realm";
 import { handleDatabaseConnectionError } from "../api/lib/database-errors";
+import { resolveAppSession } from "../api/lib/app-session";
 import { isSetupComplete } from "../api/lib/platform";
 import { resolveSession } from "../api/lib/session";
+import { safeReturnPath } from "./safe-return-path";
 
 export type AuthPage = "setup" | "login" | "register" | "forgot-password" | "home";
+
+function appRealm(realm: AuthRealm): AppAuthRealm | null {
+  return realm.mode === "app" ? realm : null;
+}
 
 export async function redirectForAuthPage(
   req: BunRequest,
   page: AuthPage,
+  realm: AuthRealm = { mode: "console" },
 ): Promise<Response | null> {
   const url = new URL(req.url);
+
+  if (realm.mode === "invalid") return null;
 
   try {
     const complete = await isSetupComplete();
@@ -22,6 +32,19 @@ export async function redirectForAuthPage(
 
     if (page === "setup") {
       return Response.redirect(new URL("/auth/login", url), 302);
+    }
+
+    const app = appRealm(realm);
+    if (app) {
+      const appSession = await resolveAppSession(req);
+      const signedInToApp = Boolean(appSession && appSession.appId === app.appId);
+
+      if (signedInToApp && (page === "login" || page === "register")) {
+        const location = safeReturnPath(url.searchParams.get("return_to"), "/oauth/resume");
+        return Response.redirect(new URL(location, url), 302);
+      }
+
+      return null;
     }
 
     const session = await resolveSession(req);
