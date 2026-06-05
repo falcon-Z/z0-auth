@@ -12,10 +12,30 @@ Self-hosted **identity and access management** for developers building apps (sim
 
 ## What we provide
 
-- **Console** — React admin UI for instance setup, members, apps, scopes, app users, email settings, profile/security.
-- **Hosted auth** — Server-rendered `/auth/*` for login, signup, invites, password reset.
-- **Authorization server** — `/oauth/*` + token and OIDC endpoints (in progress; see Todoist M09–M10).
-- **JSON API** — `/api/*` for the console and for server-side integration.
+Self-hostable **Auth0 / Clerk** for your apps: you run the IAM instance; your apps redirect end users to us; users come back signed in.
+
+- **Console** — React admin UI for instance setup, members, apps, credentials, scopes, app users, email settings, profile/security.
+- **Hosted app auth** — Branded sign-in/sign-up pages your end users see (email + password today; Google, Apple, GitHub, Facebook, etc. per app when social connections ship).
+- **Authorization server** — `/oauth/*` + token and OIDC endpoints (M09–M10): your app is the OAuth client; we are the identity provider.
+- **JSON API** — `/api/*` for the console and server-side integration.
+
+### End-user experience (target)
+
+1. Your app sends the user to us (OAuth authorize URL with your `client_id`).
+2. The user sees **your app’s hosted page** — sign up or sign in (email/password, and later “Continue with Google” / Apple / GitHub / Facebook when enabled for that app).
+3. After success, we redirect back to **your app’s redirect URI** with an authorization code (or session, per integration).
+4. Your app exchanges the code for tokens and treats the user as logged in.
+
+Same email on two different apps = two separate accounts (isolated per app), unless you explicitly link identities later.
+
+### Console vs app sign-in (two audiences)
+
+| Who | What they see | After login |
+|-----|---------------|-------------|
+| **You / your team** | `/auth/login` (no app context) — manage this IAM instance | Console at `/` |
+| **Your app’s users** | Hosted page with app context (`client_id`) — sign up or sign in **for that app** | Redirect to your app, logged in |
+
+We use one `/auth/*` UI stack for both; **app context** (`client_id`) decides whether we authenticate an app user or a console operator.
 
 ## Application integration
 
@@ -34,6 +54,8 @@ One **platform instance** per deployment (single account owner). **No** internal
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
-Planned for v1: app-user sign-in (M06), OAuth/OIDC (M09–M10), MFA, passkeys, magic links, audit, Docker self-host.
+Planned for v1: app-user hosted sign-in/sign-up + redirect (M06), OAuth/OIDC for customer apps (M09–M10), MFA, passkeys, magic links, audit, Docker self-host.
 
-Post-v1 / TBD: enterprise SSO (SAML/OIDC broker), analytics, device flow.
+**Social connections** (Google, Apple, GitHub, Facebook, etc. per app — Clerk/Auth0-style): planned module after core hosted auth + OAuth ship; console Federation nav is placeholder until then.
+
+Post-v1 / TBD: enterprise SSO (SAML/OIDC broker for workforce), analytics, device flow.

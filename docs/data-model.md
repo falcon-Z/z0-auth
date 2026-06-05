@@ -27,14 +27,14 @@ Console and instance APIs: signed in **and** `instance_members`.
 
 App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no cross-app access. App users may **self-register** (not invite-only) when signing in with app context (`client_id`).
 
-**Hosted auth (one UI, two realms):** Same `/auth/*` pages and form patterns as console login. **Realm** is chosen by context:
+**Hosted auth (one UI, two sign-in modes):** Same `/auth/*` pages as console login. **App context** (`client_id` from your app’s OAuth redirect) decides who we authenticate:
 
-| Context | How resolved | Identity table | Session cookie |
-|---------|--------------|----------------|----------------|
-| Console | No `client_id` / no app context | `users` | `z0_session` → `sessions` |
-| App user | `client_id` on authorize/login/register (→ `app_id`) | `app_users` | `z0_app_session` → `app_user_sessions` |
+| Sign-in for | How we know | Identity table | Session cookie |
+|-------------|-------------|----------------|----------------|
+| **Console** (your team) | No `client_id` | `users` | `z0_session` |
+| **App end users** | `client_id` → `app_id` | `app_users` | `z0_app_session` |
 
-Matches common IAM products (Auth0 Universal Login, Clerk hosted): one authentication layer; app context selects the user directory.
+Auth0 Universal Login / Clerk hosted pages work the same way: one login UI; the app’s client id picks the user directory. Social buttons (Google, GitHub, …) appear on the **app** hosted page when enabled for that app (future module).
 
 No role tiers, permission matrix, or organization switcher.
 

@@ -8,7 +8,7 @@ Normative rules for sessions, CSRF, cookies, and OAuth. All new API and UI work 
 
 ## Sessions
 
-Two session cookies — same lifetime and CSRF rules, different identity realms (Auth0/Clerk-style hosted auth).
+Two session cookies — same lifetime and CSRF rules. **App context** (`client_id`) selects app-user vs console sign-in (Auth0/Clerk-style hosted pages).
 
 ### Console (`z0_session`)
 
@@ -35,7 +35,7 @@ Two session cookies — same lifetime and CSRF rules, different identity realms 
 | OAuth | `/oauth/authorize` and `/oauth/resume` use **app** session when returning from hosted auth |
 | Cross-app | Session valid for **one `app_id` only**; new login for another app replaces the app session cookie |
 
-**Realm routing on `/auth/*`:** If the request includes a resolvable `client_id` (query or preserved in `z0_oauth_return`), authenticate against `app_users` and issue `z0_app_session`. Otherwise authenticate against `users` and issue `z0_session`. Same HTML forms and CSRF; different handler branch.
+**Sign-in mode on `/auth/*`:** If the request includes a resolvable `client_id` (query or preserved in `z0_oauth_return`), treat as **app user** sign-in: authenticate `app_users`, issue `z0_app_session`, then redirect to the app (via OAuth `return_to`). Otherwise **console** sign-in: `users` + `z0_session`. Same HTML shell and CSRF; social provider buttons only on app sign-in when configured.
 
 **Future APIs** that accept bearer tokens must document their own lifetime and revocation; browser console continues to use `z0_session` unless stated otherwise.
 
