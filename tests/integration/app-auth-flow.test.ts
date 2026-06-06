@@ -17,6 +17,7 @@ const ownerPassword = makeStrongPassword();
 const appUserPassword = makeStrongPassword();
 const appBPassword = makeStrongPassword();
 const registerPassword = makeStrongPassword();
+const invitePassword = makeStrongPassword();
 const REDIRECT = "http://localhost:3000/oauth/callback";
 
 function extractCsrfFromHtml(html: string): string | undefined {
@@ -101,6 +102,7 @@ async function createAppWithCredential(csrf: string, cookie: string, name: strin
 }
 
 run("M06 app hosted auth", () => {
+  let appId = "";
   let clientId = "";
   let clientBId = "";
 
@@ -111,6 +113,7 @@ run("M06 app hosted auth", () => {
     const { csrf, cookie } = await ownerLogin();
     const appA = await createAppWithCredential(csrf, cookie, "Auth App A");
     const appB = await createAppWithCredential(csrf, cookie, "Auth App B");
+    appId = appA.appId;
     clientId = appA.clientId;
     clientBId = appB.clientId;
 
@@ -262,6 +265,52 @@ run("M06 app hosted auth", () => {
 
     expect(res.status).toBe(303);
     expect(appSessionFromResponse(res)).toBeTruthy();
+  });
+
+  test("app invite accept via hosted page creates session", async () => {
+    const { csrf, cookie } = await ownerLogin();
+    const inviteRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${appId}/users/invites`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: { email: "invited-web@example.com", invitedName: "Web Invited" },
+      }),
+    );
+    expect(inviteRes.status).toBe(201);
+    const invite = (await inviteRes.json()) as { inviteUrl: string };
+    const token = new URL(invite.inviteUrl).pathname.split("/").pop() ?? "";
+    expect(token).toBeTruthy();
+
+    const page = await dispatchWeb(new Request(`http://localhost/auth/app-invite/${token}`));
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(html).toContain("Join Auth App A");
+    expect(html).toContain("invited-web@example.com");
+
+    const pageCsrf = extractCsrfFromHtml(html)!;
+    const pageCookie = extractCsrfFromSetCookie(page) ?? pageCsrf;
+
+    const acceptRes = await dispatchWeb(
+      new Request(`http://localhost/auth/app-invite/${token}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(pageCookie)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: pageCsrf,
+          intent: "accept",
+          name: "Web Invited",
+          password: invitePassword,
+          passwordConfirm: invitePassword,
+        }).toString(),
+      }),
+    );
+
+    expect(acceptRes.status).toBe(303);
+    expect(appSessionFromResponse(acceptRes)).toBeTruthy();
   });
 
   test("console login unchanged without client_id", async () => {
