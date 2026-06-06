@@ -16,9 +16,8 @@ Bun monolith (`/api`, `/auth`, `/oauth`, React console). Specs in `docs/api/`. W
 ## Agent
 
 - Module flow and definition of done: `module-delivery.mdc`
-- Planning location: `todoist-planning.mdc`
+- Task implementation plan: `todoist-planning.mdc`
 - Migrations before close: `database-migrations.mdc`
-- Today’s plan: `daily-plan-todoist.mdc` (Auth project only)
 - Commit/push: `commit-and-push.mdc` + code-review skill
 - Full glossary: `AGENTS.md`
 
