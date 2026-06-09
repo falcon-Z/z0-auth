@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { AppUserSummary, CreateAppUserInviteResponse, PendingAppUserInvite } from "@z0/contracts/app-users";
 import type { AppDetail } from "@z0/contracts/apps";
@@ -22,12 +22,14 @@ import {
   patchAppUser,
   revokeAppUserInvite,
 } from "../../../lib/app-users-api";
+import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { InviteFormDialog } from "../../members/components/InviteFormDialog";
 import { CreateAppUserDialog } from "../components/CreateAppUserDialog";
 import { AppUserInviteResultDialog } from "../components/AppUserInviteResultDialog";
 
 export function AppUsersPage() {
   const { appId } = useParams<{ appId: string }>();
+  const navigate = useNavigate();
   const confirm = useConfirm();
 
   const [app, setApp] = useState<AppDetail | null>(null);
@@ -191,35 +193,36 @@ export function AppUsersPage() {
                   </Badge>
                 ),
               },
-              {
-                id: "actions",
-                header: "",
-                cell: (row) =>
-                  row.membershipStatus === "active" ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={busyId === row.userId}
-                      onClick={() => void handleDisable(row)}
-                    >
-                      Disable
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={busyId === row.userId}
-                      onClick={() => void handleEnable(row)}
-                    >
-                      Enable
-                    </Button>
-                  ),
-              },
             ]}
             rows={users}
+            onRowClick={(row) => navigate(`/app-users/${appId}/${row.userId}`)}
             emptyMessage="No app users yet. Add someone or send an invite."
+            rowActions={(row) => (
+              <>
+                <RowActionLink to={`/app-users/${appId}/${row.userId}`}>View</RowActionLink>
+                {row.membershipStatus === "active" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busyId === row.userId}
+                    onClick={() => void handleDisable(row)}
+                  >
+                    Disable
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busyId === row.userId}
+                    onClick={() => void handleEnable(row)}
+                  >
+                    Enable
+                  </Button>
+                )}
+              </>
+            )}
           />
         </div>
       ) : (
@@ -229,23 +232,29 @@ export function AppUsersPage() {
             { id: "email", header: "Email", cell: (row) => row.email },
             { id: "name", header: "Name", cell: (row) => row.invitedName },
             {
-              id: "actions",
-              header: "",
-              cell: (row) => (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={busyId === row.id}
-                  onClick={() => void handleRevokeInvite(row)}
-                >
-                  Revoke
-                </Button>
-              ),
+              id: "expires",
+              header: "Expires",
+              cell: (row) => new Date(row.expiresAt).toLocaleDateString(),
             },
           ]}
           rows={invites}
+          onRowClick={(row) => navigate(`/app-users/${appId}/invites/${row.id}`)}
           emptyMessage="No pending invitations."
+          rowActions={(row) => (
+            <>
+              <RowActionLink to={`/app-users/${appId}/invites/${row.id}`}>View</RowActionLink>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={busyId === row.id}
+                onClick={() => void handleRevokeInvite(row)}
+              >
+                Revoke
+              </Button>
+            </>
+          )}
         />
       )}
 

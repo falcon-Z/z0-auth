@@ -1,5 +1,6 @@
 import { test as setup, expect } from "@playwright/test";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../src/lib/contracts/http";
+import { e2ePassword } from "./test-credentials";
 
 const authFile = "tests/e2e/.auth/user.json";
 
@@ -14,10 +15,10 @@ async function fetchCsrf(request: Parameters<Parameters<typeof setup>[1]>[0]["re
 
 setup("authenticate developer session", async ({ request }) => {
   const email = process.env.E2E_EMAIL ?? "admin@example.com";
-  const password = process.env.E2E_PASSWORD;
+  const password = e2ePassword();
 
   if (!password) {
-    setup.skip(true, "Set E2E_PASSWORD to the admin password for this instance");
+    setup.skip(true, "Set DEV_SEED_PASSWORD (or E2E_PASSWORD) in .env for Playwright");
     return;
   }
 

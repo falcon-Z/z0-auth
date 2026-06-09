@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AppDetail } from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
@@ -14,24 +14,46 @@ import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { FormField } from "../../../components/forms/FormField";
 
+const DEFAULT_REDIRECT_URI = "http://localhost:3000/oauth/callback";
+
 type AppFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode?: "create" | "edit";
+  initial?: Pick<AppDetail, "name" | "redirectUris">;
   onSubmit: (body: { name: string; redirectUris: string[] }) => Promise<AppDetail>;
-  onCreated: (app: AppDetail) => void;
+  onSuccess: (app: AppDetail) => void;
 };
 
-export function AppFormDialog({ open, onOpenChange, onSubmit, onCreated }: AppFormDialogProps) {
+export function AppFormDialog({
+  open,
+  onOpenChange,
+  mode = "create",
+  initial,
+  onSubmit,
+  onSuccess,
+}: AppFormDialogProps) {
   const [name, setName] = useState("");
-  const [uris, setUris] = useState(["http://localhost:3000/oauth/callback"]);
+  const [uris, setUris] = useState([DEFAULT_REDIRECT_URI]);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  function reset() {
-    setName("");
-    setUris(["http://localhost:3000/oauth/callback"]);
-    setFieldErrors({});
-  }
+  const isEdit = mode === "edit";
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      if (isEdit && initial) {
+        setName(initial.name);
+        setUris(initial.redirectUris.length > 0 ? [...initial.redirectUris] : [DEFAULT_REDIRECT_URI]);
+      } else {
+        setName("");
+        setUris([DEFAULT_REDIRECT_URI]);
+      }
+      setFieldErrors({});
+    }
+    wasOpen.current = open;
+  }, [open, isEdit, initial]);
 
   function setUri(index: number, value: string) {
     setUris((prev) => prev.map((u, i) => (i === index ? value : u)));
@@ -52,9 +74,8 @@ export function AppFormDialog({ open, onOpenChange, onSubmit, onCreated }: AppFo
     try {
       const redirectUris = uris.map((u) => u.trim()).filter(Boolean);
       const app = await onSubmit({ name, redirectUris });
-      reset();
       onOpenChange(false);
-      onCreated(app);
+      onSuccess(app);
     } catch (e) {
       if (e instanceof ApiError) {
         setFieldErrors(fieldErrorsFromProblem(e.problem));
@@ -71,7 +92,7 @@ export function AppFormDialog({ open, onOpenChange, onSubmit, onCreated }: AppFo
       <DialogContent className="max-w-lg">
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
-            <DialogTitle>Register application</DialogTitle>
+            <DialogTitle>{isEdit ? "Edit application" : "Register application"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <FormField label="Name" htmlFor="appName" error={fieldErrors.name}>
@@ -113,7 +134,7 @@ export function AppFormDialog({ open, onOpenChange, onSubmit, onCreated }: AppFo
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? "Creating…" : "Create"}
+              {submitting ? "Saving…" : isEdit ? "Save" : "Create"}
             </Button>
           </DialogFooter>
         </form>

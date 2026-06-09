@@ -79,7 +79,7 @@ export function AppsListPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSubmit={createApp}
-        onCreated={(app) => navigate(`/apps/${app.id}`)}
+        onSuccess={(app) => navigate(`/apps/${app.id}`)}
       />
     </div>
   );

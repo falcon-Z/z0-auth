@@ -10,6 +10,10 @@ import type {
 
 import { apiFetch } from "./http-client";
 
+export async function fetchAppUser(appId: string, userId: string): Promise<AppUserDetail> {
+  return apiFetch<AppUserDetail>(`/api/v1/apps/${appId}/users/${userId}`);
+}
+
 export async function fetchAppUsers(appId: string, q?: string): Promise<AppUserSummary[]> {
   const query = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
   const { users } = await apiFetch<{ users: AppUserSummary[] }>(

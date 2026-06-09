@@ -1,6 +1,14 @@
+import path from "node:path";
+
 import { defineConfig, devices } from "@playwright/test";
 
+import { loadEnvFile, loadRootEnv } from "./src/lib/load-root-env";
+
+loadRootEnv();
+loadEnvFile(path.join(process.cwd(), ".env.test"));
+
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
+const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim() ?? "";
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -20,7 +28,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "console",
-      testMatch: /(console|members)-.*\.spec\.ts/,
+      testMatch: /(console|members|owner-journey)-.*\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -40,7 +48,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
-      DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+      DATABASE_URL: testDatabaseUrl,
     },
   },
 });

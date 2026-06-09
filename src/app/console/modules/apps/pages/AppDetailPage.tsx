@@ -19,6 +19,7 @@ import {
   rotateAppCredential,
 } from "../../../lib/apps-api";
 import { ApiError } from "../../../lib/api";
+import { AppFormDialog } from "../components/AppFormDialog";
 import { CredentialSecretDialog } from "../components/CredentialSecretDialog";
 
 export function AppDetailPage() {
@@ -36,6 +37,7 @@ export function AppDetailPage() {
     clientSecret: string;
     title: string;
   } | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const reload = useCallback(async () => {
     if (!appId) return;
@@ -176,9 +178,14 @@ export function AppDetailPage() {
         <Badge variant={app.status === "active" ? "secondary" : "outline"}>{app.status}</Badge>
       }
       actions={
-        <Button variant="outline" disabled={busyId === "status"} onClick={() => void toggleDisabled()}>
-          {app.status === "active" ? "Disable" : "Enable"}
-        </Button>
+        <>
+          <Button variant="outline" onClick={() => setEditOpen(true)}>
+            Edit
+          </Button>
+          <Button variant="outline" disabled={busyId === "status"} onClick={() => void toggleDisabled()}>
+            {app.status === "active" ? "Disable" : "Enable"}
+          </Button>
+        </>
       }
     >
       <ActionNotice message={notice} />
@@ -274,6 +281,20 @@ export function AppDetailPage() {
           clientSecret={secretDialog.clientSecret}
           title={secretDialog.title}
           onClose={() => setSecretDialog(null)}
+        />
+      ) : null}
+
+      {app ? (
+        <AppFormDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          mode="edit"
+          initial={{ name: app.name, redirectUris: app.redirectUris }}
+          onSubmit={(body) => patchApp(appId!, body)}
+          onSuccess={(updated) => {
+            setApp(updated);
+            setNotice("Application updated.");
+          }}
         />
       ) : null}
     </EntityDetailLayout>
