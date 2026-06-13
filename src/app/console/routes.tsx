@@ -1,5 +1,4 @@
 import type { RouteObject } from "react-router-dom";
-import { Navigate, useParams } from "react-router-dom";
 
 import { CONSOLE_NAV_ITEMS } from "./config/navigation";
 import { ModulePlaceholderPage } from "./components/layout/ModulePlaceholderPage";
@@ -42,51 +41,7 @@ export function routePathForNav(path: string): string {
   return path;
 }
 
-function LegacyAppUsersRedirect() {
-  const { appId, userId, inviteId } = useParams<{
-    appId?: string;
-    userId?: string;
-    inviteId?: string;
-  }>();
-  if (appId && inviteId) {
-    return <Navigate to={`/apps/${appId}/users/invites/${inviteId}`} replace />;
-  }
-  if (appId && userId) {
-    return <Navigate to={`/apps/${appId}/users/${userId}`} replace />;
-  }
-  if (appId) {
-    return <Navigate to={`/apps/${appId}/users`} replace />;
-  }
-  return <Navigate to="/apps" replace />;
-}
-
-function LegacyScopesRedirect() {
-  const { appId } = useParams<{ appId?: string }>();
-  if (appId) {
-    return <Navigate to={`/apps/${appId}/scopes`} replace />;
-  }
-  return <Navigate to="/apps" replace />;
-}
-
-const legacySecurityRedirects: RouteObject[] = [
-  { path: "/security/account", element: <Navigate to="/profile/security" replace /> },
-  { path: "/security/sessions", element: <Navigate to="/profile/sessions" replace /> },
-];
-
-const legacyAppResourceRedirects: RouteObject[] = [
-  { path: "/app-users", element: <Navigate to="/apps" replace /> },
-  { path: "/app-users/:appId/invites/:inviteId", element: <LegacyAppUsersRedirect /> },
-  { path: "/app-users/:appId/:userId", element: <LegacyAppUsersRedirect /> },
-  { path: "/app-users/:appId", element: <LegacyAppUsersRedirect /> },
-  { path: "/scopes", element: <Navigate to="/apps" replace /> },
-  { path: "/scopes/:appId", element: <LegacyScopesRedirect /> },
-];
-
-export const consoleRoutes: RouteObject[] = [
-  ...legacySecurityRedirects,
-  ...legacyAppResourceRedirects,
-  ...CONSOLE_NAV_ITEMS.map((item) => ({
-    path: routePathForNav(item.path),
-    element: IMPLEMENTED_PAGES[item.path] ?? <ModulePlaceholderPage item={item} />,
-  })),
-];
+export const consoleRoutes: RouteObject[] = CONSOLE_NAV_ITEMS.map((item) => ({
+  path: routePathForNav(item.path),
+  element: IMPLEMENTED_PAGES[item.path] ?? <ModulePlaceholderPage item={item} />,
+}));

@@ -25,20 +25,6 @@ describe("console routes", () => {
     expect(profileRoute?.element).toBeDefined();
   });
 
-  test("legacy app resource URLs redirect under applications", () => {
-    const appUsersRedirect = consoleRoutes.find((route) => route.path === "/app-users");
-    const scopesRedirect = consoleRoutes.find((route) => route.path === "/scopes");
-    expect(appUsersRedirect?.element).toBeDefined();
-    expect(scopesRedirect?.element).toBeDefined();
-  });
-
-  test("legacy security URLs redirect into profile", () => {
-    const accountRedirect = consoleRoutes.find((route) => route.path === "/security/account");
-    const sessionsRedirect = consoleRoutes.find((route) => route.path === "/security/sessions");
-    expect(accountRedirect?.element).toBeDefined();
-    expect(sessionsRedirect?.element).toBeDefined();
-  });
-
   test("planned modules still resolve to a route", () => {
     const mfa = CONSOLE_NAV_ITEMS.find((item) => item.id === "mfa");
     expect(mfa).toBeDefined();
