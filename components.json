@@ -13,7 +13,7 @@
   "aliases": {
     "components": "@z0/app/console/components",
     "utils": "@z0/app/console/lib/utils",
-    "ui": "@z0/components/ui",
+    "ui": "@z0/app/console/components/ui",
     "lib": "@z0/lib",
     "hooks": "@z0/app/console/hooks"
   },
