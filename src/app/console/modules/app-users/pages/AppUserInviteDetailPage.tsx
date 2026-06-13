@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
+
 import type { PendingAppUserInvite } from "@z0/contracts/app-users";
 import { Button } from "@z0/components/ui/button";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
@@ -41,6 +43,18 @@ export function AppUserInviteDetailPage() {
     void reload();
   }, [reload]);
 
+  usePageBreadcrumbs(
+    invite && appId
+      ? [
+          { label: "Applications", to: "/apps" },
+          { label: appName ?? "Application", to: `/apps/${appId}` },
+          { label: "Users", to: `/app-users/${appId}` },
+          { label: invite.invitedName },
+        ]
+      : null,
+    [invite?.invitedName, appId, appName],
+  );
+
   async function handleRevoke() {
     if (!appId || !inviteId || !invite) return;
     const ok = await confirm({
@@ -67,11 +81,7 @@ export function AppUserInviteDetailPage() {
   if (error || !invite || !appId) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader
-          backTo={appId ? `/app-users/${appId}` : "/app-users"}
-          backLabel="App users"
-          title="Invitation"
-        />
+        <DetailPageHeader title="Invitation" />
         <PageError title="Not found" message={error ?? "Invitation not found or no longer pending."}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to={appId ? `/app-users/${appId}` : "/app-users"}>Back to app users</Link>
@@ -84,8 +94,6 @@ export function AppUserInviteDetailPage() {
   return (
     <div className="space-y-6">
       <DetailPageHeader
-        backTo={`/app-users/${appId}`}
-        backLabel={appName ? `App users — ${appName}` : "App users"}
         title={invite.invitedName}
         actions={
           <Button variant="destructive" disabled={revoking} onClick={() => void handleRevoke()}>

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
+
 import { Button } from "@z0/components/ui/button";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
@@ -19,12 +21,22 @@ export function InviteDetailPage() {
 
   const invite = invites.find((i) => i.id === inviteId);
 
+  usePageBreadcrumbs(
+    invite
+      ? [
+          { label: "Members", to: "/members" },
+          { label: invite.invitedName },
+        ]
+      : null,
+    [invite?.invitedName, inviteId],
+  );
+
   if (loading) return <ListPageSkeleton />;
 
   if (!invite) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader backTo="/members" backLabel="Members" title="Invitation" />
+        <DetailPageHeader title="Invitation" />
         <PageError title="Not found" message="Invitation not found or no longer pending.">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/members">Back to members</Link>
@@ -56,8 +68,6 @@ export function InviteDetailPage() {
   return (
     <div className="space-y-6">
       <DetailPageHeader
-        backTo="/members"
-        backLabel="Members"
         title={invite.invitedName}
         actions={
           <Button variant="destructive" disabled={revoking} onClick={() => void handleRevoke()}>

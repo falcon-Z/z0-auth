@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { AppSectionNav } from "../../../components/apps/AppSectionNav";
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
+
 import type { AppCredentialSummary, AppDetail } from "@z0/contracts/apps";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
@@ -57,6 +60,16 @@ export function AppDetailPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  usePageBreadcrumbs(
+    app
+      ? [
+          { label: "Applications", to: "/apps" },
+          { label: app.name },
+        ]
+      : null,
+    [app?.name, appId],
+  );
 
   async function handleCreateCredential() {
     if (!appId || app?.status !== "active") return;
@@ -156,7 +169,7 @@ export function AppDetailPage() {
 
   if (error || !app) {
     return (
-      <EntityDetailLayout backTo="/apps" backLabel="Applications" name="Application" tabs={[]}>
+      <EntityDetailLayout name="Application" tabs={[]}>
         <PageError title="Not found" message={error ?? "Application not found."}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/apps">Back to applications</Link>
@@ -170,8 +183,6 @@ export function AppDetailPage() {
 
   return (
     <EntityDetailLayout
-      backTo="/apps"
-      backLabel="Applications"
       name={app.name}
       subtitle={app.slug}
       badges={
@@ -190,6 +201,8 @@ export function AppDetailPage() {
     >
       <ActionNotice message={notice} />
 
+      {appId ? <AppSectionNav appId={appId} /> : null}
+
       <dl className="mb-8 grid gap-4 text-sm">
         <div>
           <dt className="text-muted-foreground">Redirect URIs</dt>
@@ -197,14 +210,6 @@ export function AppDetailPage() {
             {app.redirectUris.map((uri) => (
               <div key={uri}>{uri}</div>
             ))}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Scopes</dt>
-          <dd className="mt-1">
-            <Button variant="link" className="h-auto p-0" asChild>
-              <Link to={`/scopes/${appId}`}>Manage scopes</Link>
-            </Button>
           </dd>
         </div>
       </dl>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import type { AppUserSummary, CreateAppUserInviteResponse, PendingAppUserInvite } from "@z0/contracts/app-users";
 import type { AppDetail } from "@z0/contracts/apps";
@@ -22,7 +22,8 @@ import {
   patchAppUser,
   revokeAppUserInvite,
 } from "../../../lib/app-users-api";
-import { RowActionLink } from "../../../components/crud/RowActionLink";
+import { AppSectionNav } from "../../../components/apps/AppSectionNav";
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 import { InviteFormDialog } from "../../members/components/InviteFormDialog";
 import { CreateAppUserDialog } from "../components/CreateAppUserDialog";
 import { AppUserInviteResultDialog } from "../components/AppUserInviteResultDialog";
@@ -68,6 +69,17 @@ export function AppUsersPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  usePageBreadcrumbs(
+    app
+      ? [
+          { label: "Applications", to: "/apps" },
+          { label: app.name, to: `/apps/${appId}` },
+          { label: "Users" },
+        ]
+      : null,
+    [app?.name, appId],
+  );
 
   async function handleDisable(user: AppUserSummary) {
     if (!appId) return;
@@ -149,16 +161,9 @@ export function AppUsersPage() {
   return (
     <div className="space-y-6">
       <ListPageHeader
-        title={`App users — ${app.name}`}
-        description="People who sign in to this application through your hosted auth."
+        title="Users"
         actions={
           <>
-            <Button variant="outline" asChild>
-              <Link to="/app-users">All applications</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to={`/apps/${appId}`}>Application</Link>
-            </Button>
             <Button variant="outline" onClick={() => setInviteOpen(true)}>
               Invite
             </Button>
@@ -166,6 +171,8 @@ export function AppUsersPage() {
           </>
         }
       />
+
+      {appId ? <AppSectionNav appId={appId} /> : null}
 
       <ActionNotice message={notice} />
 
@@ -197,32 +204,29 @@ export function AppUsersPage() {
             rows={users}
             onRowClick={(row) => navigate(`/app-users/${appId}/${row.userId}`)}
             emptyMessage="No app users yet. Add someone or send an invite."
-            rowActions={(row) => (
-              <>
-                <RowActionLink to={`/app-users/${appId}/${row.userId}`}>View</RowActionLink>
-                {row.membershipStatus === "active" ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busyId === row.userId}
-                    onClick={() => void handleDisable(row)}
-                  >
-                    Disable
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={busyId === row.userId}
-                    onClick={() => void handleEnable(row)}
-                  >
-                    Enable
-                  </Button>
-                )}
-              </>
-            )}
+            rowActions={(row) =>
+              row.membershipStatus === "active" ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busyId === row.userId}
+                  onClick={() => void handleDisable(row)}
+                >
+                  Disable
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busyId === row.userId}
+                  onClick={() => void handleEnable(row)}
+                >
+                  Enable
+                </Button>
+              )
+            }
           />
         </div>
       ) : (
@@ -241,19 +245,16 @@ export function AppUsersPage() {
           onRowClick={(row) => navigate(`/app-users/${appId}/invites/${row.id}`)}
           emptyMessage="No pending invitations."
           rowActions={(row) => (
-            <>
-              <RowActionLink to={`/app-users/${appId}/invites/${row.id}`}>View</RowActionLink>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                disabled={busyId === row.id}
-                onClick={() => void handleRevokeInvite(row)}
-              >
-                Revoke
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={busyId === row.id}
+              onClick={() => void handleRevokeInvite(row)}
+            >
+              Revoke
+            </Button>
           )}
         />
       )}

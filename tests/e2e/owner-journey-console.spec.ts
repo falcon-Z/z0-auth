@@ -29,23 +29,13 @@ test.describe("owner console journey", () => {
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("heading", { name: `${appName} Updated` })).toBeVisible();
 
-    await page.goto("/scopes");
-    await page
-      .getByRole("row")
-      .filter({ hasText: `${appName} Updated` })
-      .getByRole("link", { name: "Manage scopes" })
-      .click();
+    await page.getByRole("link", { name: "Scopes" }).click();
     await page.getByRole("button", { name: "Add scope" }).click();
     await page.getByLabel(/^Name/i).fill(scopeName);
     await page.getByRole("button", { name: "Add scope", exact: true }).click();
     await expect(page.getByRole("cell", { name: scopeName })).toBeVisible();
 
-    await page.goto("/app-users");
-    await page
-      .getByRole("row")
-      .filter({ hasText: `${appName} Updated` })
-      .getByRole("link", { name: "Manage users" })
-      .click();
+    await page.getByRole("link", { name: "Users" }).click();
     await page.getByRole("button", { name: "Add user" }).click();
     await page.getByLabel("Name", { exact: true }).fill("E2E User");
     await page.getByLabel("Email", { exact: true }).fill(userEmail);
@@ -54,11 +44,12 @@ test.describe("owner console journey", () => {
     await page.getByRole("button", { name: "Add user", exact: true }).click();
     await expect(page.getByRole("cell", { name: userEmail })).toBeVisible();
 
-    await page.getByRole("link", { name: "View" }).first().click();
+    await page.getByRole("row").filter({ hasText: userEmail }).click();
     await expect(page.getByRole("heading", { name: "E2E User" })).toBeVisible();
     await expect(page.getByText(userEmail)).toBeVisible();
 
-    await page.goto("/communications/email");
+    await page.goto("/settings");
+    await page.getByRole("link", { name: "Email & SMTP" }).click();
     await expect(page.getByRole("heading", { name: "Email & SMTP", level: 1 })).toBeVisible();
     await expect(page.getByText("not available yet", { exact: false })).not.toBeVisible();
   });

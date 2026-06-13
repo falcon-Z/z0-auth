@@ -1,31 +1,27 @@
 import { Outlet, useLocation } from "react-router-dom";
 
-import { SidebarInset, SidebarProvider } from "@z0/components/ui/sidebar";
 import { TooltipProvider } from "@z0/components/ui/tooltip";
 import { ConfirmProvider } from "../feedback/ConfirmDialog";
-import { useSession } from "../../context/session-context";
+import { ConsoleContent } from "../layout/ConsoleContent";
+import { BreadcrumbProvider } from "../../context/breadcrumb-context";
 import { AppHeader } from "./AppHeader";
-import { AppSidebar } from "./AppSidebar";
 
 export function AppShell() {
   const location = useLocation();
-  const { session } = useSession();
 
   return (
     <ConfirmProvider>
       <TooltipProvider delayDuration={0}>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
+        <BreadcrumbProvider>
+          <div className="flex min-h-svh flex-col bg-background">
             <AppHeader />
-            <div
-              className="flex flex-1 flex-col gap-4 p-4 pt-0 md:p-6"
-              key={location.pathname}
-            >
-              <Outlet />
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
+            <main className="flex flex-1 flex-col" key={location.pathname}>
+              <ConsoleContent>
+                <Outlet />
+              </ConsoleContent>
+            </main>
+          </div>
+        </BreadcrumbProvider>
       </TooltipProvider>
     </ConfirmProvider>
   );

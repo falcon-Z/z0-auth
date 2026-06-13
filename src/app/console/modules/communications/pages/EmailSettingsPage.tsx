@@ -132,10 +132,7 @@ export function EmailSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <ListPageHeader
-        title="Email & SMTP"
-        description="Configure outbound email for password reset and future notifications."
-      />
+      <ListPageHeader title="Email & SMTP" />
 
       <ActionNotice message={notice} />
 

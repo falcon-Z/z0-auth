@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
 import type { AppUserDetail } from "@z0/contracts/app-users";
 import { Badge } from "@z0/components/ui/badge";
@@ -14,13 +16,14 @@ import { FormField } from "../../../components/forms/FormField";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchAppUser, patchAppUser } from "../../../lib/app-users-api";
+import { fetchApp } from "../../../lib/apps-api";
 
 export function AppUserDetailPage() {
   const { appId, userId } = useParams<{ appId: string; userId: string }>();
-  const navigate = useNavigate();
   const confirm = useConfirm();
 
   const [user, setUser] = useState<AppUserDetail | null>(null);
+  const [appName, setAppName] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,8 +37,9 @@ export function AppUserDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const detail = await fetchAppUser(appId, userId);
+      const [detail, app] = await Promise.all([fetchAppUser(appId, userId), fetchApp(appId)]);
       setUser(detail);
+      setAppName(app.name);
       setName(detail.name);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load app user.");
@@ -47,6 +51,18 @@ export function AppUserDetailPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  usePageBreadcrumbs(
+    user && appId
+      ? [
+          { label: "Applications", to: "/apps" },
+          { label: appName ?? "Application", to: `/apps/${appId}` },
+          { label: "Users", to: `/app-users/${appId}` },
+          { label: user.name },
+        ]
+      : null,
+    [user?.name, appId, appName],
+  );
 
   const nameDirty = user !== null && name.trim() !== user.name;
 
@@ -103,7 +119,7 @@ export function AppUserDetailPage() {
 
   if (error || !user || !appId) {
     return (
-      <EntityDetailLayout backTo="/app-users" backLabel="App users" name="User" tabs={[]}>
+      <EntityDetailLayout name="User" tabs={[]}>
         <PageError title="Not found" message={error ?? "App user not found."}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/app-users">Back to app users</Link>
@@ -115,8 +131,6 @@ export function AppUserDetailPage() {
 
   return (
     <EntityDetailLayout
-      backTo={`/app-users/${appId}`}
-      backLabel="App users"
       name={user.name}
       subtitle={user.email}
       badges={
@@ -166,14 +180,9 @@ export function AppUserDetailPage() {
             autoComplete="off"
           />
         </FormField>
-        <div className="flex gap-2">
-          <Button type="submit" disabled={!nameDirty || saving}>
-            {saving ? "Saving…" : "Save name"}
-          </Button>
-          <Button type="button" variant="outline" onClick={() => navigate(`/app-users/${appId}`)}>
-            Back to list
-          </Button>
-        </div>
+        <Button type="submit" disabled={!nameDirty || saving}>
+          {saving ? "Saving…" : "Save name"}
+        </Button>
       </form>
     </EntityDetailLayout>
   );

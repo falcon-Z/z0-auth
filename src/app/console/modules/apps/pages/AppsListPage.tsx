@@ -6,7 +6,6 @@ import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
-import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -64,14 +63,10 @@ export function AppsListPage() {
               header: "Credentials",
               cell: (row) => row.activeCredentialCount,
             },
-            {
-              id: "actions",
-              header: "",
-              cell: (row) => <RowActionLink to={`/apps/${row.id}`}>View</RowActionLink>,
-            },
           ]}
           rows={apps}
           rowKey={(row) => row.id}
+          onRowClick={(row) => navigate(`/apps/${row.id}`)}
         />
       )}
 

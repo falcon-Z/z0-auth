@@ -15,8 +15,6 @@ export function ProfileLayout() {
 
   return (
     <EntityDetailLayout
-      backTo="/"
-      backLabel="Dashboard"
       name={session.user!.name}
       subtitle={session.user!.email}
       basePath="/profile"

@@ -10,11 +10,13 @@ import { ProfileModule } from "./modules/profile/ProfileModule";
 import { CommunicationsModule } from "./modules/communications/CommunicationsModule";
 import { ScopesModule } from "./modules/scopes/ScopesModule";
 import { AppUsersModule } from "./modules/app-users/AppUsersModule";
+import { SettingsModule } from "./modules/settings/SettingsModule";
 
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/": <DashboardPage />,
   "/members": <MembersModule />,
   "/apps": <AppsModule />,
+  "/settings": <SettingsModule />,
   "/communications/email": <CommunicationsModule />,
   "/scopes": <ScopesModule />,
   "/app-users": <AppUsersModule />,
@@ -26,6 +28,7 @@ export const WIRED_CONSOLE_NAV_PATHS = [
   "/",
   "/members",
   "/apps",
+  "/settings",
   "/communications/email",
   "/scopes",
   "/app-users",

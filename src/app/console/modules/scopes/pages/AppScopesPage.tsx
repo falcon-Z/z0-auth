@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+
+import { AppSectionNav } from "../../../components/apps/AppSectionNav";
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
 import type { AppScopeSummary } from "@z0/contracts/app-scopes";
 import type { AppDetail } from "@z0/contracts/apps";
@@ -46,6 +49,17 @@ export function AppScopesPage() {
     void reload();
   }, [reload]);
 
+  usePageBreadcrumbs(
+    app
+      ? [
+          { label: "Applications", to: "/apps" },
+          { label: app.name, to: `/apps/${appId}` },
+          { label: "Scopes" },
+        ]
+      : null,
+    [app?.name, appId],
+  );
+
   async function handleDelete(scope: AppScopeSummary) {
     if (!appId) return;
     const ok = await confirm({
@@ -83,20 +97,11 @@ export function AppScopesPage() {
   return (
     <div className="space-y-6">
       <ListPageHeader
-        title={`Scopes — ${app.name}`}
-        description="Permissions your app can request during sign-in. Use the same names in your OAuth integration."
-        actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link to="/scopes">All applications</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to={`/apps/${appId}`}>Application</Link>
-            </Button>
-            <Button onClick={() => setDialogOpen(true)}>Add scope</Button>
-          </>
-        }
+        title="Scopes"
+        actions={<Button onClick={() => setDialogOpen(true)}>Add scope</Button>}
       />
+
+      {appId ? <AppSectionNav appId={appId} /> : null}
 
       <ActionNotice message={notice} />
 

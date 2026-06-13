@@ -79,7 +79,7 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
   return (
     <div className={embedded ? "space-y-6" : "mx-auto max-w-lg space-y-6"}>
       {!embedded ? (
-        <DetailPageHeader backTo="/profile" backLabel="Your account" title="Password" />
+        <DetailPageHeader title="Password" />
       ) : (
         <p className="text-sm text-muted-foreground">
           Update your password. Other sessions are signed out when you save.

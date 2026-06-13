@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
+
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayout";
@@ -23,11 +25,21 @@ export function MemberDetailPage() {
   const member = members.find((m) => m.userId === userId);
   const isSelf = userId === session.user?.id;
 
+  usePageBreadcrumbs(
+    member
+      ? [
+          { label: "Members", to: "/members" },
+          { label: member.name },
+        ]
+      : null,
+    [member?.name, userId],
+  );
+
   if (loading) return <ListPageSkeleton />;
 
   if (!member) {
     return (
-      <EntityDetailLayout backTo="/members" backLabel="Members" name="Member" tabs={[]}>
+      <EntityDetailLayout name="Member" tabs={[]}>
         <PageError title="Not found" message="Member not found.">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/members">Back to members</Link>
@@ -57,8 +69,6 @@ export function MemberDetailPage() {
 
   return (
     <EntityDetailLayout
-      backTo="/members"
-      backLabel="Members"
       name={member.name}
       subtitle={member.email}
       badges={

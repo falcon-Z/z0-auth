@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { AppSummary } from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
-import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { EmptyState } from "../../../components/feedback/EmptyState";
@@ -13,6 +12,7 @@ import { fetchApps } from "../../../lib/apps-api";
 import { ApiError } from "../../../lib/api";
 
 export function AppUsersPickerPage() {
+  const navigate = useNavigate();
   const [apps, setApps] = useState<AppSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,10 +46,7 @@ export function AppUsersPickerPage() {
 
   return (
     <div className="space-y-6">
-      <ListPageHeader
-        title="App users"
-        description="Choose an application to manage the people who sign in through it."
-      />
+      <ListPageHeader title="App users" />
 
       {apps.length === 0 ? (
         <EmptyState
@@ -66,15 +63,9 @@ export function AppUsersPickerPage() {
           columns={[
             { id: "name", header: "Application", cell: (row) => row.name },
             { id: "slug", header: "Slug", cell: (row) => row.slug },
-            {
-              id: "actions",
-              header: "",
-              cell: (row) => (
-                <RowActionLink to={`/app-users/${row.id}`}>Manage users</RowActionLink>
-              ),
-            },
           ]}
           rows={apps}
+          onRowClick={(row) => navigate(`/app-users/${row.id}`)}
         />
       )}
     </div>

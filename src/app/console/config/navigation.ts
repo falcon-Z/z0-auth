@@ -110,6 +110,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "available",
         module: "M05",
         summary: "End users who sign in through your registered apps.",
+        hideFromSidebar: true,
       },
       {
         id: "scopes",
@@ -119,6 +120,7 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "available",
         module: "M04",
         summary: "Permission scopes each application can request at sign-in.",
+        hideFromSidebar: true,
       },
       {
         id: "oidc",
@@ -220,9 +222,19 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
     ],
   },
   {
-    id: "communications",
-    title: "Communications",
+    id: "settings",
+    title: "Settings",
     items: [
+      {
+        id: "settings",
+        title: "Settings",
+        path: "/settings",
+        icon: SlidersHorizontal,
+        status: "available",
+        module: "P1-UX",
+        summary: "Platform-level configuration for this instance.",
+        hideFromSidebar: true,
+      },
       {
         id: "email",
         title: "Email & SMTP",
@@ -231,7 +243,14 @@ export const CONSOLE_NAV: ConsoleNavGroup[] = [
         status: "available",
         module: "M08",
         summary: "SMTP settings, test send, and password reset email.",
+        hideFromSidebar: true,
       },
+    ],
+  },
+  {
+    id: "communications",
+    title: "Communications",
+    items: [
       {
         id: "templates",
         title: "Templates",

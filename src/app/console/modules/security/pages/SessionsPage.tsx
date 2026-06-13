@@ -127,7 +127,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
     return (
       <div className="space-y-6">
         {!embedded ? (
-          <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+          <DetailPageHeader title="Sessions" />
         ) : null}
         <ListPageSkeleton />
       </div>
@@ -138,7 +138,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
     return (
       <div className="space-y-6">
         {!embedded ? (
-          <DetailPageHeader backTo="/profile" backLabel="Your account" title="Sessions" />
+          <DetailPageHeader title="Sessions" />
         ) : null}
         <PageError message={error} onRetry={() => void reload()} />
       </div>
@@ -148,12 +148,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
   return (
     <div className="space-y-6">
       {!embedded ? (
-        <DetailPageHeader
-          backTo="/profile"
-          backLabel="Your account"
-          title="Sessions"
-          actions={revokeOthersAction}
-        />
+        <DetailPageHeader title="Sessions" actions={revokeOthersAction} />
       ) : revokeOthersAction ? (
         <div className="flex justify-end">{revokeOthersAction}</div>
       ) : null}

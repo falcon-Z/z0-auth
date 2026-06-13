@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { ConsolePage } from "../../../components/layout/ConsolePage";
 import { fetchConsoleSummary } from "../../../lib/console-summary-api";
 import { ApiError } from "../../../lib/api";
 import { useSession } from "../../../context/session-context";
@@ -29,20 +28,13 @@ export function DashboardPage() {
     void reload();
   }, [reload]);
 
-  const orgName = session.organizationName || summary?.instance.organizationName;
-
   return (
-    <ConsolePage
-      title="Dashboard"
-      description={orgName ? `Overview for ${orgName}.` : undefined}
-    >
-      <DashboardMetrics
-        session={session}
-        summary={summary}
-        loading={loading}
-        error={error}
-        onRetry={() => void reload()}
-      />
-    </ConsolePage>
+    <DashboardMetrics
+      session={session}
+      summary={summary}
+      loading={loading}
+      error={error}
+      onRetry={() => void reload()}
+    />
   );
 }

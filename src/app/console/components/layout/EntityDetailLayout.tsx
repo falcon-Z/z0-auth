@@ -15,7 +15,7 @@ export type EntityDetailTab = {
 };
 
 type EntityDetailLayoutProps = {
-  backTo: string;
+  backTo?: string;
   backLabel?: string;
   name: string;
   subtitle?: string;
@@ -49,12 +49,14 @@ export function EntityDetailLayout({
 
   return (
     <div className={cn("space-y-6", className)}>
-      <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
-        <Link to={backTo}>
-          <ChevronLeft className="size-4" />
-          {backLabel}
-        </Link>
-      </Button>
+      {backTo ? (
+        <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
+          <Link to={backTo}>
+            <ChevronLeft className="size-4" />
+            {backLabel}
+          </Link>
+        </Button>
+      ) : null}
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-start gap-4">
@@ -82,7 +84,7 @@ export function EntityDetailLayout({
         />
       ) : null}
 
-      <div className="max-w-3xl">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }

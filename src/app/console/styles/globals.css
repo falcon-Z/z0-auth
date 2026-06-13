@@ -116,6 +116,6 @@
 
   body {
     @apply bg-background text-foreground m-0 min-h-svh antialiased;
-    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   }
 }

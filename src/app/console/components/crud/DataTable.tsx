@@ -34,7 +34,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="rounded-lg border">
+    <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/40">
@@ -58,7 +58,10 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className={cn("border-b last:border-0", onRowClick && "cursor-pointer hover:bg-muted/30")}
+              className={cn(
+                "group border-b last:border-0",
+                onRowClick && "cursor-pointer hover:bg-muted/30",
+              )}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               onKeyDown={
                 onRowClick
@@ -72,9 +75,13 @@ export function DataTable<T>({
               }
               tabIndex={onRowClick ? 0 : undefined}
             >
-              {columns.map((col) => (
+              {columns.map((col, index) => (
                 <td key={col.id} className={cn("px-4 py-3", col.className)}>
-                  {col.cell(row)}
+                  {index === 0 && onRowClick ? (
+                    <span className="font-medium group-hover:underline">{col.cell(row)}</span>
+                  ) : (
+                    col.cell(row)
+                  )}
                 </td>
               ))}
               {rowActions ? (

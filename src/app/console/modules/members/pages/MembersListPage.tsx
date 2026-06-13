@@ -6,7 +6,6 @@ import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
-import { RowActionLink } from "../../../components/crud/RowActionLink";
 import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ActionNotice } from "../../../components/feedback/ActionNotice";
@@ -128,22 +127,18 @@ export function MembersListPage() {
           emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite someone</EmptyStateButton>}
           rowActions={(member) => {
             const isSelf = member.userId === session.user!.id;
+            if (isSelf) return null;
             return (
-              <>
-                <RowActionLink to={`/members/${member.userId}`}>View</RowActionLink>
-                {!isSelf ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    disabled={busyId === member.userId}
-                    onClick={() => void handleRemoveMember(member)}
-                  >
-                    Remove
-                  </Button>
-                ) : null}
-              </>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={busyId === member.userId}
+                onClick={() => void handleRemoveMember(member)}
+              >
+                Remove
+              </Button>
             );
           }}
         />
@@ -170,19 +165,16 @@ export function MembersListPage() {
           emptyMessage="No pending invitations"
           emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite someone</EmptyStateButton>}
           rowActions={(invite) => (
-            <>
-              <RowActionLink to={`/members/invites/${invite.id}`}>View</RowActionLink>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                disabled={busyId === invite.id}
-                onClick={() => void handleRevokeInvite(invite)}
-              >
-                Revoke
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={busyId === invite.id}
+              onClick={() => void handleRevokeInvite(invite)}
+            >
+              Revoke
+            </Button>
           )}
         />
       )}
