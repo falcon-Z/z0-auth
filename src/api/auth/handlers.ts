@@ -6,7 +6,7 @@ import { parseJsonBody } from "@z0/contracts/validation";
 
 import { buildSessionResponse, requireSession } from "../lib/auth";
 import { validateCsrf, parseCookies } from "../lib/csrf";
-import { json, problem } from "../lib/http";
+import { json } from "../lib/http";
 import { buildAuthenticatedSessionPayload } from "../lib/session-payload";
 import {
   clearSessionCookieHeader,
@@ -69,10 +69,6 @@ export async function handleResetPassword(req: BunRequest): Promise<Response> {
   if (!parsed.ok) return parsed.response;
 
   return completePasswordReset(req, parsed.body);
-}
-
-export async function handleRegister(): Promise<Response> {
-  return problem(403, "Forbidden", "Platform registration is disabled.");
 }
 
 export async function handleChangePassword(req: BunRequest): Promise<Response> {

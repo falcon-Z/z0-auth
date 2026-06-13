@@ -12,19 +12,17 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `password` | Min 14, max 128, character mix, not weak | `password_policy` | 400 | Checklist + inline |
 | `passwordConfirm` | Equals `password` | `password_mismatch` | 400 | Inline on confirm |
 | CSRF | `X-CSRF-Token` matches cookie and origin check passes | `csrf_invalid` | 403 | Refresh token and retry |
-| Install token | Required and valid when configured | `install_token_required` / `install_token_invalid` | 403 | Show setup blocked state |
+| Install token | Required and valid when configured | `install_token_required` / `install_token_invalid` | 403 | Install token field on `/auth/setup`; `X-Install-Token` on JSON API |
+| Schema | Migrations applied (`instance_settings` exists) | `database_unavailable` | 503 | Migration instructions on `/auth/setup` and deploy checklist |
 | Platform state | Setup already complete | `setup_complete` | 409 | Redirect to login |
 
-## `POST /api/auth/register`
+## `GET /api/setup/status`
 
-| Input | Rule | Code | HTTP | UI |
-|-------|------|------|------|-----|
-| `name` | Non-empty trimmed string | `required` | 400 | Inline |
-| `email` | Required + valid + unique | `required` / `invalid_email` | 400/409 | Inline |
-| `organizationName` | Non-empty trimmed string | `required` | 400 | Inline |
-| `password` | Policy rules | `password_policy` | 400 | Checklist + inline |
-| `passwordConfirm` | Must match `password` | `password_mismatch` | 400 | Inline |
-| CSRF | Required | `csrf_invalid` | 403 | Refresh token |
+| Field | Rule | UI |
+|-------|------|-----|
+| `completed` | Reflects `setup_completed_at` | Redirect to login when true |
+| `schemaReady` | Core tables exist | Block setup form when false |
+| `installTokenRequired` | `INSTALL_TOKEN` env is set | Show install token field on setup form |
 
 ## `POST /api/auth/login`
 
@@ -43,7 +41,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | Session cookie | Valid session | — | 200 `authenticated: true` | Load console |
 | Missing/invalid session | — | — | 200 `authenticated: false` | Redirect to login |
 | Setup incomplete | — | `SetupRequired` | 503 | Redirect to setup |
-| Authenticated payload | Returns `user`, `organization`, `accountType`, `managedAppCount` | — | 200 | Render dashboard shell |
+| Authenticated payload | Returns `user`, `isInstanceMember`, `organizationName` | — | 200 | Render dashboard shell |
 
 ## `POST /api/auth/logout`
 

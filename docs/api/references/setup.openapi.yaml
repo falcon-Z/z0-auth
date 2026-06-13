@@ -64,6 +64,12 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "409":
           $ref: "common.openapi.yaml#/components/responses/Conflict"
+        "503":
+          description: Database schema not ready (run migrations)
+          content:
+            application/json:
+              schema:
+                $ref: "common.openapi.yaml#/components/schemas/ProblemDetail"
         "429":
           $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
 components:
@@ -75,10 +81,16 @@ components:
   schemas:
     SetupStatus:
       type: object
-      required: [completed]
+      required: [completed, schemaReady, installTokenRequired]
       properties:
         completed:
           type: boolean
+        schemaReady:
+          type: boolean
+          description: False when DATABASE_URL works but migrations have not been applied.
+        installTokenRequired:
+          type: boolean
+          description: True when INSTALL_TOKEN is configured on the server.
         organizationName:
           type: string
           description: Present when `completed` is true.
@@ -113,24 +125,11 @@ components:
           format: email
         name:
           type: string
-    SetupOrganization:
-      type: object
-      required: [id, name, slug]
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        slug:
-          type: string
     SetupResponse:
       type: object
-      required: [user, organizationName, organization]
+      required: [user, organizationName]
       properties:
         user:
           $ref: "#/components/schemas/SetupUser"
         organizationName:
           type: string
-        organization:
-          $ref: "#/components/schemas/SetupOrganization"

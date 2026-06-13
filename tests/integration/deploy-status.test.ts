@@ -20,13 +20,16 @@ run("deploy status", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ready: boolean;
-      database: { configured: boolean; connected: boolean };
+      database: { configured: boolean; connected: boolean; schemaReady: boolean };
       instanceKeys: { ready: boolean };
     };
     expect(body.database.configured).toBe(true);
     expect(typeof body.database.connected).toBe("boolean");
+    expect(typeof body.database.schemaReady).toBe("boolean");
     expect(typeof body.instanceKeys.ready).toBe("boolean");
-    expect(body.ready).toBe(body.database.connected && body.instanceKeys.ready);
+    expect(body.ready).toBe(
+      body.database.connected && body.database.schemaReady && body.instanceKeys.ready,
+    );
   });
 
   test("reports database not configured when DATABASE_URL is unset", async () => {

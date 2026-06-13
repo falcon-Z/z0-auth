@@ -25,7 +25,9 @@ docker start z0-auth-postgres 2>/dev/null || docker start z0auth-postgres 2>/dev
 Apply schema:
 
 ```bash
-bun run db:reset
+bun run db:reset    # local dev — wipes data
+# or
+bun run db:migrate  # production / existing database — applies pending migrations only
 ```
 
 Complete setup in the browser at `/auth/setup` with your own admin email and password. Those credentials live only in your dev database — the app does not store or print them anywhere.

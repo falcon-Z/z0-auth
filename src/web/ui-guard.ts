@@ -3,7 +3,7 @@ import type { BunRequest } from "bun";
 import type { AppAuthRealm, AuthRealm } from "../api/lib/auth-realm";
 import { handleDatabaseConnectionError } from "../api/lib/database-errors";
 import { resolveAppSession } from "../api/lib/app-session";
-import { isSetupComplete } from "../api/lib/platform";
+import { isSetupComplete } from "../api/lib/instance";
 import { resolveSession } from "../api/lib/session";
 import { safeReturnPath } from "./safe-return-path";
 

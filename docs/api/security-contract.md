@@ -16,7 +16,7 @@ Two session cookies — same lifetime and CSRF rules. **App context** (`client_i
 |------|------------------|
 | Cookie name | `z0_session` |
 | Storage | HttpOnly cookie; token stored hashed in `sessions` table (`user_id` → `users`) |
-| Issuance | After successful **console** login or setup — no `client_id` / app context on the request |
+| Issuance | After successful **console** login — no `client_id` / app context on the request. Setup creates the bootstrap account but does **not** sign you in; use `/auth/login` next. |
 | Absolute lifetime | **14 days** from creation (`expires_at` in DB and cookie `Max-Age`) |
 | Idle timeout | **Not enforced yet** — `last_seen_at` is updated on each valid request; future: configurable idle window (document target: 30 minutes idle, 14 days absolute) |
 | Revocation | Logout sets `revoked_at`; invalid/expired tokens return unauthenticated session |
@@ -57,7 +57,7 @@ Error: **403** with `errors[].code` = `csrf_invalid`, field `_csrf`.
 
 ## Setup guard
 
-Until platform setup completes:
+Until platform setup completes (unless `ALLOW_INCOMPLETE_SETUP=true`):
 
 - Allowed JSON paths: `/api/deploy/status`, `/api/setup/status`, `/api/setup`, `/api/health`, `/api/live`, `/api/ready`
 - All other `/api/*` return **503** with top-level `code`: `SetupRequired`
@@ -69,7 +69,8 @@ Until platform setup completes:
 
 When `INSTALL_TOKEN` is set in the environment:
 
-- `POST /api/setup` requires header `X-Install-Token` matching the env value
+- `POST /api/setup` requires header `X-Install-Token` matching the env value (JSON API)
+- The `/auth/setup` HTML form includes an **Install token** field that satisfies the same check
 - Missing → **403** `install_token_required` on field `_install`
 - Wrong → **403** `install_token_invalid` on field `_install`
 

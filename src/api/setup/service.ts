@@ -1,4 +1,5 @@
 import type { BunRequest } from "bun";
+import { timingSafeEqual } from "node:crypto";
 
 import type { SetupRequest, SetupResponse } from "@z0/contracts/setup";
 import { ErrorCodes } from "@z0/contracts/errors";
@@ -10,47 +11,86 @@ import { normalizeEmail, validateEmail, validateRequiredString } from "@z0/contr
 
 import { loadConfig } from "../lib/config";
 import { clientIp } from "../lib/rate-limit";
-import { getDb } from "../lib/db";
+import { checkDatabaseSchema, getDb } from "../lib/db";
 import { problem } from "../lib/http";
 import { hashPassword } from "../lib/password";
 import { checkRateLimit } from "../lib/rate-limit";
+
+export type SetupRunOptions = {
+  /** HTML forms pass the token in the body; JSON API uses X-Install-Token. */
+  installToken?: string;
+};
 
 export type SetupResult =
   | { ok: true; response: SetupResponse }
   | { ok: false; response: Response };
 
-export async function runSetup(req: BunRequest, body: SetupRequest): Promise<SetupResult> {
+function tokensMatch(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+function validateInstallToken(
+  config: ReturnType<typeof loadConfig>,
+  token: string | null | undefined,
+): Response | null {
+  if (!config.installToken) return null;
+
+  const value = token?.trim();
+  if (!value) {
+    return problem(403, "Forbidden", "Install token required", {
+      errors: [
+        {
+          field: "_install",
+          code: ErrorCodes.INSTALL_TOKEN_REQUIRED,
+          message: "Install token is required",
+        },
+      ],
+    });
+  }
+  if (!tokensMatch(value, config.installToken)) {
+    return problem(403, "Forbidden", "Invalid install token", {
+      errors: [
+        {
+          field: "_install",
+          code: ErrorCodes.INSTALL_TOKEN_INVALID,
+          message: "Invalid install token",
+        },
+      ],
+    });
+  }
+  return null;
+}
+
+export async function runSetup(
+  req: BunRequest,
+  body: SetupRequest,
+  options: SetupRunOptions = {},
+): Promise<SetupResult> {
   const config = loadConfig();
-  const installHeader = req.headers.get("x-install-token");
-  if (config.installToken) {
-    if (!installHeader) {
-      return {
-        ok: false,
-        response: problem(403, "Forbidden", "Install token required", {
-          errors: [
-            {
-              field: "_install",
-              code: ErrorCodes.INSTALL_TOKEN_REQUIRED,
-              message: "X-Install-Token header is required",
-            },
-          ],
-        }),
-      };
-    }
-    if (installHeader !== config.installToken) {
-      return {
-        ok: false,
-        response: problem(403, "Forbidden", "Invalid install token", {
-          errors: [
-            {
-              field: "_install",
-              code: ErrorCodes.INSTALL_TOKEN_INVALID,
-              message: "Invalid install token",
-            },
-          ],
-        }),
-      };
-    }
+
+  const schema = await checkDatabaseSchema();
+  if (!schema.ready) {
+    return {
+      ok: false,
+      response: problem(503, "Service Unavailable", "Database schema is not ready. Run migrations first.", {
+        errors: [
+          {
+            field: "_schema",
+            code: ErrorCodes.DATABASE_UNAVAILABLE,
+            message: "Apply database migrations before setup (bun run db:migrate).",
+          },
+        ],
+      }),
+    };
+  }
+
+  const installToken = options.installToken ?? req.headers.get("x-install-token");
+  const installError = validateInstallToken(config, installToken);
+  if (installError) {
+    return { ok: false, response: installError };
   }
 
   const rate = checkRateLimit({

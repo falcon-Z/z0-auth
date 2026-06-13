@@ -5,6 +5,7 @@ import { parseJsonBody } from "@z0/contracts/validation";
 
 import { csrfCookieHeader, ensureCsrfToken, validateCsrf } from "../lib/csrf";
 import { loadConfig } from "../lib/config";
+import { checkDatabaseSchema } from "../lib/db";
 import { json, problem } from "../lib/http";
 import { getInstanceSettings } from "../lib/instance";
 import { runSetup } from "./service";
@@ -23,16 +24,31 @@ function appendSetCookie(response: Response, cookie: string): Response {
 export const setupApiRoutes = {
   "/api/setup/status": {
     async GET(req: BunRequest) {
-      const settings = await getInstanceSettings();
+      const config = loadConfig();
+      const schema = await checkDatabaseSchema();
+
+      let completed = false;
+      let organizationName: string | undefined;
+      if (schema.ready) {
+        try {
+          const settings = await getInstanceSettings();
+          completed = settings.setupCompleted;
+          if (completed && settings.organizationName) {
+            organizationName = settings.organizationName;
+          }
+        } catch {
+          /* treat as incomplete */
+        }
+      }
+
       const body: SetupStatus = {
-        completed: settings.setupCompleted,
-        ...(settings.setupCompleted && settings.organizationName
-          ? { organizationName: settings.organizationName }
-          : {}),
+        completed,
+        schemaReady: schema.ready,
+        installTokenRequired: Boolean(config.installToken),
+        ...(organizationName ? { organizationName } : {}),
       };
 
       const { token, setCookie } = ensureCsrfToken(req);
-      const config = loadConfig();
       let response = json(body);
       if (setCookie) {
         response = appendSetCookie(response, csrfCookieHeader(token, config.nodeEnv === "production"));

@@ -14,7 +14,8 @@ type DatabaseSetupPanelProps = {
 
 export function DatabaseSetupPanel({ status }: DatabaseSetupPanelProps) {
   const [provider, setProvider] = useState(DEPLOY_PROVIDERS[0]?.id ?? "docker");
-  const dbOk = status.database.configured && status.database.connected;
+  const dbConnected = status.database.configured && status.database.connected;
+  const dbReady = dbConnected && status.database.schemaReady;
 
   return (
     <div className="space-y-6">
@@ -23,7 +24,7 @@ export function DatabaseSetupPanel({ status }: DatabaseSetupPanelProps) {
         <p className="text-sm text-muted-foreground">
           Point this instance at a PostgreSQL database using the{" "}
           <code className="rounded bg-muted px-1 py-0.5 text-xs">DATABASE_URL</code> environment
-          variable.
+          variable, then apply schema migrations.
         </p>
       </div>
 
@@ -31,8 +32,8 @@ export function DatabaseSetupPanel({ status }: DatabaseSetupPanelProps) {
         <Alert variant="destructive">
           <AlertTitle>DATABASE_URL is not set</AlertTitle>
           <AlertDescription>
-            Add a PostgreSQL connection string to your deployment environment, restart the app, then
-            click Refresh.
+            Add a PostgreSQL connection string to your deployment environment and restart the app.
+            This page refreshes automatically every few seconds.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -47,12 +48,27 @@ export function DatabaseSetupPanel({ status }: DatabaseSetupPanelProps) {
         </Alert>
       ) : null}
 
-      {dbOk ? (
+      {dbConnected && !status.database.schemaReady ? (
+        <Alert variant="destructive">
+          <AlertTitle>Run database migrations</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>PostgreSQL is reachable, but the schema has not been applied yet.</p>
+            <p>
+              From a machine that can reach this database, run{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">bun run db:migrate</code> with{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">DATABASE_URL</code> set. No
+              restart is required — this page will detect the change automatically.
+            </p>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {dbReady ? (
         <Alert>
-          <AlertTitle>Database connected</AlertTitle>
+          <AlertTitle>Database ready</AlertTitle>
           <AlertDescription>
-            PostgreSQL is reachable. Open <strong>Encryption keys</strong> in the sidebar if that step
-            is still pending, or click Refresh to continue.
+            PostgreSQL is connected and migrations are applied. Open{" "}
+            <strong>Encryption keys</strong> in the sidebar if that step is still pending.
           </AlertDescription>
         </Alert>
       ) : (

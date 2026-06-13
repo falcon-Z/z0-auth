@@ -47,6 +47,11 @@ export const DATABASE_GUIDES: Record<DeployProviderId, GuideStep[]> = {
       ],
     },
     {
+      title: "Apply schema migrations",
+      body: "Before first use, apply SQL migrations against this database. From the repo (or your release artifact) with DATABASE_URL set:",
+      code: "bun run db:migrate",
+    },
+    {
       title: "Set DATABASE_URL on the app",
       body: "Pass DATABASE_URL when you run your z0-auth container, then restart the app and refresh this page.",
       links: [

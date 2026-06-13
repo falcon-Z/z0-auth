@@ -11,7 +11,7 @@ servers:
     description: Local development
 tags:
   - name: Auth
-    description: Sign-in, session, and account entrypoints
+    description: Sign-in, session, and password management. Owner onboarding is `POST /api/setup`.
 paths:
   /api/auth/session:
     get:
@@ -94,42 +94,6 @@ paths:
                 $ref: "common.openapi.yaml#/components/schemas/LogoutResponse"
         "403":
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "503":
-          $ref: "common.openapi.yaml#/components/responses/SetupRequired"
-  /api/auth/register:
-    post:
-      tags: [Auth]
-      summary: Account owner signup
-      description: |
-        Creates the first account owner profile for the instance and signs them in.
-        This endpoint is only valid before initial setup is complete.
-        Once an owner already exists, requests are rejected with 409 Conflict.
-        Includes organization profile details used in console branding and defaults.
-      operationId: postAuthRegister
-      security:
-        - CsrfHeader: []
-          CsrfCookie: []
-      parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterRequest"
-      responses:
-        "201":
-          description: Signed up and authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthenticatedSession"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "409":
-          $ref: "common.openapi.yaml#/components/responses/Conflict"
         "503":
           $ref: "common.openapi.yaml#/components/responses/SetupRequired"
   /api/auth/forgot-password:
@@ -285,31 +249,6 @@ components:
           format: email
         name:
           type: string
-    SessionOrganization:
-      type: object
-      required: [id, name, slug]
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        slug:
-          type: string
-    RegisterRequest:
-      type: object
-      required: [name, email, password, passwordConfirm, organizationName]
-      properties:
-        name:
-          type: string
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-        passwordConfirm:
-          type: string
-        organizationName:
-          type: string
     ChangePasswordRequest:
       type: object
       required: [currentPassword, password, passwordConfirm]
@@ -328,20 +267,22 @@ components:
           type: boolean
         user:
           $ref: "#/components/schemas/SessionUser"
-        organization:
-          $ref: "#/components/schemas/SessionOrganization"
-        accountType:
+        isInstanceMember:
+          type: boolean
+          description: True when the user is an instance member (console access).
+        organizationName:
           type: string
-          enum: [owner, app_user]
-        managedAppCount:
-          type: integer
-          minimum: 0
+          description: Instance organization display name from setup.
     AuthenticatedSession:
       allOf:
         - $ref: "#/components/schemas/SessionResponse"
         - type: object
-          required: [authenticated, user, organization, accountType]
+          required: [authenticated, user, isInstanceMember, organizationName]
           properties:
             authenticated:
               type: boolean
               const: true
+            isInstanceMember:
+              type: boolean
+            organizationName:
+              type: string

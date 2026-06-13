@@ -26,6 +26,8 @@ run("setup flow", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.completed).toBe(false);
+    expect(body.schemaReady).toBe(true);
+    expect(body.installTokenRequired).toBe(false);
   });
 
   test("POST /api/setup creates bootstrap member and organization", async () => {

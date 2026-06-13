@@ -82,13 +82,11 @@ components:
         - pkce_required
         - invalid_client
         - unauthorized_client
-        - tenant_access_denied
         - permission_denied
         - invite_invalid
         - invite_expired
         - invite_email_mismatch
         - invite_already_member
-        - invalid_role
         - invalid_slug
         - slug_taken
         - app_not_found
@@ -171,7 +169,7 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetail"
     Forbidden:
-      description: Authenticated or anonymous request is not allowed (CSRF, registration disabled, install token).
+      description: Authenticated or anonymous request is not allowed (CSRF, install token).
       content:
         application/json:
           schema:

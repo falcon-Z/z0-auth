@@ -33,6 +33,3 @@ export async function isSetupComplete(): Promise<boolean> {
   const settings = await getInstanceSettings();
   return settings.setupCompleted;
 }
-
-/** @deprecated Use getInstanceSettings */
-export const getPlatformSettings = getInstanceSettings;

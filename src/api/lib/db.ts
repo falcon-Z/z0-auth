@@ -11,6 +11,12 @@ export type DatabaseHealth = {
   error?: string;
 };
 
+export type DatabaseSchemaHealth = {
+  /** True when core tables exist (instance_settings). */
+  ready: boolean;
+  error?: string;
+};
+
 /** Survives `bun --hot` reloads so old pools are not left open on the server. */
 const GLOBAL_DB_KEY = "__z0_auth_pg_sql__";
 
@@ -92,6 +98,31 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealth> {
       ok: false,
       configured: true,
       latencyMs: Math.round(performance.now() - started),
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function checkDatabaseSchema(): Promise<DatabaseSchemaHealth> {
+  const { databaseUrl } = loadConfig();
+  if (!databaseUrl) {
+    return { ready: false, error: "DATABASE_URL is not set" };
+  }
+
+  try {
+    const [row] = await getDb()`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'instance_settings'
+      ) AS ready
+    `;
+    return { ready: Boolean((row as { ready: boolean }).ready) };
+  } catch (error) {
+    if (isDatabaseConnectionError(error)) await resetDatabaseConnection();
+    return {
+      ready: false,
       error: error instanceof Error ? error.message : String(error),
     };
   }

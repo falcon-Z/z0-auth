@@ -45,7 +45,7 @@ export function SecretsSetupPanel({ status }: SecretsSetupPanelProps) {
         </div>
         <Alert>
           <AlertTitle>Keys are configured</AlertTitle>
-          <AlertDescription>Click Refresh to verify all steps and continue.</AlertDescription>
+          <AlertDescription>Click Refresh to verify all steps, or wait a few seconds for an automatic check.</AlertDescription>
         </Alert>
       </div>
     );

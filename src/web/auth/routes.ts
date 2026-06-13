@@ -11,6 +11,8 @@ import { validateFormCsrf } from "../../api/lib/csrf";
 import { clearSessionCookieHeader, revokeSessionByToken, SESSION_COOKIE } from "../../api/lib/session";
 import { parseCookies } from "../../api/lib/csrf";
 import { runSetup } from "../../api/setup/service";
+import { checkDatabaseSchema } from "../../api/lib/db";
+import { loadConfig } from "../../api/lib/config";
 import { redirectForAuthPage } from "../ui-guard";
 import { authFormErrorStatus, htmlFormRedirect, htmxAuthErrorHeaders } from "../htmx";
 import { parseFormBody } from "../forms";
@@ -63,12 +65,51 @@ async function problemFieldErrors(res: Response): Promise<{ field: string; messa
   return problemToFieldErrors(res);
 }
 
-function renderSetupForm(csrfToken: string, values: FormFields = {}, errors: { field: string; message: string }[] = []): string {
+type SetupFormOptions = {
+  installTokenRequired: boolean;
+};
+
+function renderSetupSchemaBlocked(csrfToken: string): string {
+  return renderAuthPage({
+    title: "Database not ready",
+    description: "Apply migrations before creating your account.",
+    csrfToken,
+    body: `<div class="auth-card">
+      <h2>Run database migrations</h2>
+      <p class="auth-lead">PostgreSQL is reachable, but this instance does not have the required tables yet.</p>
+      <p>From a machine that can reach <code>DATABASE_URL</code>, run:</p>
+      <p><code>bun run db:migrate</code></p>
+      <p>Then reload this page to continue setup.</p>
+    </div>`,
+  });
+}
+
+function renderSetupForm(
+  csrfToken: string,
+  values: FormFields = {},
+  errors: { field: string; message: string }[] = [],
+  options: SetupFormOptions = { installTokenRequired: false },
+): string {
   const v = (key: string) => values[key] ?? "";
+  const installTokenField = options.installTokenRequired
+    ? renderAuthField({
+        id: "installToken",
+        name: "installToken",
+        label: "Install token",
+        type: "password",
+        value: v("installToken"),
+        required: true,
+        autocomplete: "off",
+        hint: "Required because INSTALL_TOKEN is set on this server.",
+        error: fieldErrorFor(errors, "_install") ?? fieldErrorFor(errors, "installToken"),
+        msgRequired: "Enter the install token from your deployment configuration",
+      })
+    : "";
   const body = `
     <form method="post" action="/auth/setup" class="auth-card" data-validate hx-post="/auth/setup" hx-target="#auth-root" hx-select="#auth-root" hx-swap="outerHTML">
       <h2>Create your account</h2>
       ${formErrorsSummary(errors)}
+      ${installTokenField}
       ${renderAuthField({
         id: "organizationName",
         name: "organizationName",
@@ -307,20 +348,31 @@ async function getSetupPage(req: BunRequest): Promise<Response> {
   const redirect = await redirectForAuthPage(req, "setup");
   if (redirect) return redirect;
 
+  const schema = await checkDatabaseSchema();
+  const config = loadConfig();
   const { token, setCookie } = preparePageCsrf(req);
-  return withSetCookie(htmlResponse(renderSetupForm(token)), setCookie);
+  if (!schema.ready) {
+    return withSetCookie(htmlResponse(renderSetupSchemaBlocked(token)), setCookie);
+  }
+  return withSetCookie(
+    htmlResponse(renderSetupForm(token, {}, [], { installTokenRequired: Boolean(config.installToken) })),
+    setCookie,
+  );
 }
 
 async function postSetupPage(req: BunRequest): Promise<Response> {
   const redirect = await redirectForAuthPage(req, "setup");
   if (redirect) return redirect;
 
+  const config = loadConfig();
+  const formOptions = { installTokenRequired: Boolean(config.installToken) };
+
   const form = await parseFormBody(req);
   const csrfError = validateFormCsrf(req, form._csrf);
   if (csrfError) {
     const errors = await problemFieldErrors(csrfError);
     const { token, setCookie } = preparePageCsrf(req);
-    return authErrorResponse(renderSetupForm(token, form, errors), req, 403, setCookie);
+    return authErrorResponse(renderSetupForm(token, form, errors, formOptions), req, 403, setCookie);
   }
 
   const body: SetupRequest = {
@@ -331,11 +383,16 @@ async function postSetupPage(req: BunRequest): Promise<Response> {
     passwordConfirm: form.passwordConfirm ?? "",
   };
 
-  const result = await runSetup(req, body);
+  const result = await runSetup(req, body, { installToken: form.installToken });
   if (!result.ok) {
     const errors = await problemFieldErrors(result.response);
     const { token, setCookie } = preparePageCsrf(req);
-    return authErrorResponse(renderSetupForm(token, form, errors), req, 400, setCookie);
+    return authErrorResponse(
+      renderSetupForm(token, form, errors, formOptions),
+      req,
+      result.response.status,
+      setCookie,
+    );
   }
 
   const org = encodeURIComponent(result.response.organizationName);

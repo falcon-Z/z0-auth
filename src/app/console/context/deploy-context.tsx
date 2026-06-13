@@ -48,6 +48,14 @@ export function DeployProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!status || status.ready) return;
+    const intervalId = window.setInterval(() => {
+      void refresh();
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [status?.ready, refresh]);
+
   if (error) {
     return (
       <SessionGate

@@ -9,10 +9,10 @@ Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.m
 
 | Surface | Behavior |
 |---------|----------|
-| `GET /api/setup/status` | `{ completed: false }` |
+| `GET /api/setup/status` | `{ completed: false, schemaReady, installTokenRequired }` |
+| `GET /auth/setup` | Setup HTML form, or migration instructions when `schemaReady` is false |
 | `GET /auth/login`, `/auth/register`, `/auth/forgot-password` | Server **302** to `/auth/setup` |
-| `GET /auth/setup` | Setup HTML form |
-| Protected `/api/*` (except setup + health) | **503** `SetupRequired` |
+| Protected `/api/*` (except setup + health + deploy status) | **503** `SetupRequired` (unless `ALLOW_INCOMPLETE_SETUP=true`) |
 
 ## Setup flow
 

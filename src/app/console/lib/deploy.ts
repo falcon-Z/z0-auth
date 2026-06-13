@@ -12,6 +12,7 @@ function isDeployStatusResponse(value: unknown): value is DeployStatusResponse {
   if (!db || typeof db !== "object") return false;
   const d = db as Record<string, unknown>;
   if (typeof d.configured !== "boolean" || typeof d.connected !== "boolean") return false;
+  if (typeof d.schemaReady !== "boolean") return false;
   const keys = o.instanceKeys;
   if (!keys || typeof keys !== "object") return false;
   const k = keys as Record<string, unknown>;

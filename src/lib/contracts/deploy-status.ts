@@ -17,6 +17,8 @@ export type DeployStatusResponse = {
   database: {
     configured: boolean;
     connected: boolean;
+    /** True when migrations have been applied (instance_settings exists). */
+    schemaReady: boolean;
     latencyMs?: number;
     error?: string;
   };

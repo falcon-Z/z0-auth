@@ -45,8 +45,6 @@ export const ErrorCodes = {
   INVALID_CLIENT: "invalid_client",
   /** OAuth: client not permitted for this grant or redirect. */
   UNAUTHORIZED_CLIENT: "unauthorized_client",
-  /** Active organization is not in the user's memberships. */
-  TENANT_ACCESS_DENIED: "tenant_access_denied",
   /** Caller lacks permission for this action. */
   PERMISSION_DENIED: "permission_denied",
   /** Invite token unknown or not pending. */
@@ -57,18 +55,8 @@ export const ErrorCodes = {
   INVITE_EMAIL_MISMATCH: "invite_email_mismatch",
   /** User is already a member of the organization. */
   INVITE_ALREADY_MEMBER: "invite_already_member",
-  /** Invalid or unknown role key for assignment. */
-  INVALID_ROLE: "invalid_role",
   /** Target user does not exist. */
   USER_NOT_FOUND: "user_not_found",
-  /** Operator cannot disable their own account. */
-  CANNOT_DISABLE_SELF: "cannot_disable_self",
-  /** Cannot disable the last active platform administrator. */
-  LAST_PLATFORM_ADMIN: "last_platform_admin",
-  /** Cannot remove or demote the last organization administrator. */
-  LAST_TENANT_ADMIN: "last_tenant_admin",
-  /** Actor cannot assign the requested tenant role keys. */
-  ROLE_ASSIGNMENT_DENIED: "role_assignment_denied",
   /** Session id not found or not active for the current user. */
   SESSION_NOT_FOUND: "session_not_found",
   /** Organization slug format is invalid. */

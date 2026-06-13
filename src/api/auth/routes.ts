@@ -2,7 +2,6 @@ import {
   handleChangePassword,
   handleLogin,
   handleLogout,
-  handleRegister,
   handleForgotPassword,
   handleResetPassword,
   handleSession,
@@ -18,10 +17,6 @@ export const authApiRoutes = {
 
   "/api/auth/logout": {
     POST: handleLogout,
-  },
-
-  "/api/auth/register": {
-    POST: handleRegister,
   },
 
   "/api/auth/reset-password": {

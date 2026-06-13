@@ -18,7 +18,9 @@ type DeploySetupPageProps = {
 type SetupStep = "database" | "keys";
 
 function stepComplete(status: DeployStatusResponse, step: SetupStep): boolean {
-  if (step === "database") return status.database.configured && status.database.connected;
+  if (step === "database") {
+    return status.database.configured && status.database.connected && status.database.schemaReady;
+  }
   return status.instanceKeys.ready;
 }
 
@@ -91,7 +93,8 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
           <div className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Instance setup</h1>
             <p className="max-w-xl text-sm text-muted-foreground">
-              Complete each step on the left. When both are done, click Refresh to continue.
+              Complete each step on the left. When both are done, you will continue to platform setup
+              automatically.
             </p>
           </div>
           <Button type="button" variant="outline" onClick={onRefresh} disabled={refreshing}>
