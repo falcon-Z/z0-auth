@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { EmailSettingsResponse, SmtpEncryption } from "@z0/contracts/email-settings";
 import { Button } from "@z0/components/ui/button";
+import { Card, CardContent } from "@z0/components/ui/card";
 import { Input } from "@z0/components/ui/input";
 import { Label } from "@z0/components/ui/label";
+import { Switch } from "@z0/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -137,19 +139,17 @@ export function EmailSettingsPage() {
       <ActionNotice message={notice} />
 
       <form onSubmit={(e) => void handleSave(e)} className="max-w-xl space-y-6">
-        <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
-          <div>
-            <p className="text-sm font-medium">Enable SMTP</p>
-            <p className="text-sm text-muted-foreground">Required for self-service password reset.</p>
-          </div>
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            aria-label="Enable SMTP"
-            className="size-4 rounded border"
-          />
-        </div>
+        <Card>
+          <CardContent className="flex items-center justify-between gap-4 py-4">
+            <div className="space-y-1">
+              <Label htmlFor="smtp-enabled" className="text-sm font-medium">
+                Enable SMTP
+              </Label>
+              <p className="text-sm text-muted-foreground">Required for self-service password reset.</p>
+            </div>
+            <Switch id="smtp-enabled" checked={enabled} onCheckedChange={setEnabled} aria-label="Enable SMTP" />
+          </CardContent>
+        </Card>
 
         <FormField label="SMTP host" htmlFor="smtpHost" error={fieldErrors.host}>
           <Input id="smtpHost" value={host} onChange={(e) => setHost(e.target.value)} placeholder="smtp.example.com" />

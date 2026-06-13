@@ -19,9 +19,10 @@ Bun monolith (`/api`, `/auth`, `/oauth`, React console). Specs in `docs/api/`. W
 - Task implementation plan: `todoist-planning.mdc`
 - Migrations before close: `database-migrations.mdc`
 - Commit/push: `commit-and-push.mdc` + code-review skill
+- Console UI components: `shadcn-ui.mdc` (shadcn first; CLI add if missing)
 - Full glossary: `AGENTS.md`
 
 ## Do / don’t
 
-- Do: OpenAPI → handlers → tests → UI; discuss if API blocks UX; minimal deps
-- Don’t: planning in UI; UI hacks for missing APIs; close tasks without UI when UI is in scope
+- Do: OpenAPI → handlers → tests → UI; discuss if API blocks UX; minimal deps; shadcn/ui for console primitives
+- Don’t: planning in UI; UI hacks for missing APIs; close tasks without UI when UI is in scope; custom-built buttons/dialogs/tabs when shadcn covers them

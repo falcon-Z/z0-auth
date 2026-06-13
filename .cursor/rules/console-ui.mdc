@@ -1,6 +1,16 @@
+---
+description: Console layout, copy, and interaction patterns
+globs: src/app/console/**/*
+alwaysApply: false
+---
+
 # Console UI
 
 Product-facing console layout and interaction patterns.
+
+## Components
+
+Use **shadcn/ui** for primitives; install missing ones via CLI — see `shadcn-ui.mdc`.
 
 ## Layout
 

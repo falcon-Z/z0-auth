@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
 
+import { Card } from "@z0/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@z0/components/ui/table";
 import { EmptyState } from "../feedback/EmptyState";
 import { cn } from "../../lib/utils";
 
@@ -34,34 +43,31 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card shadow-xs">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/40">
+    <Card className="gap-0 overflow-hidden py-0 shadow-xs">
+      <Table>
+        <TableHeader>
+          <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
             {columns.map((col) => (
-              <th
+              <TableHead
                 key={col.id}
                 scope="col"
-                className={cn("px-4 py-3 text-left font-medium text-muted-foreground", col.className)}
+                className={cn("h-auto px-4 py-3 text-muted-foreground", col.className)}
               >
                 {col.header}
-              </th>
+              </TableHead>
             ))}
             {rowActions ? (
-              <th scope="col" className="px-4 py-3 text-right font-medium text-muted-foreground">
+              <TableHead scope="col" className="h-auto px-4 py-3 text-right text-muted-foreground">
                 Actions
-              </th>
+              </TableHead>
             ) : null}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row) => (
-            <tr
+            <TableRow
               key={rowKey(row)}
-              className={cn(
-                "group border-b last:border-0",
-                onRowClick && "cursor-pointer hover:bg-muted/30",
-              )}
+              className={cn("group", onRowClick && "cursor-pointer hover:bg-muted/30")}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
               onKeyDown={
                 onRowClick
@@ -76,27 +82,27 @@ export function DataTable<T>({
               tabIndex={onRowClick ? 0 : undefined}
             >
               {columns.map((col, index) => (
-                <td key={col.id} className={cn("px-4 py-3", col.className)}>
+                <TableCell key={col.id} className={cn("px-4 py-3", col.className)}>
                   {index === 0 && onRowClick ? (
                     <span className="font-medium group-hover:underline">{col.cell(row)}</span>
                   ) : (
                     col.cell(row)
                   )}
-                </td>
+                </TableCell>
               ))}
               {rowActions ? (
-                <td
+                <TableCell
                   className="px-4 py-3 text-right"
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                 >
                   <div className="flex justify-end gap-1">{rowActions(row)}</div>
-                </td>
+                </TableCell>
               ) : null}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }

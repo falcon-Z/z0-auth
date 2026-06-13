@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import { Button } from "@z0/components/ui/button";
+import { PageTabBar } from "../crud/PageTabBar";
 import { cn } from "../../lib/utils";
 import { initialsFromName } from "../../lib/initials";
 
@@ -97,6 +98,31 @@ type EntityDetailTabBarProps = {
   onTabChange?: (id: string) => void;
 };
 
+function resolveActiveRouteTabId(
+  tabs: EntityDetailTab[],
+  basePath: string,
+  pathname: string,
+): string {
+  const baseMatch = tabs.find((tab) => {
+    const path = tab.to ?? basePath;
+    return path === basePath && pathname === basePath;
+  });
+  if (baseMatch) return baseMatch.id;
+
+  let best: { tab: EntityDetailTab; path: string } | undefined;
+  for (const tab of tabs) {
+    const path = tab.to ?? basePath;
+    if (path === basePath) continue;
+    if (pathname === path || pathname.startsWith(`${path}/`)) {
+      if (!best || path.length > best.path.length) {
+        best = { tab, path };
+      }
+    }
+  }
+
+  return best?.tab.id ?? tabs[0]?.id ?? "";
+}
+
 function EntityDetailTabBar({
   tabs,
   basePath,
@@ -104,53 +130,29 @@ function EntityDetailTabBar({
   activeTabId,
   onTabChange,
 }: EntityDetailTabBarProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   if (useRouterTabs) {
+    const activeId = resolveActiveRouteTabId(tabs, basePath, location.pathname);
+
     return (
-      <div className="flex gap-1 overflow-x-auto border-b" role="tablist">
-        {tabs.map((tab) => {
-          const to = tab.to ?? basePath;
-          return (
-            <NavLink
-              key={tab.id}
-              to={to}
-              end={to === basePath}
-              role="tab"
-              className={({ isActive }) =>
-                cn(
-                  "shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors -mb-px",
-                  isActive
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )
-              }
-            >
-              {tab.label}
-            </NavLink>
-          );
-        })}
-      </div>
+      <PageTabBar
+        tabs={tabs}
+        value={activeId}
+        onValueChange={(id) => {
+          const tab = tabs.find((item) => item.id === id);
+          if (tab?.to) navigate(tab.to);
+        }}
+      />
     );
   }
 
   return (
-    <div className="flex gap-1 overflow-x-auto border-b" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          role="tab"
-          aria-selected={activeTabId === tab.id}
-          className={cn(
-            "shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition-colors -mb-px",
-            activeTabId === tab.id
-              ? "border-primary text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground",
-          )}
-          onClick={() => onTabChange?.(tab.id)}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
+    <PageTabBar
+      tabs={tabs}
+      value={activeTabId ?? tabs[0]?.id ?? ""}
+      onValueChange={(id) => onTabChange?.(id)}
+    />
   );
 }

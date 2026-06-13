@@ -1,0 +1,39 @@
+---
+description: Use shadcn/ui for console UI; install missing components via CLI
+globs: src/app/console/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# shadcn/ui for console UI
+
+Applies to the **React console** (`src/app/console/`). Hosted `/auth` pages are HTML + HTMX — not shadcn.
+
+## Default
+
+Use **shadcn/ui** primitives for interactive UI (buttons, inputs, dialogs, tabs, selects, menus, alerts, etc.). Do not hand-roll styled equivalents when shadcn already provides the pattern.
+
+## Before building UI
+
+1. **Check what exists** — list `src/app/console/components/ui/`.
+2. **Reuse** — import from `@z0/components/ui/<name>` (e.g. `@z0/components/ui/button`).
+3. **Missing component** — add it with the CLI from repo root:
+   ```bash
+   bunx shadcn@latest add <component> --yes
+   ```
+   Components land in `src/app/console/components/ui/` (see `components.json` aliases). Do not install under `src/components/`.
+
+## Allowed custom code
+
+- **Page/layout composition** — thin wrappers that compose shadcn pieces (e.g. `PageTabBar` built from `Tabs`).
+- **Domain-specific UI** — tables, shells, and flows that have no shadcn equivalent; still use shadcn for buttons, badges, dialogs inside them.
+- **Styling** — `className` / `cn()` on shadcn components; prefer variants and `components.json` theme tokens over one-off CSS.
+
+## Avoid
+
+- Custom `<button>`, `<input>`, modal overlays, or tab lists that duplicate shadcn `Button`, `Input`, `Dialog`, `Tabs`, etc.
+- `overflow-x-auto` tab bars or other scroll hacks when shadcn `Tabs` (line variant) fits.
+- New UI dependencies for patterns shadcn already covers.
+
+## If shadcn does not fit
+
+Discuss with the product owner before building a bespoke primitive (e.g. no suitable registry component, HTMX auth page, or a deliberate design exception).

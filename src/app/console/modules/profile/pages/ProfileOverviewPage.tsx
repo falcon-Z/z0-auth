@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
+import { Card, CardContent } from "@z0/components/ui/card";
 import { MetricCard } from "../../../components/dashboard/MetricCard";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -37,22 +38,26 @@ export function ProfileOverviewPage() {
     <div className="space-y-6">
       <section className="space-y-3">
         <h2 className="text-sm font-medium">About you</h2>
-        <dl className="grid gap-3 rounded-lg border px-4 py-3 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Name</dt>
-            <dd className="text-right font-medium">{session.user!.name}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Email</dt>
-            <dd className="text-right">{session.user!.email}</dd>
-          </div>
-          {session.organizationName ? (
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Organization</dt>
-              <dd className="text-right">{session.organizationName}</dd>
-            </div>
-          ) : null}
-        </dl>
+        <Card>
+          <CardContent className="py-4">
+            <dl className="grid gap-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Name</dt>
+                <dd className="text-right font-medium">{session.user!.name}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Email</dt>
+                <dd className="text-right">{session.user!.email}</dd>
+              </div>
+              {session.organizationName ? (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Organization</dt>
+                  <dd className="text-right">{session.organizationName}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </CardContent>
+        </Card>
       </section>
 
       {summary ? (

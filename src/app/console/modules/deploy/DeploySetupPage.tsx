@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { Button } from "@z0/components/ui/button";
+import { Card, CardContent } from "@z0/components/ui/card";
 import { cn } from "../../lib/utils";
 
 import { DatabaseSetupPanel } from "./DatabaseSetupPanel";
@@ -40,11 +41,12 @@ function StepNavButton({
   muted?: boolean;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
       className={cn(
-        "flex w-full items-start gap-3 rounded-lg border px-3 py-3 text-left text-sm transition-colors",
+        "h-auto w-full items-start gap-3 rounded-lg border px-3 py-3 text-left text-sm font-normal",
         active ? "border-primary/40 bg-primary/5" : "border-transparent hover:bg-muted/60",
         muted && !active && "opacity-50",
       )}
@@ -66,7 +68,7 @@ function StepNavButton({
           {label}
         </span>
       </span>
-    </button>
+    </Button>
   );
 }
 
@@ -133,7 +135,9 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
           </div>
         </nav>
 
-        <main className="min-w-0 flex-1 rounded-xl border bg-card p-6 shadow-sm sm:p-8">
+        <main className="min-w-0 flex-1">
+        <Card className="gap-0 py-0 shadow-sm">
+          <CardContent className="p-6 sm:p-8">
           {activeStep === "database" ? (
             <DatabaseSetupPanel status={status} />
           ) : !dbComplete ? (
@@ -150,6 +154,8 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
           ) : (
             <SecretsSetupPanel status={status} />
           )}
+          </CardContent>
+        </Card>
         </main>
       </div>
     </div>

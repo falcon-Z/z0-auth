@@ -15,8 +15,8 @@ Self-hosted IAM for app developers (Auth0/Clerk-like): register apps, redirect e
 
 - **Start a module:** say "start planning" → agent checks open task, closes if already shipped, writes implementation plan for current task (`todoist-planning.mdc`) → align before coding
 - **Ship:** plan → OpenAPI/matrix → implement → tests → UI if in scope → `bun run db:migrate` on dev → comment + complete task
-- **Rules:** `.cursor/rules/` (module-delivery, todoist-planning, database-migrations, commit-and-push)
-- **UI quality:** `.cursor/skills/frontend-design/SKILL.md`
+- **Rules:** `.cursor/rules/` (module-delivery, todoist-planning, database-migrations, commit-and-push, shadcn-ui)
+- **UI quality:** `.cursor/skills/frontend-design/SKILL.md`; console primitives via shadcn/ui (`shadcn-ui.mdc`)
 - **Commit/push:** `.agents/skills/code-review/SKILL.md` (CodeRabbit)
 
 ## Do

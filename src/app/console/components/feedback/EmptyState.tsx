@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Button } from "@z0/components/ui/button";
+import { Card, CardContent } from "@z0/components/ui/card";
 
 type EmptyStateProps = {
   message: string;
@@ -9,10 +10,12 @@ type EmptyStateProps = {
 
 export function EmptyState({ message, action }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed px-6 py-12 text-center">
-      <p className="text-sm text-muted-foreground">{message}</p>
-      {action}
-    </div>
+    <Card className="border-dashed py-12 shadow-none">
+      <CardContent className="flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-sm text-muted-foreground">{message}</p>
+        {action}
+      </CardContent>
+    </Card>
   );
 }
 
