@@ -19,10 +19,15 @@ export type SessionLoadResult =
   | { kind: "unavailable" };
 
 export async function loadSession(): Promise<SessionLoadResult> {
-  const res = await fetch("/api/auth/session", {
-    credentials: "include",
-    headers: { Accept: "application/json" },
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/auth/session", {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    return { kind: "unavailable" };
+  }
 
   if (res.status === 503) {
     const body = (await res.json().catch(() => ({}))) as { code?: string };

@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { AppSectionNav } from "../../../components/apps/AppSectionNav";
+import { AppWorkspaceError, AppWorkspaceLayout } from "../../../components/apps/AppWorkspaceLayout";
+import { TabActions } from "../../../components/apps/TabActions";
 import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
 import type { AppScopeSummary } from "@z0/contracts/app-scopes";
 import type { AppDetail } from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
-import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
-import { ActionNotice } from "../../../components/feedback/ActionNotice";
+import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
-import { PageError } from "../../../components/feedback/PageError";
 import { fetchApp } from "../../../lib/apps-api";
 import { ApiError } from "../../../lib/api";
 import { deleteAppScope, fetchAppScopes } from "../../../lib/scopes-api";
@@ -85,25 +84,15 @@ export function AppScopesPage() {
 
   if (loading) return <ListPageSkeleton />;
 
-  if (error || !app) {
-    return (
-      <div className="space-y-6">
-        <ListPageHeader title="Scopes" />
-        <PageError message={error ?? "Application not found."} onRetry={() => void reload()} />
-      </div>
-    );
+  if (error || !app || !appId) {
+    return <AppWorkspaceError message={error ?? "Application not found."} onRetry={() => void reload()} />;
   }
 
   return (
-    <div className="space-y-6">
-      <ListPageHeader
-        title="Scopes"
-        actions={<Button onClick={() => setDialogOpen(true)}>Add scope</Button>}
-      />
-
-      {appId ? <AppSectionNav appId={appId} /> : null}
-
-      <ActionNotice message={notice} />
+    <AppWorkspaceLayout appId={appId} app={app} notice={notice}>
+      <TabActions>
+        <Button onClick={() => setDialogOpen(true)}>Add scope</Button>
+      </TabActions>
 
       <DataTable
         rowKey={(row) => row.id}
@@ -127,11 +116,14 @@ export function AppScopesPage() {
             Delete
           </Button>
         )}
-        emptyMessage="No scopes yet. Add scopes your app will request at sign-in."
+        emptyMessage="No scopes yet."
+        emptyAction={
+          <EmptyStateButton onClick={() => setDialogOpen(true)}>Add scope</EmptyStateButton>
+        }
       />
 
       <ScopeFormDialog
-        appId={appId!}
+        appId={appId}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onCreated={() => {
@@ -139,6 +131,6 @@ export function AppScopesPage() {
           void reload();
         }}
       />
-    </div>
+    </AppWorkspaceLayout>
   );
 }

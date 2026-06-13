@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import type { AppUserSummary, CreateAppUserInviteResponse, PendingAppUserInvite } from "@z0/contracts/app-users";
@@ -6,13 +6,13 @@ import type { AppDetail } from "@z0/contracts/apps";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { Input } from "@z0/components/ui/input";
+import { AppWorkspaceError, AppWorkspaceLayout } from "../../../components/apps/AppWorkspaceLayout";
+import { TabActions } from "../../../components/apps/TabActions";
 import { DataTable } from "../../../components/crud/DataTable";
-import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
-import { ActionNotice } from "../../../components/feedback/ActionNotice";
+import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
-import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fetchApp } from "../../../lib/apps-api";
 import {
@@ -22,7 +22,6 @@ import {
   patchAppUser,
   revokeAppUserInvite,
 } from "../../../lib/app-users-api";
-import { AppSectionNav } from "../../../components/apps/AppSectionNav";
 import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 import { InviteFormDialog } from "../../members/components/InviteFormDialog";
 import { CreateAppUserDialog } from "../components/CreateAppUserDialog";
@@ -37,6 +36,7 @@ export function AppUsersPage() {
   const [users, setUsers] = useState<AppUserSummary[]>([]);
   const [invites, setInvites] = useState<PendingAppUserInvite[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [tab, setTab] = useState<"users" | "invites">("users");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,30 +45,86 @@ export function AppUsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [createdInvite, setCreatedInvite] = useState<CreateAppUserInviteResponse | null>(null);
+  const usersSearchLoaded = useRef<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (!appId) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    usersSearchLoaded.current = null;
+
+    void (async () => {
+      try {
+        const [appData, userList, inviteList] = await Promise.all([
+          fetchApp(appId),
+          fetchAppUsers(appId, ""),
+          fetchAppUserInvites(appId),
+        ]);
+        if (cancelled) return;
+        setApp(appData);
+        setUsers(userList);
+        setInvites(inviteList);
+        setDebouncedSearch("");
+        setSearch("");
+        usersSearchLoaded.current = "";
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof ApiError ? e.message : "Could not load app users.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appId]);
+
+  useEffect(() => {
+    if (!appId || loading) return;
+    if (usersSearchLoaded.current === debouncedSearch) return;
+
+    let cancelled = false;
+    usersSearchLoaded.current = debouncedSearch;
+
+    void fetchAppUsers(appId, debouncedSearch)
+      .then((userList) => {
+        if (!cancelled) setUsers(userList);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setNotice(e instanceof ApiError ? e.message : "Could not search users.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appId, debouncedSearch, loading]);
 
   const reload = useCallback(async () => {
     if (!appId) return;
-    setLoading(true);
-    setError(null);
     try {
       const [appData, userList, inviteList] = await Promise.all([
         fetchApp(appId),
-        fetchAppUsers(appId, search),
+        fetchAppUsers(appId, debouncedSearch),
         fetchAppUserInvites(appId),
       ]);
       setApp(appData);
       setUsers(userList);
       setInvites(inviteList);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load app users.");
-    } finally {
-      setLoading(false);
+      setNotice(e instanceof ApiError ? e.message : "Could not refresh users.");
     }
-  }, [appId, search]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  }, [appId, debouncedSearch]);
 
   usePageBreadcrumbs(
     app
@@ -144,13 +200,8 @@ export function AppUsersPage() {
 
   if (loading) return <ListPageSkeleton />;
 
-  if (error || !app) {
-    return (
-      <div className="space-y-6">
-        <ListPageHeader title="App users" />
-        <PageError message={error ?? "Application not found."} onRetry={() => void reload()} />
-      </div>
-    );
+  if (error || !app || !appId) {
+    return <AppWorkspaceError message={error ?? "Application not found."} onRetry={() => void reload()} />;
   }
 
   const tabs = [
@@ -159,27 +210,17 @@ export function AppUsersPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <ListPageHeader
-        title="Users"
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setInviteOpen(true)}>
-              Invite
-            </Button>
-            <Button onClick={() => setCreateOpen(true)}>Add user</Button>
-          </>
-        }
-      />
-
-      {appId ? <AppSectionNav appId={appId} /> : null}
-
-      <ActionNotice message={notice} />
-
+    <AppWorkspaceLayout appId={appId} app={app} notice={notice}>
       <ResourceTabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as "users" | "invites")} />
 
       {tab === "users" ? (
         <div className="space-y-4">
+          <TabActions>
+            <Button variant="outline" onClick={() => setInviteOpen(true)}>
+              Invite
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>Add user</Button>
+          </TabActions>
           <Input
             placeholder="Search by name or email"
             value={search}
@@ -203,7 +244,15 @@ export function AppUsersPage() {
             ]}
             rows={users}
             onRowClick={(row) => navigate(`/app-users/${appId}/${row.userId}`)}
-            emptyMessage="No app users yet. Add someone or send an invite."
+            emptyMessage="No users yet."
+            emptyAction={
+              <div className="flex flex-wrap justify-center gap-2">
+                <EmptyStateButton onClick={() => setCreateOpen(true)}>Add user</EmptyStateButton>
+                <Button type="button" variant="outline" onClick={() => setInviteOpen(true)}>
+                  Invite
+                </Button>
+              </div>
+            }
             rowActions={(row) =>
               row.membershipStatus === "active" ? (
                 <Button
@@ -230,7 +279,11 @@ export function AppUsersPage() {
           />
         </div>
       ) : (
-        <DataTable
+        <div className="space-y-4">
+          <TabActions>
+            <Button onClick={() => setInviteOpen(true)}>Invite</Button>
+          </TabActions>
+          <DataTable
           rowKey={(row) => row.id}
           columns={[
             { id: "email", header: "Email", cell: (row) => row.email },
@@ -244,6 +297,7 @@ export function AppUsersPage() {
           rows={invites}
           onRowClick={(row) => navigate(`/app-users/${appId}/invites/${row.id}`)}
           emptyMessage="No pending invitations."
+          emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite</EmptyStateButton>}
           rowActions={(row) => (
             <Button
               type="button"
@@ -257,32 +311,29 @@ export function AppUsersPage() {
             </Button>
           )}
         />
+        </div>
       )}
 
-      {appId ? (
-        <>
-          <CreateAppUserDialog
-            appId={appId}
-            open={createOpen}
-            onOpenChange={setCreateOpen}
-            onCreated={() => void reload()}
-          />
-          <InviteFormDialog
-            open={inviteOpen}
-            onOpenChange={setInviteOpen}
-            onSubmit={(body) => createAppUserInvite(appId, body)}
-            onCreated={(result) => {
-              setCreatedInvite(result);
-              void reload();
-            }}
-          />
-          <AppUserInviteResultDialog
-            invite={createdInvite}
-            appName={app.name}
-            onClose={() => setCreatedInvite(null)}
-          />
-        </>
-      ) : null}
-    </div>
+      <CreateAppUserDialog
+        appId={appId}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => void reload()}
+      />
+      <InviteFormDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        onSubmit={(body) => createAppUserInvite(appId, body)}
+        onCreated={(result) => {
+          setCreatedInvite(result);
+          void reload();
+        }}
+      />
+      <AppUserInviteResultDialog
+        invite={createdInvite}
+        appName={app.name}
+        onClose={() => setCreatedInvite(null)}
+      />
+    </AppWorkspaceLayout>
   );
 }

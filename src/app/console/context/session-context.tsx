@@ -5,11 +5,9 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { useLocation } from "react-router-dom";
 
 import { SessionGate } from "../components/shell/SessionGate";
 import { loadSession, postLogout } from "../lib/api";
@@ -24,15 +22,6 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 function SessionRevalidator({ onRevalidate }: { onRevalidate: () => Promise<void> }) {
-  const { pathname } = useLocation();
-  const initialPath = useRef(pathname);
-
-  useEffect(() => {
-    if (pathname === initialPath.current) return;
-    initialPath.current = pathname;
-    void onRevalidate();
-  }, [pathname, onRevalidate]);
-
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible") void onRevalidate();

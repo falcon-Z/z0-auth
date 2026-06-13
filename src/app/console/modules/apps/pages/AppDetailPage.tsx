@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { AppSectionNav } from "../../../components/apps/AppSectionNav";
+import { AppWorkspaceLayout } from "../../../components/apps/AppWorkspaceLayout";
+import { TabActions } from "../../../components/apps/TabActions";
 import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
 import type { AppCredentialSummary, AppDetail } from "@z0/contracts/apps";
@@ -12,7 +13,6 @@ import { DataTable } from "../../../components/crud/DataTable";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
-import { ActionNotice } from "../../../components/feedback/ActionNotice";
 import {
   createAppCredential,
   fetchApp,
@@ -167,10 +167,10 @@ export function AppDetailPage() {
 
   if (loading && !app) return <ListPageSkeleton />;
 
-  if (error || !app) {
+  if (error || !app || !appId) {
     return (
-      <EntityDetailLayout name="Application" tabs={[]}>
-        <PageError title="Not found" message={error ?? "Application not found."}>
+      <EntityDetailLayout name="Application">
+        <PageError title="Not found" message={error ?? "Application not found."} onRetry={() => void reload()}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/apps">Back to applications</Link>
           </Button>
@@ -182,28 +182,17 @@ export function AppDetailPage() {
   const activeCreds = credentials.filter((c) => c.status === "active");
 
   return (
-    <EntityDetailLayout
-      name={app.name}
-      subtitle={app.slug}
-      badges={
-        <Badge variant={app.status === "active" ? "secondary" : "outline"}>{app.status}</Badge>
-      }
-      actions={
-        <>
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            Edit
-          </Button>
-          <Button variant="outline" disabled={busyId === "status"} onClick={() => void toggleDisabled()}>
-            {app.status === "active" ? "Disable" : "Enable"}
-          </Button>
-        </>
-      }
-    >
-      <ActionNotice message={notice} />
+    <AppWorkspaceLayout appId={appId} app={app} notice={notice}>
+      <TabActions>
+        <Button variant="outline" onClick={() => setEditOpen(true)}>
+          Edit
+        </Button>
+        <Button variant="outline" disabled={busyId === "status"} onClick={() => void toggleDisabled()}>
+          {app.status === "active" ? "Disable" : "Enable"}
+        </Button>
+      </TabActions>
 
-      {appId ? <AppSectionNav appId={appId} /> : null}
-
-      <dl className="mb-8 grid gap-4 text-sm">
+      <dl className="grid gap-4 text-sm">
         <div>
           <dt className="text-muted-foreground">Redirect URIs</dt>
           <dd className="mt-1 space-y-1 font-mono text-xs">
@@ -217,66 +206,68 @@ export function AppDetailPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-sm font-medium">Client credentials</h2>
-          {app.status === "active" ? (
+          {app.status === "active" && credentials.length > 0 ? (
             <Button size="sm" disabled={busyId === "create"} onClick={() => void handleCreateCredential()}>
               Add credential
             </Button>
           ) : null}
         </div>
 
-        {credentials.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No credentials yet. Add one to integrate your app.</p>
-        ) : (
-          <DataTable<AppCredentialSummary>
-            columns={[
-              { id: "label", header: "Label", cell: (row) => row.label },
-              {
-                id: "clientId",
-                header: "Client ID",
-                cell: (row) => <span className="font-mono text-xs">{row.clientId}</span>,
-              },
-              {
-                id: "status",
-                header: "Status",
-                cell: (row) => (
-                  <Badge variant={row.status === "active" ? "secondary" : "outline"}>{row.status}</Badge>
-                ),
-              },
-              {
-                id: "actions",
-                header: "",
-                cell: (row) =>
-                  row.status === "active" ? (
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={busyId === row.id || app.status !== "active"}
-                        onClick={() => void handleRotate(row)}
-                      >
-                        Rotate
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          busyId === row.id ||
-                          (app.status === "active" && activeCreds.length <= 1)
-                        }
-                        onClick={() => void handleRevoke(row)}
-                      >
-                        Revoke
-                      </Button>
-                    </div>
-                  ) : null,
-              },
-            ]}
-            rows={credentials}
-            rowKey={(row) => row.id}
-          />
-        )}
+        <DataTable<AppCredentialSummary>
+          columns={[
+            { id: "label", header: "Label", cell: (row) => row.label },
+            {
+              id: "clientId",
+              header: "Client ID",
+              cell: (row) => <span className="font-mono text-xs">{row.clientId}</span>,
+            },
+            {
+              id: "status",
+              header: "Status",
+              cell: (row) => (
+                <Badge variant={row.status === "active" ? "secondary" : "outline"}>{row.status}</Badge>
+              ),
+            },
+          ]}
+          rows={credentials}
+          rowKey={(row) => row.id}
+          emptyMessage="No credentials yet."
+          emptyAction={
+            app.status === "active" ? (
+              <Button
+                type="button"
+                disabled={busyId === "create"}
+                onClick={() => void handleCreateCredential()}
+              >
+                Add credential
+              </Button>
+            ) : undefined
+          }
+          rowActions={(row) =>
+            row.status === "active" ? (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busyId === row.id || app.status !== "active"}
+                  onClick={() => void handleRotate(row)}
+                >
+                  Rotate
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busyId === row.id || (app.status === "active" && activeCreds.length <= 1)}
+                  onClick={() => void handleRevoke(row)}
+                >
+                  Revoke
+                </Button>
+              </div>
+            ) : null
+          }
+        />
       </div>
 
       {secretDialog ? (
@@ -289,19 +280,17 @@ export function AppDetailPage() {
         />
       ) : null}
 
-      {app ? (
-        <AppFormDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          mode="edit"
-          initial={{ name: app.name, redirectUris: app.redirectUris }}
-          onSubmit={(body) => patchApp(appId!, body)}
-          onSuccess={(updated) => {
-            setApp(updated);
-            setNotice("Application updated.");
-          }}
-        />
-      ) : null}
-    </EntityDetailLayout>
+      <AppFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        mode="edit"
+        initial={{ name: app.name, redirectUris: app.redirectUris }}
+        onSubmit={(body) => patchApp(appId, body)}
+        onSuccess={(updated) => {
+          setApp(updated);
+          setNotice("Application updated.");
+        }}
+      />
+    </AppWorkspaceLayout>
   );
 }

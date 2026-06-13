@@ -6,7 +6,7 @@ import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
-import { EmptyStateButton } from "../../../components/feedback/EmptyState";
+import { EmptyState, EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { useAppsData } from "../../../hooks/use-apps-data";
@@ -37,10 +37,11 @@ export function AppsListPage() {
       />
 
       {apps.length === 0 ? (
-        <EmptyStateButton
-          message="No applications yet. Register one to get client credentials."
-          actionLabel="Register application"
-          onAction={() => setCreateOpen(true)}
+        <EmptyState
+          message="No applications yet."
+          action={
+            <EmptyStateButton onClick={() => setCreateOpen(true)}>Register application</EmptyStateButton>
+          }
         />
       ) : (
         <DataTable<AppDetail>

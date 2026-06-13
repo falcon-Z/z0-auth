@@ -32,7 +32,6 @@ export function DashboardMetrics({ session, summary, loading, error, onRetry }: 
         <MetricCard label="Members" value={instance.memberCount} to="/members" />
         <MetricCard label="Applications" value={instance.appCount} to="/apps" />
         <MetricCard label="Pending invites" value={instance.pendingInviteCount} to="/members" />
-        <MetricCard label="Sessions" value={summary.sessions.activeCount} to="/profile/sessions" />
       </div>
     </section>
   );
