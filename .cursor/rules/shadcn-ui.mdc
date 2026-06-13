@@ -12,6 +12,8 @@ Applies to the **React console** (`src/app/console/`). Hosted `/auth` pages are 
 
 Use **shadcn/ui** primitives for interactive UI (buttons, inputs, dialogs, tabs, selects, menus, alerts, etc.). Do not hand-roll styled equivalents when shadcn already provides the pattern.
 
+**Data tables** — use the shared `DataTable` in `components/crud/DataTable.tsx` (TanStack Table + shadcn `Table`). Do not build one-off HTML tables for list pages.
+
 ## Before building UI
 
 1. **Check what exists** — list `src/app/console/components/ui/`.

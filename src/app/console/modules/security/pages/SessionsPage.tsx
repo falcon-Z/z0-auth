@@ -168,6 +168,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
           {
             id: "device",
             header: "Device",
+            accessorFn: (row) => row.clientLabel,
             cell: (row) => (
               <div className="flex flex-col gap-1">
                 <span className="font-medium">{row.clientLabel}</span>
@@ -182,16 +183,19 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
           {
             id: "location",
             header: "Network",
+            accessorFn: (row) => row.ipDisplay ?? "",
             cell: (row) => row.ipDisplay ?? "—",
           },
           {
             id: "lastSeen",
             header: "Last active",
+            accessorFn: (row) => new Date(row.lastSeenAt).getTime(),
             cell: (row) => formatWhen(row.lastSeenAt),
           },
           {
             id: "created",
             header: "Signed in",
+            accessorFn: (row) => new Date(row.createdAt).getTime(),
             cell: (row) => formatWhen(row.createdAt),
           },
         ]}

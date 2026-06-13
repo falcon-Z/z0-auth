@@ -97,10 +97,11 @@ export function AppScopesPage() {
       <DataTable
         rowKey={(row) => row.id}
         columns={[
-          { id: "name", header: "Scope", cell: (row) => <code>{row.name}</code> },
+          { id: "name", header: "Scope", accessorFn: (row) => row.name, cell: (row) => <code>{row.name}</code> },
           {
             id: "description",
             header: "Description",
+            accessorFn: (row) => row.description ?? "",
             cell: (row) => row.description ?? "—",
           },
         ]}

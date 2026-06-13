@@ -229,12 +229,15 @@ export function AppUsersPage() {
           />
           <DataTable
             rowKey={(row) => row.userId}
+            enableSearch={false}
+            searchPlaceholder="Search users"
             columns={[
-              { id: "name", header: "Name", cell: (row) => row.name },
-              { id: "email", header: "Email", cell: (row) => row.email },
+              { id: "name", header: "Name", accessorFn: (row) => row.name, cell: (row) => row.name },
+              { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
               {
                 id: "status",
                 header: "Status",
+                accessorFn: (row) => row.membershipStatus,
                 cell: (row) => (
                   <Badge variant={row.membershipStatus === "active" ? "secondary" : "outline"}>
                     {row.membershipStatus}
@@ -286,11 +289,12 @@ export function AppUsersPage() {
           <DataTable
           rowKey={(row) => row.id}
           columns={[
-            { id: "email", header: "Email", cell: (row) => row.email },
-            { id: "name", header: "Name", cell: (row) => row.invitedName },
+            { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
+            { id: "name", header: "Name", accessorFn: (row) => row.invitedName, cell: (row) => row.invitedName },
             {
               id: "expires",
               header: "Expires",
+              accessorFn: (row) => new Date(row.expiresAt).getTime(),
               cell: (row) => new Date(row.expiresAt).toLocaleDateString(),
             },
           ]}

@@ -49,12 +49,19 @@ export function AppsListPage() {
             {
               id: "name",
               header: "Name",
+              accessorFn: (row) => row.name,
               cell: (row) => <span className="font-medium">{row.name}</span>,
             },
-            { id: "slug", header: "Slug", cell: (row) => <span className="font-mono text-xs">{row.slug}</span> },
+            {
+              id: "slug",
+              header: "Slug",
+              accessorFn: (row) => row.slug,
+              cell: (row) => <span className="font-mono text-xs">{row.slug}</span>,
+            },
             {
               id: "status",
               header: "Status",
+              accessorFn: (row) => row.status,
               cell: (row) => (
                 <Badge variant={row.status === "active" ? "secondary" : "outline"}>{row.status}</Badge>
               ),
@@ -62,6 +69,7 @@ export function AppsListPage() {
             {
               id: "credentials",
               header: "Credentials",
+              accessorFn: (row) => row.activeCredentialCount,
               cell: (row) => row.activeCredentialCount,
             },
           ]}

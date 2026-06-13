@@ -215,15 +215,17 @@ export function AppDetailPage() {
 
         <DataTable<AppCredentialSummary>
           columns={[
-            { id: "label", header: "Label", cell: (row) => row.label },
+            { id: "label", header: "Label", accessorFn: (row) => row.label, cell: (row) => row.label },
             {
               id: "clientId",
               header: "Client ID",
+              accessorFn: (row) => row.clientId,
               cell: (row) => <span className="font-mono text-xs">{row.clientId}</span>,
             },
             {
               id: "status",
               header: "Status",
+              accessorFn: (row) => row.status,
               cell: (row) => (
                 <Badge variant={row.status === "active" ? "secondary" : "outline"}>{row.status}</Badge>
               ),

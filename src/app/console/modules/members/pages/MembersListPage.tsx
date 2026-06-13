@@ -103,12 +103,14 @@ export function MembersListPage() {
             {
               id: "name",
               header: "Name",
+              accessorFn: (row) => row.name,
               cell: (row) => <span className="font-medium">{row.name}</span>,
             },
-            { id: "email", header: "Email", cell: (row) => row.email },
+            { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
             {
               id: "role",
               header: "Role",
+              accessorFn: (row) => (row.isBootstrap ? "Owner" : "Member"),
               cell: (row) =>
                 row.isBootstrap ? (
                   <Badge variant="secondary">Owner</Badge>
@@ -119,6 +121,7 @@ export function MembersListPage() {
             {
               id: "joined",
               header: "Joined",
+              accessorFn: (row) => new Date(row.joinedAt).getTime(),
               cell: (row) => new Date(row.joinedAt).toLocaleDateString(),
             },
           ]}
@@ -152,12 +155,14 @@ export function MembersListPage() {
             {
               id: "name",
               header: "Name",
+              accessorFn: (row) => row.invitedName,
               cell: (row) => <span className="font-medium">{row.invitedName}</span>,
             },
-            { id: "email", header: "Email", cell: (row) => row.email },
+            { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
             {
               id: "expires",
               header: "Expires",
+              accessorFn: (row) => new Date(row.expiresAt).getTime(),
               cell: (row) => new Date(row.expiresAt).toLocaleDateString(),
             },
           ]}
