@@ -20,6 +20,8 @@ export type SessionResponse = {
   user?: SessionUser;
   /** True when the user can use the developer console. */
   isInstanceMember?: boolean;
+  /** True when this member created the instance at setup (owner). */
+  isBootstrap?: boolean;
   /** Instance organization display name from setup. */
   organizationName?: string;
 };
@@ -28,5 +30,6 @@ export type AuthenticatedSessionPayload = SessionResponse & {
   authenticated: true;
   user: SessionUser;
   isInstanceMember: boolean;
+  isBootstrap: boolean;
   organizationName: string;
 };

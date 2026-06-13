@@ -10,8 +10,8 @@ import { PageError } from "../feedback/PageError";
 export function appSectionTabs(appId: string): EntityDetailTab[] {
   return [
     { id: "overview", label: "Overview", to: `/apps/${appId}` },
-    { id: "scopes", label: "Scopes", to: `/scopes/${appId}` },
-    { id: "users", label: "Users", to: `/app-users/${appId}` },
+    { id: "scopes", label: "Scopes", to: `/apps/${appId}/scopes` },
+    { id: "users", label: "Users", to: `/apps/${appId}/users` },
   ];
 }
 

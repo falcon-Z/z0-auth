@@ -56,6 +56,7 @@ run("auth flow", () => {
     const body = (await res.json()) as SessionResponse;
     expect(body.authenticated).toBe(true);
     expect(body.isInstanceMember).toBe(true);
+    expect(body.isBootstrap).toBe(true);
     expect(body.organizationName).toBe("Auth Test");
     expect(sessionCookieFromResponse(res)).toBeDefined();
   });

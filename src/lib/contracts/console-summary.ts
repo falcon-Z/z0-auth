@@ -4,7 +4,6 @@ export type ConsoleSummaryResponse = {
     organizationName: string;
     memberCount: number;
     pendingInviteCount: number;
-    userCount: number;
     appCount: number;
   };
   sessions: {

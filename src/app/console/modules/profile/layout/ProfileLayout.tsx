@@ -21,7 +21,11 @@ export function ProfileLayout() {
       tabs={PROFILE_TABS}
       badges={
         session.isInstanceMember ? (
-          <Badge variant="secondary">Team member</Badge>
+          session.isBootstrap ? (
+            <Badge variant="secondary">Owner</Badge>
+          ) : (
+            <Badge variant="outline">Member</Badge>
+          )
         ) : undefined
       }
     >

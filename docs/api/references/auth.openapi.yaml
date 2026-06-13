@@ -270,6 +270,9 @@ components:
         isInstanceMember:
           type: boolean
           description: True when the user is an instance member (console access).
+        isBootstrap:
+          type: boolean
+          description: True when this member created the instance at setup (owner).
         organizationName:
           type: string
           description: Instance organization display name from setup.
@@ -277,12 +280,14 @@ components:
       allOf:
         - $ref: "#/components/schemas/SessionResponse"
         - type: object
-          required: [authenticated, user, isInstanceMember, organizationName]
+          required: [authenticated, user, isInstanceMember, isBootstrap, organizationName]
           properties:
             authenticated:
               type: boolean
               const: true
             isInstanceMember:
+              type: boolean
+            isBootstrap:
               type: boolean
             organizationName:
               type: string

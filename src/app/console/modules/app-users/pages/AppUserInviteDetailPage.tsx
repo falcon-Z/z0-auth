@@ -48,7 +48,7 @@ export function AppUserInviteDetailPage() {
       ? [
           { label: "Applications", to: "/apps" },
           { label: appName ?? "Application", to: `/apps/${appId}` },
-          { label: "Users", to: `/app-users/${appId}` },
+          { label: "Users", to: `/apps/${appId}/users` },
           { label: invite.invitedName },
         ]
       : null,
@@ -68,7 +68,7 @@ export function AppUserInviteDetailPage() {
     setRevoking(true);
     try {
       await revokeAppUserInvite(appId, inviteId);
-      navigate(`/app-users/${appId}`);
+      navigate(`/apps/${appId}/users`);
     } catch {
       setError("Could not revoke invitation.");
     } finally {
@@ -84,7 +84,7 @@ export function AppUserInviteDetailPage() {
         <DetailPageHeader title="Invitation" />
         <PageError title="Not found" message={error ?? "Invitation not found or no longer pending."}>
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link to={appId ? `/app-users/${appId}` : "/app-users"}>Back to app users</Link>
+            <Link to={appId ? `/apps/${appId}/users` : "/apps"}>Back to users</Link>
           </Button>
         </PageError>
       </div>

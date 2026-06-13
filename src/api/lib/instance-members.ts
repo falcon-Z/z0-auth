@@ -22,6 +22,13 @@ export async function isInstanceMember(userId: string): Promise<boolean> {
   return Boolean(row);
 }
 
+export async function isBootstrapMember(userId: string): Promise<boolean> {
+  const [row] = await getDb()`
+    SELECT is_bootstrap FROM instance_members WHERE user_id = ${userId} LIMIT 1
+  `;
+  return Boolean(row && (row as { is_bootstrap: boolean }).is_bootstrap);
+}
+
 export async function requireInstanceMember(
   req: Request,
 ): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
@@ -92,6 +99,10 @@ export async function removeInstanceMember(
       return { error: "not_found" as const };
     }
 
+    if ((member as { is_bootstrap: boolean }).is_bootstrap) {
+      return { error: "owner" as const };
+    }
+
     const [countRow] = await tx`
       SELECT COUNT(*)::int AS n
       FROM instance_members m
@@ -131,6 +142,20 @@ export async function removeInstanceMember(
             field: "userId",
             code: ErrorCodes.PERMISSION_DENIED,
             message: "At least one member is required",
+          },
+        ],
+      }),
+    };
+  }
+  if (result.error === "owner") {
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "Cannot remove the instance owner", {
+        errors: [
+          {
+            field: "userId",
+            code: ErrorCodes.PERMISSION_DENIED,
+            message: "The owner account cannot be removed",
           },
         ],
       }),

@@ -243,7 +243,7 @@ export function AppUsersPage() {
               },
             ]}
             rows={users}
-            onRowClick={(row) => navigate(`/app-users/${appId}/${row.userId}`)}
+            onRowClick={(row) => navigate(`/apps/${appId}/users/${row.userId}`)}
             emptyMessage="No users yet."
             emptyAction={
               <div className="flex flex-wrap justify-center gap-2">
@@ -295,7 +295,7 @@ export function AppUsersPage() {
             },
           ]}
           rows={invites}
-          onRowClick={(row) => navigate(`/app-users/${appId}/invites/${row.id}`)}
+          onRowClick={(row) => navigate(`/apps/${appId}/users/invites/${row.id}`)}
           emptyMessage="No pending invitations."
           emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite</EmptyStateButton>}
           rowActions={(row) => (

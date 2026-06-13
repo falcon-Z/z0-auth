@@ -52,7 +52,7 @@ export function MemberDetailPage() {
   async function handleRemove() {
     const ok = await confirm({
       title: "Remove member",
-      description: `Remove ${member!.name} from the team?`,
+      description: `Remove ${member!.name} from the console?`,
       confirmLabel: "Remove",
       destructive: true,
     });
@@ -74,11 +74,11 @@ export function MemberDetailPage() {
       badges={
         <>
           {isSelf ? <Badge variant="outline">You</Badge> : null}
-          {member.isBootstrap ? <Badge variant="secondary">Created account</Badge> : null}
+          {member.isBootstrap ? <Badge variant="secondary">Owner</Badge> : <Badge variant="outline">Member</Badge>}
         </>
       }
       actions={
-        !isSelf ? (
+        !isSelf && !member.isBootstrap ? (
           <Button variant="destructive" disabled={removing} onClick={() => void handleRemove()}>
             Remove
           </Button>

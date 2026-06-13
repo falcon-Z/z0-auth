@@ -30,58 +30,46 @@ export function staticBreadcrumbsForPath(pathname: string): BreadcrumbSegment[] 
 
   if (pathname === "/apps") return [{ label: "Applications" }];
   if (pathname.startsWith("/apps/")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const appId = parts[1];
+    const appPath = appId ? `/apps/${appId}` : "/apps";
+
+    if (parts[2] === "scopes") {
+      return [
+        { label: "Applications", to: "/apps" },
+        { label: "Application", to: appPath },
+        { label: "Scopes" },
+      ];
+    }
+
+    if (parts[2] === "users") {
+      const usersPath = appId ? `/apps/${appId}/users` : "/apps";
+      if (parts[3] === "invites" && parts[4]) {
+        return [
+          { label: "Applications", to: "/apps" },
+          { label: "Application", to: appPath },
+          { label: "Users", to: usersPath },
+          { label: "Invitation" },
+        ];
+      }
+      if (parts[3]) {
+        return [
+          { label: "Applications", to: "/apps" },
+          { label: "Application", to: appPath },
+          { label: "Users", to: usersPath },
+          { label: "User" },
+        ];
+      }
+      return [
+        { label: "Applications", to: "/apps" },
+        { label: "Application", to: appPath },
+        { label: "Users" },
+      ];
+    }
+
     return [
       { label: "Applications", to: "/apps" },
       { label: "Application" },
-    ];
-  }
-
-  if (pathname === "/scopes") {
-    return [
-      { label: "Applications", to: "/apps" },
-      { label: "Scopes" },
-    ];
-  }
-  if (pathname.startsWith("/scopes/")) {
-    const appId = pathname.split("/")[2];
-    return [
-      { label: "Applications", to: "/apps" },
-      { label: "Application", to: appId ? `/apps/${appId}` : "/apps" },
-      { label: "Scopes" },
-    ];
-  }
-
-  if (pathname === "/app-users") {
-    return [
-      { label: "Applications", to: "/apps" },
-      { label: "Users" },
-    ];
-  }
-  if (pathname.startsWith("/app-users/")) {
-    const parts = pathname.split("/").filter(Boolean);
-    const appId = parts[1];
-    const appUsersPath = appId ? `/app-users/${appId}` : "/app-users";
-
-    if (parts[2] === "invites" && parts[3]) {
-      return [
-        { label: "Applications", to: "/apps" },
-        { label: "Application", to: appId ? `/apps/${appId}` : "/apps" },
-        { label: "Users", to: appUsersPath },
-        { label: "Invitation" },
-      ];
-    }
-    if (parts[2] && parts[2] !== "invites") {
-      return [
-        { label: "Applications", to: "/apps" },
-        { label: "Application", to: appId ? `/apps/${appId}` : "/apps" },
-        { label: "Users", to: appUsersPath },
-        { label: "User" },
-      ];
-    }
-    return [
-      { label: "Applications", to: "/apps" },
-      { label: "Application", to: appId ? `/apps/${appId}` : "/apps" },
-      { label: "Users" },
     ];
   }
 

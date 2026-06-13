@@ -8,6 +8,7 @@ One z0-auth deployment serves one account owner team and their registered apps. 
 |------|---------|
 | instance | One deployed z0-auth service |
 | instance member | Console operator with full platform access in v1 |
+| instance owner | First setup user (`is_bootstrap`); cannot be removed |
 | organization | Display name stored on the instance (from setup) |
 | app | Registered client application |
 | app user | End user who signs in through `/auth` for **one** app — isolated from other apps and from console |
@@ -54,7 +55,7 @@ No role tiers, permission matrix, or organization switcher.
 |--------|------|-------|
 | `user_id` | UUID PK → `users` | |
 | `joined_at` | TIMESTAMPTZ | |
-| `is_bootstrap` | BOOLEAN | First setup user |
+| `is_bootstrap` | BOOLEAN | First setup user (owner) |
 
 ### `instance_invites`
 

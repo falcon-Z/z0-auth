@@ -15,11 +15,25 @@ describe("staticBreadcrumbsForPath", () => {
     ]);
   });
 
-  test("app scopes trail includes application parent", () => {
-    expect(staticBreadcrumbsForPath("/scopes/app-123")).toEqual([
+  test("app scopes trail nests under application", () => {
+    expect(staticBreadcrumbsForPath("/apps/app-123/scopes")).toEqual([
       { label: "Applications", to: "/apps" },
       { label: "Application", to: "/apps/app-123" },
       { label: "Scopes" },
+    ]);
+  });
+
+  test("app users trail nests under application", () => {
+    expect(staticBreadcrumbsForPath("/apps/app-123/users")).toEqual([
+      { label: "Applications", to: "/apps" },
+      { label: "Application", to: "/apps/app-123" },
+      { label: "Users" },
+    ]);
+    expect(staticBreadcrumbsForPath("/apps/app-123/users/user-456")).toEqual([
+      { label: "Applications", to: "/apps" },
+      { label: "Application", to: "/apps/app-123" },
+      { label: "Users", to: "/apps/app-123/users" },
+      { label: "User" },
     ]);
   });
 });

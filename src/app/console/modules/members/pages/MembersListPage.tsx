@@ -39,7 +39,7 @@ export function MembersListPage() {
   async function handleRemoveMember(member: InstanceMember) {
     const ok = await confirm({
       title: "Remove member",
-      description: `Remove ${member.name} from the team?`,
+      description: `Remove ${member.name} from the console?`,
       confirmLabel: "Remove",
       destructive: true,
     });
@@ -107,12 +107,14 @@ export function MembersListPage() {
             },
             { id: "email", header: "Email", cell: (row) => row.email },
             {
-              id: "bootstrap",
-              header: "Account",
+              id: "role",
+              header: "Role",
               cell: (row) =>
                 row.isBootstrap ? (
-                  <Badge variant="secondary">Created account</Badge>
-                ) : null,
+                  <Badge variant="secondary">Owner</Badge>
+                ) : (
+                  <Badge variant="outline">Member</Badge>
+                ),
             },
             {
               id: "joined",
@@ -127,7 +129,7 @@ export function MembersListPage() {
           emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite someone</EmptyStateButton>}
           rowActions={(member) => {
             const isSelf = member.userId === session.user!.id;
-            if (isSelf) return null;
+            if (isSelf || member.isBootstrap) return null;
             return (
               <Button
                 type="button"

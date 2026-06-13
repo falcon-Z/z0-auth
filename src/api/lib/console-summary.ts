@@ -19,11 +19,6 @@ async function countPendingInvites(): Promise<number> {
   return Number((row as { count: number }).count ?? 0);
 }
 
-async function countUsers(): Promise<number> {
-  const [row] = await getDb()`SELECT COUNT(*)::int AS count FROM users`;
-  return Number((row as { count: number }).count ?? 0);
-}
-
 async function countActiveSessions(userId: string): Promise<number> {
   const [row] = await getDb()`
     SELECT COUNT(*)::int AS count
@@ -43,7 +38,6 @@ export async function buildConsoleSummary(_userId: string): Promise<ConsoleSumma
       organizationName: settings.organizationName,
       memberCount: await countInstanceMembers(),
       pendingInviteCount: await countPendingInvites(),
-      userCount: await countUsers(),
       appCount: await countApps(),
     },
     sessions: {

@@ -290,4 +290,19 @@ run("invite flow", () => {
     const { members } = (await listRes.json()) as { members: { email: string }[] };
     expect(members.some((m) => m.email === "bob@example.com")).toBe(false);
   });
+
+  test("cannot remove instance owner", async () => {
+    const admin = await login("admin@example.com", adminPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const [adminRow] = await getDb()`SELECT id FROM users WHERE email = 'admin@example.com'`;
+    const adminUserId = String((adminRow as { id: string }).id);
+
+    const removeRes = await dispatchApi(
+      buildRequest("DELETE", `/api/v1/members/${adminUserId}`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+      }),
+    );
+    expect(removeRes.status).toBe(409);
+  });
 });

@@ -57,7 +57,7 @@ export function AppUserDetailPage() {
       ? [
           { label: "Applications", to: "/apps" },
           { label: appName ?? "Application", to: `/apps/${appId}` },
-          { label: "Users", to: `/app-users/${appId}` },
+          { label: "Users", to: `/apps/${appId}/users` },
           { label: user.name },
         ]
       : null,
@@ -122,7 +122,7 @@ export function AppUserDetailPage() {
       <EntityDetailLayout name="User" tabs={[]}>
         <PageError title="Not found" message={error ?? "App user not found."}>
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/app-users">Back to app users</Link>
+            <Link to={appId ? `/apps/${appId}/users` : "/apps"}>Back to users</Link>
           </Button>
         </PageError>
       </EntityDetailLayout>

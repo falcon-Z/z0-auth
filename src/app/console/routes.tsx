@@ -1,5 +1,5 @@
 import type { RouteObject } from "react-router-dom";
-import { Navigate } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 
 import { CONSOLE_NAV_ITEMS } from "./config/navigation";
 import { ModulePlaceholderPage } from "./components/layout/ModulePlaceholderPage";
@@ -8,8 +8,6 @@ import { AppsModule } from "./modules/apps/AppsModule";
 import { MembersModule } from "./modules/members/MembersModule";
 import { ProfileModule } from "./modules/profile/ProfileModule";
 import { CommunicationsModule } from "./modules/communications/CommunicationsModule";
-import { ScopesModule } from "./modules/scopes/ScopesModule";
-import { AppUsersModule } from "./modules/app-users/AppUsersModule";
 import { SettingsModule } from "./modules/settings/SettingsModule";
 
 const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
@@ -18,8 +16,6 @@ const IMPLEMENTED_PAGES: Record<string, RouteObject["element"]> = {
   "/apps": <AppsModule />,
   "/settings": <SettingsModule />,
   "/communications/email": <CommunicationsModule />,
-  "/scopes": <ScopesModule />,
-  "/app-users": <AppUsersModule />,
   "/profile": <ProfileModule />,
 };
 
@@ -30,8 +26,6 @@ export const WIRED_CONSOLE_NAV_PATHS = [
   "/apps",
   "/settings",
   "/communications/email",
-  "/scopes",
-  "/app-users",
   "/profile",
 ] as const;
 
@@ -41,8 +35,6 @@ export function routePathForNav(path: string): string {
     path === "/members" ||
     path === "/apps" ||
     path === "/communications/email" ||
-    path === "/scopes" ||
-    path === "/app-users" ||
     path === "/profile"
   ) {
     return `${path}/*`;
@@ -50,13 +42,49 @@ export function routePathForNav(path: string): string {
   return path;
 }
 
+function LegacyAppUsersRedirect() {
+  const { appId, userId, inviteId } = useParams<{
+    appId?: string;
+    userId?: string;
+    inviteId?: string;
+  }>();
+  if (appId && inviteId) {
+    return <Navigate to={`/apps/${appId}/users/invites/${inviteId}`} replace />;
+  }
+  if (appId && userId) {
+    return <Navigate to={`/apps/${appId}/users/${userId}`} replace />;
+  }
+  if (appId) {
+    return <Navigate to={`/apps/${appId}/users`} replace />;
+  }
+  return <Navigate to="/apps" replace />;
+}
+
+function LegacyScopesRedirect() {
+  const { appId } = useParams<{ appId?: string }>();
+  if (appId) {
+    return <Navigate to={`/apps/${appId}/scopes`} replace />;
+  }
+  return <Navigate to="/apps" replace />;
+}
+
 const legacySecurityRedirects: RouteObject[] = [
   { path: "/security/account", element: <Navigate to="/profile/security" replace /> },
   { path: "/security/sessions", element: <Navigate to="/profile/sessions" replace /> },
 ];
 
+const legacyAppResourceRedirects: RouteObject[] = [
+  { path: "/app-users", element: <Navigate to="/apps" replace /> },
+  { path: "/app-users/:appId/invites/:inviteId", element: <LegacyAppUsersRedirect /> },
+  { path: "/app-users/:appId/:userId", element: <LegacyAppUsersRedirect /> },
+  { path: "/app-users/:appId", element: <LegacyAppUsersRedirect /> },
+  { path: "/scopes", element: <Navigate to="/apps" replace /> },
+  { path: "/scopes/:appId", element: <LegacyScopesRedirect /> },
+];
+
 export const consoleRoutes: RouteObject[] = [
   ...legacySecurityRedirects,
+  ...legacyAppResourceRedirects,
   ...CONSOLE_NAV_ITEMS.map((item) => ({
     path: routePathForNav(item.path),
     element: IMPLEMENTED_PAGES[item.path] ?? <ModulePlaceholderPage item={item} />,

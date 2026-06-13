@@ -41,7 +41,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | Session cookie | Valid session | — | 200 `authenticated: true` | Load console |
 | Missing/invalid session | — | — | 200 `authenticated: false` | Redirect to login |
 | Setup incomplete | — | `SetupRequired` | 503 | Redirect to setup |
-| Authenticated payload | Returns `user`, `isInstanceMember`, `organizationName` | — | 200 | Render dashboard shell |
+| Authenticated payload | Returns `user`, `isInstanceMember`, `isBootstrap`, `organizationName` | — | 200 | Render dashboard shell |
 
 ## `POST /api/auth/logout`
 
@@ -70,6 +70,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `DELETE /api/v1/members/:userId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
 | `DELETE /api/v1/members/:userId` | `userId` | Member exists | `user_not_found` | 404 | Not found state |
 | `DELETE /api/v1/members/:userId` | — | Not last active member | `permission_denied` | 409 | Inline error on remove |
+| `DELETE /api/v1/members/:userId` | — | Not the instance owner (`is_bootstrap`) | `permission_denied` | 409 | Inline error on remove |
 | `GET /api/v1/members/invites` | Session | Instance member | — | 200 | Invites tab |
 | `POST /api/v1/members/invites` | `email` | Valid email | `required` / `invalid_email` | 400 | Inline on email |
 | `POST /api/v1/members/invites` | `invitedName` | Non-empty trimmed | `required` | 400 | Inline on name |
