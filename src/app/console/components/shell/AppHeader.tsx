@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Settings } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@z0/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@z0/components/ui/tooltip";
 import { useBreadcrumbContext } from "../../context/breadcrumb-context";
 import { useSession } from "../../context/session-context";
 import { initialsFromName } from "../../lib/initials";
@@ -71,41 +72,51 @@ export function AppHeader() {
           </BreadcrumbList>
         </Breadcrumb>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/settings">Settings</Link>
-          </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8" asChild>
+                <Link to="/settings" aria-label="Settings">
+                  <Settings className="size-4" />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Settings</TooltipContent>
+          </Tooltip>
 
           <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="shrink-0 gap-2 pl-1.5 pr-2.5">
-              <Avatar className="size-6">
-                <AvatarFallback className="bg-muted text-[10px] font-medium">
-                  {initialsFromName(session.user.name)}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm">Account</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1.5">
-              <p className="truncate text-sm font-medium">{session.user.name}</p>
-              <p className="truncate text-xs text-muted-foreground">{session.user.email}</p>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link to="/profile">Profile</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/profile/sessions">Sessions</Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => void signOut()}>
-              <LogOut className="size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 rounded-full pl-1 pr-1.5"
+                aria-label={`${session.user.name}, account menu`}
+              >
+                <Avatar className="size-7">
+                  <AvatarFallback className="bg-muted text-[10px] font-medium">
+                    {initialsFromName(session.user.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <ChevronDown className="size-3.5 opacity-50" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem asChild className="h-auto cursor-pointer py-2.5 focus:bg-accent">
+                <Link to="/profile" className="flex w-full items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium leading-none">{session.user.name}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{session.user.email}</p>
+                  </div>
+                  <ChevronRight className="size-4 shrink-0 opacity-50" aria-hidden />
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => void signOut()}>
+                <LogOut className="size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>
