@@ -1,0 +1,34 @@
+---
+description: Use shadcn CLI before building custom console UI primitives
+alwaysApply: true
+---
+
+# shadcn UI first
+
+For console UI (`src/console/`), prefer shadcn components over custom primitives.
+
+## Before building a UI element
+
+1. **Check what we already have** — `src/console/components/ui/`.
+2. **Add via shadcn CLI** if the component exists in the registry and is not installed yet:
+
+   ```bash
+   bunx shadcn@latest add <component>
+   ```
+
+3. **Compose from existing primitives** — if no single registry component fits, build with installed shadcn pieces, not bespoke replacements.
+
+## Do not
+
+- Hand-roll buttons, dialogs, sheets, tabs, tables, selects, or other primitives shadcn already provides.
+- Duplicate a shadcn component under `components/` when the CLI version would work.
+
+## Where things go
+
+| Path | Purpose |
+|------|---------|
+| `src/console/components/ui/` | Raw shadcn components (CLI only) |
+| `src/console/components/<use-case>/` | Reusable composed components |
+| `src/console/pages/` | Page-level UI |
+
+Customize styling via Tailwind tokens and shadcn variants — not by reimplementing the component.

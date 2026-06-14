@@ -92,7 +92,7 @@ export function AppFormDialog({
       <DialogContent className="max-w-lg">
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit application" : "Register application"}</DialogTitle>
+            <DialogTitle>{isEdit ? "Edit app" : "Add app"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <FormField label="Name" htmlFor="appName" error={fieldErrors.name}>

@@ -1,0 +1,50 @@
+---
+description: Commit and push workflow with Bugbot and security review before push
+alwaysApply: true
+---
+
+# Commit and push
+
+When I ask to **commit**, **commit and push**, or **push changes**:
+
+## 1. Scope
+
+- `git status` and `git diff` (staged + unstaged). Do not commit secrets (`.env`, credentials).
+
+## 2. Review (required before commit)
+
+Run both review subagents on the changes (default: `branch changes`):
+
+1. **Bugbot** — follow `.cursor/skills-cursor/review-bugbot` (or `review-bugbot` skill): launch one `bugbot` subagent, `readonly: true`.
+2. **Security** — follow `.cursor/skills-cursor/review-security` (or `review-security` skill): launch one `security-review` subagent, `readonly: true`.
+
+Use this prompt shape for each:
+
+```text
+Full Repository Path: /home/madhan/projects/z0-auth
+Diff: branch changes
+```
+
+Use `Diff: uncommitted changes` only if I asked to review uncommitted work only.
+
+## 3. Fix loop
+
+- Address all findings from both reviews.
+- Re-run **both** reviews until clean or only acceptable info-level nits remain.
+- If a review subagent fails twice, stop and report the blocker — do not commit or push.
+
+## 4. Tests
+
+If the diff touches runtime code, run the full test suite (`bun test --preload ./tests/preload.ts` unless I scoped narrower).
+
+## 5. Commit
+
+- Stage intentionally; commit with a clear message (HEREDOC).
+- Do not push unless I explicitly asked to push.
+
+## 6. Push and Todoist
+
+After a successful push:
+
+- Comment on the related Todoist task with the **commit link** and a short summary of what shipped.
+- Complete subtasks only when their scope is actually done and verified.

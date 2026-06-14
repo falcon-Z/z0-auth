@@ -57,7 +57,7 @@ export function DatabaseSetupPanel({ status }: DatabaseSetupPanelProps) {
               From a machine that can reach this database, run{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">bun run db:migrate</code> with{" "}
               <code className="rounded bg-muted px-1 py-0.5 text-xs">DATABASE_URL</code> set. No
-              restart is required — this page will detect the change automatically.
+              restart is required. This page will detect the change automatically.
             </p>
           </AlertDescription>
         </Alert>

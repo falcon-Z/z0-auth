@@ -1,78 +1,62 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
 
-import { AppWorkspaceLayout } from "../../../components/apps/AppWorkspaceLayout";
-import { TabActions } from "../../../components/apps/TabActions";
+import { useAppWorkspace } from "../../../context/app-workspace-context";
 import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
-import type { AppCredentialSummary, AppDetail } from "@z0/contracts/apps";
+import type { AppCredentialSummary } from "@z0/contracts/apps";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
-import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayout";
 import { DataTable } from "../../../components/crud/DataTable";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
-import { PageError } from "../../../components/feedback/PageError";
 import {
   createAppCredential,
-  fetchApp,
   fetchAppCredentials,
-  patchApp,
   revokeAppCredential,
   rotateAppCredential,
 } from "../../../lib/apps-api";
 import { ApiError } from "../../../lib/api";
-import { AppFormDialog } from "../components/AppFormDialog";
 import { CredentialSecretDialog } from "../components/CredentialSecretDialog";
 
-export function AppDetailPage() {
-  const { appId } = useParams<{ appId: string }>();
+export function AppSetupPage() {
+  const { appId, app, setNotice } = useAppWorkspace();
   const confirm = useConfirm();
 
-  const [app, setApp] = useState<AppDetail | null>(null);
   const [credentials, setCredentials] = useState<AppCredentialSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [secretDialog, setSecretDialog] = useState<{
     clientId: string;
     clientSecret: string;
     title: string;
   } | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
 
-  const reload = useCallback(async () => {
-    if (!appId) return;
+  const reloadCredentials = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      const [appData, creds] = await Promise.all([fetchApp(appId), fetchAppCredentials(appId)]);
-      setApp(appData);
-      setCredentials(creds);
+      setCredentials(await fetchAppCredentials(appId));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load application.");
+      setNotice(e instanceof ApiError ? e.message : "Could not load credentials.");
     } finally {
       setLoading(false);
     }
-  }, [appId]);
+  }, [appId, setNotice]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void reloadCredentials();
+  }, [reloadCredentials]);
 
   usePageBreadcrumbs(
-    app
-      ? [
-          { label: "Applications", to: "/apps" },
-          { label: app.name },
-        ]
-      : null,
-    [app?.name, appId],
+    [
+      { label: "Apps", to: "/apps" },
+      { label: app.name, to: `/apps/${appId}/setup` },
+      { label: "Setup" },
+    ],
+    [app.name, appId],
   );
 
   async function handleCreateCredential() {
-    if (!appId || app?.status !== "active") return;
+    if (app.status !== "active") return;
     setBusyId("create");
     setNotice(null);
     try {
@@ -82,7 +66,7 @@ export function AppDetailPage() {
         clientSecret: result.clientSecret,
         title: "New client credential",
       });
-      await reload();
+      await reloadCredentials();
     } catch (e) {
       setNotice(e instanceof ApiError ? e.message : "Could not create credential.");
     } finally {
@@ -91,7 +75,6 @@ export function AppDetailPage() {
   }
 
   async function handleRotate(cred: AppCredentialSummary) {
-    if (!appId) return;
     const ok = await confirm({
       title: "Rotate secret",
       description: "The current secret will stop working immediately.",
@@ -109,7 +92,7 @@ export function AppDetailPage() {
         clientSecret: result.clientSecret,
         title: "Secret rotated",
       });
-      await reload();
+      await reloadCredentials();
     } catch (e) {
       setNotice(e instanceof ApiError ? e.message : "Could not rotate secret.");
     } finally {
@@ -118,7 +101,6 @@ export function AppDetailPage() {
   }
 
   async function handleRevoke(cred: AppCredentialSummary) {
-    if (!appId) return;
     const ok = await confirm({
       title: "Revoke credential",
       description: `Revoke ${cred.label} (${cred.clientId})?`,
@@ -132,7 +114,7 @@ export function AppDetailPage() {
     try {
       await revokeAppCredential(appId, cred.id);
       setNotice("Credential revoked.");
-      await reload();
+      await reloadCredentials();
     } catch (e) {
       setNotice(e instanceof ApiError ? e.message : "Could not revoke credential.");
     } finally {
@@ -140,58 +122,12 @@ export function AppDetailPage() {
     }
   }
 
-  async function toggleDisabled() {
-    if (!appId || !app) return;
-    const disabling = app.status === "active";
-    const ok = await confirm({
-      title: disabling ? "Disable application" : "Enable application",
-      description: disabling
-        ? "New credentials cannot be created while disabled."
-        : "The application will be active again.",
-      confirmLabel: disabling ? "Disable" : "Enable",
-      destructive: disabling,
-    });
-    if (!ok) return;
-
-    setBusyId("status");
-    try {
-      const updated = await patchApp(appId, { status: disabling ? "disabled" : "active" });
-      setApp(updated);
-      setNotice(disabling ? "Application disabled." : "Application enabled.");
-    } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not update application.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  if (loading && !app) return <ListPageSkeleton />;
-
-  if (error || !app || !appId) {
-    return (
-      <EntityDetailLayout name="Application">
-        <PageError title="Not found" message={error ?? "Application not found."} onRetry={() => void reload()}>
-          <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/apps">Back to applications</Link>
-          </Button>
-        </PageError>
-      </EntityDetailLayout>
-    );
-  }
+  if (loading) return <ListPageSkeleton />;
 
   const activeCreds = credentials.filter((c) => c.status === "active");
 
   return (
-    <AppWorkspaceLayout appId={appId} app={app} notice={notice}>
-      <TabActions>
-        <Button variant="outline" onClick={() => setEditOpen(true)}>
-          Edit
-        </Button>
-        <Button variant="outline" disabled={busyId === "status"} onClick={() => void toggleDisabled()}>
-          {app.status === "active" ? "Disable" : "Enable"}
-        </Button>
-      </TabActions>
-
+    <div className="space-y-6">
       <dl className="grid gap-4 text-sm">
         <div>
           <dt className="text-muted-foreground">Redirect URIs</dt>
@@ -281,18 +217,6 @@ export function AppDetailPage() {
           onClose={() => setSecretDialog(null)}
         />
       ) : null}
-
-      <AppFormDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        mode="edit"
-        initial={{ name: app.name, redirectUris: app.redirectUris }}
-        onSubmit={(body) => patchApp(appId, body)}
-        onSuccess={(updated) => {
-          setApp(updated);
-          setNotice("Application updated.");
-        }}
-      />
-    </AppWorkspaceLayout>
+    </div>
   );
 }

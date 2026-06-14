@@ -23,7 +23,7 @@ export function AppsListPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <ListPageHeader title="Applications" />
+        <ListPageHeader title="Apps" />
         <PageError message={error} onRetry={() => void reload()} />
       </div>
     );
@@ -32,15 +32,15 @@ export function AppsListPage() {
   return (
     <div className="space-y-6">
       <ListPageHeader
-        title="Applications"
-        actions={<Button onClick={() => setCreateOpen(true)}>Register application</Button>}
+        title="Apps"
+        actions={<Button onClick={() => setCreateOpen(true)}>Add app</Button>}
       />
 
       {apps.length === 0 ? (
         <EmptyState
-          message="No applications yet."
+          message="No apps yet."
           action={
-            <EmptyStateButton onClick={() => setCreateOpen(true)}>Register application</EmptyStateButton>
+            <EmptyStateButton onClick={() => setCreateOpen(true)}>Add app</EmptyStateButton>
           }
         />
       ) : (
@@ -75,7 +75,7 @@ export function AppsListPage() {
           ]}
           rows={apps}
           rowKey={(row) => row.id}
-          onRowClick={(row) => navigate(`/apps/${row.id}`)}
+          onRowClick={(row) => navigate(`/apps/${row.id}/setup`)}
         />
       )}
 
@@ -83,7 +83,7 @@ export function AppsListPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSubmit={createApp}
-        onSuccess={(app) => navigate(`/apps/${app.id}`)}
+        onSuccess={(app) => navigate(`/apps/${app.id}/setup`)}
       />
     </div>
   );

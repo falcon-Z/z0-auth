@@ -1,50 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
-import type { AppUserSummary, CreateAppUserInviteResponse, PendingAppUserInvite } from "@z0/contracts/app-users";
-import type { AppDetail } from "@z0/contracts/apps";
+import type { AppUserSummary } from "@z0/contracts/app-users";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { Input } from "@z0/components/ui/input";
-import { AppWorkspaceError, AppWorkspaceLayout } from "../../../components/apps/AppWorkspaceLayout";
 import { TabActions } from "../../../components/apps/TabActions";
 import { DataTable } from "../../../components/crud/DataTable";
-import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { PageError } from "../../../components/feedback/PageError";
+import { useAppWorkspace } from "../../../context/app-workspace-context";
 import { ApiError } from "../../../lib/api";
-import { fetchApp } from "../../../lib/apps-api";
-import {
-  createAppUserInvite,
-  fetchAppUserInvites,
-  fetchAppUsers,
-  patchAppUser,
-  revokeAppUserInvite,
-} from "../../../lib/app-users-api";
+import { fetchAppUsers, patchAppUser } from "../../../lib/app-users-api";
 import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
-import { InviteFormDialog } from "../../members/components/InviteFormDialog";
 import { CreateAppUserDialog } from "../components/CreateAppUserDialog";
-import { AppUserInviteResultDialog } from "../components/AppUserInviteResultDialog";
 
 export function AppUsersPage() {
-  const { appId } = useParams<{ appId: string }>();
+  const { appId, app, setNotice } = useAppWorkspace();
   const navigate = useNavigate();
   const confirm = useConfirm();
-
-  const [app, setApp] = useState<AppDetail | null>(null);
   const [users, setUsers] = useState<AppUserSummary[]>([]);
-  const [invites, setInvites] = useState<PendingAppUserInvite[]>([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [tab, setTab] = useState<"users" | "invites">("users");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [createdInvite, setCreatedInvite] = useState<CreateAppUserInviteResponse | null>(null);
   const usersSearchLoaded = useRef<string | null>(null);
 
   useEffect(() => {
@@ -53,43 +36,36 @@ export function AppUsersPage() {
   }, [search]);
 
   useEffect(() => {
-    if (!appId) return;
-
     let cancelled = false;
     setLoading(true);
     setError(null);
     usersSearchLoaded.current = null;
 
-    void (async () => {
-      try {
-        const [appData, userList, inviteList] = await Promise.all([
-          fetchApp(appId),
-          fetchAppUsers(appId, ""),
-          fetchAppUserInvites(appId),
-        ]);
+    void fetchAppUsers(appId, "")
+      .then((userList) => {
         if (cancelled) return;
-        setApp(appData);
         setUsers(userList);
-        setInvites(inviteList);
         setDebouncedSearch("");
         setSearch("");
         usersSearchLoaded.current = "";
-      } catch (e) {
+      })
+      .catch((e) => {
         if (!cancelled) {
           setError(e instanceof ApiError ? e.message : "Could not load app users.");
+          usersSearchLoaded.current = "";
         }
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    })();
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [appId]);
+  }, [appId, setNotice]);
 
   useEffect(() => {
-    if (!appId || loading) return;
+    if (loading) return;
     if (usersSearchLoaded.current === debouncedSearch) return;
 
     let cancelled = false;
@@ -97,7 +73,10 @@ export function AppUsersPage() {
 
     void fetchAppUsers(appId, debouncedSearch)
       .then((userList) => {
-        if (!cancelled) setUsers(userList);
+        if (!cancelled) {
+          setUsers(userList);
+          setError(null);
+        }
       })
       .catch((e) => {
         if (!cancelled) {
@@ -108,37 +87,30 @@ export function AppUsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [appId, debouncedSearch, loading]);
+  }, [appId, debouncedSearch, loading, setNotice]);
 
   const reload = useCallback(async () => {
-    if (!appId) return;
+    setLoading(true);
+    setError(null);
     try {
-      const [appData, userList, inviteList] = await Promise.all([
-        fetchApp(appId),
-        fetchAppUsers(appId, debouncedSearch),
-        fetchAppUserInvites(appId),
-      ]);
-      setApp(appData);
-      setUsers(userList);
-      setInvites(inviteList);
+      setUsers(await fetchAppUsers(appId, debouncedSearch));
     } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not refresh users.");
+      setError(e instanceof ApiError ? e.message : "Could not load app users.");
+    } finally {
+      setLoading(false);
     }
   }, [appId, debouncedSearch]);
 
   usePageBreadcrumbs(
-    app
-      ? [
-          { label: "Applications", to: "/apps" },
-          { label: app.name, to: `/apps/${appId}` },
-          { label: "Users" },
-        ]
-      : null,
-    [app?.name, appId],
+    [
+      { label: "Apps", to: "/apps" },
+      { label: app.name, to: `/apps/${appId}/setup` },
+      { label: "Users" },
+    ],
+    [app.name, appId],
   );
 
   async function handleDisable(user: AppUserSummary) {
-    if (!appId) return;
     const ok = await confirm({
       title: "Disable user",
       description: `${user.name} will not be able to sign in to this application.`,
@@ -161,7 +133,6 @@ export function AppUsersPage() {
   }
 
   async function handleEnable(user: AppUserSummary) {
-    if (!appId) return;
     setBusyId(user.userId);
     setNotice(null);
     try {
@@ -175,148 +146,80 @@ export function AppUsersPage() {
     }
   }
 
-  async function handleRevokeInvite(invite: PendingAppUserInvite) {
-    if (!appId) return;
-    const ok = await confirm({
-      title: "Revoke invitation",
-      description: `Revoke the invitation for ${invite.email}?`,
-      confirmLabel: "Revoke",
-      destructive: true,
-    });
-    if (!ok) return;
-
-    setBusyId(invite.id);
-    setNotice(null);
-    try {
-      await revokeAppUserInvite(appId, invite.id);
-      setNotice("Invitation revoked.");
-      await reload();
-    } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not revoke invitation.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   if (loading) return <ListPageSkeleton />;
 
-  if (error || !app || !appId) {
-    return <AppWorkspaceError message={error ?? "Application not found."} onRetry={() => void reload()} />;
+  if (error) {
+    return <PageError message={error} onRetry={() => void reload()} />;
   }
 
-  const tabs = [
-    { id: "users", label: "Users" },
-    { id: "invites", label: "Invites" },
-  ];
-
   return (
-    <AppWorkspaceLayout appId={appId} app={app} notice={notice}>
-      <ResourceTabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as "users" | "invites")} />
+    <div className="space-y-4">
+      <TabActions>
+        <Button variant="outline" asChild>
+          <Link to={`/apps/${appId}/users/invites`}>Invites</Link>
+        </Button>
+        <Button onClick={() => setCreateOpen(true)}>Add user</Button>
+      </TabActions>
 
-      {tab === "users" ? (
-        <div className="space-y-4">
-          <TabActions>
-            <Button variant="outline" onClick={() => setInviteOpen(true)}>
-              Invite
+      <Input
+        placeholder="Search by name or email"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="max-w-sm"
+      />
+
+      <DataTable
+        rowKey={(row) => row.userId}
+        enableSearch={false}
+        columns={[
+          { id: "name", header: "Name", accessorFn: (row) => row.name, cell: (row) => row.name },
+          { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
+          {
+            id: "status",
+            header: "Status",
+            accessorFn: (row) => row.membershipStatus,
+            cell: (row) => (
+              <Badge variant={row.membershipStatus === "active" ? "secondary" : "outline"}>
+                {row.membershipStatus}
+              </Badge>
+            ),
+          },
+        ]}
+        rows={users}
+        onRowClick={(row) => navigate(`/apps/${appId}/users/${row.userId}`)}
+        emptyMessage="No users yet."
+        emptyAction={
+          <div className="flex flex-wrap justify-center gap-2">
+            <EmptyStateButton onClick={() => setCreateOpen(true)}>Add user</EmptyStateButton>
+            <Button type="button" variant="outline" asChild>
+              <Link to={`/apps/${appId}/users/invites`}>Invites</Link>
             </Button>
-            <Button onClick={() => setCreateOpen(true)}>Add user</Button>
-          </TabActions>
-          <Input
-            placeholder="Search by name or email"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
-          <DataTable
-            rowKey={(row) => row.userId}
-            enableSearch={false}
-            searchPlaceholder="Search users"
-            columns={[
-              { id: "name", header: "Name", accessorFn: (row) => row.name, cell: (row) => row.name },
-              { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
-              {
-                id: "status",
-                header: "Status",
-                accessorFn: (row) => row.membershipStatus,
-                cell: (row) => (
-                  <Badge variant={row.membershipStatus === "active" ? "secondary" : "outline"}>
-                    {row.membershipStatus}
-                  </Badge>
-                ),
-              },
-            ]}
-            rows={users}
-            onRowClick={(row) => navigate(`/apps/${appId}/users/${row.userId}`)}
-            emptyMessage="No users yet."
-            emptyAction={
-              <div className="flex flex-wrap justify-center gap-2">
-                <EmptyStateButton onClick={() => setCreateOpen(true)}>Add user</EmptyStateButton>
-                <Button type="button" variant="outline" onClick={() => setInviteOpen(true)}>
-                  Invite
-                </Button>
-              </div>
-            }
-            rowActions={(row) =>
-              row.membershipStatus === "active" ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={busyId === row.userId}
-                  onClick={() => void handleDisable(row)}
-                >
-                  Disable
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={busyId === row.userId}
-                  onClick={() => void handleEnable(row)}
-                >
-                  Enable
-                </Button>
-              )
-            }
-          />
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <TabActions>
-            <Button onClick={() => setInviteOpen(true)}>Invite</Button>
-          </TabActions>
-          <DataTable
-          rowKey={(row) => row.id}
-          columns={[
-            { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
-            { id: "name", header: "Name", accessorFn: (row) => row.invitedName, cell: (row) => row.invitedName },
-            {
-              id: "expires",
-              header: "Expires",
-              accessorFn: (row) => new Date(row.expiresAt).getTime(),
-              cell: (row) => new Date(row.expiresAt).toLocaleDateString(),
-            },
-          ]}
-          rows={invites}
-          onRowClick={(row) => navigate(`/apps/${appId}/users/invites/${row.id}`)}
-          emptyMessage="No pending invitations."
-          emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite</EmptyStateButton>}
-          rowActions={(row) => (
+          </div>
+        }
+        rowActions={(row) =>
+          row.membershipStatus === "active" ? (
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="text-destructive hover:text-destructive"
-              disabled={busyId === row.id}
-              onClick={() => void handleRevokeInvite(row)}
+              disabled={busyId === row.userId}
+              onClick={() => void handleDisable(row)}
             >
-              Revoke
+              Disable
             </Button>
-          )}
-        />
-        </div>
-      )}
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busyId === row.userId}
+              onClick={() => void handleEnable(row)}
+            >
+              Enable
+            </Button>
+          )
+        }
+      />
 
       <CreateAppUserDialog
         appId={appId}
@@ -324,20 +227,6 @@ export function AppUsersPage() {
         onOpenChange={setCreateOpen}
         onCreated={() => void reload()}
       />
-      <InviteFormDialog
-        open={inviteOpen}
-        onOpenChange={setInviteOpen}
-        onSubmit={(body) => createAppUserInvite(appId, body)}
-        onCreated={(result) => {
-          setCreatedInvite(result);
-          void reload();
-        }}
-      />
-      <AppUserInviteResultDialog
-        invite={createdInvite}
-        appName={app.name}
-        onClose={() => setCreatedInvite(null)}
-      />
-    </AppWorkspaceLayout>
+    </div>
   );
 }

@@ -12,12 +12,13 @@ test.describe("owner console journey", () => {
     const userEmail = `e2e-user-${suffix}@example.com`;
 
     await page.goto("/apps");
-    await expect(page.getByRole("heading", { name: "Applications", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Apps", level: 1 })).toBeVisible();
     await expect(page.getByText("not available yet", { exact: false })).not.toBeVisible();
 
-    await page.getByRole("button", { name: "Register application" }).click();
+    await page.getByRole("button", { name: "Add app" }).click();
     await page.getByLabel("Name").fill(appName);
     await page.getByRole("button", { name: "Create" }).click();
+    await expect(page).toHaveURL(/\/apps\/.+\/setup/);
     await expect(page.getByRole("heading", { name: appName })).toBeVisible();
 
     await page.getByRole("button", { name: "Add credential" }).click();
@@ -29,7 +30,7 @@ test.describe("owner console journey", () => {
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("heading", { name: `${appName} Updated` })).toBeVisible();
 
-    await page.getByRole("link", { name: "Scopes" }).click();
+    await page.getByRole("link", { name: "Permissions" }).click();
     await page.getByRole("button", { name: "Add scope" }).click();
     await page.getByLabel(/^Name/i).fill(scopeName);
     await page.getByRole("button", { name: "Add scope", exact: true }).click();
@@ -49,8 +50,9 @@ test.describe("owner console journey", () => {
     await expect(page.getByText(userEmail)).toBeVisible();
 
     await page.goto("/settings");
-    await page.getByRole("link", { name: "Email & SMTP" }).click();
-    await expect(page.getByRole("heading", { name: "Email & SMTP", level: 1 })).toBeVisible();
+    await page.getByRole("link", { name: "Email" }).click();
+    await expect(page).toHaveURL("/settings/email");
+    await expect(page.getByRole("heading", { name: "Email", level: 1 })).toBeVisible();
     await expect(page.getByText("not available yet", { exact: false })).not.toBeVisible();
   });
 });

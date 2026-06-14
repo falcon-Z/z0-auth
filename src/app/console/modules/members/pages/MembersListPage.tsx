@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { CreateInviteResponse, InstanceMember, PendingInvite } from "@z0/contracts/invites";
 import { Badge } from "@z0/components/ui/badge";
@@ -80,7 +80,7 @@ export function MembersListPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <ListPageHeader title="Members" />
+        <ListPageHeader title="Team" />
         <PageError message={error} onRetry={() => void reload()} />
       </div>
     );
@@ -89,15 +89,18 @@ export function MembersListPage() {
   return (
     <div className="space-y-6">
       <ListPageHeader
-        title="Members"
+        title="Team"
         actions={<Button onClick={() => setInviteOpen(true)}>Invite</Button>}
       />
 
       <ActionNotice message={notice} />
 
-      <ResourceTabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as "members" | "invites")} />
-
-      {tab === "members" && (
+      <ResourceTabs
+        tabs={tabs}
+        activeId={tab}
+        onChange={(id) => setTab(id as "members" | "invites")}
+        panels={{
+          members: (
         <DataTable<InstanceMember>
           columns={[
             {
@@ -127,7 +130,7 @@ export function MembersListPage() {
           ]}
           rows={members}
           rowKey={(row) => row.userId}
-          onRowClick={(member) => navigate(`/members/${member.userId}`)}
+          onRowClick={(member) => navigate(`/team/${member.userId}`)}
           emptyMessage="No members yet"
           emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite someone</EmptyStateButton>}
           rowActions={(member) => {
@@ -147,9 +150,8 @@ export function MembersListPage() {
             );
           }}
         />
-      )}
-
-      {tab === "invites" && (
+          ),
+          invites: (
         <DataTable<PendingInvite>
           columns={[
             {
@@ -168,7 +170,7 @@ export function MembersListPage() {
           ]}
           rows={invites}
           rowKey={(row) => row.id}
-          onRowClick={(invite) => navigate(`/members/invites/${invite.id}`)}
+          onRowClick={(invite) => navigate(`/team/invites/${invite.id}`)}
           emptyMessage="No pending invitations"
           emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite someone</EmptyStateButton>}
           rowActions={(invite) => (
@@ -184,7 +186,15 @@ export function MembersListPage() {
             </Button>
           )}
         />
-      )}
+          ),
+        }}
+      />
+
+      <p className="text-sm">
+        <Button variant="link" className="h-auto p-0" asChild>
+          <Link to="/team/access">Manage what the team can do</Link>
+        </Button>
+      </p>
 
       <InviteFormDialog
         open={inviteOpen}

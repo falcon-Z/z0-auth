@@ -5,6 +5,7 @@ import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
+import { Card, CardContent } from "@z0/components/ui/card";
 import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayout";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
@@ -28,7 +29,7 @@ export function MemberDetailPage() {
   usePageBreadcrumbs(
     member
       ? [
-          { label: "Members", to: "/members" },
+          { label: "Team", to: "/team" },
           { label: member.name },
         ]
       : null,
@@ -42,7 +43,7 @@ export function MemberDetailPage() {
       <EntityDetailLayout name="Member" tabs={[]}>
         <PageError title="Not found" message="Member not found.">
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/members">Back to members</Link>
+            <Link to="/team">Back to team</Link>
           </Button>
         </PageError>
       </EntityDetailLayout>
@@ -61,7 +62,7 @@ export function MemberDetailPage() {
     setRemoving(true);
     try {
       await removeMember(userId);
-      navigate("/members");
+      navigate("/team");
     } finally {
       setRemoving(false);
     }
@@ -85,16 +86,20 @@ export function MemberDetailPage() {
         ) : undefined
       }
     >
-      <dl className="grid gap-4 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Email</dt>
-          <dd>{member.email}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Joined</dt>
-          <dd>{new Date(member.joinedAt).toLocaleString()}</dd>
-        </div>
-      </dl>
+      <Card className="py-0 shadow-xs">
+        <CardContent className="px-5 py-5">
+          <dl className="grid gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Email</dt>
+              <dd>{member.email}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Joined</dt>
+              <dd>{new Date(member.joinedAt).toLocaleString()}</dd>
+            </div>
+          </dl>
+        </CardContent>
+      </Card>
     </EntityDetailLayout>
   );
 }

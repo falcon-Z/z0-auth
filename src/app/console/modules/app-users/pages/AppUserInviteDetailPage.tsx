@@ -46,8 +46,8 @@ export function AppUserInviteDetailPage() {
   usePageBreadcrumbs(
     invite && appId
       ? [
-          { label: "Applications", to: "/apps" },
-          { label: appName ?? "Application", to: `/apps/${appId}` },
+          { label: "Apps", to: "/apps" },
+          { label: appName ?? "App", to: `/apps/${appId}/setup` },
           { label: "Users", to: `/apps/${appId}/users` },
           { label: invite.invitedName },
         ]

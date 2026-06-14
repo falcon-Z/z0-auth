@@ -126,7 +126,7 @@ export function EmailSettingsPage() {
   if (error || !settings) {
     return (
       <div className="space-y-6">
-        <ListPageHeader title="Email & SMTP" />
+        <ListPageHeader title="Email" />
         <PageError message={error ?? "Could not load settings."} onRetry={() => void reload()} />
       </div>
     );
@@ -134,7 +134,7 @@ export function EmailSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <ListPageHeader title="Email & SMTP" />
+      <ListPageHeader title="Email" />
 
       <ActionNotice message={notice} />
 

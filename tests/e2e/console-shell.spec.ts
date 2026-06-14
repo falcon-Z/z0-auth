@@ -1,23 +1,45 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("console shell", () => {
-  test("renders breadcrumb header without sidebar or top nav", async ({ page }) => {
+  test("renders org nav, search, and account menu", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL("/");
 
     await expect(page.locator('[data-slot="sidebar"]')).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "breadcrumb" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Z0", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /search/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Choose where to go" })).toBeVisible();
     await expect(page.getByRole("button", { name: /account menu/i })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
-
-    await expect(page.getByRole("link", { name: "Members" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Applications" })).toBeVisible();
   });
 
-  test("settings page is reachable from header", async ({ page }) => {
+  test("mobile header keeps search icon, profile, and collapsed breadcrumbs", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/apps/bab84903-75ed-4b0d-b9df-6b2ba1a1f1d0/setup");
+
+    await expect(page.getByRole("link", { name: "Z0", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /account menu/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show path" })).toBeVisible();
+  });
+
+  test("org nav popover lists primary destinations", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    await page.getByRole("link", { name: "Settings" }).click();
+    await expect(page.getByRole("link", { name: "Z0", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Choose where to go" }).click();
+    await expect(page.getByRole("menuitem", { name: "Home", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Apps", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Team", exact: true })).toBeVisible();
+
+    await page.getByRole("menuitem", { name: "Team", exact: true }).click();
+    await expect(page).toHaveURL("/team");
+  });
+
+  test("settings page is reachable from account menu", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /account menu/i }).click();
+    await page.getByRole("menuitem", { name: "Settings" }).click();
     await expect(page).toHaveURL("/settings");
     await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
   });
@@ -31,7 +53,8 @@ test.describe("console shell", () => {
 
   test("loads sessions page when signed in", async ({ page }) => {
     await page.goto("/profile/sessions");
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Account sections" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Sessions", exact: true })).toHaveAttribute("aria-current", "page");
     await expect(page.getByText("not available yet", { exact: false })).not.toBeVisible();
   });
 });

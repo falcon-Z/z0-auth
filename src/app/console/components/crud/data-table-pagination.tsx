@@ -1,7 +1,14 @@
 import type { Table } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
 
 import { Button } from "@z0/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@z0/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -9,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@z0/components/ui/select";
+import { cn } from "../../lib/utils";
 
 type DataTablePaginationProps<TData> = {
   table: Table<TData>;
@@ -46,50 +54,59 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">First page</span>
-            <ChevronsLeft className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">Previous page</span>
-            <ChevronLeft className="size-4" />
-          </Button>
+
+        <div className="flex items-center gap-2">
           <span className="min-w-24 text-center text-sm text-muted-foreground">
             Page {table.getState().pagination.pageIndex + 1} of {Math.max(pageCount, 1)}
           </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">Next page</span>
-            <ChevronRight className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            onClick={() => table.setPageIndex(pageCount - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">Last page</span>
-            <ChevronsRight className="size-4" />
-          </Button>
+          <Pagination className="mx-0 w-auto justify-end">
+            <PaginationContent>
+              <PaginationItem>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">First page</span>
+                  <ChevronsLeft className="size-4" />
+                </Button>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    table.previousPage();
+                  }}
+                  className={cn(!table.getCanPreviousPage() && "pointer-events-none opacity-50")}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    table.nextPage();
+                  }}
+                  className={cn(!table.getCanNextPage() && "pointer-events-none opacity-50")}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  onClick={() => table.setPageIndex(pageCount - 1)}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Last page</span>
+                  <ChevronsRight className="size-4" />
+                </Button>
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       </div>
     </div>

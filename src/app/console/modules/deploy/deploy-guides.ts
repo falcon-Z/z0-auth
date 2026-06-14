@@ -201,7 +201,7 @@ bun src/scripts/generate-instance-token-keys.ts`,
   "google-cloud-run": [
     {
       title: "Generate keys once",
-      body: "Run these commands locally. Store the output in Secret Manager — not in your container image.",
+      body: "Run these commands locally. Store the output in Secret Manager, not in your container image.",
       code: `bun src/scripts/generate-instance-data-key.ts
 bun src/scripts/generate-instance-token-keys.ts`,
       links: [{ label: "Secret Manager documentation", href: "https://cloud.google.com/secret-manager/docs" }],

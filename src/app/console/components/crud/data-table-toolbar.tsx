@@ -19,16 +19,21 @@ export function DataTableToolbar<TData>({
   if (!enableSearch && !enableColumnVisibility) return null;
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       {enableSearch ? (
         <Input
           placeholder={searchPlaceholder}
           value={(table.getState().globalFilter as string | undefined) ?? ""}
           onChange={(event) => table.setGlobalFilter(event.target.value)}
-          className="h-9 max-w-sm"
+          className="h-9 w-full max-w-sm"
+          aria-label={searchPlaceholder}
         />
       ) : null}
-      {enableColumnVisibility ? <DataTableViewOptions table={table} /> : null}
+      {enableColumnVisibility ? (
+        <div className={enableSearch ? "shrink-0 sm:ml-auto" : "ml-auto"}>
+          <DataTableViewOptions table={table} />
+        </div>
+      ) : null}
     </div>
   );
 }

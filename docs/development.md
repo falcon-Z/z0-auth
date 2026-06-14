@@ -118,16 +118,15 @@ Install browsers once: `bunx playwright install chromium`. If Playwright reports
 
 ### Console shell
 
-The management SPA uses a **shadcn sidebar + header** layout (`AppShell`) and a single navigation catalog:
+The management SPA uses a **top bar** layout (`AppShell`): org breadcrumb, search (⌘K), Home · Apps · Team, and account menu.
 
 | File | Role |
 |------|------|
-| `src/app/console/config/navigation.ts` | All console routes, grouped by area; `status`: `available`, `stub`, or `planned` |
-| `src/app/console/routes.tsx` | Registers routes; maps paths to real pages or `ModulePlaceholderPage` |
-| `src/app/console/components/layout/ConsolePage.tsx` | Shared page title and description |
-| `src/app/console/components/layout/ModulePlaceholderPage.tsx` | Default body for planned modules |
+| `src/app/console/config/navigation.ts` | Primary nav, search items, app sections, settings links |
+| `src/app/console/routes.tsx` | Top-level routes only — no redirects for old paths |
+| `src/app/console/components/layout/StubPage.tsx` | Placeholder for screens not built yet |
 
-When shipping a module: set `status` to `available` (or `stub`), add the page under `src/app/console/modules/<name>/`, and register it in `routes.tsx` `IMPLEMENTED_PAGES`. Keep API wiring in the module page using `apiFetch` and `form-errors.ts`.
+When shipping a screen: add the page under `src/app/console/modules/<name>/`, register the route in `routes.tsx`, and wire API calls with `apiFetch` and `form-errors.ts`. Remove or rename old paths in the same change — no compatibility redirects (see `.cursor/rules/no-legacy.mdc`).
 
 ## Useful commands
 

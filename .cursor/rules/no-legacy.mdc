@@ -1,0 +1,22 @@
+---
+description: No legacy shims — remove or rename directly during early development
+alwaysApply: true
+---
+
+# No legacy compatibility
+
+This project is in **early development**. There are no external consumers depending on old URLs, route names, or module layout.
+
+## Do
+
+- **Rename or remove** routes, modules, and files when the design changes.
+- **Update all references** in the same change: routes, links, breadcrumbs, tests, docs.
+- **Delete dead code** instead of leaving redirects, `@deprecated` wrappers, or “legacy” comments.
+
+## Do not
+
+- Add redirect routes (e.g. `/old-path` → `/new-path`) “for compatibility”.
+- Keep duplicate pages or modules “until migration is done”.
+- Mark console/API paths as legacy and maintain both old and new names.
+
+If something is no longer needed, remove it. If the name or path is wrong, change it everywhere.

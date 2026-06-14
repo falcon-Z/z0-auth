@@ -1,28 +1,31 @@
-import { Mail } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 
+import { SETTINGS_LINKS } from "../../../config/navigation";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
-import { SettingsCategoryCard } from "../components/SettingsCategoryCard";
-
-const SETTINGS_CATEGORIES = [
-  {
-    title: "Email & SMTP",
-    description: "SMTP connection, test send, and password reset email.",
-    to: "/communications/email",
-    icon: Mail,
-  },
-] as const;
 
 export function SettingsPage() {
   return (
     <div className="space-y-6">
       <ListPageHeader title="Settings" />
 
-      <section aria-label="Platform configuration">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SETTINGS_CATEGORIES.map((item) => (
-            <SettingsCategoryCard key={item.to} {...item} />
+      <section aria-label="Instance settings">
+        <ul className="divide-y rounded-lg border">
+          {SETTINGS_LINKS.map((item) => (
+            <li key={item.path}>
+              <Link
+                to={item.path}
+                className="flex items-start justify-between gap-4 px-4 py-4 transition-colors hover:bg-muted/30"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{item.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+                </div>
+                <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
     </div>
   );

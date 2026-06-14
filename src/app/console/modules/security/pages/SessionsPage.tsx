@@ -184,7 +184,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
             id: "location",
             header: "Network",
             accessorFn: (row) => row.ipDisplay ?? "",
-            cell: (row) => row.ipDisplay ?? "—",
+            cell: (row) => row.ipDisplay ?? "Unknown",
           },
           {
             id: "lastSeen",

@@ -24,7 +24,7 @@ export function InviteDetailPage() {
   usePageBreadcrumbs(
     invite
       ? [
-          { label: "Members", to: "/members" },
+          { label: "Team", to: "/team" },
           { label: invite.invitedName },
         ]
       : null,
@@ -39,7 +39,7 @@ export function InviteDetailPage() {
         <DetailPageHeader title="Invitation" />
         <PageError title="Not found" message="Invitation not found or no longer pending.">
           <Button type="button" variant="outline" size="sm" asChild>
-            <Link to="/members">Back to members</Link>
+            <Link to="/team">Back to team</Link>
           </Button>
         </PageError>
       </div>
@@ -59,7 +59,7 @@ export function InviteDetailPage() {
     try {
       await revokeInstanceInvite(inviteId);
       await reload();
-      navigate("/members");
+      navigate("/team");
     } finally {
       setRevoking(false);
     }

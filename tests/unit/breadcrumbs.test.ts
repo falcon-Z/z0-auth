@@ -9,29 +9,37 @@ describe("staticBreadcrumbsForPath", () => {
 
   test("settings and email nest under settings", () => {
     expect(staticBreadcrumbsForPath("/settings")).toEqual([{ label: "Settings" }]);
-    expect(staticBreadcrumbsForPath("/communications/email")).toEqual([
+    expect(staticBreadcrumbsForPath("/settings/email")).toEqual([
       { label: "Settings", to: "/settings" },
-      { label: "Email & SMTP" },
+      { label: "Email" },
     ]);
   });
 
-  test("app scopes trail nests under application", () => {
-    expect(staticBreadcrumbsForPath("/apps/app-123/scopes")).toEqual([
-      { label: "Applications", to: "/apps" },
-      { label: "Application", to: "/apps/app-123" },
-      { label: "Scopes" },
+  test("people and access nest correctly", () => {
+    expect(staticBreadcrumbsForPath("/team")).toEqual([{ label: "Team" }]);
+    expect(staticBreadcrumbsForPath("/team/access")).toEqual([
+      { label: "Team", to: "/team" },
+      { label: "Manage access" },
     ]);
   });
 
-  test("app users trail nests under application", () => {
+  test("app permissions trail nests under app setup", () => {
+    expect(staticBreadcrumbsForPath("/apps/app-123/permissions")).toEqual([
+      { label: "Apps", to: "/apps" },
+      { label: "App", to: "/apps/app-123/setup" },
+      { label: "Permissions" },
+    ]);
+  });
+
+  test("app users trail nests under app setup", () => {
     expect(staticBreadcrumbsForPath("/apps/app-123/users")).toEqual([
-      { label: "Applications", to: "/apps" },
-      { label: "Application", to: "/apps/app-123" },
+      { label: "Apps", to: "/apps" },
+      { label: "App", to: "/apps/app-123/setup" },
       { label: "Users" },
     ]);
     expect(staticBreadcrumbsForPath("/apps/app-123/users/user-456")).toEqual([
-      { label: "Applications", to: "/apps" },
-      { label: "Application", to: "/apps/app-123" },
+      { label: "Apps", to: "/apps" },
+      { label: "App", to: "/apps/app-123/setup" },
       { label: "Users", to: "/apps/app-123/users" },
       { label: "User" },
     ]);

@@ -1,0 +1,28 @@
+---
+description: Todoist is the project management source of truth for all work
+alwaysApply: true
+---
+
+# Todoist
+
+Access Todoist via the **Auth** project MCP server.
+
+## Tasks
+
+- All work must have a Todoist task (parent module or subtask).
+- When starting work, use or create the task that tracks that scope.
+- Subtasks hold implementation detail; parent tasks stay high level.
+
+## Comments
+
+- Add comments on the **active working task** as you go — decisions, blockers, what shipped, context for the next agent or for me.
+- After each commit tied to a task, comment on that task with a **link to the commit** (SHA or remote URL).
+
+## Planning
+
+When I ask to plan, follow `AGENTS.md` workflow: pick the open task, investigate, present a plan, add subtasks after alignment.
+
+## Module completion
+
+- Do not start the next **parent/module** task until I explicitly say to move on.
+- At module end, add review subtasks and wait for my whole-module review.

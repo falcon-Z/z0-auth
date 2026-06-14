@@ -146,92 +146,98 @@ export function DataTable<T>({
     enableToolbar && (enableSearch || enableColumnVisibility) && columnDefs.some((c) => c.id !== "actions");
 
   return (
-    <div className="space-y-4">
-      {showToolbar ? (
-        <DataTableToolbar
-          table={table}
-          searchPlaceholder={searchPlaceholder}
-          enableSearch={enableSearch}
-          enableColumnVisibility={enableColumnVisibility}
-        />
-      ) : null}
+    <Card className="gap-0 overflow-hidden py-0 shadow-xs">
+      <div className={cn(showToolbar && "bg-muted/40")}>
+        {showToolbar ? (
+          <div className="border-b border-border/60 px-4 py-2.5">
+            <DataTableToolbar
+              table={table}
+              searchPlaceholder={searchPlaceholder}
+              enableSearch={enableSearch}
+              enableColumnVisibility={enableColumnVisibility}
+            />
+          </div>
+        ) : null}
 
-      <Card className="gap-0 overflow-hidden py-0 shadow-xs">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="border-b bg-muted/40 hover:bg-muted/40">
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    scope="col"
+              <TableRow key={headerGroup.id} className="border-b border-border/60 bg-muted/40 hover:bg-muted/40">
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  scope="col"
+                  className={cn(
+                    "h-auto px-4 py-3 text-muted-foreground",
+                    header.column.id === "actions" && "text-right",
+                    (header.column.columnDef.meta as { className?: string } | undefined)?.className,
+                  )}
+                >
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columnDefs.length} className="h-24 text-center text-muted-foreground">
+                No results match your search.
+              </TableCell>
+            </TableRow>
+          ) : (
+            table.getRowModel().rows.map((row) => (
+              <TableRow
+                key={row.id}
+                className={cn("group", onRowClick && "cursor-pointer hover:bg-muted/30")}
+                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                onKeyDown={
+                  onRowClick
+                    ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onRowClick(row.original);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={onRowClick ? 0 : undefined}
+              >
+                {row.getVisibleCells().map((cell, index) => (
+                  <TableCell
+                    key={cell.id}
                     className={cn(
-                      "h-auto px-4 py-3 text-muted-foreground",
-                      header.column.id === "actions" && "text-right",
-                      (header.column.columnDef.meta as { className?: string } | undefined)?.className,
+                      "px-4 py-3",
+                      cell.column.id === "actions" && "text-right",
+                      (cell.column.columnDef.meta as { className?: string } | undefined)?.className,
                     )}
+                    onClick={cell.column.id === "actions" ? (e) => e.stopPropagation() : undefined}
+                    onKeyDown={cell.column.id === "actions" ? (e) => e.stopPropagation() : undefined}
                   >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
+                    {index === 0 && onRowClick && cell.column.id !== "actions" ? (
+                      <span className="font-medium group-hover:underline">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </span>
+                    ) : (
+                      flexRender(cell.column.columnDef.cell, cell.getContext())
+                    )}
+                  </TableCell>
                 ))}
               </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columnDefs.length} className="h-24 text-center text-muted-foreground">
-                  No results match your search.
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className={cn("group", onRowClick && "cursor-pointer hover:bg-muted/30")}
-                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                  onKeyDown={
-                    onRowClick
-                      ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onRowClick(row.original);
-                          }
-                        }
-                      : undefined
-                  }
-                  tabIndex={onRowClick ? 0 : undefined}
-                >
-                  {row.getVisibleCells().map((cell, index) => (
-                    <TableCell
-                      key={cell.id}
-                      className={cn(
-                        "px-4 py-3",
-                        cell.column.id === "actions" && "text-right",
-                        (cell.column.columnDef.meta as { className?: string } | undefined)?.className,
-                      )}
-                      onClick={cell.column.id === "actions" ? (e) => e.stopPropagation() : undefined}
-                      onKeyDown={cell.column.id === "actions" ? (e) => e.stopPropagation() : undefined}
-                    >
-                      {index === 0 && onRowClick && cell.column.id !== "actions" ? (
-                        <span className="font-medium group-hover:underline">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </span>
-                      ) : (
-                        flexRender(cell.column.columnDef.cell, cell.getContext())
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            )}
+            ))
+          )}
           </TableBody>
         </Table>
-      </Card>
+      </div>
 
-      {enablePagination ? <DataTablePagination table={table} /> : null}
-    </div>
+      {enablePagination ? (
+        <div className="border-t border-border/60 px-4 py-3">
+          <DataTablePagination table={table} />
+        </div>
+      ) : null}
+    </Card>
   );
 }

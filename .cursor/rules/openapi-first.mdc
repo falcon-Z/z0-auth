@@ -1,0 +1,34 @@
+---
+description: Write OpenAPI YAML specs before implementing API endpoints
+alwaysApply: true
+---
+
+# OpenAPI first
+
+When building or changing APIs, **define the OpenAPI spec before handlers**.
+
+## Where specs live
+
+- `docs/api/references/<resource>.openapi.yaml` — one spec per resource or domain
+- Shared components: `docs/api/references/common.openapi.yaml`
+- How to extend contracts: `docs/api/CONTRACTS.md`
+- Validation rows: `docs/api/validation-matrix.md`
+
+## Each spec must include
+
+- Path, method, summary, and purpose
+- Request body / query / path params with types and constraints
+- Response shapes and status codes
+- Error responses (reuse common problem schema)
+- Auth / security requirements
+
+Specs are documentation and the future source for Postman, API gateways, and codegen — keep them accurate and complete.
+
+## Order
+
+1. OpenAPI YAML (+ validation matrix rows for new fields/errors)
+2. TypeScript contracts in `src/lib/contracts/` if needed
+3. Handlers in `src/api/`
+4. Integration tests
+
+Do not merge handler-only API changes without the matching OpenAPI update.

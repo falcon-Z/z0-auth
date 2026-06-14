@@ -55,8 +55,8 @@ export function AppUserDetailPage() {
   usePageBreadcrumbs(
     user && appId
       ? [
-          { label: "Applications", to: "/apps" },
-          { label: appName ?? "Application", to: `/apps/${appId}` },
+          { label: "Apps", to: "/apps" },
+          { label: appName ?? "App", to: `/apps/${appId}/setup` },
           { label: "Users", to: `/apps/${appId}/users` },
           { label: user.name },
         ]

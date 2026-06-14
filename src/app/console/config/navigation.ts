@@ -1,285 +1,111 @@
-import type { LucideIcon } from "lucide-react";
-import {
-  Activity,
-  AppWindow,
-  CircleUser,
-  Fingerprint,
-  KeyRound,
-  LayoutDashboard,
-  LineChart,
-  Mail,
-  ScrollText,
-  Shield,
-  ShieldCheck,
-  SlidersHorizontal,
-  Users,
-  Webhook,
-} from "lucide-react";
+/** Primary destinations — shown in the top bar. */
+export const PRIMARY_NAV = [
+  { id: "home", label: "Home", path: "/" },
+  { id: "apps", label: "Apps", path: "/apps" },
+  { id: "team", label: "Team", path: "/team" },
+] as const;
 
-/** Mirrors API & UI delivery catalog status. */
-export type ConsoleNavStatus = "available" | "stub" | "planned";
+export type SearchItemGroup = "Go to" | "Settings" | "Actions";
 
-export type ConsoleNavItem = {
+export type SearchItem = {
   id: string;
-  title: string;
+  label: string;
   path: string;
-  icon: LucideIcon;
-  status: ConsoleNavStatus;
-  module: string;
-  summary: string;
-  /** Route exists but is reached from identity / header, not sidebar. */
-  hideFromSidebar?: boolean;
+  keywords: string[];
+  group: SearchItemGroup;
 };
 
-export type ConsoleNavGroup = {
-  id: string;
-  title: string;
-  items: ConsoleNavItem[];
-};
-
-export const CONSOLE_NAV: ConsoleNavGroup[] = [
+/** Everything reachable via search — not duplicated in the top bar. */
+export const SEARCH_ITEMS: SearchItem[] = [
+  { id: "home", label: "Home", path: "/", keywords: ["dashboard", "overview", "start"], group: "Go to" },
+  { id: "apps", label: "Apps", path: "/apps", keywords: ["applications", "clients"], group: "Go to" },
+  { id: "team", label: "Team", path: "/team", keywords: ["members", "people", "invites"], group: "Go to" },
+  { id: "activity", label: "Activity", path: "/activity", keywords: ["audit", "log", "history", "events"], group: "Go to" },
+  { id: "profile", label: "Your account", path: "/profile", keywords: ["password", "profile", "me"], group: "Go to" },
+  { id: "settings", label: "Settings", path: "/settings", keywords: ["configure", "instance"], group: "Settings" },
+  { id: "email", label: "Email", path: "/settings/email", keywords: ["smtp", "mail", "send"], group: "Settings" },
   {
-    id: "home",
-    title: "",
-    items: [
-      {
-        id: "dashboard",
-        title: "Dashboard",
-        path: "/",
-        icon: LayoutDashboard,
-        status: "available",
-        module: "P1-M1",
-        summary: "Instance overview.",
-      },
-      {
-        id: "members",
-        title: "Members",
-        path: "/members",
-        icon: Users,
-        status: "available",
-        module: "M01",
-        summary: "People who can sign in to the console and manage this instance.",
-      },
-    ],
+    id: "sign-in-providers",
+    label: "Sign-in providers",
+    path: "/settings/sign-in-providers",
+    keywords: ["google", "github", "social", "oauth"],
+    group: "Settings",
   },
   {
-    id: "platform",
-    title: "Platform",
-    items: [
-      {
-        id: "analytics",
-        title: "Analytics",
-        path: "/analytics",
-        icon: LineChart,
-        status: "planned",
-        module: "P6-M2",
-        summary: "Aggregated sign-ins, errors, and session metrics for admins.",
-      },
-    ],
+    id: "app-groups",
+    label: "App groups",
+    path: "/settings/app-groups",
+    keywords: ["sso", "group", "related apps"],
+    group: "Settings",
   },
   {
-    id: "applications",
-    title: "Applications",
-    items: [
-      {
-        id: "apps",
-        title: "Applications",
-        path: "/apps",
-        icon: AppWindow,
-        status: "available",
-        module: "M03",
-        summary: "Register apps, credentials, scopes, and end users per application.",
-      },
-      {
-        id: "clients",
-        title: "OAuth clients",
-        path: "/clients",
-        icon: AppWindow,
-        status: "planned",
-        module: "M09",
-        summary: "OAuth authorization settings per application (Phase 4).",
-        hideFromSidebar: true,
-      },
-      {
-        id: "oidc",
-        title: "OIDC playground",
-        path: "/oidc",
-        icon: Webhook,
-        status: "planned",
-        module: "P3-M2",
-        summary: "Fetch discovery, inspect JWKS, and sample userinfo for this instance.",
-      },
-    ],
+    id: "security-settings",
+    label: "Security",
+    path: "/settings/security",
+    keywords: ["encryption", "rate limit"],
+    group: "Settings",
   },
-  {
-    id: "account",
-    title: "Account",
-    items: [
-      {
-        id: "profile",
-        title: "Your account",
-        path: "/profile",
-        icon: CircleUser,
-        status: "available",
-        module: "P2-UX",
-        summary: "Your profile, password, and sessions.",
-        hideFromSidebar: true,
-      },
-    ],
-  },
-  {
-    id: "security",
-    title: "Security",
-    items: [
-      {
-        id: "devices",
-        title: "Trusted devices",
-        path: "/security/devices",
-        icon: Fingerprint,
-        status: "planned",
-        module: "post-MFA",
-        summary: "Device trust list with trust and revoke actions.",
-      },
-      {
-        id: "mfa",
-        title: "Multi-factor auth",
-        path: "/security/mfa",
-        icon: Shield,
-        status: "planned",
-        module: "P5-M1",
-        summary: "TOTP enrollment, backup codes, and admin reset flows.",
-      },
-      {
-        id: "passkeys",
-        title: "Passkeys",
-        path: "/security/passkeys",
-        icon: KeyRound,
-        status: "planned",
-        module: "P5-M2",
-        summary: "WebAuthn credentials for passwordless sign-in.",
-      },
-    ],
-  },
-  {
-    id: "federation",
-    title: "Federation",
-    items: [
-      {
-        id: "sso",
-        title: "SSO",
-        path: "/sso",
-        icon: ShieldCheck,
-        status: "planned",
-        module: "P4-M2",
-        summary: "Identity provider configuration and login policies.",
-      },
-      {
-        id: "app-groups",
-        title: "App groups",
-        path: "/app-groups",
-        icon: SlidersHorizontal,
-        status: "planned",
-        module: "P4-M2",
-        summary: "Group OAuth clients and enforce SSO allow or deny rules.",
-      },
-    ],
-  },
-  {
-    id: "compliance",
-    title: "Compliance",
-    items: [
-      {
-        id: "audit",
-        title: "Audit log",
-        path: "/audit",
-        icon: ScrollText,
-        status: "planned",
-        module: "P4-M3",
-        summary: "Searchable security and admin events for this instance.",
-      },
-    ],
-  },
-  {
-    id: "settings",
-    title: "Settings",
-    items: [
-      {
-        id: "settings",
-        title: "Settings",
-        path: "/settings",
-        icon: SlidersHorizontal,
-        status: "available",
-        module: "P1-UX",
-        summary: "Platform-level configuration for this instance.",
-        hideFromSidebar: true,
-      },
-      {
-        id: "email",
-        title: "Email & SMTP",
-        path: "/communications/email",
-        icon: Mail,
-        status: "available",
-        module: "M08",
-        summary: "SMTP settings, test send, and password reset email.",
-        hideFromSidebar: true,
-      },
-    ],
-  },
-  {
-    id: "communications",
-    title: "Communications",
-    items: [
-      {
-        id: "templates",
-        title: "Templates",
-        path: "/communications/templates",
-        icon: Mail,
-        status: "planned",
-        module: "P5-M3",
-        summary: "Auth email templates with preview and test send.",
-      },
-    ],
-  },
-  {
-    id: "operations",
-    title: "Operations",
-    items: [
-      {
-        id: "observability",
-        title: "Observability",
-        path: "/operations/observability",
-        icon: Activity,
-        status: "planned",
-        module: "P6-M1",
-        summary: "Request correlation and troubleshooting hints for operators.",
-      },
-    ],
-  },
+  { id: "legal", label: "Legal", path: "/settings/legal", keywords: ["privacy", "terms"], group: "Settings" },
+  { id: "access", label: "Manage access", path: "/team/access", keywords: ["roles", "permissions"], group: "Go to" },
+  { id: "invite", label: "Invite someone", path: "/team", keywords: ["invite", "add member"], group: "Actions" },
+  { id: "add-app", label: "Add an app", path: "/apps", keywords: ["register", "create app"], group: "Actions" },
 ];
 
-export const CONSOLE_NAV_ITEMS: ConsoleNavItem[] = CONSOLE_NAV.flatMap((group) => group.items);
-
-export function isConsoleNavItemVisible(item: ConsoleNavItem): boolean {
-  return item.status === "available";
-}
-
-const PROFILE_TITLES: Record<string, string> = {
-  "/profile": "Your account",
-  "/profile/security": "Password",
-  "/profile/sessions": "Sessions",
+export type AppSidebarItem = {
+  id: string;
+  label: string;
+  path: string;
+  /** When true, active only on an exact path match. */
+  exact?: boolean;
 };
 
-export function findNavItem(pathname: string): ConsoleNavItem | undefined {
-  if (pathname in PROFILE_TITLES) {
-    return CONSOLE_NAV_ITEMS.find((item) => item.path === "/profile");
-  }
-  if (pathname === "/") {
-    return CONSOLE_NAV_ITEMS.find((item) => item.path === "/");
-  }
-  return CONSOLE_NAV_ITEMS.find((item) => item.path !== "/" && pathname.startsWith(item.path));
+const APP_SIDEBAR_DEFS = [
+  { id: "setup", label: "Setup", segment: "setup" },
+  { id: "sign-in", label: "Sign-in page", segment: "sign-in" },
+  { id: "users", label: "Users", segment: "users", exact: true },
+  { id: "invites", label: "Invites", segment: "users/invites" },
+  { id: "permissions", label: "Permissions", segment: "permissions" },
+] as const;
+
+export function appSidebarItems(appId: string): AppSidebarItem[] {
+  return APP_SIDEBAR_DEFS.map((item) => ({
+    id: item.id,
+    label: item.label,
+    path: `/apps/${appId}/${item.segment}`,
+    exact: "exact" in item ? item.exact : true,
+  }));
 }
 
-export function pageTitleForPath(pathname: string): string {
-  if (pathname in PROFILE_TITLES) return PROFILE_TITLES[pathname]!;
-  return findNavItem(pathname)?.title ?? "Console";
-}
+export type SettingsLink = {
+  title: string;
+  description: string;
+  path: string;
+};
+
+export const SETTINGS_LINKS: SettingsLink[] = [
+  {
+    title: "Email",
+    description: "How your service sends mail for invites, password reset, and notifications.",
+    path: "/settings/email",
+  },
+  {
+    title: "Sign-in providers",
+    description: "Google, GitHub, and other ways people can sign in.",
+    path: "/settings/sign-in-providers",
+  },
+  {
+    title: "App groups",
+    description: "Related apps that can share sign-in.",
+    path: "/settings/app-groups",
+  },
+  {
+    title: "Security",
+    description: "Encryption and abuse protection for this instance.",
+    path: "/settings/security",
+  },
+  {
+    title: "Legal",
+    description: "Privacy and terms shown to your users.",
+    path: "/settings/legal",
+  },
+];

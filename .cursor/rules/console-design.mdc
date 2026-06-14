@@ -1,0 +1,43 @@
+---
+description: Console UI layout, navigation, and page patterns — keep modules consistent
+globs: src/app/console/**/*
+alwaysApply: false
+---
+
+# Console design
+
+Full guide: `docs/console-design.md`. Read it when planning or building console UI.
+
+## Navigation
+
+- **Top bar:** org name + chevron menu (Home · Apps · Team) · search · account. No inline Home/Apps/Team links.
+- **Search:** icon on mobile, full bar on `md+`. Same ⌘K dialog everywhere.
+- **Breadcrumbs:** truncate and collapse with `…` dropdown. Never push search or profile off-screen (`shrink-0` on the right cluster).
+
+## Page patterns (pick one)
+
+| Pattern | When | Use |
+|---------|------|-----|
+| Hub | Overview / landing | Metric cards, next steps — `HomeView` |
+| List | Index of records | `ListPageHeader` + `DataTable` |
+| List tabs | Two related lists | `ResourceTabs` only (e.g. Members \| Invites) |
+| **Workspace** | Multi-section entity | Header block + **`SectionSidebar`** + `<Outlet />` |
+| Detail | Single view | `EntityDetailLayout` without tabs |
+
+**Do not** use horizontal `PageTabBar` / line tabs for entity sections. Use `SectionSidebar` (same as Apps and Profile).
+
+## Reuse these
+
+- `SectionSidebar` — app sections, profile, any future multi-section module
+- `AppWorkspaceLayout` — app-scoped pages
+- `DataTable` — toolbar and pagination **inside** the card
+- shadcn primitives from `components/ui/` — never hand-roll buttons, dialogs, tables
+
+## Copy
+
+- One question per screen; plain language; **no em-dashes** in UI strings.
+- Bold numbers on metrics; short status tokens (`Off`, `On`), not sentences.
+
+## Before shipping
+
+Check ~390px and ~1024px: header controls visible, breadcrumbs collapse, sidebar scrolls horizontally on mobile.

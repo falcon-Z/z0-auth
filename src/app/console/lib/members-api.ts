@@ -33,7 +33,7 @@ export async function removeMember(userId: string): Promise<void> {
 }
 
 export function buildInviteMailto(invite: CreateInviteResponse): string {
-  const subject = encodeURIComponent(`Invitation to join — ${invite.invitedName}`);
+  const subject = encodeURIComponent(`Invitation to join: ${invite.invitedName}`);
   const body = encodeURIComponent(
     `You have been invited to join the team.\n\nOpen this link to accept or decline:\n${invite.inviteUrl}\n\nThis link expires on ${new Date(invite.expiresAt).toLocaleString()}.`,
   );
