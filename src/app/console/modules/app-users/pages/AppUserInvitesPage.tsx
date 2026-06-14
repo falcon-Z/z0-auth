@@ -5,6 +5,7 @@ import type { CreateAppUserInviteResponse, PendingAppUserInvite } from "@z0/cont
 import { Button } from "@z0/components/ui/button";
 import { TabActions } from "../../../components/apps/TabActions";
 import { DataTable } from "../../../components/crud/DataTable";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
@@ -122,16 +123,14 @@ export function AppUserInvitesPage() {
         emptyMessage="No pending invitations."
         emptyAction={<EmptyStateButton onClick={() => setInviteOpen(true)}>Invite</EmptyStateButton>}
         rowActions={(row) => (
-          <Button
+          <DestructiveButton
             type="button"
-            variant="ghost"
             size="sm"
-            className="text-destructive hover:text-destructive"
             disabled={busyId === row.id}
             onClick={() => void handleRevokeInvite(row)}
           >
             Revoke
-          </Button>
+          </DestructiveButton>
         )}
       />
 

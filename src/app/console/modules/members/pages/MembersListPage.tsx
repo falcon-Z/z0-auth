@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import type { CreateInviteResponse, InstanceMember, PendingInvite } from "@z0/contracts/invites";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { ResourceTabs } from "../../../components/crud/ResourceTabs";
 import { TeamWorkspaceLayout } from "../../../components/team/TeamWorkspaceLayout";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
@@ -167,16 +168,14 @@ export function MembersListPage() {
                 const isSelf = member.userId === session.user!.id;
                 if (isSelf || member.isBootstrap || !canRemove) return null;
                 return (
-                  <Button
+                  <DestructiveButton
                     type="button"
-                    variant="ghost"
                     size="sm"
-                    className="text-destructive hover:text-destructive"
                     disabled={busyId === member.userId}
                     onClick={() => void handleRemoveMember(member)}
                   >
                     Remove
-                  </Button>
+                  </DestructiveButton>
                 );
               }}
             />
@@ -221,30 +220,20 @@ export function MembersListPage() {
               }
               rowActions={(invite) =>
                 canInvite ? (
-                  <Button
+                  <DestructiveButton
                     type="button"
-                    variant="ghost"
                     size="sm"
-                    className="text-destructive hover:text-destructive"
                     disabled={busyId === invite.id}
                     onClick={() => void handleRevokeInvite(invite)}
                   >
                     Revoke
-                  </Button>
+                  </DestructiveButton>
                 ) : null
               }
             />
           ),
         }}
       />
-
-      {hasScope("roles:read") ? (
-        <p className="text-sm">
-          <Button variant="link" className="h-auto p-0" asChild>
-            <Link to="/team/roles">Manage roles and permissions</Link>
-          </Button>
-        </p>
-      ) : null}
 
       {canInvite ? (
         <InviteFormDialog

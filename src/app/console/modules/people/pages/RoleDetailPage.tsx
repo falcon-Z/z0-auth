@@ -13,6 +13,9 @@ import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { FormField } from "../../../components/forms/FormField";
+import { FormActions } from "../../../components/forms/FormActions";
+import { DangerZone } from "../../../components/forms/DangerZone";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { deleteRole, fetchPlatformResources, fetchRole, patchRole } from "../../../lib/rbac-api";
@@ -120,13 +123,6 @@ export function RoleDetailPage() {
       badges={
         <Badge variant={role.isSystem ? "secondary" : "outline"}>{role.isSystem ? "System" : "Custom"}</Badge>
       }
-      actions={
-        !role.isSystem && canManage ? (
-          <Button variant="destructive" onClick={() => void handleDelete()}>
-            Delete
-          </Button>
-        ) : undefined
-      }
     >
       <Card className="py-0 shadow-xs">
         <CardContent className="space-y-6 px-5 py-5">
@@ -156,18 +152,29 @@ export function RoleDetailPage() {
               selected={scopeKeys}
               onChange={setScopeKeys}
               disabled={role.isSystem || !canManage}
+              hideOwnerOnlyScopes={!role.isSystem}
             />
           </FormField>
 
           {!role.isSystem && canManage ? (
-            <div className="flex justify-end">
+            <FormActions>
               <Button disabled={saving} onClick={() => void handleSave()}>
                 {saving ? "Saving…" : "Save changes"}
               </Button>
-            </div>
+            </FormActions>
           ) : null}
         </CardContent>
       </Card>
+
+      {!role.isSystem && canManage ? (
+        <DangerZone
+          title="Delete role"
+          description="Permanently remove this role. Unassign it from all members and pending invites first."
+          action={
+            <DestructiveButton onClick={() => void handleDelete()}>Delete role</DestructiveButton>
+          }
+        />
+      ) : null}
     </EntityDetailLayout>
   );
 }

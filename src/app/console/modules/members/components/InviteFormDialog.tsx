@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import type { CreateInviteRequest, CreateInviteResponse } from "@z0/contracts/invites";
 import type { InstanceRoleSummary } from "@z0/contracts/rbac";
 import { Button } from "@z0/components/ui/button";
-import { Checkbox } from "@z0/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -12,8 +11,8 @@ import {
   DialogTitle,
 } from "@z0/components/ui/dialog";
 import { Input } from "@z0/components/ui/input";
-import { Label } from "@z0/components/ui/label";
 import { FormField } from "../../../components/forms/FormField";
+import { RoleMultiSelect } from "../../../components/team/RoleMultiSelect";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchRoles } from "../../../lib/rbac-api";
@@ -114,34 +113,13 @@ export function InviteFormDialog({ open, onOpenChange, onSubmit, onCreated }: In
             </FormField>
             {canPickRoles ? (
               <FormField label="Roles" error={fieldErrors.roleIds}>
-                <div className="grid gap-2">
-                  {roles.map((role) => {
-                    const id = `invite-role-${role.id}`;
-                    return (
-                      <div key={role.id} className="flex items-start gap-2 rounded-md border px-3 py-2">
-                        <Checkbox
-                          id={id}
-                          checked={selectedRoleIds.includes(role.id)}
-                          onCheckedChange={(checked) => {
-                            setSelectedRoleIds((current) =>
-                              checked === true
-                                ? [...new Set([...current, role.id])]
-                                : current.filter((value) => value !== role.id),
-                            );
-                          }}
-                        />
-                        <div>
-                          <Label htmlFor={id} className="text-sm font-normal">
-                            {role.name}
-                          </Label>
-                          {role.description ? (
-                            <p className="text-xs text-muted-foreground">{role.description}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <RoleMultiSelect
+                  id="inviteRoles"
+                  roles={roles}
+                  value={selectedRoleIds}
+                  onChange={setSelectedRoleIds}
+                  disabled={roles.length === 0}
+                />
               </FormField>
             ) : (
               <p className="text-sm text-muted-foreground">New members will receive the Developer role by default.</p>

@@ -13,6 +13,9 @@ import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayou
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
+import { FormActions } from "../../../components/forms/FormActions";
+import { DangerZone } from "../../../components/forms/DangerZone";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { useMembersData } from "../../../hooks/use-members-data";
 import { usePermissions } from "../../../hooks/use-permissions";
 import { ApiError } from "../../../lib/api";
@@ -157,13 +160,6 @@ export function MemberDetailPage() {
           ))}
         </>
       }
-      actions={
-        !isSelf && !member.isBootstrap && canRemove ? (
-          <Button variant="destructive" disabled={removing} onClick={() => void handleRemove()}>
-            Remove
-          </Button>
-        ) : undefined
-      }
     >
       <Card className="py-0 shadow-xs">
         <CardContent className="px-5 py-5">
@@ -219,9 +215,11 @@ export function MemberDetailPage() {
             {canManageRoles ? (
               <>
                 {roleError ? <p className="text-sm text-destructive">{roleError}</p> : null}
-                <Button disabled={savingRoles || selectedRoleIds.length === 0} onClick={() => void handleSaveRoles()}>
-                  {savingRoles ? "Saving…" : "Save roles"}
-                </Button>
+                <FormActions>
+                  <Button disabled={savingRoles || selectedRoleIds.length === 0} onClick={() => void handleSaveRoles()}>
+                    {savingRoles ? "Saving…" : "Save roles"}
+                  </Button>
+                </FormActions>
               </>
             ) : null}
           </CardContent>
@@ -243,6 +241,18 @@ export function MemberDetailPage() {
             </Button>
           </CardContent>
         </Card>
+      ) : null}
+
+      {!isSelf && !member.isBootstrap && canRemove ? (
+        <DangerZone
+          title="Remove member"
+          description={`Remove ${member.name} from the console. They will lose access immediately.`}
+          action={
+            <DestructiveButton disabled={removing} onClick={() => void handleRemove()}>
+              Remove member
+            </DestructiveButton>
+          }
+        />
       ) : null}
     </EntityDetailLayout>
   );

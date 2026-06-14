@@ -15,6 +15,7 @@ import {
 } from "@z0/components/ui/select";
 import { ListPageHeader } from "../../../components/crud/ListPageHeader";
 import { FormField } from "../../../components/forms/FormField";
+import { FormActions } from "../../../components/forms/FormActions";
 import { ActionNotice } from "../../../components/feedback/ActionNotice";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -218,9 +219,11 @@ export function EmailSettingsPage() {
           </p>
         ) : null}
 
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save settings"}
-        </Button>
+        <FormActions>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save settings"}
+          </Button>
+        </FormActions>
       </form>
 
       <section className="max-w-xl space-y-3 border-t pt-6">

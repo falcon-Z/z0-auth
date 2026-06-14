@@ -13,6 +13,9 @@ import { ActionNotice } from "../../../components/feedback/ActionNotice";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
 import { FormField } from "../../../components/forms/FormField";
+import { FormActions } from "../../../components/forms/FormActions";
+import { DangerZone } from "../../../components/forms/DangerZone";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchAppUser, patchAppUser } from "../../../lib/app-users-api";
@@ -145,15 +148,6 @@ export function AppUserDetailPage() {
           {user.membershipStatus}
         </Badge>
       }
-      actions={
-        <Button
-          variant={user.membershipStatus === "active" ? "destructive" : "outline"}
-          disabled={busyStatus}
-          onClick={() => void handleToggleStatus()}
-        >
-          {user.membershipStatus === "active" ? "Disable" : "Enable"}
-        </Button>
-      }
     >
       <ActionNotice message={notice} />
 
@@ -187,10 +181,30 @@ export function AppUserDetailPage() {
             autoComplete="off"
           />
         </FormField>
-        <Button type="submit" disabled={!nameDirty || saving}>
-          {saving ? "Saving…" : "Save name"}
-        </Button>
+        <FormActions>
+          <Button type="submit" disabled={!nameDirty || saving}>
+            {saving ? "Saving…" : "Save name"}
+          </Button>
+        </FormActions>
       </form>
+
+      {user.membershipStatus === "active" ? (
+        <DangerZone
+          title="Disable user"
+          description={`${user.name} will not be able to sign in to this application.`}
+          action={
+            <DestructiveButton disabled={busyStatus} onClick={() => void handleToggleStatus()}>
+              Disable user
+            </DestructiveButton>
+          }
+        />
+      ) : (
+        <FormActions>
+          <Button variant="outline" disabled={busyStatus} onClick={() => void handleToggleStatus()}>
+            Enable user
+          </Button>
+        </FormActions>
+      )}
     </EntityDetailLayout>
   );
 }

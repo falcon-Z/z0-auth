@@ -7,6 +7,7 @@ import { Button } from "@z0/components/ui/button";
 import { Input } from "@z0/components/ui/input";
 import { TabActions } from "../../../components/apps/TabActions";
 import { DataTable } from "../../../components/crud/DataTable";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
@@ -198,15 +199,14 @@ export function AppUsersPage() {
         }
         rowActions={(row) =>
           row.membershipStatus === "active" ? (
-            <Button
+            <DestructiveButton
               type="button"
-              variant="ghost"
               size="sm"
               disabled={busyId === row.userId}
               onClick={() => void handleDisable(row)}
             >
               Disable
-            </Button>
+            </DestructiveButton>
           ) : (
             <Button
               type="button"

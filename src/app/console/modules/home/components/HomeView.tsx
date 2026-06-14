@@ -20,13 +20,6 @@ type HomeViewProps = {
   onRetry: () => void;
 };
 
-/** Short status token for the email metric — not a sentence. */
-function emailStatusValue(email: EmailSettingsResponse | null): string {
-  if (!email?.configured || !email.enabled) return "Off";
-  if (!email.verifiedAt) return "Test";
-  return "On";
-}
-
 export function HomeView({ session, summary, email, loading, error, onRetry }: HomeViewProps) {
   if (loading) return <ListPageSkeleton />;
   if (error || !summary) {
@@ -61,10 +54,9 @@ export function HomeView({ session, summary, email, loading, error, onRetry }: H
     <div className="space-y-10">
       <section className="space-y-4" aria-label="Overview">
         <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <MetricCard label="Apps" value={instance.appCount} to="/apps" />
           <MetricCard label="Team" value={instance.memberCount} to="/team" />
-          <MetricCard label="Email" value={emailStatusValue(email)} to="/settings/email" />
         </div>
       </section>
 

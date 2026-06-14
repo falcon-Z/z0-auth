@@ -6,6 +6,7 @@ import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 import type { AppScopeSummary } from "@z0/contracts/app-scopes";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { EmptyStateButton } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
@@ -98,15 +99,14 @@ export function AppPermissionsPage() {
           ]}
           rows={scopes}
           rowActions={(row) => (
-            <Button
+            <DestructiveButton
               type="button"
-              variant="ghost"
               size="sm"
               disabled={busyId === row.id}
               onClick={() => void handleDelete(row)}
             >
               Delete
-            </Button>
+            </DestructiveButton>
           )}
           emptyMessage="No scopes yet."
           emptyAction={

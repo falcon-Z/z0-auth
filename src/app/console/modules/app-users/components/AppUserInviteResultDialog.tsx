@@ -41,7 +41,7 @@ export function AppUserInviteResultDialog({ invite, appName, onClose }: Props) {
         <p className="break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">
           {invite.inviteUrl}
         </p>
-        <DialogFooter className="gap-2 sm:justify-start">
+        <DialogFooter className="gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
             <Copy className="size-4" />
             {copied ? "Copied" : "Copy link"}

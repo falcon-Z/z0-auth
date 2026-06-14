@@ -5,6 +5,8 @@ import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 
 import { Button } from "@z0/components/ui/button";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
+import { DangerZone } from "../../../components/forms/DangerZone";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
@@ -71,11 +73,6 @@ export function InviteDetailPage() {
         backTo="/team?tab=invites"
         backLabel="Back to invites"
         title={invite.invitedName}
-        actions={
-          <Button variant="destructive" disabled={revoking} onClick={() => void handleRevoke()}>
-            Revoke
-          </Button>
-        }
       />
 
       <dl className="grid max-w-lg gap-4 text-sm">
@@ -92,6 +89,16 @@ export function InviteDetailPage() {
           <dd>{new Date(invite.expiresAt).toLocaleString()}</dd>
         </div>
       </dl>
+
+      <DangerZone
+        title="Revoke invitation"
+        description="Cancel this invitation. The link will stop working."
+        action={
+          <DestructiveButton disabled={revoking} onClick={() => void handleRevoke()}>
+            Revoke invitation
+          </DestructiveButton>
+        }
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Input } from "@z0/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { DetailPageHeader } from "../../../components/crud/DetailPageHeader";
 import { FormField } from "../../../components/forms/FormField";
+import { FormActions } from "../../../components/forms/FormActions";
 import { PageError } from "../../../components/feedback/PageError";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
@@ -124,9 +125,11 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
             required
           />
         </FormField>
-        <Button type="submit" disabled={submitting}>
-          {submitting ? "Saving…" : "Change password"}
-        </Button>
+        <FormActions>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Saving…" : "Change password"}
+          </Button>
+        </FormActions>
       </form>
     </div>
   );

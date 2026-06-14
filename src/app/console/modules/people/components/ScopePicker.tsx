@@ -2,14 +2,36 @@ import type { PlatformResource } from "@z0/contracts/rbac";
 import { Checkbox } from "@z0/components/ui/checkbox";
 import { Label } from "@z0/components/ui/label";
 
+/** Scopes reserved for the instance owner — not assignable on custom roles. */
+const OWNER_ONLY_SCOPE_KEYS = new Set(["ownership:transfer"]);
+
 type ScopePickerProps = {
   resources: PlatformResource[];
   selected: string[];
   onChange: (scopeKeys: string[]) => void;
   disabled?: boolean;
+  /** Omit owner-only scopes (default for custom role create/edit). */
+  hideOwnerOnlyScopes?: boolean;
 };
 
-export function ScopePicker({ resources, selected, onChange, disabled }: ScopePickerProps) {
+function visibleResources(resources: PlatformResource[], hideOwnerOnlyScopes: boolean): PlatformResource[] {
+  if (!hideOwnerOnlyScopes) return resources;
+
+  return resources
+    .map((resource) => ({
+      ...resource,
+      scopes: resource.scopes.filter((scope) => !OWNER_ONLY_SCOPE_KEYS.has(scope.key)),
+    }))
+    .filter((resource) => resource.scopes.length > 0);
+}
+
+export function ScopePicker({
+  resources,
+  selected,
+  onChange,
+  disabled,
+  hideOwnerOnlyScopes = true,
+}: ScopePickerProps) {
   function toggle(scopeKey: string, checked: boolean) {
     if (checked) {
       onChange([...new Set([...selected, scopeKey])]);
@@ -18,9 +40,11 @@ export function ScopePicker({ resources, selected, onChange, disabled }: ScopePi
     onChange(selected.filter((key) => key !== scopeKey));
   }
 
+  const items = visibleResources(resources, hideOwnerOnlyScopes);
+
   return (
     <div className="space-y-6">
-      {resources.map((resource) => (
+      {items.map((resource) => (
         <div key={resource.key} className="space-y-3">
           <h3 className="text-sm font-medium">{resource.label}</h3>
           <div className="grid gap-2 sm:grid-cols-2">

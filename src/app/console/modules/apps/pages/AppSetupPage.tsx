@@ -7,6 +7,7 @@ import type { AppCredentialSummary } from "@z0/contracts/apps";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
+import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import {
@@ -193,15 +194,14 @@ export function AppSetupPage() {
                 >
                   Rotate
                 </Button>
-                <Button
+                <DestructiveButton
                   type="button"
-                  variant="outline"
                   size="sm"
                   disabled={busyId === row.id || (app.status === "active" && activeCreds.length <= 1)}
                   onClick={() => void handleRevoke(row)}
                 >
                   Revoke
-                </Button>
+                </DestructiveButton>
               </div>
             ) : null
           }
