@@ -97,6 +97,7 @@ Served from the server (`src/web/auth/`). Follow the existing auth page design a
 - `.cursor/rules/shadcn-ui.mdc` — shadcn CLI first, compose before custom primitives
 - `.cursor/rules/console-design.mdc` — console layout, nav, and page patterns
 - `.cursor/rules/no-legacy.mdc` — no compatibility redirects; remove or rename directly
+- `.cursor/rules/dev-server.mdc` — check port 3000 before starting dev server; never stack instances
 
 ## References
 

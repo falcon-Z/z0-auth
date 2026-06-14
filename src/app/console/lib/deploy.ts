@@ -1,8 +1,8 @@
 import type { DeployStatusResponse } from "@z0/contracts/deploy-status";
 
-export type { DeployStatusResponse, DeployProviderId } from "@z0/contracts/deploy-status";
+import { fetchWithTimeout, withTimeout } from "./fetch-with-timeout";
 
-const FETCH_TIMEOUT_MS = 10_000;
+export type { DeployStatusResponse, DeployProviderId } from "@z0/contracts/deploy-status";
 
 function isDeployStatusResponse(value: unknown): value is DeployStatusResponse {
   if (!value || typeof value !== "object") return false;
@@ -20,30 +20,26 @@ function isDeployStatusResponse(value: unknown): value is DeployStatusResponse {
 }
 
 export async function loadDeployStatus(): Promise<DeployStatusResponse> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
   try {
-    const res = await fetch("/api/deploy/status", {
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-    });
+    return await withTimeout(async () => {
+      const res = await fetchWithTimeout("/api/deploy/status", {
+        headers: { Accept: "application/json" },
+      });
 
-    if (!res.ok) {
-      throw new Error(`Could not load deployment status (${res.status})`);
-    }
+      if (!res.ok) {
+        throw new Error(`Could not load deployment status (${res.status})`);
+      }
 
-    const data: unknown = await res.json();
-    if (!isDeployStatusResponse(data)) {
-      throw new Error("Invalid deployment status response");
-    }
-    return data;
+      const data: unknown = await res.json();
+      if (!isDeployStatusResponse(data)) {
+        throw new Error("Invalid deployment status response");
+      }
+      return data;
+    }, undefined, "Deploy status load");
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof Error && error.message.includes("timed out")) {
       throw new Error("Timed out loading deployment status");
     }
     throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }

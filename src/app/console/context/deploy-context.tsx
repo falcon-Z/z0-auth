@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -30,8 +31,11 @@ export function DeployProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DeployStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const refreshInFlight = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setRefreshing(true);
     setError(null);
     try {
@@ -40,6 +44,7 @@ export function DeployProvider({ children }: { children: ReactNode }) {
     } catch {
       setError("Could not reach the server. Check that the app is running, then refresh.");
     } finally {
+      refreshInFlight.current = false;
       setRefreshing(false);
     }
   }, []);

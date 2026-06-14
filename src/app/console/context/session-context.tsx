@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -36,27 +37,36 @@ function SessionRevalidator({ onRevalidate }: { onRevalidate: () => Promise<void
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [gate, setGate] = useState<"loading" | "ready" | "unavailable">("loading");
+  const refreshSeq = useRef(0);
 
   const redirectForGate = useCallback((kind: "login" | "setup") => {
-    window.location.href = kind === "setup" ? "/auth/setup" : "/auth/login";
+    window.location.replace(kind === "setup" ? "/auth/setup" : "/auth/login");
   }, []);
 
   const refreshSession = useCallback(async () => {
-    const result = await loadSession();
-    if (result.kind === "authenticated") {
-      if (!hasConsoleAccess(result.session)) {
-        redirectForGate("login");
+    const seq = ++refreshSeq.current;
+    try {
+      const result = await loadSession();
+      if (seq !== refreshSeq.current) return;
+
+      if (result.kind === "authenticated") {
+        if (!hasConsoleAccess(result.session)) {
+          redirectForGate("login");
+          return;
+        }
+        setSession(result.session);
+        setGate("ready");
         return;
       }
-      setSession(result.session);
-      setGate("ready");
-      return;
-    }
-    if (result.kind === "unavailable") {
+      if (result.kind === "unavailable") {
+        setGate("unavailable");
+        return;
+      }
+      redirectForGate(result.kind);
+    } catch {
+      if (seq !== refreshSeq.current) return;
       setGate("unavailable");
-      return;
     }
-    redirectForGate(result.kind);
   }, [redirectForGate]);
 
   useEffect(() => {
@@ -83,7 +93,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   if (gate === "unavailable") {
     return (
-      <SessionGate message="The database became unavailable. Fix DATABASE_URL or Postgres, then refresh." />
+      <SessionGate message="Could not reach the server or database. Check that the app is running, then refresh." />
     );
   }
 

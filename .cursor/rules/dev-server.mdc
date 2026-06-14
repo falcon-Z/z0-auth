@@ -1,0 +1,30 @@
+---
+description: Check port 3000 before starting a dev server — never stack two instances
+alwaysApply: true
+---
+
+# Dev server
+
+The user may already have `bun dev` running. **Do not start another dev server on top.**
+
+Default port: **3000** (or `PORT` from `.env`).
+
+## Before starting the server
+
+1. Check whether something is already listening on the dev port.
+2. If a z0-auth dev server is already running (`bun … src/server.ts` on that port), **reuse it** — do not start a second one.
+3. If you must restart, stop the existing process first, then start one server.
+4. If the port is held by an unknown process, stop and tell the user — do not bind on top.
+
+## Quick checks
+
+```bash
+ss -tlnp | grep ':3000' || lsof -tiTCP:3000 -sTCP:LISTEN
+pgrep -af 'bun.*src/server.ts'
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/live
+```
+
+## Do not
+
+- Run `bun --hot src/server.ts` in the background without checking the port first.
+- Start a second dev server when one is already up — this causes random crashes and endless loading.

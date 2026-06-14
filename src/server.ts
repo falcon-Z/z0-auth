@@ -8,6 +8,11 @@ import { loadRootEnv } from "./lib/load-root-env";
 loadRootEnv();
 import { initializeInstanceKeys } from "./api/lib/instance-keys";
 import { printStartupSummary } from "./api/lib/startup-log";
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+
 await initializeInstanceKeys();
 import { authWebRoutes } from "./web/auth/routes";
 import { appInviteWebRoutes } from "./web/auth/app-invite-routes";
