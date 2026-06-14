@@ -64,7 +64,7 @@ export function AppWorkspaceRoute() {
 
   if (error || !app || !appId || app.id !== appId) {
     return (
-      <EntityDetailLayout name="App">
+      <EntityDetailLayout name="App" backTo="/apps" backLabel="Back to apps">
         <PageError title="Not found" message={error ?? "App not found."} onRetry={() => void refreshApp()}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/apps">Back to apps</Link>

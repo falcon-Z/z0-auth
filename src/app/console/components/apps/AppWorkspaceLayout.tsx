@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { ChevronLeft } from "lucide-react";
 
 import type { AppDetail } from "@z0/contracts/apps";
 import { Avatar, AvatarFallback } from "@z0/components/ui/avatar";
 import { Badge } from "@z0/components/ui/badge";
+import { Button } from "@z0/components/ui/button";
 import { ActionNotice } from "../feedback/ActionNotice";
 import { PageError } from "../feedback/PageError";
 import { EntityDetailLayout } from "../layout/EntityDetailLayout";
@@ -28,12 +31,19 @@ export function AppWorkspaceLayout({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <Avatar className="size-16 shrink-0 rounded-xl text-lg sm:size-20 sm:text-xl">
-            <AvatarFallback className="rounded-xl bg-muted font-medium text-foreground">
-              {initialsFromName(app.name)}
-            </AvatarFallback>
-          </Avatar>
+        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="ghost" size="icon" className="size-9 shrink-0" asChild>
+              <Link to="/apps" aria-label="Back to apps">
+                <ChevronLeft className="size-5" />
+              </Link>
+            </Button>
+            <Avatar className="size-16 shrink-0 rounded-xl text-lg sm:size-20 sm:text-xl">
+              <AvatarFallback className="rounded-xl bg-muted font-medium text-foreground">
+                {initialsFromName(app.name)}
+              </AvatarFallback>
+            </Avatar>
+          </div>
           <div className="min-w-0 space-y-1 pt-1">
             <h1 className="text-2xl font-semibold tracking-tight">{app.name}</h1>
             <p className="text-sm text-muted-foreground">{app.slug}</p>

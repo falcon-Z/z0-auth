@@ -23,7 +23,7 @@ export function AppsListPage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <ListPageHeader title="Apps" />
+        <ListPageHeader title="Apps" backTo="/" backLabel="Back to home" />
         <PageError message={error} onRetry={() => void reload()} />
       </div>
     );
@@ -33,6 +33,8 @@ export function AppsListPage() {
     <div className="space-y-6">
       <ListPageHeader
         title="Apps"
+        backTo="/"
+        backLabel="Back to home"
         actions={<Button onClick={() => setCreateOpen(true)}>Add app</Button>}
       />
 

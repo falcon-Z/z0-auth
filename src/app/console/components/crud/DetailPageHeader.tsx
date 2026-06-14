@@ -13,19 +13,18 @@ type DetailPageHeaderProps = {
 
 export function DetailPageHeader({ backTo, backLabel = "Back", title, actions }: DetailPageHeaderProps) {
   return (
-    <div className="space-y-4">
-      {backTo ? (
-        <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
-          <Link to={backTo}>
-            <ChevronLeft className="size-4" />
-            {backLabel}
-          </Link>
-        </Button>
-      ) : null}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-1">
+        {backTo ? (
+          <Button variant="ghost" size="icon" className="size-9 shrink-0" asChild>
+            <Link to={backTo} aria-label={backLabel}>
+              <ChevronLeft className="size-5" />
+            </Link>
+          </Button>
+        ) : null}
+        <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">{title}</h1>
       </div>
+      {actions ? <div className="flex shrink-0 flex-wrap justify-end gap-2">{actions}</div> : null}
     </div>
   );
 }

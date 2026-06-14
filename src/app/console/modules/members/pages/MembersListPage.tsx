@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import type { CreateInviteResponse, InstanceMember, PendingInvite } from "@z0/contracts/invites";
 import { Badge } from "@z0/components/ui/badge";
@@ -28,6 +28,7 @@ function roleLabels(member: InstanceMember): string {
 
 export function MembersListPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const confirm = useConfirm();
   const { hasScope } = usePermissions();
   const { session } = useSession();
@@ -36,7 +37,22 @@ export function MembersListPage() {
 
   const { members, invites, loading, error, submitInvite, reload, revokeInvite } = useMembersData();
 
-  const [tab, setTab] = useState<"members" | "invites">("members");
+  const [tab, setTab] = useState<"members" | "invites">(() =>
+    searchParams.get("tab") === "invites" ? "invites" : "members",
+  );
+
+  useEffect(() => {
+    setTab(searchParams.get("tab") === "invites" ? "invites" : "members");
+  }, [searchParams]);
+
+  function setActiveTab(id: "members" | "invites") {
+    setTab(id);
+    if (id === "invites") {
+      setSearchParams({ tab: "invites" }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  }
   const [inviteOpen, setInviteOpen] = useState(false);
   const [createdInvite, setCreatedInvite] = useState<CreateInviteResponse | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -106,7 +122,7 @@ export function MembersListPage() {
       <ResourceTabs
         tabs={tabs}
         activeId={tab}
-        onChange={(id) => setTab(id as "members" | "invites")}
+        onChange={(id) => setActiveTab(id as "members" | "invites")}
         panels={{
           members: (
             <DataTable<InstanceMember>

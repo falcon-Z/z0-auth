@@ -81,7 +81,11 @@ export function AppUserInviteDetailPage() {
   if (error || !invite || !appId) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader title="Invitation" />
+        <DetailPageHeader
+          title="Invitation"
+          backTo={appId ? `/apps/${appId}/users/invites` : "/apps"}
+          backLabel="Back to invites"
+        />
         <PageError title="Not found" message={error ?? "Invitation not found or no longer pending."}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to={appId ? `/apps/${appId}/users` : "/apps"}>Back to users</Link>
@@ -94,6 +98,8 @@ export function AppUserInviteDetailPage() {
   return (
     <div className="space-y-6">
       <DetailPageHeader
+        backTo={`/apps/${appId}/users/invites`}
+        backLabel="Back to invites"
         title={invite.invitedName}
         actions={
           <Button variant="destructive" disabled={revoking} onClick={() => void handleRevoke()}>

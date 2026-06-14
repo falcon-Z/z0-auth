@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import type { InstanceRoleSummary } from "@z0/contracts/rbac";
 import { Badge } from "@z0/components/ui/badge";
@@ -43,7 +43,7 @@ export function RolesListPage() {
 
   if (error) {
     return (
-      <TeamWorkspaceLayout title="Team">
+      <TeamWorkspaceLayout title="Team" backTo="/team" backLabel="Back to people">
         <PageError message={error} onRetry={() => void load()} />
       </TeamWorkspaceLayout>
     );
@@ -52,6 +52,8 @@ export function RolesListPage() {
   return (
     <TeamWorkspaceLayout
       title="Team"
+      backTo="/team"
+      backLabel="Back to people"
       actions={
         canManage ? (
           <Button onClick={() => setCreateOpen(true)}>Create role</Button>
@@ -100,13 +102,6 @@ export function RolesListPage() {
           canManage ? <EmptyStateButton onClick={() => setCreateOpen(true)}>Create role</EmptyStateButton> : undefined
         }
       />
-
-      <p className="text-sm text-muted-foreground">
-        System roles cover common team needs.{" "}
-        <Button variant="link" className="h-auto p-0" asChild>
-          <Link to="/team">Back to people</Link>
-        </Button>
-      </p>
 
       {canManage ? (
         <CreateRoleDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={() => void load()} />

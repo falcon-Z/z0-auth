@@ -119,7 +119,12 @@ export function AppUserDetailPage() {
 
   if (error || !user || !appId) {
     return (
-      <EntityDetailLayout name="User" tabs={[]}>
+      <EntityDetailLayout
+        name="User"
+        backTo={appId ? `/apps/${appId}/users` : "/apps"}
+        backLabel="Back to users"
+        tabs={[]}
+      >
         <PageError title="Not found" message={error ?? "App user not found."}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to={appId ? `/apps/${appId}/users` : "/apps"}>Back to users</Link>
@@ -131,6 +136,8 @@ export function AppUserDetailPage() {
 
   return (
     <EntityDetailLayout
+      backTo={`/apps/${appId}/users`}
+      backLabel="Back to users"
       name={user.name}
       subtitle={user.email}
       badges={

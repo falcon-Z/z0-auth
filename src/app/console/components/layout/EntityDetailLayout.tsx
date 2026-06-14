@@ -50,22 +50,22 @@ export function EntityDetailLayout({
 
   return (
     <div className={cn("space-y-6", className)}>
-      {backTo ? (
-        <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
-          <Link to={backTo}>
-            <ChevronLeft className="size-4" />
-            {backLabel}
-          </Link>
-        </Button>
-      ) : null}
-
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-4">
-          <Avatar className="size-16 shrink-0 rounded-xl text-lg sm:size-20 sm:text-xl">
-            <AvatarFallback className="rounded-xl bg-muted font-medium text-foreground">
-              {initialsFromName(name)}
-            </AvatarFallback>
-          </Avatar>
+        <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+          <div className="flex shrink-0 items-center gap-1">
+            {backTo ? (
+              <Button variant="ghost" size="icon" className="size-9 shrink-0" asChild>
+                <Link to={backTo} aria-label={backLabel}>
+                  <ChevronLeft className="size-5" />
+                </Link>
+              </Button>
+            ) : null}
+            <Avatar className="size-16 shrink-0 rounded-xl text-lg sm:size-20 sm:text-xl">
+              <AvatarFallback className="rounded-xl bg-muted font-medium text-foreground">
+                {initialsFromName(name)}
+              </AvatarFallback>
+            </Avatar>
+          </div>
           <div className="min-w-0 space-y-1 pt-1">
             <h1 className="text-2xl font-semibold tracking-tight">{name}</h1>
             {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}

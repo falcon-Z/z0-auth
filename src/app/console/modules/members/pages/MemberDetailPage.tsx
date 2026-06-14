@@ -62,7 +62,7 @@ export function MemberDetailPage() {
 
   if (!member) {
     return (
-      <EntityDetailLayout name="Member" tabs={[]}>
+      <EntityDetailLayout name="Member" backTo="/team" backLabel="Back to team" tabs={[]}>
         <PageError title="Not found" message="Member not found.">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/team">Back to team</Link>
@@ -142,6 +142,8 @@ export function MemberDetailPage() {
 
   return (
     <EntityDetailLayout
+      backTo="/team"
+      backLabel="Back to team"
       name={member.name}
       subtitle={member.email}
       badges={

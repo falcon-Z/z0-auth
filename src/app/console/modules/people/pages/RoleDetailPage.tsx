@@ -101,7 +101,7 @@ export function RoleDetailPage() {
 
   if (error || !role) {
     return (
-      <EntityDetailLayout name="Role" tabs={[]}>
+      <EntityDetailLayout name="Role" backTo="/team/roles" backLabel="Back to roles" tabs={[]}>
         <PageError title="Not found" message={error ?? "Role not found."}>
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/team/roles">Back to roles</Link>
@@ -113,6 +113,8 @@ export function RoleDetailPage() {
 
   return (
     <EntityDetailLayout
+      backTo="/team/roles"
+      backLabel="Back to roles"
       name={role.name}
       subtitle={role.description || undefined}
       badges={

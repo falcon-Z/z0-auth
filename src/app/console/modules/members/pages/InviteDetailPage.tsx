@@ -36,7 +36,7 @@ export function InviteDetailPage() {
   if (!invite) {
     return (
       <div className="space-y-6">
-        <DetailPageHeader title="Invitation" />
+        <DetailPageHeader title="Invitation" backTo="/team?tab=invites" backLabel="Back to invites" />
         <PageError title="Not found" message="Invitation not found or no longer pending.">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to="/team">Back to team</Link>
@@ -68,6 +68,8 @@ export function InviteDetailPage() {
   return (
     <div className="space-y-6">
       <DetailPageHeader
+        backTo="/team?tab=invites"
+        backLabel="Back to invites"
         title={invite.invitedName}
         actions={
           <Button variant="destructive" disabled={revoking} onClick={() => void handleRevoke()}>

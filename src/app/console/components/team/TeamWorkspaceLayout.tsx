@@ -6,11 +6,19 @@ import { SectionSidebar, type SectionSidebarItem } from "../layout/SectionSideba
 
 type TeamWorkspaceLayoutProps = {
   title: string;
+  backTo?: string;
+  backLabel?: string;
   actions?: ReactNode;
   children: ReactNode;
 };
 
-export function TeamWorkspaceLayout({ title, actions, children }: TeamWorkspaceLayoutProps) {
+export function TeamWorkspaceLayout({
+  title,
+  backTo = "/",
+  backLabel = "Back to home",
+  actions,
+  children,
+}: TeamWorkspaceLayoutProps) {
   const { hasScope } = usePermissions();
   const sidebarItems: SectionSidebarItem[] = [
     { id: "people", label: "People", path: "/team", exact: true },
@@ -19,7 +27,7 @@ export function TeamWorkspaceLayout({ title, actions, children }: TeamWorkspaceL
 
   return (
     <div className="space-y-6">
-      <ListPageHeader title={title} actions={actions} />
+      <ListPageHeader title={title} backTo={backTo} backLabel={backLabel} actions={actions} />
       <div className="flex flex-col gap-6 md:flex-row md:gap-8">
         <SectionSidebar items={sidebarItems} ariaLabel="Team sections" />
         <div className="min-w-0 flex-1">{children}</div>
