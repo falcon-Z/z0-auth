@@ -12,18 +12,18 @@ import {
   rotateCredential,
 } from "../../lib/apps";
 import { json } from "../../lib/http";
-import { requireInstanceMember } from "../../lib/instance-members";
+import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 
 export async function handleListApps(req: RoutedRequest): Promise<Response> {
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps:read");
   if (!auth.ok) return auth.response;
   const apps = await listAppsForApi();
   return json({ apps });
 }
 
 export async function handleCreateApp(req: RoutedRequest): Promise<Response> {
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps:create");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<CreateAppRequest>(req);
@@ -36,7 +36,7 @@ export async function handleCreateApp(req: RoutedRequest): Promise<Response> {
 
 export async function handleGetApp(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps:read");
   if (!auth.ok) return auth.response;
 
   const result = await getAppForApi(appId);
@@ -46,7 +46,7 @@ export async function handleGetApp(req: RoutedRequest): Promise<Response> {
 
 export async function handlePatchApp(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps:update");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<PatchAppRequest>(req);
@@ -59,7 +59,7 @@ export async function handlePatchApp(req: RoutedRequest): Promise<Response> {
 
 export async function handleListCredentials(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.credentials:read");
   if (!auth.ok) return auth.response;
 
   const result = await listCredentialsForApi(appId);
@@ -69,7 +69,7 @@ export async function handleListCredentials(req: RoutedRequest): Promise<Respons
 
 export async function handleCreateCredential(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.credentials:create");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<CreateCredentialRequest>(req);
@@ -83,7 +83,7 @@ export async function handleCreateCredential(req: RoutedRequest): Promise<Respon
 export async function handleRevokeCredential(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
   const credentialId = req.pathParams?.credentialId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.credentials:revoke");
   if (!auth.ok) return auth.response;
 
   const result = await revokeCredential(appId, credentialId);
@@ -94,7 +94,7 @@ export async function handleRevokeCredential(req: RoutedRequest): Promise<Respon
 export async function handleRotateCredential(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
   const credentialId = req.pathParams?.credentialId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.credentials:rotate");
   if (!auth.ok) return auth.response;
 
   const result = await rotateCredential(appId, credentialId);

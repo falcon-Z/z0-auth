@@ -4,7 +4,7 @@ import { parseJsonBody } from "@z0/contracts/validation";
 
 import { validateCsrf } from "../../lib/csrf";
 import { json, problem } from "../../lib/http";
-import { requireInstanceMember } from "../../lib/instance-members";
+import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 import { deliverEmail } from "../../lib/smtp-mail";
 import {
@@ -17,7 +17,7 @@ import {
 import { writeAuditEvent } from "../../lib/audit";
 
 export async function handleGetEmailSettings(req: RoutedRequest): Promise<Response> {
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "settings.email:read");
   if (!auth.ok) return auth.response;
   const settings = await getEmailSettingsForApi();
   return json(settings);
@@ -27,7 +27,7 @@ export async function handlePutEmailSettings(req: RoutedRequest): Promise<Respon
   const csrfError = validateCsrf(req);
   if (csrfError) return csrfError;
 
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "settings.email:update");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<PutEmailSettingsRequest>(req);
@@ -50,7 +50,7 @@ export async function handleTestEmail(req: RoutedRequest): Promise<Response> {
   const csrfError = validateCsrf(req);
   if (csrfError) return csrfError;
 
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "settings.email:update");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<TestEmailRequest>(req);

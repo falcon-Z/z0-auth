@@ -16,7 +16,7 @@ import {
   revokeAppUserInvite,
 } from "../../lib/app-users";
 import { json } from "../../lib/http";
-import { requireInstanceMember } from "../../lib/instance-members";
+import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 
 function appIdFrom(req: RoutedRequest): string {
@@ -33,7 +33,7 @@ function inviteIdFrom(req: RoutedRequest): string {
 
 export async function handleListAppUsers(req: RoutedRequest): Promise<Response> {
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:read");
   if (!auth.ok) return auth.response;
 
   const url = new URL(req.url);
@@ -49,7 +49,7 @@ export async function handleCreateAppUser(req: RoutedRequest): Promise<Response>
   if (csrfError) return csrfError;
 
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:manage");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<CreateAppUserRequest>(req);
@@ -62,7 +62,7 @@ export async function handleCreateAppUser(req: RoutedRequest): Promise<Response>
 
 export async function handleGetAppUser(req: RoutedRequest): Promise<Response> {
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:read");
   if (!auth.ok) return auth.response;
 
   const result = await getAppUserDetailForApi(appId, userIdFrom(req));
@@ -75,7 +75,7 @@ export async function handlePatchAppUser(req: RoutedRequest): Promise<Response> 
   if (csrfError) return csrfError;
 
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:manage");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<PatchAppUserRequest>(req);
@@ -88,7 +88,7 @@ export async function handlePatchAppUser(req: RoutedRequest): Promise<Response> 
 
 export async function handleListAppUserInvites(req: RoutedRequest): Promise<Response> {
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:read");
   if (!auth.ok) return auth.response;
 
   const result = await listPendingAppUserInvites(appId);
@@ -101,7 +101,7 @@ export async function handleCreateAppUserInvite(req: RoutedRequest): Promise<Res
   if (csrfError) return csrfError;
 
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:manage");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<CreateAppUserInviteRequest>(req);
@@ -117,7 +117,7 @@ export async function handleRevokeAppUserInvite(req: RoutedRequest): Promise<Res
   if (csrfError) return csrfError;
 
   const appId = appIdFrom(req);
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.users:manage");
   if (!auth.ok) return auth.response;
 
   const result = await revokeAppUserInvite(appId, inviteIdFrom(req), auth.userId);

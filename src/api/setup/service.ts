@@ -14,6 +14,7 @@ import { clientIp } from "../lib/rate-limit";
 import { checkDatabaseSchema, getDb } from "../lib/db";
 import { problem } from "../lib/http";
 import { hashPassword } from "../lib/password";
+import { assignBootstrapOwnerRoleInTx } from "../lib/platform-rbac";
 import { checkRateLimit } from "../lib/rate-limit";
 
 export type SetupRunOptions = {
@@ -167,6 +168,8 @@ export async function runSetup(
             updated_at = NOW()
         WHERE id = 1
       `;
+
+      await assignBootstrapOwnerRoleInTx(tx, userId);
 
       return { conflict: false as const, user, userId, organizationName };
     });

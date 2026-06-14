@@ -1,0 +1,109 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Platform RBAC API
+  version: 0.1.0
+  description: Instance-scoped roles, permissions, and member role assignments (MS-P1).
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: RBAC
+  - name: Ownership
+paths:
+  /api/v1/rbac/resources:
+    get:
+      tags: [RBAC]
+      summary: List platform resources and scopes
+      operationId: listRbacResources
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Resource catalog for role editors
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/v1/rbac/roles:
+    get:
+      tags: [RBAC]
+      summary: List roles
+      operationId: listRoles
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Roles with member and scope counts
+    post:
+      tags: [RBAC]
+      summary: Create custom role
+      operationId: createRole
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      responses:
+        "201":
+          description: Role created
+  /api/v1/rbac/roles/{roleId}:
+    get:
+      tags: [RBAC]
+      summary: Get role
+      operationId: getRole
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Role detail
+    patch:
+      tags: [RBAC]
+      summary: Update custom role
+      operationId: patchRole
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      responses:
+        "200":
+          description: Role updated
+    delete:
+      tags: [RBAC]
+      summary: Delete custom role
+      operationId: deleteRole
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      responses:
+        "200":
+          description: Role deleted
+  /api/v1/members/{userId}/roles:
+    get:
+      tags: [RBAC]
+      summary: List member roles
+      operationId: getMemberRoles
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Member role assignments
+    put:
+      tags: [RBAC]
+      summary: Replace member role assignments
+      operationId: setMemberRoles
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      responses:
+        "200":
+          description: Updated assignments
+  /api/v1/ownership/transfer:
+    post:
+      tags: [Ownership]
+      summary: Transfer instance ownership
+      operationId: transferOwnership
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      responses:
+        "200":
+          description: Ownership transferred

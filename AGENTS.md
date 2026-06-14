@@ -76,7 +76,7 @@ Folder structure reflects the resource, e.g. `src/api/v1/members/`. Shared or cr
 | `src/console/pages/<page>/components/` | Components specific to that page |
 | `src/console/components/<use-case>/` | Reusable components by use case, e.g. `components/auth/` |
 
-Console layout, navigation, and page patterns: **`docs/console-design.md`** (rule: `.cursor/rules/console-design.mdc`).
+Console layout, navigation, and page patterns: `.cursor/rules/console-design.mdc`.
 
 ### Hosted auth (HTMX)
 
@@ -101,6 +101,5 @@ Served from the server (`src/web/auth/`). Follow the existing auth page design a
 ## References
 
 - Product: `docs/product.md`
-- Console design: `docs/console-design.md`
 - Data model: `docs/data-model.md`
 - API contracts: `docs/api/`

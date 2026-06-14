@@ -15,6 +15,14 @@ export type InvitePreviewResponse = {
 export type CreateInviteRequest = {
   email: string;
   invitedName: string;
+  /** Role IDs to assign when the invite is accepted. Defaults to Developer. */
+  roleIds?: string[];
+};
+
+export type RoleSummary = {
+  id: string;
+  key: string;
+  name: string;
 };
 
 export type CreateInviteResponse = {
@@ -23,6 +31,7 @@ export type CreateInviteResponse = {
   expiresAt: string;
   email: string;
   invitedName: string;
+  roles: RoleSummary[];
 };
 
 export type AcceptInviteRequest = {
@@ -42,6 +51,7 @@ export type InstanceMember = {
   name: string;
   joinedAt: string;
   isBootstrap: boolean;
+  roles: RoleSummary[];
 };
 
 export type PendingInvite = {
@@ -50,5 +60,6 @@ export type PendingInvite = {
   invitedName: string;
   expiresAt: string;
   createdAt: string;
+  roles: RoleSummary[];
 };
 

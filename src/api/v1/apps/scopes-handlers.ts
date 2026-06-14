@@ -8,12 +8,12 @@ import {
   patchScopeForApi,
 } from "../../lib/app-scopes";
 import { json } from "../../lib/http";
-import { requireInstanceMember } from "../../lib/instance-members";
+import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 
 export async function handleListScopes(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.scopes:read");
   if (!auth.ok) return auth.response;
 
   const result = await listScopesForApi(appId);
@@ -23,7 +23,7 @@ export async function handleListScopes(req: RoutedRequest): Promise<Response> {
 
 export async function handleCreateScope(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.scopes:manage");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<CreateAppScopeRequest>(req);
@@ -37,7 +37,7 @@ export async function handleCreateScope(req: RoutedRequest): Promise<Response> {
 export async function handlePatchScope(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
   const scopeId = req.pathParams?.scopeId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.scopes:manage");
   if (!auth.ok) return auth.response;
 
   const parsed = await parseJsonBody<PatchAppScopeRequest>(req);
@@ -51,7 +51,7 @@ export async function handlePatchScope(req: RoutedRequest): Promise<Response> {
 export async function handleDeleteScope(req: RoutedRequest): Promise<Response> {
   const appId = req.pathParams?.appId ?? "";
   const scopeId = req.pathParams?.scopeId ?? "";
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "apps.scopes:manage");
   if (!auth.ok) return auth.response;
 
   const result = await deleteScopeForApi(appId, scopeId);

@@ -1,43 +1,122 @@
 ---
-description: Console UI layout, navigation, and page patterns — keep modules consistent
+description: How agents build console UI — layout, navigation, page patterns, copy
 globs: src/app/console/**/*
 alwaysApply: false
 ---
 
-# Console design
+# Console UI (agent guide)
 
-Full guide: `docs/console-design.md`. Read it when planning or building console UI.
+Applies when planning or implementing anything under `src/app/console/`. Compose from existing components; do not invent new nav or tab patterns.
 
-## Navigation
+## Principles
 
-- **Top bar:** org name + chevron menu (Home · Apps · Team) · search · account. No inline Home/Apps/Team links.
-- **Search:** icon on mobile, full bar on `md+`. Same ⌘K dialog everywhere.
-- **Breadcrumbs:** truncate and collapse with `…` dropdown. Never push search or profile off-screen (`shrink-0` on the right cluster).
+- **One question per screen** (e.g. “Who is on the team?”, “How is this app set up?”).
+- **Plain language.** Short labels. **No em-dashes** in UI copy.
+- **Reuse before inventing.** Match Home, Apps, Team, and Profile.
+- **shadcn first** — see `.cursor/rules/shadcn-ui.mdc`. Primitives only in `components/ui/` (CLI).
 
-## Page patterns (pick one)
+## Information architecture
 
-| Pattern | When | Use |
-|---------|------|-----|
-| Hub | Overview / landing | Metric cards, next steps — `HomeView` |
-| List | Index of records | `ListPageHeader` + `DataTable` |
-| List tabs | Two related lists | `ResourceTabs` only (e.g. Members \| Invites) |
-| **Workspace** | Multi-section entity | Header block + **`SectionSidebar`** + `<Outlet />` |
-| Detail | Single view | `EntityDetailLayout` without tabs |
+| Daily nav | Route |
+|-----------|-------|
+| Home | `/` |
+| Apps | `/apps` |
+| Team | `/team` |
 
-**Do not** use horizontal `PageTabBar` / line tabs for entity sections. Use `SectionSidebar` (same as Apps and Profile).
+Everything else (Settings, Activity, security, etc.) → **Search** (⌘K) or contextual links. **Not** inline header links.
 
-## Reuse these
+Primary nav: **org menu** (chevron next to org name) via `OrgNavMenu`.
 
-- `SectionSidebar` — app sections, profile, any future multi-section module
-- `AppWorkspaceLayout` — app-scoped pages
-- `DataTable` — toolbar and pagination **inside** the card
-- shadcn primitives from `components/ui/` — never hand-roll buttons, dialogs, tables
+## Header (`AppHeader.tsx`)
+
+Three-column grid on all breakpoints:
+
+```
+[ Org ▼ + breadcrumbs ]   [ Search ]   [ Account ]
+```
+
+| Zone | Rule |
+|------|------|
+| Org + menu | Name links home; chevron → Home · Apps · Team |
+| Breadcrumbs | `HeaderBreadcrumbs` — truncate; `…` dropdown when long; never push search/profile off-screen |
+| Search | Mobile: icon. `md+`: “Search or jump to…” bar. Same `ConsoleSearch` dialog |
+| Account | Avatar menu; `shrink-0` always visible |
+
+Do **not** add: second nav row, hamburger sidebars, full-width mobile search competing with org name.
+
+## Page patterns (pick one per module)
+
+| Pattern | When | Components |
+|---------|------|------------|
+| **Hub** | Landing / overview | Metric cards (3-col grid), next-step cards — `HomeView` |
+| **List** | Record index | `ListPageHeader` + `DataTable` |
+| **List tabs** | Two sibling lists on one page only | `ResourceTabs` (e.g. Members \| Invites) |
+| **Workspace** | Multi-section entity | Header + **`SectionSidebar`** + `<Outlet />` |
+| **Detail** | Single view, no sections | `EntityDetailLayout` without tabs |
+
+**Never** use horizontal `PageTabBar` / line `TabsList` for entity sections. Use `SectionSidebar`.
+
+### Workspace layout
+
+```
+[ Avatar / title / subtitle / badges / actions ]
+
+[ SectionSidebar ]   [ content ]
+```
+
+- Desktop: vertical sidebar. Mobile: horizontal scroll (same component).
+- Active link: `bg-muted`, not underline tabs.
+- App: `AppWorkspaceLayout` + `AppSectionSidebar`
+- Profile: `ProfileLayout` + `SectionSidebar`
+
+References: `AppWorkspaceLayout.tsx`, `ProfileLayout.tsx`, `SectionSidebar.tsx`
+
+## Data tables (`DataTable.tsx`)
+
+- Toolbar (search, columns) and pagination **inside** the table `Card`.
+- Toolbar + column headers share muted top band.
+
+## Forms
+
+- `FormField`; labels above inputs; errors on the field.
+- Destructive actions → `ConfirmDialog`.
+- No bloated intros.
 
 ## Copy
 
-- One question per screen; plain language; **no em-dashes** in UI strings.
-- Bold numbers on metrics; short status tokens (`Off`, `On`), not sentences.
+| Do | Don't |
+|----|-------|
+| “Set up email” | “Configure your SMTP integration —” |
+| “No members yet” | Long explanatory empty states |
+| “Team”, “Apps”, “Home” | Internal module names in UI |
 
-## Before shipping
+Metrics: **bold numbers**; status tokens (`Off`, `On`, `Test`), not sentences.
 
-Check ~390px and ~1024px: header controls visible, breadcrumbs collapse, sidebar scrolls horizontally on mobile.
+## Responsive checklist (~390px and ~1024px)
+
+- Org name, search, account all visible
+- Breadcrumbs truncate/collapse; search and profile never clipped
+- `SectionSidebar` scrolls horizontally on mobile
+- Metric cards stay 3 columns unless intentional
+
+## Component map
+
+| Need | Path |
+|------|------|
+| Shell | `components/shell/AppShell.tsx`, `AppHeader.tsx` |
+| Org nav | `components/shell/OrgNavMenu.tsx` |
+| Search | `components/shell/ConsoleSearch.tsx` |
+| Breadcrumbs | `components/shell/HeaderBreadcrumbs.tsx` |
+| Section nav | `components/layout/SectionSidebar.tsx` |
+| App workspace | `components/apps/AppWorkspaceLayout.tsx` |
+| List header | `components/crud/ListPageHeader.tsx` |
+| Table | `components/crud/DataTable.tsx` |
+| List sub-views | `components/crud/ResourceTabs.tsx` |
+| Detail header | `components/layout/EntityDetailLayout.tsx` |
+
+## New module checklist
+
+1. Pick a page pattern above.
+2. Register route in `routes.tsx`; add `SEARCH_ITEMS` / breadcrumbs if needed.
+3. Multi-section → `SectionSidebar` only (no new tab styles).
+4. Update console e2e if nav paths change.

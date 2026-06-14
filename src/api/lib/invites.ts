@@ -8,6 +8,7 @@ import type {
   InstanceMember,
   InvitePreviewResponse,
   PendingInvite,
+  RoleSummary,
 } from "@z0/contracts/invites";
 import { ErrorCodes } from "@z0/contracts/errors";
 import {
@@ -17,16 +18,35 @@ import {
 import { normalizeEmail, validateEmail, validateRequiredString } from "@z0/contracts/validation";
 
 import { getUserById } from "./auth";
+
 import { writeAuditEvent } from "./audit";
 import { sha256Hex, randomToken } from "./crypto";
-import { getDb } from "./db";
+import { getDb, pgTextArray } from "./db";
 import { problem } from "./http";
 import { getInstanceSettings } from "./instance";
 import { hashPassword } from "./password";
+import {
+  applyInviteRolesToMember,
+  assignInviteRolesInTx,
+  getDeveloperRoleId,
+  grantBoundaryViolationForRoleIds,
+} from "./platform-rbac";
 import { resolveSession } from "./session";
 import { createSession, sessionCookieHeader } from "./session";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function inviteRolesMissingResponse(): Response {
+  return problem(409, "Conflict", "This invitation is missing role assignments.", {
+    errors: [
+      {
+        field: "_invite",
+        code: ErrorCodes.INVITE_INVALID,
+        message: "Invitation roles are invalid",
+      },
+    ],
+  });
+}
 
 export type InviteRow = {
   id: string;
@@ -85,6 +105,27 @@ async function userExistsByEmail(email: string): Promise<boolean> {
     SELECT id FROM users WHERE lower(email) = ${email} AND status = 'active'
   `;
   return Boolean(row);
+}
+
+async function roleSummariesForInvite(inviteId: string, db: SQL = getDb()): Promise<RoleSummary[]> {
+  const rows = await db`
+    SELECT r.id, r.key, r.name
+    FROM instance_invite_roles ir
+    JOIN instance_roles r ON r.id = ir.role_id
+    WHERE ir.invite_id = ${inviteId}
+    ORDER BY r.name
+  `;
+  return rows.map((row) => {
+    const r = row as { id: string; key: string; name: string };
+    return { id: String(r.id), key: r.key, name: r.name };
+  });
+}
+
+async function resolveInviteRoleIds(body: CreateInviteRequest): Promise<string[]> {
+  if (body.roleIds && body.roleIds.length > 0) {
+    return [...new Set(body.roleIds)];
+  }
+  return [await getDeveloperRoleId()];
 }
 
 async function isMemberByEmail(email: string): Promise<boolean> {
@@ -161,43 +202,68 @@ export async function createInstanceInvite(
   const rawToken = randomToken(32);
   const tokenHash = await sha256Hex(rawToken);
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+  const roleIds = await resolveInviteRoleIds(body);
+
+  const boundary = await grantBoundaryViolationForRoleIds(invitedByUserId, roleIds, "roleIds");
+  if (boundary) return { ok: false, response: boundary };
+
+  for (const roleId of roleIds) {
+    const [row] = await getDb()`SELECT id FROM instance_roles WHERE id = ${roleId} LIMIT 1`;
+    if (!row) {
+      return {
+        ok: false,
+        response: problem(400, "Validation Error", "One or more roles are invalid", {
+          errors: [{ field: "roleIds", code: ErrorCodes.USER_NOT_FOUND, message: "Unknown role" }],
+        }),
+      };
+    }
+  }
 
   try {
-    const [inserted] = await getDb()`
-      INSERT INTO instance_invites (
-        email,
-        invited_name,
-        token_hash,
-        invited_by_user_id,
-        expires_at
-      )
-      VALUES (
-        ${email},
-        ${invitedName},
-        ${tokenHash},
-        ${invitedByUserId},
-        ${expiresAt}
-      )
-      RETURNING id
-    `;
+    const created = await getDb().begin(async (tx) => {
+      const [inserted] = await tx`
+        INSERT INTO instance_invites (
+          email,
+          invited_name,
+          token_hash,
+          invited_by_user_id,
+          expires_at
+        )
+        VALUES (
+          ${email},
+          ${invitedName},
+          ${tokenHash},
+          ${invitedByUserId},
+          ${expiresAt}
+        )
+        RETURNING id
+      `;
 
-    const id = String((inserted as { id: string }).id);
-    await writeAuditEvent({
-      actorUserId: invitedByUserId,
-      action: "invite.created",
-      resourceType: "instance_invite",
-      resourceId: id,
-      payload: { email },
+      const id = String((inserted as { id: string }).id);
+      await assignInviteRolesInTx(tx, id, roleIds);
+      await writeAuditEvent(
+        {
+          actorUserId: invitedByUserId,
+          action: "invite.created",
+          resourceType: "instance_invite",
+          resourceId: id,
+          payload: { email },
+        },
+        tx,
+      );
+      const roles = await roleSummariesForInvite(id, tx);
+      return { id, roles };
     });
 
     return {
       ok: true,
       data: {
-        id,
+        id: created.id,
         inviteUrl: inviteUrlFromRequest(req, rawToken),
         expiresAt: expiresAt.toISOString(),
         email,
         invitedName,
+        roles: created.roles,
       },
     };
   } catch (error) {
@@ -209,11 +275,24 @@ export async function createInstanceInvite(
         }),
       };
     }
+    if (error instanceof Error && error.message === "invite_roles_required") {
+      return {
+        ok: false,
+        response: problem(400, "Validation Error", "Choose at least one role", {
+          errors: [{ field: "roleIds", code: ErrorCodes.REQUIRED, message: "At least one role is required" }],
+        }),
+      };
+    }
     throw error;
   }
 }
 
-async function applyInviteMembership(tx: SQL, invite: InviteRow, userId: string): Promise<void> {
+async function applyInviteMembership(
+  tx: SQL,
+  invite: InviteRow,
+  userId: string,
+  invitedByUserId: string | null,
+): Promise<void> {
   await tx`
     INSERT INTO instance_members (user_id)
     VALUES (${userId})
@@ -224,6 +303,7 @@ async function applyInviteMembership(tx: SQL, invite: InviteRow, userId: string)
     SET status = 'accepted', accepted_at = NOW()
     WHERE id = ${invite.id}
   `;
+  await applyInviteRolesToMember(invite.id, userId, invitedByUserId, tx);
 }
 
 export async function acceptInstanceInvite(
@@ -298,19 +378,26 @@ export async function acceptInstanceInvite(
       };
     }
 
-    await getDb().begin(async (tx) => {
-      await applyInviteMembership(tx, invite, userId);
-      await writeAuditEvent(
-        {
-          actorUserId: userId,
-          action: "invite.accepted",
-          resourceType: "instance_invite",
-          resourceId: invite.id,
-          payload: { email: invite.email },
-        },
-        tx,
-      );
-    });
+    try {
+      await getDb().begin(async (tx) => {
+        await applyInviteMembership(tx, invite, userId, invite.invited_by_user_id);
+        await writeAuditEvent(
+          {
+            actorUserId: userId,
+            action: "invite.accepted",
+            resourceType: "instance_invite",
+            resourceId: invite.id,
+            payload: { email: invite.email },
+          },
+          tx,
+        );
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "invite_roles_missing") {
+        return { ok: false, response: inviteRolesMissingResponse() };
+      }
+      throw error;
+    }
 
     return { ok: true, userId };
   }
@@ -339,7 +426,7 @@ export async function acceptInstanceInvite(
         INSERT INTO password_credentials (user_id, password_hash)
         VALUES (${userId}, ${passwordHash})
       `;
-      await applyInviteMembership(tx, invite, userId);
+      await applyInviteMembership(tx, invite, userId, invite.invited_by_user_id);
       await writeAuditEvent(
         {
           actorUserId: userId,
@@ -367,6 +454,9 @@ export async function acceptInstanceInvite(
           errors: [{ field: "email", code: ErrorCodes.INVITE_ALREADY_MEMBER, message: "Account already exists" }],
         }),
       };
+    }
+    if (error instanceof Error && error.message === "invite_roles_missing") {
+      return { ok: false, response: inviteRolesMissingResponse() };
     }
     throw error;
   }
@@ -442,6 +532,50 @@ export async function declineInstanceInvite(
   return { ok: true };
 }
 
+async function memberRolesByUserIds(userIds: string[]): Promise<Map<string, RoleSummary[]>> {
+  const map = new Map<string, RoleSummary[]>();
+  if (userIds.length === 0) return map;
+
+  const rows = await getDb()`
+    SELECT mr.member_user_id, r.id, r.key, r.name
+    FROM instance_member_roles mr
+    JOIN instance_roles r ON r.id = mr.role_id
+    WHERE mr.member_user_id = ANY(${pgTextArray(userIds)}::uuid[])
+    ORDER BY r.name
+  `;
+
+  for (const row of rows) {
+    const r = row as { member_user_id: string; id: string; key: string; name: string };
+    const userId = String(r.member_user_id);
+    const roles = map.get(userId) ?? [];
+    roles.push({ id: String(r.id), key: r.key, name: r.name });
+    map.set(userId, roles);
+  }
+  return map;
+}
+
+async function inviteRolesByInviteIds(inviteIds: string[]): Promise<Map<string, RoleSummary[]>> {
+  const map = new Map<string, RoleSummary[]>();
+  if (inviteIds.length === 0) return map;
+
+  const rows = await getDb()`
+    SELECT ir.invite_id, r.id, r.key, r.name
+    FROM instance_invite_roles ir
+    JOIN instance_roles r ON r.id = ir.role_id
+    WHERE ir.invite_id = ANY(${pgTextArray(inviteIds)}::uuid[])
+    ORDER BY r.name
+  `;
+
+  for (const row of rows) {
+    const r = row as { invite_id: string; id: string; key: string; name: string };
+    const inviteId = String(r.invite_id);
+    const roles = map.get(inviteId) ?? [];
+    roles.push({ id: String(r.id), key: r.key, name: r.name });
+    map.set(inviteId, roles);
+  }
+  return map;
+}
+
 export async function listInstanceMembersForApi(): Promise<InstanceMember[]> {
   const rows = await getDb()`
     SELECT
@@ -455,14 +589,19 @@ export async function listInstanceMembersForApi(): Promise<InstanceMember[]> {
     ORDER BY u.name ASC
   `;
 
+  const userIds = rows.map((row) => String((row as { id: string }).id));
+  const rolesByUserId = await memberRolesByUserIds(userIds);
+
   return rows.map((row) => {
     const r = row as { id: string; email: string; name: string; joined_at: Date; is_bootstrap: boolean };
+    const userId = String(r.id);
     return {
-      userId: String(r.id),
+      userId,
       email: r.email,
       name: r.name,
       joinedAt: new Date(r.joined_at).toISOString(),
       isBootstrap: Boolean(r.is_bootstrap),
+      roles: rolesByUserId.get(userId) ?? [],
     };
   });
 }
@@ -476,6 +615,9 @@ export async function listPendingInstanceInvites(): Promise<PendingInvite[]> {
     ORDER BY created_at DESC
   `;
 
+  const inviteIds = rows.map((row) => String((row as { id: string }).id));
+  const rolesByInviteId = await inviteRolesByInviteIds(inviteIds);
+
   return rows.map((row) => {
     const r = row as {
       id: string;
@@ -484,12 +626,14 @@ export async function listPendingInstanceInvites(): Promise<PendingInvite[]> {
       expires_at: Date;
       created_at: Date;
     };
+    const id = String(r.id);
     return {
-      id: String(r.id),
+      id,
       email: r.email,
       invitedName: r.invited_name,
       expiresAt: new Date(r.expires_at).toISOString(),
       createdAt: new Date(r.created_at).toISOString(),
+      roles: rolesByInviteId.get(id) ?? [],
     };
   });
 }

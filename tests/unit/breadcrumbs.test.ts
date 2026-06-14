@@ -15,11 +15,16 @@ describe("staticBreadcrumbsForPath", () => {
     ]);
   });
 
-  test("people and access nest correctly", () => {
+  test("team and roles nest correctly", () => {
     expect(staticBreadcrumbsForPath("/team")).toEqual([{ label: "Team" }]);
-    expect(staticBreadcrumbsForPath("/team/access")).toEqual([
+    expect(staticBreadcrumbsForPath("/team/roles")).toEqual([
       { label: "Team", to: "/team" },
-      { label: "Manage access" },
+      { label: "Roles" },
+    ]);
+    expect(staticBreadcrumbsForPath("/team/roles/role-123")).toEqual([
+      { label: "Team", to: "/team" },
+      { label: "Roles", to: "/team/roles" },
+      { label: "Role" },
     ]);
   });
 

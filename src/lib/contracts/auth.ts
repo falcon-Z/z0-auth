@@ -24,6 +24,10 @@ export type SessionResponse = {
   isBootstrap?: boolean;
   /** Instance organization display name from setup. */
   organizationName?: string;
+  /** Effective platform permission scopes for console UI gating. */
+  scopes?: string[];
+  /** Assigned role names for display. */
+  roles?: string[];
 };
 
 export type AuthenticatedSessionPayload = SessionResponse & {
@@ -32,4 +36,6 @@ export type AuthenticatedSessionPayload = SessionResponse & {
   isInstanceMember: boolean;
   isBootstrap: boolean;
   organizationName: string;
+  scopes: string[];
+  roles: string[];
 };

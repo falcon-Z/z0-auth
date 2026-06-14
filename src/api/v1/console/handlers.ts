@@ -1,11 +1,11 @@
 import type { BunRequest } from "bun";
 
-import { requireInstanceMember } from "../../lib/instance-members";
+import { requireScope } from "../../lib/platform-rbac";
 import { buildConsoleSummary } from "../../lib/console-summary";
 import { json } from "../../lib/http";
 
 export async function handleConsoleSummary(req: BunRequest): Promise<Response> {
-  const auth = await requireInstanceMember(req);
+  const auth = await requireScope(req, "instance:read");
   if (!auth.ok) return auth.response;
 
   const summary = await buildConsoleSummary(auth.userId);

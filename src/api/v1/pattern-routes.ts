@@ -28,6 +28,17 @@ import {
 } from "./sessions/handlers";
 import { handleConsoleSummary } from "./console/handlers";
 import {
+  handleCreateRole,
+  handleDeleteRole,
+  handleGetMemberRoles,
+  handleGetRole,
+  handleListRbacResources,
+  handleListRoles,
+  handlePatchRole,
+  handleSetMemberRoles,
+  handleTransferOwnership,
+} from "./rbac/handlers";
+import {
   handleCreateApp,
   handleCreateCredential,
   handleGetApp,
@@ -91,6 +102,11 @@ export const v1PatternRoutes: PathRoute[] = [
     handlers: { GET: handleGetAppUser, PATCH: handlePatchAppUser },
   },
   { pattern: "/api/v1/console/summary", handlers: { GET: handleConsoleSummary } },
+  { pattern: "/api/v1/rbac/resources", handlers: { GET: handleListRbacResources } },
+  { pattern: "/api/v1/rbac/roles", handlers: { GET: handleListRoles, POST: handleCreateRole } },
+  { pattern: "/api/v1/rbac/roles/:roleId", handlers: { GET: handleGetRole, PATCH: handlePatchRole, DELETE: handleDeleteRole } },
+  { pattern: "/api/v1/members/:userId/roles", handlers: { GET: handleGetMemberRoles, PUT: handleSetMemberRoles } },
+  { pattern: "/api/v1/ownership/transfer", handlers: { POST: handleTransferOwnership } },
   { pattern: "/api/v1/app-invites/:token", handlers: { GET: handleAppUserInvitePreview } },
   { pattern: "/api/v1/app-invites/:token/accept", handlers: { POST: handleAcceptAppUserInvite } },
   { pattern: "/api/v1/app-invites/:token/decline", handlers: { POST: handleDeclineAppUserInvite } },

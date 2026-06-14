@@ -7,7 +7,7 @@ One z0-auth deployment serves one account owner team and their registered apps. 
 | Term | Meaning |
 |------|---------|
 | instance | One deployed z0-auth service |
-| instance member | Console operator with full platform access in v1 |
+| instance member | Console operator; access controlled by assigned roles |
 | instance owner | First setup user (`is_bootstrap`); cannot be removed |
 | organization | Display name stored on the instance (from setup) |
 | app | Registered client application |
@@ -24,7 +24,7 @@ One z0-auth deployment serves one account owner team and their registered apps. 
 
 ## Authorization (v1)
 
-Console and instance APIs: signed in **and** `instance_members`.
+Console APIs require a signed-in **instance member** with the required **platform scope**. Effective scopes are the union of all assigned **roles** (Owner, Admin, Developer, Viewer, plus custom roles). The bootstrap owner (`is_bootstrap`) always has full access and is the only member who can transfer ownership.
 
 App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no cross-app access. App users may **self-register** (not invite-only) when signing in with app context (`client_id`).
 
@@ -36,8 +36,6 @@ App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no c
 | **App end users** | `client_id` → `app_id` | `app_users` | `z0_app_session` |
 
 Auth0 Universal Login / Clerk hosted pages work the same way: one login UI; the app’s client id picks the user directory. Social buttons (Google, GitHub, …) appear on the **app** hosted page when enabled for that app (future module).
-
-No role tiers, permission matrix, or organization switcher.
 
 ## Tables
 
@@ -204,6 +202,9 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 
 | Table | Purpose |
 |-------|---------|
+| `platform_resources`, `platform_scopes` | RBAC catalog (seeded) |
+| `instance_roles`, `instance_role_scopes` | Predefined + custom roles |
+| `instance_member_roles`, `instance_invite_roles` | Role assignments |
 | `audit_events` | Audit trail (`tenant_id` unused, NULL in v1) |
 
 ## Setup flow

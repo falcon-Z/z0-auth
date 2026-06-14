@@ -37,10 +37,17 @@ export function staticBreadcrumbsForPath(pathname: string): BreadcrumbSegment[] 
   if (pathname === "/activity") return [{ label: "Activity" }];
 
   if (pathname === "/team") return [{ label: "Team" }];
-  if (pathname === "/team/access") {
+  if (pathname === "/team/roles") {
     return [
       { label: "Team", to: "/team" },
-      { label: "Manage access" },
+      { label: "Roles" },
+    ];
+  }
+  if (pathname.startsWith("/team/roles/")) {
+    return [
+      { label: "Team", to: "/team" },
+      { label: "Roles", to: "/team/roles" },
+      { label: "Role" },
     ];
   }
   if (pathname.startsWith("/team/invites/")) {

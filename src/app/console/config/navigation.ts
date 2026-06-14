@@ -46,7 +46,7 @@ export const SEARCH_ITEMS: SearchItem[] = [
     group: "Settings",
   },
   { id: "legal", label: "Legal", path: "/settings/legal", keywords: ["privacy", "terms"], group: "Settings" },
-  { id: "access", label: "Manage access", path: "/team/access", keywords: ["roles", "permissions"], group: "Go to" },
+  { id: "access", label: "Roles and permissions", path: "/team/roles", keywords: ["roles", "permissions", "access"], group: "Go to" },
   { id: "invite", label: "Invite someone", path: "/team", keywords: ["invite", "add member"], group: "Actions" },
   { id: "add-app", label: "Add an app", path: "/apps", keywords: ["register", "create app"], group: "Actions" },
 ];
