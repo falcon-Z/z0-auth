@@ -1,3 +1,5 @@
+import type { EmailDeliveryStatus } from "./email-delivery";
+
 export type AppUserMembershipStatus = "active" | "disabled";
 
 export type AppUserSummary = {
@@ -39,6 +41,7 @@ export type CreateAppUserInviteResponse = {
   expiresAt: string;
   email: string;
   invitedName: string;
+  emailDelivery: EmailDeliveryStatus;
 };
 
 export type PendingAppUserInvite = {

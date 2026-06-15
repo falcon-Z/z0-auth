@@ -34,7 +34,7 @@ describe("instance-keys configuration", () => {
     expect(bytes?.length).toBe(32);
   });
 
-  test("production leaves keys missing when env and file are absent", async () => {
+  test("production auto-generates keys when env and file are absent", async () => {
     process.env.NODE_ENV = "production";
     delete process.env.INSTANCE_DATA_KEY;
     delete process.env.INSTANCE_TOKEN_PRIVATE_KEY;
@@ -44,20 +44,22 @@ describe("instance-keys configuration", () => {
     const { getInstanceKeySources, areInstanceKeysReady } = await import(
       "../../src/api/lib/instance-keys"
     );
-    expect(getInstanceKeySources()?.dataKey).toBe("missing");
-    expect(getInstanceKeySources()?.tokenKeys).toBe("missing");
-    expect(areInstanceKeysReady()).toBe(false);
+    expect(getInstanceKeySources()?.dataKey).toBe("generated");
+    expect(getInstanceKeySources()?.tokenKeys).toBe("generated");
+    expect(areInstanceKeysReady()).toBe(true);
   });
 
-  test("production is not ready when only data key is in env", async () => {
+  test("production loads data key from env and auto-generates token keys when missing", async () => {
     process.env.NODE_ENV = "production";
     process.env.INSTANCE_DATA_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     delete process.env.INSTANCE_TOKEN_PRIVATE_KEY;
     delete process.env.INSTANCE_TOKEN_PUBLIC_KEY;
 
     await initializeInstanceKeys();
-    const { areInstanceKeysReady } = await import("../../src/api/lib/instance-keys");
-    expect(areInstanceKeysReady()).toBe(false);
+    const { getInstanceKeySources, areInstanceKeysReady } = await import("../../src/api/lib/instance-keys");
+    expect(getInstanceKeySources()?.dataKey).toBe("env");
+    expect(getInstanceKeySources()?.tokenKeys).toBe("generated");
+    expect(areInstanceKeysReady()).toBe(true);
   });
 
   test("production loads when data and token keys are in env", async () => {

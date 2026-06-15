@@ -34,10 +34,6 @@ function keysFilePath(): string {
   return path.resolve(process.cwd(), ".data/instance-keys.json");
 }
 
-function isProduction(): boolean {
-  return (process.env.NODE_ENV ?? "development") === "production";
-}
-
 function base64ToBytes(b64: string): Uint8Array {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
@@ -151,10 +147,6 @@ async function resolveDataKey(
     return { key: await importDataKeyB64(stored.dataKey), source: "file" };
   }
 
-  if (isProduction()) {
-    return { key: null, source: "missing" };
-  }
-
   const key = await generateDataKey();
   return { key, source: "generated" };
 }
@@ -190,14 +182,6 @@ async function resolveTokenKeys(
         tokenPrivateKey: stored.tokenPrivateKey,
         tokenPublicKey: stored.tokenPublicKey,
       },
-    };
-  }
-
-  if (isProduction()) {
-    return {
-      keys: null,
-      source: "missing",
-      exported: { tokenPrivateKey: "", tokenPublicKey: "" },
     };
   }
 

@@ -263,7 +263,7 @@ components:
           type: string
     CreateAppUserInviteResponse:
       type: object
-      required: [id, inviteUrl, expiresAt, email, invitedName]
+      required: [id, inviteUrl, expiresAt, email, invitedName, emailDelivery]
       properties:
         id:
           type: string
@@ -278,6 +278,9 @@ components:
           type: string
         invitedName:
           type: string
+        emailDelivery:
+          type: string
+          enum: [sent, failed, skipped]
     PendingAppUserInvite:
       type: object
       required: [id, email, invitedName, expiresAt, createdAt]

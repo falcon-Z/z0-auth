@@ -31,6 +31,7 @@ import {
   getDeveloperRoleId,
   grantBoundaryViolationForRoleIds,
 } from "./platform-rbac";
+import { memberInviteEmailText, sendTransactionalEmail } from "./transactional-email";
 import { resolveSession } from "./session";
 import { createSession, sessionCookieHeader } from "./session";
 
@@ -255,15 +256,36 @@ export async function createInstanceInvite(
       return { id, roles };
     });
 
+    const inviteUrl = inviteUrlFromRequest(req, rawToken);
+    const settings = await getInstanceSettings();
+    const template = memberInviteEmailText({
+      invitedName,
+      organizationName: settings.organizationName,
+      inviteUrl,
+      expiresAt: expiresAt.toISOString(),
+    });
+    let emailDelivery: import("@z0/contracts/email-delivery").EmailDeliveryStatus = "skipped";
+    try {
+      const delivery = await sendTransactionalEmail({
+        to: email,
+        subject: template.subject,
+        text: template.text,
+      });
+      emailDelivery = delivery.status;
+    } catch {
+      emailDelivery = "failed";
+    }
+
     return {
       ok: true,
       data: {
         id: created.id,
-        inviteUrl: inviteUrlFromRequest(req, rawToken),
+        inviteUrl,
         expiresAt: expiresAt.toISOString(),
         email,
         invitedName,
         roles: created.roles,
+        emailDelivery,
       },
     };
   } catch (error) {

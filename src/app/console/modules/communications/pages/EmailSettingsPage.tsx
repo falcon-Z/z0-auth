@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { EmailSettingsResponse, SmtpEncryption } from "@z0/contracts/email-settings";
+import { SMTP_PROVIDER_PRESETS, type SmtpProviderPresetId } from "@z0/contracts/smtp-presets";
+import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
 import { Button } from "@z0/components/ui/button";
 import { Card, CardContent } from "@z0/components/ui/card";
 import { Input } from "@z0/components/ui/input";
@@ -23,6 +25,17 @@ import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchEmailSettings, putEmailSettings, sendTestEmail } from "../../../lib/email-settings-api";
 
+function detectPreset(settings: EmailSettingsResponse): SmtpProviderPresetId {
+  const match = SMTP_PROVIDER_PRESETS.find(
+    (preset) =>
+      preset.id !== "custom" &&
+      preset.host === settings.host &&
+      preset.port === settings.port &&
+      preset.encryption === settings.encryption,
+  );
+  return match?.id ?? "custom";
+}
+
 export function EmailSettingsPage() {
   const [settings, setSettings] = useState<EmailSettingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +45,7 @@ export function EmailSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
+  const [presetId, setPresetId] = useState<SmtpProviderPresetId>("custom");
   const [host, setHost] = useState("");
   const [port, setPort] = useState("587");
   const [encryption, setEncryption] = useState<SmtpEncryption>("starttls");
@@ -42,8 +56,14 @@ export function EmailSettingsPage() {
   const [enabled, setEnabled] = useState(false);
   const [testTo, setTestTo] = useState("");
 
+  const selectedPreset = useMemo(
+    () => SMTP_PROVIDER_PRESETS.find((preset) => preset.id === presetId),
+    [presetId],
+  );
+
   const applySettings = useCallback((s: EmailSettingsResponse) => {
     setSettings(s);
+    setPresetId(detectPreset(s));
     setHost(s.host);
     setPort(String(s.port));
     setEncryption(s.encryption);
@@ -71,6 +91,15 @@ export function EmailSettingsPage() {
     void reload();
   }, [reload]);
 
+  function applyPreset(id: SmtpProviderPresetId) {
+    setPresetId(id);
+    const preset = SMTP_PROVIDER_PRESETS.find((item) => item.id === id);
+    if (!preset || preset.id === "custom") return;
+    setHost(preset.host);
+    setPort(String(preset.port));
+    setEncryption(preset.encryption);
+  }
+
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -89,7 +118,7 @@ export function EmailSettingsPage() {
       };
       const updated = await putEmailSettings(body);
       applySettings(updated);
-      setNotice("Settings saved.");
+      setNotice("Settings saved. Send a test email to enable automated delivery.");
     } catch (e) {
       if (e instanceof ApiError) {
         setFieldErrors(fieldErrorsFromProblem(e.problem));
@@ -133,11 +162,31 @@ export function EmailSettingsPage() {
     );
   }
 
+  const readOnly = settings.readOnly;
+
   return (
     <div className="space-y-6">
       <ListPageHeader title="Email" />
 
       <ActionNotice message={notice} />
+
+      {readOnly ? (
+        <Alert>
+          <AlertTitle>Managed by environment variables</AlertTitle>
+          <AlertDescription>
+            SMTP is configured from server env vars. Update SMTP_HOST, SMTP_PASSWORD, and related vars, then restart the app.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {!settings.verifiedAt && settings.configured ? (
+        <Alert>
+          <AlertTitle>Send a test email</AlertTitle>
+          <AlertDescription>
+            Automated invites, password reset, and magic links stay off until a test email succeeds.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <form onSubmit={(e) => void handleSave(e)} className="max-w-xl space-y-6">
         <Card>
@@ -146,23 +195,61 @@ export function EmailSettingsPage() {
               <Label htmlFor="smtp-enabled" className="text-sm font-medium">
                 Enable SMTP
               </Label>
-              <p className="text-sm text-muted-foreground">Required for self-service password reset.</p>
+              <p className="text-sm text-muted-foreground">Required for automated email delivery.</p>
             </div>
-            <Switch id="smtp-enabled" checked={enabled} onCheckedChange={setEnabled} aria-label="Enable SMTP" />
+            <Switch
+              id="smtp-enabled"
+              checked={enabled}
+              onCheckedChange={setEnabled}
+              disabled={readOnly}
+              aria-label="Enable SMTP"
+            />
           </CardContent>
         </Card>
 
+        <FormField label="Provider" htmlFor="smtpProvider">
+          <Select value={presetId} onValueChange={(value) => applyPreset(value as SmtpProviderPresetId)} disabled={readOnly}>
+            <SelectTrigger id="smtpProvider">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SMTP_PROVIDER_PRESETS.map((preset) => (
+                <SelectItem key={preset.id} value={preset.id}>
+                  {preset.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedPreset?.hint ? <p className="text-sm text-muted-foreground">{selectedPreset.hint}</p> : null}
+        </FormField>
+
         <FormField label="SMTP host" htmlFor="smtpHost" error={fieldErrors.host}>
-          <Input id="smtpHost" value={host} onChange={(e) => setHost(e.target.value)} placeholder="smtp.example.com" />
+          <Input
+            id="smtpHost"
+            value={host}
+            onChange={(e) => setHost(e.target.value)}
+            placeholder="smtp.example.com"
+            disabled={readOnly}
+          />
         </FormField>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <FormField label="Port" htmlFor="smtpPort" error={fieldErrors.port}>
-            <Input id="smtpPort" type="number" value={port} onChange={(e) => setPort(e.target.value)} />
+            <Input
+              id="smtpPort"
+              type="number"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+              disabled={readOnly}
+            />
           </FormField>
 
           <FormField label="Encryption" htmlFor="smtpEncryption" error={fieldErrors.encryption}>
-            <Select value={encryption} onValueChange={(v) => setEncryption(v as SmtpEncryption)}>
+            <Select
+              value={encryption}
+              onValueChange={(v) => setEncryption(v as SmtpEncryption)}
+              disabled={readOnly}
+            >
               <SelectTrigger id="smtpEncryption">
                 <SelectValue />
               </SelectTrigger>
@@ -181,6 +268,7 @@ export function EmailSettingsPage() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="off"
+            disabled={readOnly}
           />
         </FormField>
 
@@ -196,6 +284,7 @@ export function EmailSettingsPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
+            disabled={readOnly}
           />
         </FormField>
 
@@ -206,11 +295,18 @@ export function EmailSettingsPage() {
             value={fromAddress}
             onChange={(e) => setFromAddress(e.target.value)}
             placeholder="noreply@example.com"
+            disabled={readOnly}
           />
         </FormField>
 
         <FormField label="From name" htmlFor="fromName" error={fieldErrors.fromName}>
-          <Input id="fromName" value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder="Acme IAM" />
+          <Input
+            id="fromName"
+            value={fromName}
+            onChange={(e) => setFromName(e.target.value)}
+            placeholder="Acme IAM"
+            disabled={readOnly}
+          />
         </FormField>
 
         {settings.verifiedAt ? (
@@ -219,15 +315,20 @@ export function EmailSettingsPage() {
           </p>
         ) : null}
 
-        <FormActions>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save settings"}
-          </Button>
-        </FormActions>
+        {!readOnly ? (
+          <FormActions>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save settings"}
+            </Button>
+          </FormActions>
+        ) : null}
       </form>
 
       <section className="max-w-xl space-y-3 border-t pt-6">
         <Label htmlFor="testTo">Send test email</Label>
+        <p className="text-sm text-muted-foreground">
+          A successful test marks SMTP as verified for automated delivery.
+        </p>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             id="testTo"
@@ -237,7 +338,12 @@ export function EmailSettingsPage() {
             placeholder="you@example.com"
             className="flex-1"
           />
-          <Button type="button" variant="outline" disabled={testing || !testTo.trim()} onClick={() => void handleTestSend()}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={testing || !testTo.trim() || !settings.configured}
+            onClick={() => void handleTestSend()}
+          >
             {testing ? "Sending…" : "Send test"}
           </Button>
         </div>

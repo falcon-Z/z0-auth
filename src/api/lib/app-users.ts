@@ -27,6 +27,7 @@ import { problem } from "./http";
 import { countActiveAppUserSessions } from "./app-session";
 import { hashPassword } from "./password";
 import { normalizeMetadata, validateAppUserMetadata } from "./app-user-metadata";
+import { appUserInviteEmailText, sendTransactionalEmail } from "./transactional-email";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -468,14 +469,34 @@ export async function createAppUserInviteForApi(
       payload: { appId, email },
     });
 
+    const inviteUrl = appUserInviteUrlFromRequest(req, rawToken);
+    const template = appUserInviteEmailText({
+      invitedName,
+      appName: app.name,
+      inviteUrl,
+      expiresAt: expiresAt.toISOString(),
+    });
+    let emailDelivery: import("@z0/contracts/email-delivery").EmailDeliveryStatus = "skipped";
+    try {
+      const delivery = await sendTransactionalEmail({
+        to: email,
+        subject: template.subject,
+        text: template.text,
+      });
+      emailDelivery = delivery.status;
+    } catch {
+      emailDelivery = "failed";
+    }
+
     return {
       ok: true,
       data: {
         id,
-        inviteUrl: appUserInviteUrlFromRequest(req, rawToken),
+        inviteUrl,
         expiresAt: expiresAt.toISOString(),
         email,
         invitedName,
+        emailDelivery,
       },
     };
   } catch (error) {

@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import { StubPage } from "../../components/layout/StubPage";
+import { InstanceSignInSettingsPage } from "./pages/InstanceSignInSettingsPage";
 import { EmailSettingsPage } from "../communications/pages/EmailSettingsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -9,14 +10,10 @@ export function SettingsModule() {
     <Routes>
       <Route index element={<SettingsPage />} />
       <Route path="email" element={<EmailSettingsPage />} />
+      <Route path="sign-in" element={<InstanceSignInSettingsPage />} />
       <Route
         path="sign-in-providers"
-        element={
-          <StubPage
-            title="Sign-in providers"
-            message="Google, GitHub, and other sign-in providers are not ready yet."
-          />
-        }
+        element={<InstanceSignInSettingsPage />}
       />
       <Route
         path="app-groups"

@@ -45,7 +45,9 @@ export function printStartupSummary(config: AppConfig, db: DatabaseHealth): void
     lines.push(`  Data key  ${dataLabel}   SMTP / secrets encryption`);
     lines.push(`  Token keys ${tokenLabel}   signed reset links`);
     if (config.nodeEnv === "production" && (keySources.dataKey === "generated" || keySources.tokenKeys === "generated")) {
-      lines.push("  WARNING   Keys were auto-generated; use INSTANCE_DATA_KEY and shared token keys in production.");
+      lines.push(
+        "  WARNING   Keys were auto-generated on this pod; set env keys or a shared keys file before scaling to multiple replicas.",
+      );
     }
   }
 

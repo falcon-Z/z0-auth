@@ -34,6 +34,17 @@ export function InviteResultDialog({ invite, onClose }: InviteResultDialogProps)
         <DialogHeader>
           <DialogTitle>Invitation created</DialogTitle>
         </DialogHeader>
+        {invite.emailDelivery === "sent" ? (
+          <p className="text-sm text-muted-foreground">We emailed the invite link to {invite.email}.</p>
+        ) : invite.emailDelivery === "failed" ? (
+          <p className="text-sm text-muted-foreground">
+            We could not email the invite. Copy the link below or open your email client.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Email is not configured yet. Copy the link below or open your email client.
+          </p>
+        )}
         <p className="break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">{invite.inviteUrl}</p>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}>
@@ -43,7 +54,7 @@ export function InviteResultDialog({ invite, onClose }: InviteResultDialogProps)
           <Button type="button" variant="outline" size="sm" asChild>
             <a href={buildInviteMailto(invite)}>
               <Mail className="size-4" />
-              Email
+              Open in email client
             </a>
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>

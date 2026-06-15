@@ -1,8 +1,12 @@
 export type SmtpEncryption = "none" | "starttls" | "tls";
 
+export type SmtpSettingsSource = "database" | "env";
+
 export type EmailSettingsResponse = {
   configured: boolean;
   enabled: boolean;
+  source: SmtpSettingsSource;
+  readOnly: boolean;
   host: string;
   port: number;
   encryption: SmtpEncryption;

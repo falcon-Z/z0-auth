@@ -1,3 +1,5 @@
+import type { EmailDeliveryStatus } from "./email-delivery";
+
 export type InvitePreviewResponse = {
   status: "pending" | "accepted" | "declined" | "revoked" | "expired";
   email: string;
@@ -32,6 +34,7 @@ export type CreateInviteResponse = {
   email: string;
   invitedName: string;
   roles: RoleSummary[];
+  emailDelivery: EmailDeliveryStatus;
 };
 
 export type AcceptInviteRequest = {

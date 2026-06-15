@@ -23,7 +23,8 @@ export function staticBreadcrumbsForPath(pathname: string): BreadcrumbSegment[] 
     const segment = pathname.replace("/settings/", "");
     const labels: Record<string, string> = {
       email: "Email",
-      "sign-in-providers": "Sign-in providers",
+      "sign-in": "Sign-in",
+      "sign-in-providers": "Sign-in",
       "app-groups": "App groups",
       security: "Security",
       legal: "Legal",

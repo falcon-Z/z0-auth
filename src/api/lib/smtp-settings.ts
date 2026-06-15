@@ -9,6 +9,7 @@ import { normalizeEmail, validateEmail } from "@z0/contracts/validation";
 import { decryptSecret, encryptSecret } from "./settings-crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
+import { getSmtpEnvCredentials, isSmtpEnvManaged } from "./smtp-env";
 
 type SmtpRow = {
   host: string;
@@ -23,13 +24,15 @@ type SmtpRow = {
   updated_at: Date;
 };
 
-function mapRow(row: SmtpRow): EmailSettingsResponse {
+function mapDatabaseRow(row: SmtpRow): EmailSettingsResponse {
   const host = row.host?.trim() ?? "";
   const fromAddress = row.from_address?.trim() ?? "";
   const configured = host.length > 0 && fromAddress.length > 0 && Boolean(row.password_ciphertext);
   return {
     configured,
     enabled: row.enabled && configured,
+    source: "database",
+    readOnly: false,
     host,
     port: Number(row.port) || 587,
     encryption: row.encryption,
@@ -42,7 +45,31 @@ function mapRow(row: SmtpRow): EmailSettingsResponse {
   };
 }
 
+function mapEnvSettings(): EmailSettingsResponse | null {
+  const creds = getSmtpEnvCredentials();
+  if (!creds) return null;
+  const now = new Date().toISOString();
+  return {
+    configured: true,
+    enabled: true,
+    source: "env",
+    readOnly: true,
+    host: creds.host,
+    port: creds.port,
+    encryption: creds.encryption,
+    username: creds.username,
+    hasPassword: true,
+    fromAddress: creds.fromAddress,
+    fromName: creds.fromName,
+    verifiedAt: now,
+    updatedAt: now,
+  };
+}
+
 export async function getEmailSettingsForApi(): Promise<EmailSettingsResponse> {
+  const fromEnv = mapEnvSettings();
+  if (fromEnv) return fromEnv;
+
   const [row] = await getDb()`
     SELECT
       host,
@@ -62,6 +89,8 @@ export async function getEmailSettingsForApi(): Promise<EmailSettingsResponse> {
     return {
       configured: false,
       enabled: false,
+      source: "database",
+      readOnly: false,
       host: "",
       port: 587,
       encryption: "starttls",
@@ -73,7 +102,7 @@ export async function getEmailSettingsForApi(): Promise<EmailSettingsResponse> {
       updatedAt: null,
     };
   }
-  return mapRow(row as SmtpRow);
+  return mapDatabaseRow(row as SmtpRow);
 }
 
 function validateEncryption(value: string): SmtpEncryption | null {
@@ -84,6 +113,21 @@ function validateEncryption(value: string): SmtpEncryption | null {
 export async function putEmailSettings(
   body: PutEmailSettingsRequest,
 ): Promise<{ ok: true; settings: EmailSettingsResponse } | { ok: false; response: Response }> {
+  if (isSmtpEnvManaged()) {
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "SMTP is managed by environment variables.", {
+        errors: [
+          {
+            field: "_smtp",
+            code: ErrorCodes.SMTP_NOT_CONFIGURED,
+            message: "SMTP settings are read-only when SMTP_HOST is set in the environment",
+          },
+        ],
+      }),
+    };
+  }
+
   const host = body.host?.trim() ?? "";
   const fromAddress = body.fromAddress?.trim() ?? "";
   const port = Number(body.port);
@@ -155,6 +199,7 @@ export async function putEmailSettings(
 }
 
 export async function markEmailVerified(): Promise<void> {
+  if (isSmtpEnvManaged()) return;
   await getDb()`
     UPDATE smtp_settings
     SET verified_at = NOW(), updated_at = NOW()
@@ -162,9 +207,10 @@ export async function markEmailVerified(): Promise<void> {
   `;
 }
 
+/** SMTP is configured, enabled, and verified (test send or env-managed). */
 export async function isSmtpReady(): Promise<boolean> {
   const settings = await getEmailSettingsForApi();
-  return settings.enabled && settings.configured;
+  return settings.enabled && settings.configured && Boolean(settings.verifiedAt);
 }
 
 export async function getSmtpCredentialsForSend(): Promise<
@@ -179,6 +225,9 @@ export async function getSmtpCredentialsForSend(): Promise<
     }
   | null
 > {
+  const fromEnv = getSmtpEnvCredentials();
+  if (fromEnv) return fromEnv;
+
   const [row] = await getDb()`
     SELECT
       host,

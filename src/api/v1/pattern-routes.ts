@@ -59,12 +59,20 @@ import {
   handlePutEmailSettings,
   handleTestEmail,
 } from "./settings/handlers";
+import {
+  handleGetAppSignInSettings,
+  handleGetInstanceSignInSettings,
+  handlePutAppSignInSettings,
+  handlePutInstanceSignInSettings,
+} from "./settings/sign-in-handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/settings/email/test", handlers: { POST: handleTestEmail } },
   { pattern: "/api/v1/settings/email", handlers: { GET: handleGetEmailSettings, PUT: handlePutEmailSettings } },
+  { pattern: "/api/v1/settings/sign-in", handlers: { GET: handleGetInstanceSignInSettings, PUT: handlePutInstanceSignInSettings } },
   { pattern: "/api/v1/apps", handlers: { GET: handleListApps, POST: handleCreateApp } },
   { pattern: "/api/v1/apps/:appId", handlers: { GET: handleGetApp, PATCH: handlePatchApp } },
+  { pattern: "/api/v1/apps/:appId/sign-in", handlers: { GET: handleGetAppSignInSettings, PUT: handlePutAppSignInSettings } },
   {
     pattern: "/api/v1/apps/:appId/credentials",
     handlers: { GET: handleListCredentials, POST: handleCreateCredential },

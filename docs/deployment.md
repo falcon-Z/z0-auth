@@ -9,7 +9,7 @@ The management console shows a **setup checklist** until `DATABASE_URL` works, m
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL 16+ connection string |
-| `INSTANCE_DATA_KEY` | AES-256 key for encrypting SMTP password and other instance secrets (production; same on every replica) |
+| `INSTANCE_DATA_KEY` | AES-256 key for encrypting SMTP password and other instance secrets (recommended for multi-replica; same on every pod) |
 | `INSTANCE_TOKEN_PRIVATE_KEY` | Ed25519 private key for password-reset link signatures (production; same on every replica) |
 | `INSTANCE_TOKEN_PUBLIC_KEY` | Matching public key |
 
@@ -20,7 +20,7 @@ bun src/scripts/generate-instance-data-key.ts
 bun src/scripts/generate-instance-token-keys.ts
 ```
 
-In **development**, keys may be auto-created under `.data/instance-keys.json` when env vars are unset. Do not rely on that in production or multi-instance deployments.
+In **development**, keys may be auto-created under `.data/instance-keys.json` when env vars are unset. A single production instance may also auto-generate keys on first start; use env vars or a shared keys file before scaling to multiple replicas.
 
 Optional: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/auth/setup` form), `ALLOW_INCOMPLETE_SETUP` (bypass setup guard for maintenance), `PORT`, `BIND_ADDRESS`, `APP_NAME`. See `.env.example`.
 

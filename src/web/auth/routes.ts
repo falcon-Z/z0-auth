@@ -6,6 +6,8 @@ import { runLogin } from "../../api/auth/service";
 import { runAppLogin, runAppRegister } from "../../api/lib/app-auth";
 import type { AppAuthRealm, AuthRealm } from "../../api/lib/auth-realm";
 import { resolveAuthRealm } from "../../api/lib/auth-realm";
+import { resolveHostedSignInMethods } from "../../api/lib/auth-settings";
+import { isSmtpReady } from "../../api/lib/smtp-settings";
 import { buildSessionResponse } from "../../api/lib/auth";
 import { validateFormCsrf } from "../../api/lib/csrf";
 import { clearSessionCookieHeader, revokeSessionByToken, SESSION_COOKIE } from "../../api/lib/session";
@@ -179,6 +181,13 @@ function renderSetupForm(
 
 type AppLoginContext = Pick<AppAuthRealm, "clientId" | "appName">;
 
+export type { AppLoginContext };
+
+type LoginFormOptions = {
+  signInMethods?: import("@z0/contracts/auth-settings").SignInMethod[];
+  mode?: "password" | "magic_link";
+};
+
 function registerHref(clientId: string, returnTo?: string): string {
   const params = new URLSearchParams({ client_id: clientId });
   if (returnTo) params.set("return_to", returnTo);
@@ -192,7 +201,10 @@ export function renderLoginForm(
   flash?: Flash,
   returnTo?: string,
   app?: AppLoginContext,
+  options: LoginFormOptions = {},
 ): string {
+  const signInMethods = options.signInMethods ?? ["password"];
+  const mode = options.mode ?? (signInMethods.includes("password") ? "password" : "magic_link");
   const v = (key: string) => values[key] ?? "";
   const forgotLink = app
     ? ""
@@ -200,8 +212,30 @@ export function renderLoginForm(
   const registerLink = app
     ? `<a class="auth-link" href="${escapeHtml(registerHref(app.clientId, returnTo))}">Create account</a>`
     : "";
-  const body = `
-    <form method="post" action="/auth/login" class="auth-card" data-validate hx-post="/auth/login" hx-target="#auth-root" hx-select="#auth-root" hx-swap="outerHTML">
+
+  const loginQuery = new URLSearchParams();
+  if (returnTo) loginQuery.set("return_to", returnTo);
+  if (app?.clientId) loginQuery.set("client_id", app.clientId);
+  loginQuery.set("mode", mode === "password" ? "magic_link" : "password");
+  const switchHref = `/auth/login?${loginQuery.toString()}`;
+
+  const switchToMagic =
+    signInMethods.includes("password") && signInMethods.includes("magic_link") && mode === "password"
+      ? `<a class="auth-link" href="${escapeHtml(switchHref)}">Use email link instead</a>`
+      : "";
+  const switchToPassword =
+    signInMethods.includes("password") && signInMethods.includes("magic_link") && mode === "magic_link"
+      ? `<a class="auth-link" href="${escapeHtml(switchHref)}">Use password instead</a>`
+      : "";
+
+  const hiddenContext = `
+    ${returnTo ? `<input type="hidden" name="return_to" value="${escapeHtml(returnTo)}" />` : ""}
+    ${app ? `<input type="hidden" name="client_id" value="${escapeHtml(app.clientId)}" />` : ""}`;
+
+  const passwordForm =
+    mode === "password"
+      ? `
+    <form method="post" action="/auth/login" class="auth-card" data-validate data-auth-form="password" hx-post="/auth/login" hx-target="#auth-root" hx-select="#auth-root" hx-swap="outerHTML">
       <h2>Sign in</h2>
       ${formErrorsSummary(errors)}
       ${renderAuthField({
@@ -227,14 +261,45 @@ export function renderLoginForm(
         msgRequired: "Enter your password",
       })}
       <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
-      ${returnTo ? `<input type="hidden" name="return_to" value="${escapeHtml(returnTo)}" />` : ""}
-      ${app ? `<input type="hidden" name="client_id" value="${escapeHtml(app.clientId)}" />` : ""}
+      ${hiddenContext}
       <div class="auth-actions">
         <button type="submit" class="auth-button">Sign in</button>
         ${forgotLink}
         ${registerLink}
+        ${switchToMagic}
       </div>
-    </form>`;
+    </form>`
+      : "";
+
+  const magicForm =
+    mode === "magic_link"
+      ? `
+    <form method="post" action="/auth/magic-link" class="auth-card" data-validate data-auth-form="magic_link" hx-post="/auth/magic-link" hx-target="#auth-root" hx-select="#auth-root" hx-swap="outerHTML">
+      <h2>Sign in with email link</h2>
+      ${formErrorsSummary(errors)}
+      ${renderAuthField({
+        id: "email",
+        name: "email",
+        label: "Email",
+        type: "email",
+        value: v("email"),
+        required: true,
+        autocomplete: "username",
+        error: fieldErrorFor(errors, "email"),
+        msgRequired: "Enter your email address",
+        msgEmail: "Enter an email address like name@example.com",
+      })}
+      <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
+      ${hiddenContext}
+      <div class="auth-actions">
+        <button type="submit" class="auth-button">Email me a sign-in link</button>
+        ${registerLink}
+        ${switchToPassword}
+      </div>
+    </form>`
+      : "";
+
+  const body = `${passwordForm}${magicForm}`;
 
   return renderAuthPage({
     title: "Sign in",
@@ -245,7 +310,7 @@ export function renderLoginForm(
   });
 }
 
-function renderInvalidClientPage(csrfToken: string, message: string): string {
+export function renderInvalidClientPage(csrfToken: string, message: string): string {
   return renderAuthPage({
     title: "Sign-in unavailable",
     description: message,
@@ -406,6 +471,45 @@ function appContextFromRealm(realm: AuthRealm): AppLoginContext | undefined {
     : undefined;
 }
 
+async function resolveLoginFormOptions(
+  realm: AuthRealm,
+  modeParam?: string,
+): Promise<{ signInMethods: import("@z0/contracts/auth-settings").SignInMethod[]; mode: "password" | "magic_link" }> {
+  const smtpReady = await isSmtpReady();
+  const signInMethods =
+    realm.mode === "app"
+      ? await resolveHostedSignInMethods({
+          realm: "app",
+          appId: realm.appId,
+          appName: realm.appName,
+          smtpReady,
+        })
+      : await resolveHostedSignInMethods({ realm: "console", smtpReady });
+
+  const requestedMode = modeParam === "magic_link" ? "magic_link" : "password";
+  const mode = signInMethods.includes(requestedMode)
+    ? requestedMode
+    : signInMethods.includes("password")
+      ? "password"
+      : signInMethods.includes("magic_link")
+        ? "magic_link"
+        : "password";
+
+  return { signInMethods, mode };
+}
+
+function renderSignInUnavailablePage(csrfToken: string, message: string): string {
+  return renderAuthPage({
+    title: "Sign-in unavailable",
+    description: message,
+    csrfToken,
+    body: `<div class="auth-card">
+      <h2>Sign-in unavailable</h2>
+      <p class="auth-footer">${escapeHtml(message)}</p>
+    </div>`,
+  });
+}
+
 async function getLoginPage(req: BunRequest): Promise<Response> {
   const url = new URL(req.url);
   const returnTo = url.searchParams.get("return_to") ?? undefined;
@@ -430,9 +534,35 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
     };
   }
 
+  const modeParam = url.searchParams.get("mode") ?? undefined;
+  const formOptions = await resolveLoginFormOptions(realm, modeParam);
+
+  if (formOptions.signInMethods.length === 0) {
+    const { token, setCookie } = preparePageCsrf(req);
+    return withSetCookie(
+      htmlResponse(
+        renderSignInUnavailablePage(
+          token,
+          "Sign-in is not available right now. Ask your administrator to configure email settings.",
+        ),
+      ),
+      setCookie,
+    );
+  }
+
   const { token, setCookie } = preparePageCsrf(req);
   return withSetCookie(
-    htmlResponse(renderLoginForm(token, {}, [], flash, returnTo, appContextFromRealm(realm))),
+    htmlResponse(
+      renderLoginForm(
+        token,
+        {},
+        [],
+        flash,
+        returnTo,
+        appContextFromRealm(realm),
+        { signInMethods: formOptions.signInMethods, mode: formOptions.mode },
+      ),
+    ),
     setCookie,
   );
 }
@@ -453,18 +583,41 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
   if (redirect) return redirect;
 
   const csrfError = validateFormCsrf(req, form._csrf);
+  const formOptions = await resolveLoginFormOptions(realm);
+  const app = appContextFromRealm(realm);
+
   if (csrfError) {
     const errors = await problemFieldErrors(csrfError);
     const { token, setCookie } = preparePageCsrf(req);
     return authErrorResponse(
-      renderLoginForm(token, form, errors, undefined, form.return_to, appContextFromRealm(realm)),
+      renderLoginForm(token, form, errors, undefined, form.return_to, app, {
+        signInMethods: formOptions.signInMethods,
+        mode: formOptions.mode,
+      }),
       req,
       403,
       setCookie,
     );
   }
 
-  const app = appContextFromRealm(realm);
+  if (!formOptions.signInMethods.includes("password")) {
+    const { token, setCookie } = preparePageCsrf(req);
+    return authErrorResponse(
+      renderLoginForm(
+        token,
+        form,
+        [{ field: "_form", message: "Password sign-in is not enabled." }],
+        undefined,
+        form.return_to,
+        app,
+        { signInMethods: formOptions.signInMethods, mode: "magic_link" },
+      ),
+      req,
+      403,
+      setCookie,
+    );
+  }
+
   const result =
     realm.mode === "app"
       ? await runAppLogin(req, realm.appId, form.email ?? "", form.password ?? "")
@@ -475,7 +628,10 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
     const { token, setCookie } = preparePageCsrf(req);
     const fallback = result.response.status === 401 ? 401 : 400;
     return authErrorResponse(
-      renderLoginForm(token, form, errors, undefined, form.return_to, app),
+      renderLoginForm(token, form, errors, undefined, form.return_to, app, {
+        signInMethods: formOptions.signInMethods,
+        mode: formOptions.mode,
+      }),
       req,
       fallback,
       setCookie,

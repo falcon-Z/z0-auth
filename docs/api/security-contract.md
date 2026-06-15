@@ -90,7 +90,7 @@ Two separate purposes — do not conflate them:
 Keys are **not** regenerated on every restart.
 
 - **Development:** If `INSTANCE_DATA_KEY` is unset, the first start may create `.data/instance-keys.json` (including a data key). Keep that file (or set `INSTANCE_DATA_KEY`) so SMTP settings remain decryptable.
-- **Production:** Auto-generating keys in production is not allowed. Set `INSTANCE_DATA_KEY` and the token keypair (or a shared keys file) before using SMTP encryption or password-reset links. The console setup checklist reports missing keys until they are configured.
+- **Production:** Keys may be auto-generated on first start for a single instance. For multiple replicas, set `INSTANCE_DATA_KEY` and the token keypair (or mount a shared keys file) so every pod uses the same material.
 
 Rotating the data key without re-saving SMTP settings breaks existing ciphertext (same as losing the key).
 

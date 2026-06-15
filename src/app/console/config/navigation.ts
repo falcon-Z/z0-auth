@@ -25,10 +25,10 @@ export const SEARCH_ITEMS: SearchItem[] = [
   { id: "settings", label: "Settings", path: "/settings", keywords: ["configure", "instance"], group: "Settings" },
   { id: "email", label: "Email", path: "/settings/email", keywords: ["smtp", "mail", "send"], group: "Settings" },
   {
-    id: "sign-in-providers",
-    label: "Sign-in providers",
-    path: "/settings/sign-in-providers",
-    keywords: ["google", "github", "social", "oauth"],
+    id: "sign-in",
+    label: "Sign-in",
+    path: "/settings/sign-in",
+    keywords: ["password", "magic link", "methods"],
     group: "Settings",
   },
   {
@@ -89,9 +89,9 @@ export const SETTINGS_LINKS: SettingsLink[] = [
     path: "/settings/email",
   },
   {
-    title: "Sign-in providers",
-    description: "Google, GitHub, and other ways people can sign in.",
-    path: "/settings/sign-in-providers",
+    title: "Sign-in",
+    description: "How console members sign in to this instance.",
+    path: "/settings/sign-in",
   },
   {
     title: "App groups",

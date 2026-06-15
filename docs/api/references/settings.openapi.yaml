@@ -103,6 +103,53 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/Conflict"
         "502":
           description: SMTP delivery failed
+  /api/v1/settings/sign-in:
+    get:
+      tags: [Settings]
+      summary: Get instance sign-in settings
+      operationId: getInstanceSignInSettings
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Instance sign-in methods
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceSignInSettings"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    put:
+      tags: [Settings]
+      summary: Update instance sign-in settings
+      operationId: putInstanceSignInSettings
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutInstanceSignInSettingsRequest"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceSignInSettings"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
 components:
   schemas:
     EmailSettings:
@@ -110,6 +157,8 @@ components:
       required:
         - configured
         - enabled
+        - source
+        - readOnly
         - host
         - port
         - encryption
@@ -119,6 +168,11 @@ components:
         configured:
           type: boolean
         enabled:
+          type: boolean
+        source:
+          type: string
+          enum: [database, env]
+        readOnly:
           type: boolean
         host:
           type: string
@@ -170,3 +224,26 @@ components:
           nullable: true
         enabled:
           type: boolean
+    InstanceSignInSettings:
+      type: object
+      required: [signInMethods]
+      properties:
+        signInMethods:
+          type: array
+          items:
+            type: string
+            enum: [password, magic_link]
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+    PutInstanceSignInSettingsRequest:
+      type: object
+      required: [signInMethods]
+      properties:
+        signInMethods:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [password, magic_link]
