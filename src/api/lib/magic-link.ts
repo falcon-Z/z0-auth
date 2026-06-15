@@ -17,6 +17,20 @@ const GENERIC_MESSAGE = "If an account exists for that email, you will receive a
 
 export type MagicLinkRealm = "console" | "app";
 
+export type MagicLinkSendOutcome =
+  | { ok: true; sent: true }
+  | { ok: true; sent: false; reason: "no_account" | "delivery_failed" }
+  | { ok: false; response: Response };
+
+type MagicLinkDeliveryOptions = {
+  realm: MagicLinkRealm;
+  email: string;
+  appId?: string;
+  appName?: string;
+  clientId?: string;
+  returnTo?: string;
+};
+
 function magicLinkUrlFromRequest(req: Request, rawToken: string, options?: { clientId?: string; returnTo?: string }): string {
   const url = new URL(req.url);
   const path = `/auth/magic-link/${encodeURIComponent(rawToken)}`;
@@ -75,15 +89,114 @@ async function invalidatePendingMagicLinks(
   `;
 }
 
+export async function sendMagicLinkForHostedAuth(
+  req: BunRequest,
+  options: MagicLinkDeliveryOptions,
+): Promise<MagicLinkSendOutcome> {
+  if (!(await isSmtpReady())) {
+    return { ok: true, sent: false, reason: "delivery_failed" };
+  }
+
+  const requiredErrors = validateRequiredString(options.email, "email", "Email");
+  if (requiredErrors.length) {
+    return {
+      ok: false,
+      response: problem(400, "Validation Error", "Invalid request.", { errors: requiredErrors }),
+    };
+  }
+  const email = normalizeEmail(options.email);
+  const emailErrors = validateEmail(email);
+  if (emailErrors.length) {
+    return {
+      ok: false,
+      response: problem(400, "Validation Error", "Invalid request.", { errors: emailErrors }),
+    };
+  }
+
+  const ip = clientIp(req);
+  const ipLimit = checkRateLimit({ key: `magic:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
+  if (!ipLimit.allowed) {
+    return {
+      ok: false,
+      response: problem(429, "Too Many Requests", "Too many sign-in link requests. Try again later.", {
+        code: ErrorCodes.RATE_LIMITED,
+        retryAfter: ipLimit.retryAfterSec,
+        errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Too many attempts" }],
+      }),
+    };
+  }
+
+  const emailLimit = checkRateLimit({
+    key: `magic:email:${options.realm}:${options.appId ?? "console"}:${email}`,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!emailLimit.allowed) {
+    return {
+      ok: false,
+      response: problem(429, "Too Many Requests", "Too many sign-in link requests. Try again later.", {
+        code: ErrorCodes.RATE_LIMITED,
+        retryAfter: emailLimit.retryAfterSec,
+        errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Too many attempts" }],
+      }),
+    };
+  }
+
+  const userId =
+    options.realm === "console"
+      ? await findConsoleUserIdByEmail(email)
+      : options.appId
+        ? await findAppUserIdByEmail(options.appId, email)
+        : null;
+
+  if (!userId) {
+    return { ok: true, sent: false, reason: "no_account" };
+  }
+
+  const rawToken = randomToken(32);
+  const tokenHash = await sha256Hex(rawToken);
+  const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MS);
+
+  await getDb()`
+    INSERT INTO magic_link_tokens (realm, app_id, email, token_hash, expires_at)
+    VALUES (
+      ${options.realm},
+      ${options.appId ?? null},
+      ${email},
+      ${tokenHash},
+      ${expiresAt}
+    )
+  `;
+
+  const link = magicLinkUrlFromRequest(req, rawToken, {
+    clientId: options.clientId,
+    returnTo: options.returnTo,
+  });
+  const appName = options.appName ?? process.env.APP_NAME ?? "z0-auth";
+  const template = magicLinkEmailText({ appName, link, expiresMinutes: 15 });
+  const delivery = await sendTransactionalEmail({ to: email, subject: template.subject, text: template.text });
+
+  if (delivery.status !== "sent") {
+    await getDb()`DELETE FROM magic_link_tokens WHERE token_hash = ${tokenHash}`;
+    return { ok: true, sent: false, reason: "delivery_failed" };
+  }
+
+  await invalidatePendingMagicLinks(options.realm, email, options.appId, tokenHash);
+
+  await writeAuditEvent({
+    actorUserId: userId,
+    action: "magic_link.requested",
+    resourceType: options.realm === "console" ? "user" : "app_user",
+    resourceId: userId,
+    payload: { email, realm: options.realm, appId: options.appId ?? null },
+  });
+
+  return { ok: true, sent: true };
+}
+
 export async function requestMagicLink(
   req: BunRequest,
-  options: {
-    realm: MagicLinkRealm;
-    email: string;
-    appId?: string;
-    appName?: string;
-    clientId?: string;
-    returnTo?: string;
+  options: MagicLinkDeliveryOptions & {
     allowedMethods: SignInMethod[];
   },
 ): Promise<Response> {
@@ -111,84 +224,8 @@ export async function requestMagicLink(
     });
   }
 
-  const requiredErrors = validateRequiredString(options.email, "email", "Email");
-  if (requiredErrors.length) {
-    return problem(400, "Validation Error", "Invalid request.", { errors: requiredErrors });
-  }
-  const email = normalizeEmail(options.email);
-  const emailErrors = validateEmail(email);
-  if (emailErrors.length) {
-    return problem(400, "Validation Error", "Invalid request.", { errors: emailErrors });
-  }
-
-  const ip = clientIp(req);
-  const ipLimit = checkRateLimit({ key: `magic:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
-  if (!ipLimit.allowed) {
-    return problem(429, "Too Many Requests", "Too many sign-in link requests. Try again later.", {
-      code: ErrorCodes.RATE_LIMITED,
-      retryAfter: ipLimit.retryAfterSec,
-      errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Too many attempts" }],
-    });
-  }
-
-  const emailLimit = checkRateLimit({
-    key: `magic:email:${options.realm}:${options.appId ?? "console"}:${email}`,
-    limit: 5,
-    windowMs: 60 * 60 * 1000,
-  });
-  if (!emailLimit.allowed) {
-    return problem(429, "Too Many Requests", "Too many sign-in link requests. Try again later.", {
-      code: ErrorCodes.RATE_LIMITED,
-      retryAfter: emailLimit.retryAfterSec,
-      errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Too many attempts" }],
-    });
-  }
-
-  const userId =
-    options.realm === "console"
-      ? await findConsoleUserIdByEmail(email)
-      : options.appId
-        ? await findAppUserIdByEmail(options.appId, email)
-        : null;
-
-  if (userId) {
-    const rawToken = randomToken(32);
-    const tokenHash = await sha256Hex(rawToken);
-    const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MS);
-
-    await getDb()`
-      INSERT INTO magic_link_tokens (realm, app_id, email, token_hash, expires_at)
-      VALUES (
-        ${options.realm},
-        ${options.appId ?? null},
-        ${email},
-        ${tokenHash},
-        ${expiresAt}
-      )
-    `;
-
-    const link = magicLinkUrlFromRequest(req, rawToken, {
-      clientId: options.clientId,
-      returnTo: options.returnTo,
-    });
-    const appName = options.appName ?? process.env.APP_NAME ?? "z0-auth";
-    const template = magicLinkEmailText({ appName, link, expiresMinutes: 15 });
-    const delivery = await sendTransactionalEmail({ to: email, subject: template.subject, text: template.text });
-
-    if (delivery.status !== "sent") {
-      await getDb()`DELETE FROM magic_link_tokens WHERE token_hash = ${tokenHash}`;
-    } else {
-      await invalidatePendingMagicLinks(options.realm, email, options.appId, tokenHash);
-
-      await writeAuditEvent({
-        actorUserId: userId,
-        action: "magic_link.requested",
-        resourceType: options.realm === "console" ? "user" : "app_user",
-        resourceId: userId,
-        payload: { email, realm: options.realm, appId: options.appId ?? null },
-      });
-    }
-  }
+  const outcome = await sendMagicLinkForHostedAuth(req, options);
+  if (!outcome.ok) return outcome.response;
 
   return new Response(JSON.stringify({ ok: true, message: GENERIC_MESSAGE }), {
     status: 200,

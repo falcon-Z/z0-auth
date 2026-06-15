@@ -10,10 +10,12 @@ import { deliverEmail } from "../../lib/smtp-mail";
 import {
   getEmailSettingsForApi,
   getSmtpCredentialsForSend,
+  hasSmtpBeenVerifiedBefore,
   markEmailVerified,
   putEmailSettings,
   validateTestRecipient,
 } from "../../lib/smtp-settings";
+import { ensureMagicLinkSignInWhenSmtpReady } from "../../lib/auth-settings";
 import { writeAuditEvent } from "../../lib/audit";
 
 export async function handleGetEmailSettings(req: RoutedRequest): Promise<Response> {
@@ -91,7 +93,11 @@ export async function handleTestEmail(req: RoutedRequest): Promise<Response> {
     });
   }
 
+  const hadVerifiedBefore = await hasSmtpBeenVerifiedBefore();
   await markEmailVerified();
+  if (!hadVerifiedBefore) {
+    await ensureMagicLinkSignInWhenSmtpReady();
+  }
   const settings = await getEmailSettingsForApi();
 
   await writeAuditEvent({

@@ -67,6 +67,22 @@ function validateLogoUrl(value: string | null | undefined): { field: string; cod
   return [];
 }
 
+/** When SMTP is ready, enable magic-link sign-in alongside password if not already configured. */
+export async function ensureMagicLinkSignInWhenSmtpReady(): Promise<void> {
+  if (!(await isSmtpReady())) return;
+
+  const settings = await getInstanceSignInSettingsForApi();
+  if (settings.signInMethods.includes("magic_link")) return;
+
+  const next: SignInMethod[] = [...settings.signInMethods, "magic_link"];
+  await getDb()`
+    INSERT INTO instance_auth_settings (id, sign_in_methods, updated_at)
+    VALUES (1, ${pgTextArray(next)}, NOW())
+    ON CONFLICT (id) DO UPDATE
+    SET sign_in_methods = EXCLUDED.sign_in_methods, updated_at = NOW()
+  `;
+}
+
 export async function getInstanceSignInSettingsForApi(): Promise<InstanceSignInSettingsResponse> {
   const [row] = await getDb()`
     SELECT sign_in_methods, updated_at

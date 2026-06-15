@@ -80,7 +80,7 @@ export function InstanceSignInSettingsPage() {
     <div className="space-y-6">
       <ListPageHeader
         title="Sign-in"
-        description="Choose how console members sign in. Social providers are not available yet."
+        description="Choose how console members sign in. Email link is enabled automatically when email is verified."
       />
       <ActionNotice message={notice} />
 
@@ -98,7 +98,7 @@ export function InstanceSignInSettingsPage() {
                   <Label htmlFor={`method-${method}`}>{METHOD_LABELS[method]}</Label>
                   {method === "magic_link" ? (
                     <p className="text-sm text-muted-foreground">
-                      Requires verified email settings. Only works for people who already have an account.
+                      Sends a one-time sign-in link. Enabled automatically when email is verified.
                     </p>
                   ) : null}
                 </div>

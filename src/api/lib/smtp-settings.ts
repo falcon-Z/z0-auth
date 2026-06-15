@@ -202,9 +202,23 @@ export async function markEmailVerified(): Promise<void> {
   if (isSmtpEnvManaged()) return;
   await getDb()`
     UPDATE smtp_settings
-    SET verified_at = NOW(), updated_at = NOW()
+    SET
+      verified_at = NOW(),
+      first_verified_at = COALESCE(first_verified_at, NOW()),
+      updated_at = NOW()
     WHERE id = 1
   `;
+}
+
+/** True after SMTP has been verified at least once (survives SMTP config changes). */
+export async function hasSmtpBeenVerifiedBefore(): Promise<boolean> {
+  if (isSmtpEnvManaged()) return true;
+  const [row] = await getDb()`
+    SELECT first_verified_at
+    FROM smtp_settings
+    WHERE id = 1
+  `;
+  return Boolean((row as { first_verified_at: Date | null } | undefined)?.first_verified_at);
 }
 
 /** SMTP is configured, enabled, and verified (test send or env-managed). */

@@ -33,8 +33,8 @@ Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.m
 
 1. Instance member creates invite in console → receives **invite URL** (copy or `mailto:`).
 2. Invitee opens `GET /auth/invite/:token`.
-3. **New user:** set name + password → accept → session → console (`/`).
-4. **Existing user:** sign in (must match invite email) → **Accept** or **Decline**.
+3. **New or returning user:** set name + password → accept → session → console (`/`).
+4. **Signed-in existing user:** **Accept** or **Decline** (must match invite email).
 5. Wrong signed-in account → sign out and sign in with invited email.
 
 JSON: `GET /api/v1/invites/:token`, `POST .../accept`, `POST .../decline`.  

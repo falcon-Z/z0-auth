@@ -22,6 +22,7 @@ import { escapeHtml, renderAuthPage } from "../html";
 import { preparePageCsrf, withSetCookie } from "../csrf-page";
 import { safeReturnPath } from "../safe-return-path";
 import { renderInvalidClientPage, renderLoginForm } from "./routes";
+import { renderMagicLinkSentPage } from "./login-ui";
 
 type AppLoginContext = Pick<AppAuthRealm, "clientId" | "appName">;
 
@@ -51,23 +52,6 @@ async function problemFieldErrors(res: Response): Promise<{ field: string; messa
   return [{ field: "_form", message: "Request failed. Check your input and try again." }];
 }
 
-function renderMagicLinkSentPage(csrfToken: string, email: string, app?: AppLoginContext): string {
-  const title = "Check your email";
-  const description = app
-    ? `If an account exists for ${email}, we sent a sign-in link for ${app.appName}.`
-    : `If an account exists for ${email}, we sent a sign-in link.`;
-  return renderAuthPage({
-    title,
-    description,
-    csrfToken,
-    body: `<div class="auth-card">
-      <h2>${escapeHtml(title)}</h2>
-      <p class="auth-lead">${escapeHtml(description)}</p>
-      <p class="auth-footer">The link expires in 15 minutes. You can close this tab.</p>
-    </div>`,
-  });
-}
-
 function renderMagicLinkConfirmPage(
   csrfToken: string,
   rawToken: string,
@@ -94,7 +78,12 @@ function renderMagicLinkConfirmPage(
 async function resolveLoginContext(req: BunRequest, options?: { clientId?: string; returnTo?: string }) {
   const realm = await resolveAuthRealm(req, options);
   if (realm.mode === "invalid") {
-    return { realm, signInMethods: [] as SignInMethod[], app: undefined as AppLoginContext | undefined };
+    return {
+      realm,
+      signInMethods: [] as SignInMethod[],
+      smtpReady: false,
+      app: undefined as AppLoginContext | undefined,
+    };
   }
 
   const smtpReady = await isSmtpReady();
@@ -111,6 +100,7 @@ async function resolveLoginContext(req: BunRequest, options?: { clientId?: strin
   return {
     realm,
     signInMethods,
+    smtpReady,
     app: realm.mode === "app" ? { clientId: realm.clientId, appName: realm.appName } : undefined,
   };
 }
@@ -138,6 +128,7 @@ async function postMagicLinkPage(req: BunRequest): Promise<Response> {
       renderLoginForm(token, form, errors, undefined, form.return_to, context.app, {
         signInMethods: context.signInMethods,
         mode: "magic_link",
+        smtpReady: context.smtpReady,
       }),
       req,
       403,
@@ -162,6 +153,7 @@ async function postMagicLinkPage(req: BunRequest): Promise<Response> {
       renderLoginForm(token, form, errors, undefined, form.return_to, context.app, {
         signInMethods: context.signInMethods,
         mode: "magic_link",
+        smtpReady: context.smtpReady,
       }),
       req,
       result.status,
@@ -170,8 +162,15 @@ async function postMagicLinkPage(req: BunRequest): Promise<Response> {
   }
 
   const { token, setCookie } = preparePageCsrf(req);
+  const passwordQuery = new URLSearchParams();
+  if (form.return_to) passwordQuery.set("return_to", form.return_to);
+  if (form.client_id) passwordQuery.set("client_id", form.client_id);
+  passwordQuery.set("mode", "password");
+  const passwordFallbackHref = context.signInMethods.includes("password")
+    ? `/auth/login?${passwordQuery.toString()}`
+    : undefined;
   return withSetCookie(
-    htmlResponse(renderMagicLinkSentPage(token, form.email ?? "", context.app)),
+    htmlResponse(renderMagicLinkSentPage(token, form.email ?? "", context.app, { passwordFallbackHref })),
     setCookie,
   );
 }

@@ -33,7 +33,7 @@ import {
 } from "./platform-rbac";
 import { memberInviteEmailText, sendTransactionalEmail } from "./transactional-email";
 import { resolveSession } from "./session";
-import { createSession, sessionCookieHeader } from "./session";
+import { createSession, sessionCookieHeader, revokeAllUserSessions } from "./session";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -153,6 +153,8 @@ export async function buildInvitePreview(req: Request, rawToken: string): Promis
   const session = await resolveSession(req);
   const sessionUser = session ? await getUserById(session.userId) : null;
   const emailMatches = Boolean(sessionUser && normalizeEmail(sessionUser.email) === invite.email);
+  const hasAccount = await userExistsByEmail(invite.email);
+  const isMember = hasAccount ? await isMemberByEmail(invite.email) : false;
 
   return {
     status,
@@ -160,7 +162,7 @@ export async function buildInvitePreview(req: Request, rawToken: string): Promis
     invitedName: invite.invited_name,
     organizationName: settings.organizationName,
     expiresAt: invite.expires_at.toISOString(),
-    accountExists: await userExistsByEmail(invite.email),
+    accountExists: hasAccount && isMember,
     viewer: {
       authenticated: Boolean(sessionUser),
       emailMatches,
@@ -359,15 +361,22 @@ export async function acceptInstanceInvite(
   const accountExists = await userExistsByEmail(invite.email);
   const session = await resolveSession(req);
 
-  if (accountExists) {
-    if (!session) {
-      return {
-        ok: false,
-        response: problem(401, "Unauthorized", "Sign in to accept this invitation.", {
-          code: "AuthenticationRequired",
-        }),
-      };
-    }
+  if (await isMemberByEmail(invite.email)) {
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "You are already a member.", {
+        errors: [
+          {
+            field: "_invite",
+            code: ErrorCodes.INVITE_ALREADY_MEMBER,
+            message: "Already a member",
+          },
+        ],
+      }),
+    };
+  }
+
+  if (session) {
     const user = await getUserById(session.userId);
     if (!user || normalizeEmail(user.email) !== invite.email) {
       return {
@@ -384,28 +393,12 @@ export async function acceptInstanceInvite(
       };
     }
 
-    const userId = user.id;
-    if (await isMemberByEmail(invite.email)) {
-      return {
-        ok: false,
-        response: problem(409, "Conflict", "You are already a member.", {
-          errors: [
-            {
-              field: "_invite",
-              code: ErrorCodes.INVITE_ALREADY_MEMBER,
-              message: "Already a member",
-            },
-          ],
-        }),
-      };
-    }
-
     try {
       await getDb().begin(async (tx) => {
-        await applyInviteMembership(tx, invite, userId, invite.invited_by_user_id);
+        await applyInviteMembership(tx, invite, user.id, invite.invited_by_user_id);
         await writeAuditEvent(
           {
-            actorUserId: userId,
+            actorUserId: user.id,
             action: "invite.accepted",
             resourceType: "instance_invite",
             resourceId: invite.id,
@@ -421,7 +414,7 @@ export async function acceptInstanceInvite(
       throw error;
     }
 
-    return { ok: true, userId };
+    return { ok: true, userId: user.id };
   }
 
   const name = (body.name?.trim() || invite.invited_name).trim();
@@ -438,29 +431,70 @@ export async function acceptInstanceInvite(
 
   try {
     const result = await getDb().begin(async (tx) => {
-      const [user] = await tx`
-        INSERT INTO users (email, name, email_verified_at)
-        VALUES (${invite.email}, ${name}, NOW())
-        RETURNING id
-      `;
-      const userId = String((user as { id: string }).id);
-      await tx`
-        INSERT INTO password_credentials (user_id, password_hash)
-        VALUES (${userId}, ${passwordHash})
-      `;
-      await applyInviteMembership(tx, invite, userId, invite.invited_by_user_id);
-      await writeAuditEvent(
-        {
-          actorUserId: userId,
-          action: "invite.accepted",
-          resourceType: "instance_invite",
-          resourceId: invite.id,
-          payload: { email: invite.email, createdUser: true },
-        },
-        tx,
-      );
+      let userId: string;
+      if (accountExists) {
+        const [existing] = await tx`
+          SELECT id
+          FROM users
+          WHERE lower(email) = ${invite.email}
+            AND status = 'active'
+          LIMIT 1
+        `;
+        if (!existing) {
+          throw new Error("user_missing");
+        }
+        userId = String((existing as { id: string }).id);
+        await tx`
+          UPDATE users
+          SET name = ${name}, email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW()
+          WHERE id = ${userId}
+        `;
+        await tx`
+          INSERT INTO password_credentials (user_id, password_hash, updated_at)
+          VALUES (${userId}, ${passwordHash}, NOW())
+          ON CONFLICT (user_id) DO UPDATE
+          SET password_hash = EXCLUDED.password_hash, updated_at = NOW()
+        `;
+        await applyInviteMembership(tx, invite, userId, invite.invited_by_user_id);
+        await writeAuditEvent(
+          {
+            actorUserId: userId,
+            action: "invite.accepted",
+            resourceType: "instance_invite",
+            resourceId: invite.id,
+            payload: { email: invite.email, rejoinedUser: true },
+          },
+          tx,
+        );
+      } else {
+        const [user] = await tx`
+          INSERT INTO users (email, name, email_verified_at)
+          VALUES (${invite.email}, ${name}, NOW())
+          RETURNING id
+        `;
+        userId = String((user as { id: string }).id);
+        await tx`
+          INSERT INTO password_credentials (user_id, password_hash)
+          VALUES (${userId}, ${passwordHash})
+        `;
+        await applyInviteMembership(tx, invite, userId, invite.invited_by_user_id);
+        await writeAuditEvent(
+          {
+            actorUserId: userId,
+            action: "invite.accepted",
+            resourceType: "instance_invite",
+            resourceId: invite.id,
+            payload: { email: invite.email, createdUser: true },
+          },
+          tx,
+        );
+      }
       return userId;
     });
+
+    if (accountExists) {
+      await revokeAllUserSessions(result);
+    }
 
     const { token, expiresAt } = await createSession(result, req);
     return {
@@ -469,6 +503,14 @@ export async function acceptInstanceInvite(
       setCookie: sessionCookieHeader(token, expiresAt),
     };
   } catch (error) {
+    if (error instanceof Error && error.message === "user_missing") {
+      return {
+        ok: false,
+        response: problem(404, "Not Found", "This invitation is not valid.", {
+          errors: [{ field: "_invite", code: ErrorCodes.INVITE_INVALID, message: "Account not found" }],
+        }),
+      };
+    }
     if (error instanceof Error && error.message.includes("unique")) {
       return {
         ok: false,
@@ -511,15 +553,7 @@ export async function declineInstanceInvite(
   const accountExists = await userExistsByEmail(invite.email);
   const session = await resolveSession(req);
 
-  if (accountExists) {
-    if (!session) {
-      return {
-        ok: false,
-        response: problem(401, "Unauthorized", "Sign in to decline this invitation.", {
-          code: "AuthenticationRequired",
-        }),
-      };
-    }
+  if (session) {
     const user = await getUserById(session.userId);
     if (!user || normalizeEmail(user.email) !== invite.email) {
       return {
@@ -535,6 +569,13 @@ export async function declineInstanceInvite(
         }),
       };
     }
+  } else if (accountExists && (await isMemberByEmail(invite.email))) {
+    return {
+      ok: false,
+      response: problem(401, "Unauthorized", "Sign in to decline this invitation.", {
+        code: "AuthenticationRequired",
+      }),
+    };
   }
 
   await getDb()`

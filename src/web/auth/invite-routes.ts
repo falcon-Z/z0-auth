@@ -103,20 +103,6 @@ function renderExistingUserInvite(
   });
 }
 
-function renderLoginToAccept(csrfToken: string, preview: InvitePreviewResponse, token: string): string {
-  const returnTo = inviteReturnPath(token);
-  const loginForm = renderLoginForm(
-    csrfToken,
-    { email: preview.email },
-    [],
-    {
-      variant: "success",
-      message: `Sign in as ${preview.email} to accept or decline this invitation.`,
-    },
-    returnTo,
-  );
-  return loginForm;
-}
 
 function renderWrongAccount(csrfToken: string, preview: InvitePreviewResponse, token: string): string {
   return renderAuthPage({
@@ -192,6 +178,11 @@ function renderNewUserAccept(
         <div class="auth-actions">
           <button type="submit" class="auth-button">Accept and create account</button>
         </div>
+      </form>
+      <form method="post" action="${escapeHtml(inviteReturnPath(token))}" class="auth-actions" style="margin-top:0.75rem">
+        <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
+        <input type="hidden" name="intent" value="decline" />
+        <button type="submit" class="auth-button auth-button-secondary">Decline invitation</button>
       </form>`,
   });
 }
@@ -238,14 +229,11 @@ export async function getInvitePage(req: BunRequest): Promise<Response> {
     );
   }
 
-  if (preview.accountExists) {
-    if (!preview.viewer.authenticated) {
-      return withSetCookie(htmlResponse(renderLoginToAccept(csrf, preview, token)), setCookie);
-    }
-    if (!preview.viewer.emailMatches) {
-      return withSetCookie(htmlResponse(renderWrongAccount(csrf, preview, token)), setCookie);
-    }
+  if (preview.viewer.authenticated && preview.viewer.emailMatches) {
     return withSetCookie(htmlResponse(renderExistingUserInvite(csrf, preview, token)), setCookie);
+  }
+  if (preview.viewer.authenticated && !preview.viewer.emailMatches) {
+    return withSetCookie(htmlResponse(renderWrongAccount(csrf, preview, token)), setCookie);
   }
 
   return withSetCookie(htmlResponse(renderNewUserAccept(csrf, preview, token)), setCookie);
@@ -263,7 +251,7 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
     if (preview instanceof Response) return preview;
     const { token: csrf, setCookie } = preparePageCsrf(req);
     const html =
-      preview.accountExists && preview.viewer.emailMatches
+      preview.viewer.authenticated && preview.viewer.emailMatches
         ? renderExistingUserInvite(csrf, preview, token, errors)
         : renderNewUserAccept(csrf, preview, token, form, errors);
     return authErrorResponse(html, req, 403, setCookie);
@@ -319,9 +307,10 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
     const preview = await loadPreview(req, token);
     if (preview instanceof Response) return preview;
     const { token: csrf, setCookie } = preparePageCsrf(req);
-    const html = preview.accountExists
-      ? renderExistingUserInvite(csrf, preview, token, errors)
-      : renderNewUserAccept(csrf, preview, token, form, errors);
+    const html =
+      preview.viewer.authenticated && preview.viewer.emailMatches
+        ? renderExistingUserInvite(csrf, preview, token, errors)
+        : renderNewUserAccept(csrf, preview, token, form, errors);
     const status = acceptResult.response.status === 401 ? 401 : 400;
     return authErrorResponse(html, req, status, setCookie);
   }

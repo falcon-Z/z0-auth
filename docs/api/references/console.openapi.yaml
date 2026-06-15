@@ -35,12 +35,15 @@ components:
       properties:
         instance:
           type: object
-          required: [organizationName, memberCount, pendingInviteCount, appCount]
+          required: [organizationName, memberCount, pendingInviteCount, appCount, emailReady]
           properties:
             organizationName: { type: string }
             memberCount: { type: integer }
             pendingInviteCount: { type: integer }
             appCount: { type: integer }
+            emailReady:
+              type: boolean
+              description: SMTP is configured, enabled, and verified for transactional email.
         sessions:
           type: object
           required: [activeCount]

@@ -5,6 +5,8 @@ export type ConsoleSummaryResponse = {
     memberCount: number;
     pendingInviteCount: number;
     appCount: number;
+    /** SMTP configured, enabled, and verified — transactional email can send. */
+    emailReady: boolean;
   };
   sessions: {
     activeCount: number;

@@ -134,7 +134,7 @@ run("invite flow", () => {
     expect(res.status).toBe(409);
   });
 
-  test("existing user must sign in before accept", async () => {
+  test("existing non-member must provide password to accept", async () => {
     const admin = await login("admin@example.com", adminPassword);
     const csrf = await fetchCsrfToken(dispatchApi);
     const createRes = await dispatchApi(
@@ -168,7 +168,20 @@ run("invite flow", () => {
         body: {},
       }),
     );
-    expect(unauthAccept.status).toBe(401);
+    expect(unauthAccept.status).toBe(400);
+
+    const acceptRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/invites/${token}/accept`, {
+        csrfToken: await fetchCsrfToken(dispatchApi),
+        body: {
+          name: "Zoe",
+          password: zoePassword,
+          passwordConfirm: zoePassword,
+        },
+      }),
+    );
+    expect(acceptRes.status).toBe(200);
+    expect(sessionCookieFromResponse(acceptRes)).toBeDefined();
   });
 
   test("duplicate pending invite returns 409", async () => {
@@ -289,6 +302,49 @@ run("invite flow", () => {
     );
     const { members } = (await listRes.json()) as { members: { email: string }[] };
     expect(members.some((m) => m.email === "bob@example.com")).toBe(false);
+  });
+
+  test("re-invited removed member can accept via setup form", async () => {
+    const admin = await login("admin@example.com", adminPassword);
+    const csrf = await fetchCsrfToken(dispatchApi);
+    const createRes = await dispatchApi(
+      buildRequest("POST", "/api/v1/members/invites", {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: admin.cookie! },
+        body: {
+          email: "bob@example.com",
+          invitedName: "Bob Example",
+        },
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    const token = inviteTokenFromUrl((await createRes.json() as { inviteUrl: string }).inviteUrl);
+
+    const previewRes = await dispatchApi(buildRequest("GET", `/api/v1/invites/${token}`));
+    const preview = (await previewRes.json()) as { accountExists: boolean };
+    expect(preview.accountExists).toBe(false);
+
+    const newPassword = makeStrongPassword();
+    const acceptRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/invites/${token}/accept`, {
+        csrfToken: await fetchCsrfToken(dispatchApi),
+        body: {
+          name: "Bob Example",
+          password: newPassword,
+          passwordConfirm: newPassword,
+        },
+      }),
+    );
+    expect(acceptRes.status).toBe(200);
+    expect(sessionCookieFromResponse(acceptRes)).toBeDefined();
+
+    const bob = await login("bob@example.com", newPassword);
+    const listRes = await dispatchApi(
+      buildRequest("GET", "/api/v1/members", {
+        cookies: { [SESSION_COOKIE]: bob.cookie! },
+      }),
+    );
+    expect(listRes.status).toBe(200);
   });
 
   test("cannot remove instance owner", async () => {

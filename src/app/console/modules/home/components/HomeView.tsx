@@ -2,25 +2,26 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
 import type { ConsoleSummaryResponse } from "@z0/contracts/console-summary";
-import type { EmailSettingsResponse } from "@z0/contracts/email-settings";
 import type { SessionResponse } from "@z0/contracts/auth";
 import { Button } from "@z0/components/ui/button";
 import { MetricCard } from "../../../components/dashboard/MetricCard";
 import { EmptyState } from "../../../components/feedback/EmptyState";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
+import { usePermissions } from "../../../hooks/use-permissions";
 import { hasConsoleAccess } from "../../../lib/console-access";
 
 type HomeViewProps = {
   session: SessionResponse;
   summary: ConsoleSummaryResponse | null;
-  email: EmailSettingsResponse | null;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
 };
 
-export function HomeView({ session, summary, email, loading, error, onRetry }: HomeViewProps) {
+export function HomeView({ session, summary, loading, error, onRetry }: HomeViewProps) {
+  const { hasScope } = usePermissions();
+
   if (loading) return <ListPageSkeleton />;
   if (error || !summary) {
     return <PageError message={error ?? "Could not load home."} onRetry={onRetry} />;
@@ -31,6 +32,7 @@ export function HomeView({ session, summary, email, loading, error, onRetry }: H
   }
 
   const { instance } = summary;
+  const canManageEmail = hasScope("settings.email:read");
 
   const nextSteps: { message: string; action: string; to: string }[] = [];
 
@@ -42,7 +44,7 @@ export function HomeView({ session, summary, email, loading, error, onRetry }: H
     });
   }
 
-  if (!email?.configured || !email.enabled) {
+  if (!instance.emailReady && canManageEmail) {
     nextSteps.push({
       message: "Configure email to send invites and allow password resets.",
       action: "Set up email",
