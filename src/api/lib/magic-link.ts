@@ -13,13 +13,13 @@ import { checkRateLimit, clientIp } from "./rate-limit";
 import { magicLinkEmailText, sendTransactionalEmail } from "./transactional-email";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
-const GENERIC_MESSAGE = "If an account exists for that email, you will receive a sign-in link shortly.";
+const GENERIC_MESSAGE = "Check your email for a sign-in link.";
 
 export type MagicLinkRealm = "console" | "app";
 
 export type MagicLinkSendOutcome =
   | { ok: true; sent: true }
-  | { ok: true; sent: false; reason: "no_account" | "delivery_failed" }
+  | { ok: true; sent: false; reason: "no_account" | "account_disabled" | "delivery_failed" }
   | { ok: false; response: Response };
 
 type MagicLinkDeliveryOptions = {
@@ -40,23 +40,43 @@ function magicLinkUrlFromRequest(req: Request, rawToken: string, options?: { cli
   return link.toString();
 }
 
-async function findConsoleUserIdByEmail(email: string): Promise<string | null> {
+type MagicLinkUserLookup =
+  | { status: "active"; userId: string }
+  | { status: "disabled" }
+  | { status: "missing" };
+
+async function lookupConsoleUserByEmail(email: string): Promise<MagicLinkUserLookup> {
   const [row] = await getDb()`
-    SELECT id FROM users WHERE lower(email) = ${email} AND status = 'active' LIMIT 1
+    SELECT id, status FROM users WHERE lower(email) = ${email} LIMIT 1
   `;
-  return row ? String((row as { id: string }).id) : null;
+  if (!row) return { status: "missing" };
+  const r = row as { id: string; status: string };
+  if (r.status === "disabled") return { status: "disabled" };
+  return { status: "active", userId: String(r.id) };
 }
 
-async function findAppUserIdByEmail(appId: string, email: string): Promise<string | null> {
+async function lookupAppUserByEmail(appId: string, email: string): Promise<MagicLinkUserLookup> {
   const [row] = await getDb()`
-    SELECT id
+    SELECT id, status
     FROM app_users
     WHERE app_id = ${appId}
       AND lower(email) = ${email}
-      AND status = 'active'
     LIMIT 1
   `;
-  return row ? String((row as { id: string }).id) : null;
+  if (!row) return { status: "missing" };
+  const r = row as { id: string; status: string };
+  if (r.status === "disabled") return { status: "disabled" };
+  return { status: "active", userId: String(r.id) };
+}
+
+async function findConsoleUserIdByEmail(email: string): Promise<string | null> {
+  const lookup = await lookupConsoleUserByEmail(email);
+  return lookup.status === "active" ? lookup.userId : null;
+}
+
+async function findAppUserIdByEmail(appId: string, email: string): Promise<string | null> {
+  const lookup = await lookupAppUserByEmail(appId, email);
+  return lookup.status === "active" ? lookup.userId : null;
 }
 
 async function invalidatePendingMagicLinks(
@@ -142,12 +162,18 @@ export async function sendMagicLinkForHostedAuth(
     };
   }
 
-  const userId =
+  const userLookup =
     options.realm === "console"
-      ? await findConsoleUserIdByEmail(email)
+      ? await lookupConsoleUserByEmail(email)
       : options.appId
-        ? await findAppUserIdByEmail(options.appId, email)
-        : null;
+        ? await lookupAppUserByEmail(options.appId, email)
+        : { status: "missing" as const };
+
+  if (userLookup.status === "disabled") {
+    return { ok: true, sent: false, reason: "account_disabled" };
+  }
+
+  const userId = userLookup.status === "active" ? userLookup.userId : null;
 
   if (!userId) {
     return { ok: true, sent: false, reason: "no_account" };

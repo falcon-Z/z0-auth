@@ -31,7 +31,7 @@ import {
 } from "../html";
 import { preparePageCsrf, withSetCookie } from "../csrf-page";
 import { safeReturnPath } from "../safe-return-path";
-import { renderMagicLinkSentPage } from "./login-ui";
+import { renderMagicLinkOutcomePage } from "./login-ui";
 
 const STATIC_DIR = path.join(import.meta.dir, "../static");
 const AUTH_CSS = Bun.file(path.join(STATIC_DIR, "auth.css"));
@@ -707,8 +707,37 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
           );
         }
 
+        if (!outcome.sent && outcome.reason === "delivery_failed") {
+          return withSetCookie(
+            htmlResponse(
+              renderLoginForm(
+                token,
+                form,
+                [{ field: "_form", message: "We could not email a sign-in link. Try again later." }],
+                undefined,
+                form.return_to,
+                app,
+                { ...loginFormOptions, mode: "email_first" },
+              ),
+            ),
+            setCookie,
+          );
+        }
+
         return withSetCookie(
-          htmlResponse(renderMagicLinkSentPage(token, form.email ?? "", app, { passwordFallbackHref })),
+          htmlResponse(
+            renderMagicLinkOutcomePage(
+              token,
+              { sent: outcome.sent, reason: outcome.sent ? undefined : outcome.reason },
+              {
+                email: form.email ?? "",
+                realm: realm.mode === "app" ? "app" : "console",
+                app,
+                returnTo: form.return_to,
+                passwordFallbackHref,
+              },
+            ),
+          ),
           setCookie,
         );
       }

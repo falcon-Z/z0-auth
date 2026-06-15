@@ -11,7 +11,7 @@ import {
   revokeAppSessionByToken,
 } from "../../api/lib/app-session";
 import { validateFormCsrf } from "../../api/lib/csrf";
-import { consumeMagicLinkToken, previewMagicLinkToken, requestMagicLink } from "../../api/lib/magic-link";
+import { consumeMagicLinkToken, previewMagicLinkToken, sendMagicLinkForHostedAuth } from "../../api/lib/magic-link";
 import { isSmtpReady } from "../../api/lib/smtp-settings";
 import { createSession, sessionCookieHeader, revokeSessionByToken, SESSION_COOKIE } from "../../api/lib/session";
 import { parseCookies } from "../../api/lib/csrf";
@@ -22,7 +22,7 @@ import { escapeHtml, renderAuthPage } from "../html";
 import { preparePageCsrf, withSetCookie } from "../csrf-page";
 import { safeReturnPath } from "../safe-return-path";
 import { renderInvalidClientPage, renderLoginForm } from "./routes";
-import { renderMagicLinkSentPage } from "./login-ui";
+import { renderMagicLinkOutcomePage } from "./login-ui";
 
 type AppLoginContext = Pick<AppAuthRealm, "clientId" | "appName">;
 
@@ -60,11 +60,9 @@ function renderMagicLinkConfirmPage(
   const action = `/auth/magic-link/${encodeURIComponent(rawToken)}/accept`;
   return renderAuthPage({
     title: "Confirm sign-in",
-    description: "Complete sign-in with your email link.",
+    description: "Click continue to finish signing in.",
     csrfToken,
     body: `<form method="post" action="${escapeHtml(action)}" class="auth-card">
-      <h2>Confirm sign-in</h2>
-      <p class="auth-lead">Click continue to finish signing in with this link.</p>
       <input type="hidden" name="_csrf" value="${escapeHtml(csrfToken)}" />
       ${options.returnTo ? `<input type="hidden" name="return_to" value="${escapeHtml(options.returnTo)}" />` : ""}
       ${options.clientId ? `<input type="hidden" name="client_id" value="${escapeHtml(options.clientId)}" />` : ""}
@@ -72,6 +70,17 @@ function renderMagicLinkConfirmPage(
         <button type="submit" class="auth-button">Continue</button>
       </div>
     </form>`,
+  });
+}
+
+function renderMagicLinkExpiredPage(csrfToken: string, message: string): string {
+  return renderAuthPage({
+    title: "Sign-in link expired",
+    description: message,
+    csrfToken,
+    body: `<div class="auth-card">
+      <div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div>
+    </div>`,
   });
 }
 
@@ -136,18 +145,53 @@ async function postMagicLinkPage(req: BunRequest): Promise<Response> {
     );
   }
 
-  const result = await requestMagicLink(req, {
+  if (!context.signInMethods.includes("magic_link")) {
+    const { token, setCookie } = preparePageCsrf(req);
+    return authErrorResponse(
+      renderLoginForm(
+        token,
+        form,
+        [{ field: "_form", message: "Email link sign-in is not enabled." }],
+        undefined,
+        form.return_to,
+        context.app,
+        { signInMethods: context.signInMethods, mode: "magic_link", smtpReady: context.smtpReady },
+      ),
+      req,
+      403,
+      setCookie,
+    );
+  }
+
+  if (!context.smtpReady) {
+    const { token, setCookie } = preparePageCsrf(req);
+    return authErrorResponse(
+      renderLoginForm(
+        token,
+        form,
+        [{ field: "_form", message: "Email link sign-in is not available until email is configured." }],
+        undefined,
+        form.return_to,
+        context.app,
+        { signInMethods: context.signInMethods, mode: "magic_link", smtpReady: context.smtpReady },
+      ),
+      req,
+      503,
+      setCookie,
+    );
+  }
+
+  const outcome = await sendMagicLinkForHostedAuth(req, {
     realm: context.realm.mode === "app" ? "app" : "console",
     email: form.email ?? "",
     appId: context.realm.mode === "app" ? context.realm.appId : undefined,
     appName: context.realm.mode === "app" ? context.realm.appName : undefined,
     clientId: form.client_id,
     returnTo: form.return_to,
-    allowedMethods: context.signInMethods,
   });
 
-  if (result.status >= 400) {
-    const errors = await problemFieldErrors(result);
+  if (!outcome.ok) {
+    const errors = await problemFieldErrors(outcome.response);
     const { token, setCookie } = preparePageCsrf(req);
     return authErrorResponse(
       renderLoginForm(token, form, errors, undefined, form.return_to, context.app, {
@@ -156,7 +200,7 @@ async function postMagicLinkPage(req: BunRequest): Promise<Response> {
         smtpReady: context.smtpReady,
       }),
       req,
-      result.status,
+      outcome.response.status,
       setCookie,
     );
   }
@@ -169,8 +213,55 @@ async function postMagicLinkPage(req: BunRequest): Promise<Response> {
   const passwordFallbackHref = context.signInMethods.includes("password")
     ? `/auth/login?${passwordQuery.toString()}`
     : undefined;
+
+  if (!outcome.sent && outcome.reason === "delivery_failed" && passwordFallbackHref) {
+    return withSetCookie(
+      htmlResponse(
+        renderLoginForm(
+          token,
+          form,
+          [{ field: "_form", message: "We could not email a sign-in link. Enter your password to continue." }],
+          undefined,
+          form.return_to,
+          context.app,
+          { signInMethods: context.signInMethods, mode: "password", smtpReady: context.smtpReady },
+        ),
+      ),
+      setCookie,
+    );
+  }
+
+  if (!outcome.sent && outcome.reason === "delivery_failed") {
+    return withSetCookie(
+      htmlResponse(
+        renderLoginForm(
+          token,
+          form,
+          [{ field: "_form", message: "We could not email a sign-in link. Try again later." }],
+          undefined,
+          form.return_to,
+          context.app,
+          { signInMethods: context.signInMethods, mode: "magic_link", smtpReady: context.smtpReady },
+        ),
+      ),
+      setCookie,
+    );
+  }
+
   return withSetCookie(
-    htmlResponse(renderMagicLinkSentPage(token, form.email ?? "", context.app, { passwordFallbackHref })),
+    htmlResponse(
+      renderMagicLinkOutcomePage(
+        token,
+        { sent: outcome.sent, reason: outcome.sent ? undefined : outcome.reason },
+        {
+          email: form.email ?? "",
+          realm: context.realm.mode === "app" ? "app" : "console",
+          app: context.app,
+          returnTo: form.return_to,
+          passwordFallbackHref,
+        },
+      ),
+    ),
     setCookie,
   );
 }
@@ -189,14 +280,7 @@ async function getMagicLinkConfirmPage(req: BunRequest): Promise<Response> {
     const errors = await problemFieldErrors(preview.response);
     const message = errors[0]?.message ?? "This sign-in link is invalid or has expired.";
     return withSetCookie(
-      htmlResponse(
-        renderAuthPage({
-          title: "Sign-in link expired",
-          description: message,
-          csrfToken: token,
-          body: `<div class="auth-card"><h2>Sign-in link expired</h2><p class="auth-footer">${escapeHtml(message)}</p><div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div></div>`,
-        }),
-      ),
+      htmlResponse(renderMagicLinkExpiredPage(token, message)),
       setCookie,
     );
   }
@@ -232,14 +316,7 @@ async function postMagicLinkAcceptPage(req: BunRequest): Promise<Response> {
     const errors = await problemFieldErrors(consumed.response);
     const message = errors[0]?.message ?? "This sign-in link is invalid or has expired.";
     return withSetCookie(
-      htmlResponse(
-        renderAuthPage({
-          title: "Sign-in link expired",
-          description: message,
-          csrfToken: token,
-          body: `<div class="auth-card"><h2>Sign-in link expired</h2><p class="auth-footer">${escapeHtml(message)}</p><div class="auth-actions"><a class="auth-button" href="/auth/login">Back to sign in</a></div></div>`,
-        }),
-      ),
+      htmlResponse(renderMagicLinkExpiredPage(token, message)),
       setCookie,
     );
   }
