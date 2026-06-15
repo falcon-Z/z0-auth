@@ -31,7 +31,7 @@ export async function handleCreateApp(req: RoutedRequest): Promise<Response> {
 
   const result = await createApp(parsed.body);
   if (!result.ok) return result.response;
-  return json(result.app, { status: 201 });
+  return json(result.data, { status: 201 });
 }
 
 export async function handleGetApp(req: RoutedRequest): Promise<Response> {

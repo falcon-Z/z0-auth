@@ -88,6 +88,7 @@ Accepting an invite inserts `instance_members` (no roles).
 | `id` | UUID PK | |
 | `name` | TEXT | Display name |
 | `slug` | TEXT | Unique URL-safe id (from name; suffix on conflict) |
+| `client_type` | TEXT | `public` (SPA/PKCE) or `confidential` (server); immutable after create |
 | `redirect_uris` | TEXT[] | OAuth redirect allow-list (exact match at authorize time) |
 | `status` | TEXT | `active`, `disabled` |
 | `disabled_at` | TIMESTAMPTZ | Set when disabled |
@@ -112,7 +113,7 @@ Unique `(app_id, name)`. Used as the allow-list for OAuth `scope` requests (Phas
 | `id` | UUID PK | |
 | `app_id` | UUID → `apps` | CASCADE delete |
 | `client_id` | TEXT | Unique public id (`z0_…`) |
-| `client_secret_hash` | TEXT | Argon2id; plaintext shown once on create/rotate |
+| `client_secret_hash` | TEXT | Argon2id; NULL for public clients; plaintext shown once on create/rotate |
 | `label` | TEXT | Default `Default` |
 | `status` | TEXT | `active`, `revoked` |
 | `revoked_at` | TIMESTAMPTZ | |
@@ -136,11 +137,23 @@ Singleton row (`id = 1`). Outbound email for password reset and test send.
 
 ### `password_reset_tokens` (M08)
 
+Console members only — see `app_password_reset_tokens` for app users.
+
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | UUID PK | |
 | `user_id` | UUID → `users` | |
 | `token_hash` | TEXT | Reset `jti` (matches signed token payload; signature verified with instance Ed25519 public key) |
+| `expires_at` | TIMESTAMPTZ | 1 hour TTL |
+| `used_at` | TIMESTAMPTZ | Single-use |
+
+### `app_password_reset_tokens` (P3M5)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `app_user_id` | UUID → `app_users` | |
+| `app_id` | UUID → `apps` | Must match `app_users.app_id` |
+| `token_hash` | TEXT | Reset `jti` |
 | `expires_at` | TIMESTAMPTZ | 1 hour TTL |
 | `used_at` | TIMESTAMPTZ | Single-use |
 

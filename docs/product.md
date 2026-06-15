@@ -54,7 +54,9 @@ One **platform instance** per deployment (single account owner). **No** internal
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
-Planned for v1: app-user hosted sign-in/sign-up + redirect (M06), OAuth/OIDC for customer apps (M09–M10), MFA, passkeys, magic links, audit, Docker self-host.
+Planned for v1: OAuth/OIDC for customer apps (M09–M10), MFA, passkeys, audit, Docker self-host.
+
+**Shipped:** app-user hosted sign-in/sign-up + redirect (M06), per-app branding on hosted pages, app-user password reset, SPA vs server client types.
 
 **Social connections** (Google, Apple, GitHub, Facebook, etc. per app — Clerk/Auth0-style): planned module after core hosted auth + OAuth ship; console Federation nav is placeholder until then.
 

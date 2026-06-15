@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAppWorkspace } from "../../../context/app-workspace-context";
 import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
@@ -19,18 +20,37 @@ import {
 import { ApiError } from "../../../lib/api";
 import { CredentialSecretDialog } from "../components/CredentialSecretDialog";
 
+type SetupLocationState = {
+  credentialReveal?: {
+    clientId: string;
+    clientSecret: string | null;
+    title: string;
+  };
+};
+
 export function AppSetupPage() {
   const { appId, app, setNotice } = useAppWorkspace();
   const confirm = useConfirm();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [credentials, setCredentials] = useState<AppCredentialSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [secretDialog, setSecretDialog] = useState<{
     clientId: string;
-    clientSecret: string;
+    clientSecret: string | null;
     title: string;
   } | null>(null);
+
+  const isPublicApp = app.clientType === "public";
+
+  useEffect(() => {
+    const state = location.state as SetupLocationState | null;
+    if (!state?.credentialReveal) return;
+    setSecretDialog(state.credentialReveal);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   const reloadCredentials = useCallback(async () => {
     setLoading(true);
@@ -131,6 +151,12 @@ export function AppSetupPage() {
     <div className="space-y-6">
       <dl className="grid gap-4 text-sm">
         <div>
+          <dt className="text-muted-foreground">Application type</dt>
+          <dd className="mt-1">
+            {isPublicApp ? "Single-page app (browser)" : "Web app (server)"}
+          </dd>
+        </div>
+        <div>
           <dt className="text-muted-foreground">Redirect URIs</dt>
           <dd className="mt-1 space-y-1 font-mono text-xs">
             {app.redirectUris.map((uri) => (
@@ -142,8 +168,15 @@ export function AppSetupPage() {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-sm font-medium">Client credentials</h2>
-          {app.status === "active" && credentials.length > 0 ? (
+          <div>
+            <h2 className="text-sm font-medium">Client credentials</h2>
+            {isPublicApp ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Public clients use PKCE. No client secret is issued.
+              </p>
+            ) : null}
+          </div>
+          {app.status === "active" && credentials.length > 0 && !isPublicApp ? (
             <Button size="sm" disabled={busyId === "create"} onClick={() => void handleCreateCredential()}>
               Add credential
             </Button>
@@ -172,7 +205,7 @@ export function AppSetupPage() {
           rowKey={(row) => row.id}
           emptyMessage="No credentials yet."
           emptyAction={
-            app.status === "active" ? (
+            app.status === "active" && !isPublicApp ? (
               <Button
                 type="button"
                 disabled={busyId === "create"}
@@ -185,15 +218,17 @@ export function AppSetupPage() {
           rowActions={(row) =>
             row.status === "active" ? (
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busyId === row.id || app.status !== "active"}
-                  onClick={() => void handleRotate(row)}
-                >
-                  Rotate
-                </Button>
+                {!isPublicApp ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busyId === row.id || app.status !== "active"}
+                    onClick={() => void handleRotate(row)}
+                  >
+                    Rotate
+                  </Button>
+                ) : null}
                 <DestructiveButton
                   type="button"
                   size="sm"

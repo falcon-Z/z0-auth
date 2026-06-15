@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { AppDetail } from "@z0/contracts/apps";
+import type { AppDetail, CreateAppResponse } from "@z0/contracts/apps";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
@@ -61,6 +61,16 @@ export function AppsListPage() {
               cell: (row) => <span className="font-mono text-xs">{row.slug}</span>,
             },
             {
+              id: "type",
+              header: "Type",
+              accessorFn: (row) => row.clientType,
+              cell: (row) => (
+                <Badge variant="outline">
+                  {row.clientType === "public" ? "SPA" : "Server"}
+                </Badge>
+              ),
+            },
+            {
               id: "status",
               header: "Status",
               accessorFn: (row) => row.status,
@@ -85,7 +95,20 @@ export function AppsListPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onSubmit={createApp}
-        onSuccess={(app) => navigate(`/apps/${app.id}/setup`)}
+        onSuccess={(result: CreateAppResponse) => {
+          navigate(`/apps/${result.app.id}/setup`, {
+            state: {
+              credentialReveal: {
+                clientId: result.credential.clientId,
+                clientSecret: result.clientSecret,
+                title:
+                  result.app.clientType === "public"
+                    ? "Your client ID"
+                    : "Copy your client secret",
+              },
+            },
+          });
+        }}
       />
     </div>
   );

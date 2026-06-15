@@ -39,13 +39,33 @@ export type Flash = {
   message: string;
 };
 
+export type AuthPageBranding = {
+  name?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+};
+
 export type AuthPageOptions = {
   title: string;
   description?: string;
   csrfToken: string;
   body: string;
   flash?: Flash;
+  branding?: AuthPageBranding;
 };
+
+function renderAuthBrand(branding?: AuthPageBranding): string {
+  const name = branding?.name?.trim();
+  const logoUrl = branding?.logoUrl?.trim();
+  if (logoUrl) {
+    const alt = escapeHtml(name ?? "App");
+    return `<p class="auth-brand auth-brand--logo"><img src="${escapeHtml(logoUrl)}" alt="${alt}" class="auth-brand__logo" /></p>`;
+  }
+  if (name) {
+    return `<p class="auth-brand">${escapeHtml(name)}</p>`;
+  }
+  return `<p class="auth-brand">z0-auth</p>`;
+}
 
 export function renderAuthPage(options: AuthPageOptions): string {
   const description = options.description
@@ -54,21 +74,25 @@ export function renderAuthPage(options: AuthPageOptions): string {
   const flash = options.flash
     ? `<div class="auth-flash auth-flash--${options.flash.variant}" role="alert">${escapeHtml(options.flash.message)}</div>`
     : "";
+  const primaryColor = options.branding?.primaryColor?.trim();
+  const bodyStyle = primaryColor && /^#[0-9a-fA-F]{6}$/.test(primaryColor)
+    ? ` style="--primary: ${primaryColor}; --primary-foreground: #fafafa;"`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(options.title)} · z0-auth</title>
+  <title>${escapeHtml(options.title)} · ${escapeHtml(options.branding?.name?.trim() || "z0-auth")}</title>
   <link rel="stylesheet" href="/static/auth.css" />
   <script src="https://unpkg.com/htmx.org@2.0.8"></script>
   <script src="/static/auth-forms.js" defer></script>
 </head>
-<body class="auth-body">
+<body class="auth-body"${bodyStyle}>
   <main id="auth-root" class="auth-main">
     <header class="auth-header">
-      <p class="auth-brand">z0-auth</p>
+      ${renderAuthBrand(options.branding)}
       <h1 class="auth-title">${escapeHtml(options.title)}</h1>
       ${description}
     </header>

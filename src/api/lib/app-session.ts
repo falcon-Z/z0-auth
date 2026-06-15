@@ -63,6 +63,13 @@ export async function revokeAppSessionByToken(token: string): Promise<void> {
   `;
 }
 
+export async function revokeAllAppUserSessions(appUserId: string): Promise<void> {
+  await getDb()`
+    UPDATE app_user_sessions SET revoked_at = NOW()
+    WHERE app_user_id = ${appUserId} AND revoked_at IS NULL
+  `;
+}
+
 export async function resolveAppSession(req: Request): Promise<ActiveAppSession | null> {
   const token = parseCookies(req).get(APP_SESSION_COOKIE);
   if (!token) return null;

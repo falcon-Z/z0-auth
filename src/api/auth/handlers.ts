@@ -14,6 +14,11 @@ import {
   SESSION_COOKIE,
 } from "../lib/session";
 import { completePasswordReset, requestPasswordReset } from "../lib/password-reset";
+import {
+  completeAppPasswordReset,
+  requestAppPasswordReset,
+} from "../lib/app-password-reset";
+import { verifyResetToken } from "../lib/instance-keys";
 import { changePassword } from "../lib/users";
 import { runLogin } from "./service";
 
@@ -58,6 +63,9 @@ export async function handleForgotPassword(req: BunRequest): Promise<Response> {
   const parsed = await parseJsonBody<ForgotPasswordRequest>(req);
   if (!parsed.ok) return parsed.response;
 
+  if (parsed.body.clientId?.trim()) {
+    return requestAppPasswordReset(req, parsed.body);
+  }
   return requestPasswordReset(req, parsed.body);
 }
 
@@ -67,6 +75,14 @@ export async function handleResetPassword(req: BunRequest): Promise<Response> {
 
   const parsed = await parseJsonBody<ResetPasswordRequest>(req);
   if (!parsed.ok) return parsed.response;
+
+  const token = parsed.body.token?.trim();
+  if (token) {
+    const verified = await verifyResetToken(token);
+    if (verified.ok && verified.payload.realm === "app") {
+      return completeAppPasswordReset(req, parsed.body, parsed.body.clientId?.trim());
+    }
+  }
 
   return completePasswordReset(req, parsed.body);
 }

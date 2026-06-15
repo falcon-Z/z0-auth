@@ -6,11 +6,16 @@ import { runLogin } from "../../api/auth/service";
 import { runAppLogin, runAppRegister } from "../../api/lib/app-auth";
 import type { AppAuthRealm, AuthRealm } from "../../api/lib/auth-realm";
 import { resolveAuthRealm } from "../../api/lib/auth-realm";
-import { resolveHostedSignInMethods } from "../../api/lib/auth-settings";
+import { resolveAuthConfigForApp, resolveHostedSignInMethods } from "../../api/lib/auth-settings";
 import { isSmtpReady } from "../../api/lib/smtp-settings";
 import { buildSessionResponse } from "../../api/lib/auth";
 import { validateFormCsrf } from "../../api/lib/csrf";
 import { clearSessionCookieHeader, revokeSessionByToken, SESSION_COOKIE } from "../../api/lib/session";
+import {
+  APP_SESSION_COOKIE,
+  clearAppSessionCookieHeader,
+  revokeAppSessionByToken,
+} from "../../api/lib/app-session";
 import { parseCookies } from "../../api/lib/csrf";
 import { runSetup } from "../../api/setup/service";
 import { sendMagicLinkForHostedAuth } from "../../api/lib/magic-link";
@@ -27,6 +32,7 @@ import {
   renderAuthField,
   renderAuthPage,
   renderPasswordField,
+  type AuthPageBranding,
   type Flash,
 } from "../html";
 import { preparePageCsrf, withSetCookie } from "../csrf-page";
@@ -191,6 +197,7 @@ type LoginFormOptions = {
   signInMethods?: import("@z0/contracts/auth-settings").SignInMethod[];
   mode?: LoginFormMode;
   smtpReady?: boolean;
+  branding?: AuthPageBranding;
 };
 
 function registerHref(clientId: string, returnTo?: string): string {
@@ -216,9 +223,12 @@ export function renderLoginForm(
     options.mode ??
     (hasMagic && hasPassword ? "email_first" : hasMagic ? "magic_link" : "password");
   const v = (key: string) => values[key] ?? "";
-  const forgotLink = app
-    ? ""
-    : `<a class="auth-link" href="/auth/forgot-password">Forgot password?</a>`;
+  const forgotLink =
+    app && hasPassword
+      ? `<a class="auth-link" href="/auth/forgot-password?client_id=${encodeURIComponent(app.clientId)}">Forgot password?</a>`
+      : !app
+        ? `<a class="auth-link" href="/auth/forgot-password">Forgot password?</a>`
+        : "";
   const registerLink = app
     ? `<a class="auth-link" href="${escapeHtml(registerHref(app.clientId, returnTo))}">Create account</a>`
     : "";
@@ -344,14 +354,16 @@ export function renderLoginForm(
     csrfToken,
     body,
     flash,
+    branding: options.branding,
   });
 }
 
-export function renderInvalidClientPage(csrfToken: string, message: string): string {
+export function renderInvalidClientPage(csrfToken: string, message: string, branding?: AuthPageBranding): string {
   return renderAuthPage({
     title: "Sign-in unavailable",
     description: message,
     csrfToken,
+    branding,
     body: `
       <div class="auth-card">
         <h2>Sign-in unavailable</h2>
@@ -366,6 +378,7 @@ function renderAppRegisterForm(
   values: FormFields = {},
   errors: { field: string; message: string }[] = [],
   returnTo?: string,
+  branding?: AuthPageBranding,
 ): string {
   const v = (key: string) => values[key] ?? "";
   const loginHref = (() => {
@@ -434,6 +447,7 @@ function renderAppRegisterForm(
     description: `Sign up for ${app.appName}.`,
     csrfToken,
     body,
+    branding,
   });
 }
 
@@ -506,6 +520,12 @@ function appContextFromRealm(realm: AuthRealm): AppLoginContext | undefined {
   return realm.mode === "app"
     ? { clientId: realm.clientId, appName: realm.appName }
     : undefined;
+}
+
+async function brandingForRealm(realm: AuthRealm): Promise<AuthPageBranding | undefined> {
+  if (realm.mode !== "app") return undefined;
+  const config = await resolveAuthConfigForApp(realm.appId, realm.appName);
+  return config.branding;
 }
 
 async function resolveLoginFormOptions(
@@ -587,6 +607,7 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
 
   const modeParam = url.searchParams.get("mode") ?? undefined;
   const formOptions = await resolveLoginFormOptions(realm, modeParam);
+  const branding = await brandingForRealm(realm);
 
   if (formOptions.signInMethods.length === 0) {
     const { token, setCookie } = preparePageCsrf(req);
@@ -611,7 +632,12 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
         flash,
         returnTo,
         appContextFromRealm(realm),
-        { signInMethods: formOptions.signInMethods, mode: formOptions.mode, smtpReady: formOptions.smtpReady },
+        {
+          signInMethods: formOptions.signInMethods,
+          mode: formOptions.mode,
+          smtpReady: formOptions.smtpReady,
+          branding,
+        },
       ),
     ),
     setCookie,
@@ -637,10 +663,12 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
   const intent = form.intent === "password" || (form.password?.trim() && form.intent !== "continue") ? "password" : "continue";
   const formOptions = await resolveLoginFormOptions(realm, intent === "password" ? "password" : undefined);
   const app = appContextFromRealm(realm);
+  const branding = await brandingForRealm(realm);
   const loginFormOptions = {
     signInMethods: formOptions.signInMethods,
     mode: formOptions.mode,
     smtpReady: formOptions.smtpReady,
+    branding,
   };
 
   if (csrfError) {
@@ -832,9 +860,17 @@ async function getRegisterPage(req: BunRequest): Promise<Response> {
   const { token, setCookie } = preparePageCsrf(req);
 
   if (realm.mode === "app") {
+    const branding = await brandingForRealm(realm);
     return withSetCookie(
       htmlResponse(
-        renderAppRegisterForm(token, { clientId: realm.clientId, appName: realm.appName }, {}, [], returnTo),
+        renderAppRegisterForm(
+          token,
+          { clientId: realm.clientId, appName: realm.appName },
+          {},
+          [],
+          returnTo,
+          branding,
+        ),
       ),
       setCookie,
     );
@@ -877,11 +913,12 @@ async function postRegisterPage(req: BunRequest): Promise<Response> {
 
   const csrfError = validateFormCsrf(req, form._csrf);
   const app = { clientId: realm.clientId, appName: realm.appName };
+  const branding = await brandingForRealm(realm);
   if (csrfError) {
     const errors = await problemFieldErrors(csrfError);
     const { token, setCookie } = preparePageCsrf(req);
     return authErrorResponse(
-      renderAppRegisterForm(token, app, form, errors, form.return_to),
+      renderAppRegisterForm(token, app, form, errors, form.return_to, branding),
       req,
       403,
       setCookie,
@@ -902,7 +939,7 @@ async function postRegisterPage(req: BunRequest): Promise<Response> {
     const { token, setCookie } = preparePageCsrf(req);
     const fallback = result.response.status === 409 ? 409 : 400;
     return authErrorResponse(
-      renderAppRegisterForm(token, app, form, errors, form.return_to),
+      renderAppRegisterForm(token, app, form, errors, form.return_to, branding),
       req,
       fallback,
       setCookie,
@@ -946,11 +983,20 @@ async function postLogoutPage(req: BunRequest): Promise<Response> {
   const csrfError = validateFormCsrf(req, form._csrf);
   if (csrfError) return Response.redirect(new URL("/auth/login", req.url), 303);
 
-  const token = parseCookies(req).get(SESSION_COOKIE);
-  if (token) await revokeSessionByToken(token);
+  const sessionToken = parseCookies(req).get(SESSION_COOKIE);
+  if (sessionToken) await revokeSessionByToken(sessionToken);
 
-  const headers = new Headers({ Location: "/auth/login" });
-  headers.set("Set-Cookie", clearSessionCookieHeader());
+  const appToken = parseCookies(req).get(APP_SESSION_COOKIE);
+  if (appToken) await revokeAppSessionByToken(appToken);
+
+  const clientId = form.client_id?.trim();
+  const loginPath = clientId
+    ? `/auth/login?client_id=${encodeURIComponent(clientId)}`
+    : "/auth/login";
+
+  const headers = new Headers({ Location: loginPath });
+  headers.append("Set-Cookie", clearSessionCookieHeader());
+  headers.append("Set-Cookie", clearAppSessionCookieHeader());
   return new Response(null, { status: 303, headers });
 }
 

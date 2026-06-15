@@ -313,6 +313,10 @@ export type SignedResetPayload = {
   uid: string;
   exp: number;
   jti: string;
+  /** `app` when resetting an app user password; omitted for console users. */
+  realm?: "app";
+  /** Application id when `realm` is `app`. */
+  aid?: string;
 };
 
 /** Sign a password-reset token (Ed25519). Returns URL-safe token string. */
@@ -339,6 +343,9 @@ export async function verifyResetToken(
 
     const payload = JSON.parse(new TextDecoder().decode(body)) as SignedResetPayload;
     if (payload.v !== 1 || !payload.uid || !payload.jti || typeof payload.exp !== "number") {
+      return { ok: false };
+    }
+    if (payload.realm === "app" && !payload.aid) {
       return { ok: false };
     }
     return { ok: true, payload };

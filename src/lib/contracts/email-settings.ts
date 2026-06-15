@@ -41,6 +41,8 @@ export type TestEmailResponse = {
 
 export type ForgotPasswordRequest = {
   email: string;
+  /** When set, reset is scoped to an app end-user account (not console). */
+  clientId?: string;
 };
 
 export type ForgotPasswordResponse = {
@@ -52,6 +54,8 @@ export type ResetPasswordRequest = {
   token: string;
   password: string;
   passwordConfirm: string;
+  /** When set, completes reset for an app end-user account. */
+  clientId?: string;
 };
 
 export type ResetPasswordResponse = {

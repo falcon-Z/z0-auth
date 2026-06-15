@@ -52,11 +52,11 @@ paths:
               $ref: "#/components/schemas/CreateAppRequest"
       responses:
         "201":
-          description: Application created
+          description: Application created with default credential
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AppDetail"
+                $ref: "#/components/schemas/CreateAppResponse"
         "400":
           $ref: "common.openapi.yaml#/components/responses/ValidationError"
         "401":
@@ -382,6 +382,7 @@ components:
         - id
         - name
         - slug
+        - clientType
         - status
         - redirectUris
         - activeCredentialCount
@@ -392,6 +393,12 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         slug: { type: string }
+        clientType:
+          type: string
+          enum: [public, confidential]
+          description: |
+            `public` — browser SPA (PKCE, no client secret).
+            `confidential` — server app with client secret.
         status: { $ref: "#/components/schemas/AppStatus" }
         redirectUris:
           type: array
@@ -404,13 +411,26 @@ components:
       $ref: "#/components/schemas/AppSummary"
     CreateAppRequest:
       type: object
-      required: [name, redirectUris]
+      required: [name, redirectUris, clientType]
       properties:
         name: { type: string }
+        clientType:
+          type: string
+          enum: [public, confidential]
         redirectUris:
           type: array
           minItems: 1
           items: { type: string, format: uri }
+    CreateAppResponse:
+      type: object
+      required: [app, credential, clientSecret]
+      properties:
+        app: { $ref: "#/components/schemas/AppDetail" }
+        credential: { $ref: "#/components/schemas/AppCredentialSummary" }
+        clientSecret:
+          type: string
+          nullable: true
+          description: Shown once for confidential clients; null for public clients.
     PatchAppRequest:
       type: object
       properties:
@@ -441,7 +461,10 @@ components:
       required: [credential, clientSecret]
       properties:
         credential: { $ref: "#/components/schemas/AppCredentialSummary" }
-        clientSecret: { type: string }
+        clientSecret:
+          type: string
+          nullable: true
+          description: Null for public application credentials.
     RotateCredentialResponse:
       $ref: "#/components/schemas/CreateCredentialResponse"
     AppScopeSummary:

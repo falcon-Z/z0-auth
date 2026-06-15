@@ -48,12 +48,23 @@ body.auth-body {
 }
 
 .auth-brand {
-  margin: 0 0 0.5rem;
-  font-size: 0.75rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--muted-foreground);
+}
+
+.auth-brand--logo {
+  margin-bottom: 0.5rem;
+}
+
+.auth-brand__logo {
+  display: block;
+  max-height: 2.5rem;
+  max-width: 12rem;
+  width: auto;
+  object-fit: contain;
 }
 
 .auth-title {

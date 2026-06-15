@@ -71,6 +71,10 @@ export const ErrorCodes = {
   APP_DISABLED: "app_disabled",
   /** Cannot revoke the last active credential on an active application. */
   LAST_ACTIVE_CREDENTIAL: "last_active_credential",
+  /** Public (SPA) clients do not have rotatable secrets. */
+  PUBLIC_CLIENT_NO_SECRET: "public_client_no_secret",
+  /** Public apps allow only one active credential. */
+  CREDENTIAL_LIMIT_REACHED: "credential_limit_reached",
   /** Scope name already registered for the application. */
   SCOPE_TAKEN: "scope_taken",
   /** Scope id is unknown for the application. */

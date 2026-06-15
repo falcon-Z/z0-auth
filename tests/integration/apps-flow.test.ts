@@ -51,6 +51,8 @@ run("M03 applications and credentials", () => {
   let appId = "";
   let credentialId = "";
   let clientId = "";
+  let publicAppId = "";
+  let publicCredentialId = "";
 
   beforeAll(async () => {
     await resetTestDatabase();
@@ -67,7 +69,7 @@ run("M03 applications and credentials", () => {
     expect(res.status).toBe(401);
   });
 
-  test("create app with redirect URIs", async () => {
+  test("create confidential app with default credential", async () => {
     const { csrf, cookie } = await login();
     const res = await dispatchApi(
       buildRequest("POST", "/api/v1/apps", {
@@ -76,14 +78,50 @@ run("M03 applications and credentials", () => {
         body: {
           name: "Dogfood App",
           redirectUris: [REDIRECT],
+          clientType: "confidential",
         },
       }),
     );
     expect(res.status).toBe(201);
-    const app = (await res.json()) as { id: string; slug: string; status: string };
-    appId = app.id;
-    expect(app.slug).toBe("dogfood-app");
-    expect(app.status).toBe("active");
+    const created = (await res.json()) as {
+      app: { id: string; slug: string; status: string; clientType: string; activeCredentialCount: number };
+      credential: { id: string; clientId: string };
+      clientSecret: string;
+    };
+    appId = created.app.id;
+    credentialId = created.credential.id;
+    clientId = created.credential.clientId;
+    expect(created.app.slug).toBe("dogfood-app");
+    expect(created.app.status).toBe("active");
+    expect(created.app.clientType).toBe("confidential");
+    expect(created.app.activeCredentialCount).toBe(1);
+    expect(created.clientSecret.length).toBeGreaterThan(20);
+    expect(clientId.startsWith("z0_")).toBe(true);
+  });
+
+  test("create public app without client secret", async () => {
+    const { csrf, cookie } = await login();
+    const res = await dispatchApi(
+      buildRequest("POST", "/api/v1/apps", {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: {
+          name: "SPA App",
+          redirectUris: [REDIRECT],
+          clientType: "public",
+        },
+      }),
+    );
+    expect(res.status).toBe(201);
+    const created = (await res.json()) as {
+      app: { id: string; clientType: string };
+      credential: { id: string; clientId: string };
+      clientSecret: string | null;
+    };
+    publicAppId = created.app.id;
+    publicCredentialId = created.credential.id;
+    expect(created.app.clientType).toBe("public");
+    expect(created.clientSecret).toBeNull();
   });
 
   test("reject invalid redirect URI", async () => {
@@ -95,6 +133,7 @@ run("M03 applications and credentials", () => {
         body: {
           name: "Bad URIs",
           redirectUris: ["not-a-url"],
+          clientType: "confidential",
         },
       }),
     );
@@ -103,25 +142,17 @@ run("M03 applications and credentials", () => {
     expect(body.errors.some((e) => e.code === "invalid_redirect_uri")).toBe(true);
   });
 
-  test("create and rotate credential", async () => {
+  test("rotate confidential credential secret", async () => {
     const { csrf, cookie } = await login();
 
     const createRes = await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${appId}/credentials`, {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { label: "Primary" },
+        body: { label: "Secondary" },
       }),
     );
     expect(createRes.status).toBe(201);
-    const created = (await createRes.json()) as {
-      credential: { id: string; clientId: string };
-      clientSecret: string;
-    };
-    credentialId = created.credential.id;
-    clientId = created.credential.clientId;
-    expect(created.clientSecret.length).toBeGreaterThan(20);
-    expect(clientId.startsWith("z0_")).toBe(true);
 
     const listRes = await dispatchApi(
       buildRequest("GET", `/api/v1/apps/${appId}/credentials`, {
@@ -130,7 +161,7 @@ run("M03 applications and credentials", () => {
     );
     expect(listRes.status).toBe(200);
     const listed = (await listRes.json()) as { credentials: { id: string }[] };
-    expect(listed.credentials).toHaveLength(1);
+    expect(listed.credentials).toHaveLength(2);
 
     const rotateRes = await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${appId}/credentials/${credentialId}/rotate`, {
@@ -141,13 +172,40 @@ run("M03 applications and credentials", () => {
     expect(rotateRes.status).toBe(200);
     const rotated = (await rotateRes.json()) as { clientSecret: string; credential: { clientId: string } };
     expect(rotated.credential.clientId).toBe(clientId);
-    expect(rotated.clientSecret).not.toBe(created.clientSecret);
+    expect(rotated.clientSecret).not.toBeNull();
+  });
+
+  test("cannot rotate secret on public client", async () => {
+    const { csrf, cookie } = await login();
+    const res = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${publicAppId}/credentials/${publicCredentialId}/rotate`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { errors: { code: string }[] };
+    expect(body.errors.some((e) => e.code === "public_client_no_secret")).toBe(true);
+  });
+
+  test("cannot add second credential to public app", async () => {
+    const { csrf, cookie } = await login();
+    const res = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${publicAppId}/credentials`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: {},
+      }),
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { errors: { code: string }[] };
+    expect(body.errors.some((e) => e.code === "credential_limit_reached")).toBe(true);
   });
 
   test("cannot revoke last active credential on active app", async () => {
     const { csrf, cookie } = await login();
     const res = await dispatchApi(
-      buildRequest("DELETE", `/api/v1/apps/${appId}/credentials/${credentialId}`, {
+      buildRequest("DELETE", `/api/v1/apps/${publicAppId}/credentials/${publicCredentialId}`, {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
       }),

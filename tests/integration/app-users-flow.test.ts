@@ -54,12 +54,12 @@ async function createApp(csrf: string, cookie: string, name: string) {
     buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: cookie },
-      body: { name, redirectUris: [REDIRECT] },
+      body: { name, redirectUris: [REDIRECT], clientType: "confidential" },
     }),
   );
   expect(res.status).toBe(201);
-  const body = (await res.json()) as { id: string };
-  return body.id;
+  const body = (await res.json()) as { app: { id: string } };
+  return body.app.id;
 }
 
 run("M05 app users (Option B)", () => {

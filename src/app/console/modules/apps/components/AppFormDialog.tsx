@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { AppDetail } from "@z0/contracts/apps";
+import type { AppClientType, AppDetail, CreateAppResponse } from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
 import {
   Dialog,
@@ -10,20 +10,40 @@ import {
   DialogTitle,
 } from "@z0/components/ui/dialog";
 import { Input } from "@z0/components/ui/input";
+import { Label } from "@z0/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@z0/components/ui/select";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { FormField } from "../../../components/forms/FormField";
 
 const DEFAULT_REDIRECT_URI = "http://localhost:3000/oauth/callback";
 
-type AppFormDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  mode?: "create" | "edit";
-  initial?: Pick<AppDetail, "name" | "redirectUris">;
-  onSubmit: (body: { name: string; redirectUris: string[] }) => Promise<AppDetail>;
-  onSuccess: (app: AppDetail) => void;
-};
+type CreateBody = { name: string; redirectUris: string[]; clientType: AppClientType };
+type EditBody = { name: string; redirectUris: string[] };
+
+type AppFormDialogProps =
+  | {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      mode?: "create";
+      initial?: Pick<AppDetail, "name" | "redirectUris">;
+      onSubmit: (body: CreateBody) => Promise<CreateAppResponse>;
+      onSuccess: (result: CreateAppResponse) => void;
+    }
+  | {
+      open: boolean;
+      onOpenChange: (open: boolean) => void;
+      mode: "edit";
+      initial?: Pick<AppDetail, "name" | "redirectUris">;
+      onSubmit: (body: EditBody) => Promise<AppDetail>;
+      onSuccess: (result: AppDetail) => void;
+    };
 
 export function AppFormDialog({
   open,
@@ -34,6 +54,7 @@ export function AppFormDialog({
   onSuccess,
 }: AppFormDialogProps) {
   const [name, setName] = useState("");
+  const [clientType, setClientType] = useState<AppClientType>("confidential");
   const [uris, setUris] = useState([DEFAULT_REDIRECT_URI]);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -48,6 +69,7 @@ export function AppFormDialog({
         setUris(initial.redirectUris.length > 0 ? [...initial.redirectUris] : [DEFAULT_REDIRECT_URI]);
       } else {
         setName("");
+        setClientType("confidential");
         setUris([DEFAULT_REDIRECT_URI]);
       }
       setFieldErrors({});
@@ -73,9 +95,19 @@ export function AppFormDialog({
     setFieldErrors({});
     try {
       const redirectUris = uris.map((u) => u.trim()).filter(Boolean);
-      const app = await onSubmit({ name, redirectUris });
-      onOpenChange(false);
-      onSuccess(app);
+      if (isEdit) {
+        const updated = await (onSubmit as (body: EditBody) => Promise<AppDetail>)({ name, redirectUris });
+        onOpenChange(false);
+        (onSuccess as (result: AppDetail) => void)(updated);
+      } else {
+        const result = await (onSubmit as (body: CreateBody) => Promise<CreateAppResponse>)({
+          name,
+          redirectUris,
+          clientType,
+        });
+        onOpenChange(false);
+        (onSuccess as (result: CreateAppResponse) => void)(result);
+      }
     } catch (e) {
       if (e instanceof ApiError) {
         setFieldErrors(fieldErrorsFromProblem(e.problem));
@@ -104,6 +136,28 @@ export function AppFormDialog({
                 autoComplete="off"
               />
             </FormField>
+            {!isEdit ? (
+              <div className="space-y-2">
+                <Label htmlFor="clientType">Application type</Label>
+                <Select value={clientType} onValueChange={(v) => setClientType(v as AppClientType)}>
+                  <SelectTrigger id="clientType" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="confidential">Web app (server)</SelectItem>
+                    <SelectItem value="public">Single-page app (browser)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {fieldErrors.clientType ? (
+                  <p className="text-sm text-destructive">{fieldErrors.clientType}</p>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  {clientType === "public"
+                    ? "Runs in the browser. Uses PKCE instead of a client secret."
+                    : "Runs on your server. Keep the client secret on the server only."}
+                </p>
+              </div>
+            ) : null}
             <div className="space-y-2">
               <p className="text-sm font-medium">Redirect URIs</p>
               {fieldErrors.redirectUris ? (

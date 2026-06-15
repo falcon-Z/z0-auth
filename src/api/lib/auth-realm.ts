@@ -69,7 +69,7 @@ function clientIdHintsFromRequest(req: Request, extra?: { clientId?: string; ret
   return [...new Set(hints)];
 }
 
-async function findAppByClientId(clientId: string): Promise<AppClientRow | null> {
+export async function findAppByClientId(clientId: string): Promise<AppClientRow | null> {
   const [row] = await getDb()`
     SELECT
       a.id AS app_id,
@@ -90,6 +90,17 @@ async function findAppByClientId(clientId: string): Promise<AppClientRow | null>
     app_status: r.app_status,
     client_id: r.client_id,
   };
+}
+
+/** Resolve app id from any credential row (including revoked). */
+export async function findAppIdByClientId(clientId: string): Promise<string | null> {
+  const [row] = await getDb()`
+    SELECT app_id
+    FROM app_credentials
+    WHERE client_id = ${clientId}
+    LIMIT 1
+  `;
+  return row ? String((row as { app_id: string }).app_id) : null;
 }
 
 export async function resolveAuthRealm(

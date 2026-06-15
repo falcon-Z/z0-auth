@@ -2,6 +2,7 @@ import type {
   AppDetail,
   AppSummary,
   CreateAppRequest,
+  CreateAppResponse,
   CreateCredentialRequest,
   CreateCredentialResponse,
   PatchAppRequest,
@@ -20,8 +21,8 @@ export async function fetchApp(appId: string): Promise<AppDetail> {
   return apiFetch<AppDetail>(`/api/v1/apps/${appId}`);
 }
 
-export async function createApp(body: CreateAppRequest): Promise<AppDetail> {
-  return apiFetch<AppDetail>("/api/v1/apps", { method: "POST", body });
+export async function createApp(body: CreateAppRequest): Promise<CreateAppResponse> {
+  return apiFetch<CreateAppResponse>("/api/v1/apps", { method: "POST", body });
 }
 
 export async function patchApp(appId: string, body: PatchAppRequest): Promise<AppDetail> {

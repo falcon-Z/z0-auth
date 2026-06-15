@@ -13,7 +13,7 @@ import {
 type CredentialSecretDialogProps = {
   open: boolean;
   clientId: string;
-  clientSecret: string;
+  clientSecret: string | null;
   title?: string;
   onClose: () => void;
 };
@@ -27,6 +27,7 @@ export function CredentialSecretDialog({
 }: CredentialSecretDialogProps) {
   const [copiedId, setCopiedId] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const isPublic = clientSecret === null;
 
   async function copy(value: string, which: "id" | "secret") {
     try {
@@ -51,27 +52,33 @@ export function CredentialSecretDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Store the client secret now. You will not be able to view it again.
+          {isPublic
+            ? "Use this client ID with PKCE in your browser app. No client secret is issued for public clients."
+            : "Store the client secret now. You will not be able to view it again."}
         </p>
         <div className="space-y-3">
           <div>
             <p className="mb-1 text-xs font-medium text-muted-foreground">Client ID</p>
             <p className="break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">{clientId}</p>
           </div>
-          <div>
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Client secret</p>
-            <p className="break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">{clientSecret}</p>
-          </div>
+          {!isPublic ? (
+            <div>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">Client secret</p>
+              <p className="break-all rounded-md border bg-muted/40 px-3 py-2 font-mono text-xs">{clientSecret}</p>
+            </div>
+          ) : null}
         </div>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => void copy(clientId, "id")}>
             <Copy className="size-4" />
             {copiedId ? "Copied" : "Copy client ID"}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => void copy(clientSecret, "secret")}>
-            <Copy className="size-4" />
-            {copiedSecret ? "Copied" : "Copy secret"}
-          </Button>
+          {!isPublic ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => void copy(clientSecret!, "secret")}>
+              <Copy className="size-4" />
+              {copiedSecret ? "Copied" : "Copy secret"}
+            </Button>
+          ) : null}
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Done
           </Button>

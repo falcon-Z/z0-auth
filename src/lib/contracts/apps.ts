@@ -1,9 +1,13 @@
 export type AppStatus = "active" | "disabled";
 
+/** `public` = browser SPA (PKCE, no client secret). `confidential` = server app with secret. */
+export type AppClientType = "public" | "confidential";
+
 export type AppSummary = {
   id: string;
   name: string;
   slug: string;
+  clientType: AppClientType;
   status: AppStatus;
   redirectUris: string[];
   activeCredentialCount: number;
@@ -17,9 +21,15 @@ export type AppDetail = AppSummary;
 export type CreateAppRequest = {
   name: string;
   redirectUris: string[];
+  clientType: AppClientType;
 };
 
-export type CreateAppResponse = AppDetail;
+export type CreateAppResponse = {
+  app: AppDetail;
+  credential: AppCredentialSummary;
+  /** Shown once for confidential clients; null for public clients. */
+  clientSecret: string | null;
+};
 
 export type PatchAppRequest = {
   name?: string;
@@ -44,7 +54,7 @@ export type CreateCredentialRequest = {
 
 export type CreateCredentialResponse = {
   credential: AppCredentialSummary;
-  clientSecret: string;
+  clientSecret: string | null;
 };
 
 export type RotateCredentialResponse = CreateCredentialResponse;
