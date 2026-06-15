@@ -61,7 +61,7 @@ export function InviteDetailPage() {
     try {
       await revokeInstanceInvite(inviteId);
       await reload();
-      navigate("/team");
+      navigate("/team", { replace: true });
     } finally {
       setRevoking(false);
     }

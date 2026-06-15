@@ -56,10 +56,28 @@ export function MemberDetailPage() {
   );
 
   useEffect(() => {
-    if (!userId) return;
-    void fetchMemberRoles(userId).then((roles) => setSelectedRoleIds(roles.map((role) => role.id)));
-    void fetchRoles().then(setAllRoles).catch(() => setAllRoles([]));
-  }, [userId]);
+    if (!userId || !member) return;
+
+    let cancelled = false;
+    void fetchMemberRoles(userId)
+      .then((roles) => {
+        if (!cancelled) setSelectedRoleIds(roles.map((role) => role.id));
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedRoleIds([]);
+      });
+    void fetchRoles()
+      .then((roles) => {
+        if (!cancelled) setAllRoles(roles);
+      })
+      .catch(() => {
+        if (!cancelled) setAllRoles([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, member?.userId]);
 
   if (loading) return <ListPageSkeleton />;
 
@@ -87,7 +105,7 @@ export function MemberDetailPage() {
     setRemoving(true);
     try {
       await removeMember(userId);
-      navigate("/team");
+      navigate("/team", { replace: true });
     } finally {
       setRemoving(false);
     }
