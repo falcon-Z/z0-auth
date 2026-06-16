@@ -24,7 +24,8 @@ import { findAppRow } from "./apps";
 import { sha256Hex, randomToken } from "./crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
-import { countActiveAppUserSessions } from "./app-session";
+import { countActiveAppUserSessions, revokeAllAppUserSessions } from "./app-session";
+import { revokeAllOAuthTokensForAppUser, revokePendingAuthorizationCodesForAppUser } from "./oauth";
 import { hashPassword } from "./password";
 import { normalizeMetadata, validateAppUserMetadata } from "./app-user-metadata";
 import { appUserInviteEmailText, sendTransactionalEmail } from "./transactional-email";
@@ -299,6 +300,7 @@ export async function patchAppUserForApi(
     body.metadata === undefined ? appUser.metadata : normalizeMetadata(body.metadata);
   const status = body.membershipStatus ?? appUser.status;
   const name = body.name !== undefined ? body.name.trim() : appUser.name;
+  const disablingUser = appUser.status === "active" && status === "disabled";
 
   await getDb()`
     UPDATE app_users
@@ -310,6 +312,12 @@ export async function patchAppUserForApi(
     WHERE app_id = ${appId}
       AND id = ${userId}
   `;
+
+  if (disablingUser) {
+    await revokeAllAppUserSessions(userId);
+    await revokePendingAuthorizationCodesForAppUser(userId);
+    await revokeAllOAuthTokensForAppUser(userId);
+  }
 
   await writeAuditEvent({
     actorUserId,

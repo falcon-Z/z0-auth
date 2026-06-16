@@ -15,6 +15,8 @@ export type AppConfig = {
   installToken?: string;
   /** Allow server start when setup is incomplete (development escape hatch). */
   allowIncompleteSetup: boolean;
+  /** Public HTTPS origin for OAuth/OIDC issuer (e.g. https://auth.example.com). Falls back to request origin. */
+  publicOrigin?: string;
 };
 
 /** True when DATABASE_URL is set to a non-empty value. */
@@ -45,7 +47,15 @@ export function loadConfig(): AppConfig {
     appName: process.env.APP_NAME ?? "z0-auth",
     installToken: process.env.INSTALL_TOKEN,
     allowIncompleteSetup: process.env.ALLOW_INCOMPLETE_SETUP === "true",
+    publicOrigin: process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, "") || undefined,
   };
+}
+
+/** Origin clients use to reach this instance (OIDC issuer, absolute URLs). */
+export function requestPublicOrigin(req: Request): string {
+  const configured = loadConfig().publicOrigin;
+  if (configured) return configured;
+  return new URL(req.url).origin;
 }
 
 /** URL shown in logs and docs (always localhost in development). */

@@ -137,12 +137,13 @@ Signed payload (`uid`, `exp`, `jti`); `password_reset_tokens.token_hash` stores 
 |--------|-------|--------|-------|
 | Setup | 3 / IP | 1 hour | **429** `rate_limited`, field `_rate`, optional `retryAfter` |
 | Login | 10 / IP | 15 minutes | **429** `rate_limited`, field `_rate` |
+| OAuth confidential client auth (`/oauth/token`, `/oauth/revoke`) | 10 / IP + `client_id` | 15 minutes | **429** `invalid_client` |
 
 ---
 
-## OAuth 2.1 (planned — implement before token endpoint ships)
+## OAuth 2.1 (baseline)
 
-These rules are **required** for Phase 3; the dev stub at `/oauth/authorize` does not enforce them yet.
+These rules are required for the OAuth authorization server baseline.
 
 ### Redirect URI
 
@@ -179,6 +180,37 @@ These rules are **required** for Phase 3; the dev stub at `/oauth/authorize` doe
 - Public clients: PKCE only; no secret in browser
 
 Reserved error codes: `invalid_client`, `unauthorized_client` (see `ErrorCodes` in `src/lib/contracts/errors.ts`).
+
+---
+
+## OIDC (P4M2 baseline)
+
+OIDC builds on OAuth with discovery metadata, JWK distribution, ID tokens, and userinfo.
+
+### Signing and key exposure
+
+- ID tokens are signed with **RS256**.
+- JWKS endpoint exposes **public keys only** (no private key material in responses or logs).
+- `kid` in ID token header must match a key published in `/.well-known/jwks.json`.
+- Exactly one key is `active` for new token signing at a time; retired keys may remain published for verification until decommissioned.
+
+### Discovery
+
+- `/.well-known/openid-configuration` must publish issuer, authorization endpoint, token endpoint, userinfo endpoint, jwks URI, supported scopes, and supported signing algorithms.
+- Metadata values must be stable for a running deployment and must reflect actual server behavior.
+
+### ID token
+
+- Returned from `/oauth/token` for OIDC requests (when `openid` scope is granted).
+- Minimum claims: `iss`, `sub`, `aud`, `exp`, `iat`.
+- Optional claims are scope-gated (`email`, `email_verified`, `name`).
+- `sub` is derived from app-user identity and must be stable for the same app user.
+
+### Userinfo
+
+- `/oauth/userinfo` accepts bearer **access token** only (not ID token).
+- Access token must be active, unexpired, and not revoked.
+- Response claims are filtered to granted scope.
 
 ---
 

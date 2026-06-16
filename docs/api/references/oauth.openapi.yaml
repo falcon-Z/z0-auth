@@ -1,28 +1,29 @@
 openapi: 3.1.0
 info:
-  title: z0-auth OAuth 2.1 / OIDC API (planned)
+  title: z0-auth OAuth 2.1 API
   version: 0.1.0
   description: |
-    **Status: planned (Phase 3).** Browser flow stubs exist at `/oauth/*`; token and client APIs are not implemented yet.
-
-    Normative validation rules for OAuth are defined in `docs/api/security-contract.md` and must be implemented before these endpoints ship.
-
-    When implementing, extend this spec and add contract tests — do not diverge from shared error components in `common.openapi.yaml`.
+    OAuth authorization code flow contract for app-user sign-in and token exchange.
+    This document defines the Phase P4M1 baseline:
+    - authorization code flow
+    - PKCE required for public clients
+    - opaque access tokens
+    - refresh token lifecycle deferred to P4M4
 servers:
   - url: http://localhost:3000
     description: Local development
 tags:
   - name: OAuth
-    description: Authorization server (planned)
+    description: Authorization server
 paths:
   /oauth/authorize:
     get:
       tags: [OAuth]
-      summary: Authorization endpoint (browser, partial)
+      summary: Authorization endpoint (authorization code flow)
       description: |
-        **Current:** dev stub; requires session; validates `response_type`, `client_id`, `redirect_uri` presence only.
-
-        **Target:** RFC 6749 authorization code + OAuth 2.1 constraints (PKCE, exact redirect URI, scope subset).
+        Starts OAuth authorization code flow for an app client.
+        If the app user is not authenticated for the resolved app context, the user is redirected
+        to hosted auth (`/auth/login`) and then resumed.
       operationId: getOAuthAuthorize
       parameters:
         - name: response_type
@@ -67,39 +68,360 @@ paths:
             enum: [S256]
       responses:
         "302":
-          description: Redirect to login or back to client with `code` and optional `state`
+          description: Redirect to hosted login, consent, or client redirect URI with code/state
+          headers:
+            Location:
+              description: Redirect target URL
+              schema:
+                type: string
+                format: uri
         "400":
-          $ref: "common.openapi.yaml#/components/responses/BadRequest"
+          description: Invalid OAuth request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "common.openapi.yaml#/components/schemas/Problem"
+              examples:
+                invalidRequest:
+                  value:
+                    type: "https://z0.dev/problems/bad-request"
+                    title: "Bad Request"
+                    status: 400
+                    detail: "response_type=code is required"
+                invalidRedirectUri:
+                  value:
+                    type: "https://z0.dev/problems/bad-request"
+                    title: "Bad Request"
+                    status: 400
+                    code: "invalid_redirect_uri"
+                    detail: "redirect_uri must exactly match a registered URI"
   /oauth/token:
     post:
       tags: [OAuth]
-      summary: Token endpoint (planned)
+      summary: Token endpoint (authorization_code grant)
+      description: |
+        Exchanges an authorization code for OAuth tokens.
+        In P4M1, only `grant_type=authorization_code` is supported.
+        Access tokens are opaque. Refresh token lifecycle is finalized in P4M4.
       operationId: postOAuthToken
-      x-z0-status: planned
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - code
+                - redirect_uri
+                - client_id
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code]
+                code:
+                  type: string
+                redirect_uri:
+                  type: string
+                  format: uri
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                  description: Required for confidential clients.
+                code_verifier:
+                  type: string
+                  description: Required for public clients and validated against stored PKCE challenge.
       responses:
         "200":
-          description: Access token (and optional refresh token) issued
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthTokenResponse"
+              examples:
+                opaqueAccessToken:
+                  value:
+                    access_token: "z0_at_opaque_123"
+                    token_type: "Bearer"
+                    expires_in: 3600
+                    scope: "openid profile"
         "400":
-          $ref: "common.openapi.yaml#/components/responses/BadRequest"
+          description: Invalid grant request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                invalidGrant:
+                  value:
+                    error: "invalid_grant"
+                    error_description: "authorization code is expired or already used"
+                invalidRequest:
+                  value:
+                    error: "invalid_request"
+                    error_description: "grant_type must be authorization_code"
         "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+          description: Client authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                invalidClient:
+                  value:
+                    error: "invalid_client"
+                    error_description: "client authentication failed"
   /oauth/revoke:
     post:
       tags: [OAuth]
-      summary: Token revocation (planned)
+      summary: Token revocation
+      description: |
+        Revokes access or refresh token by token value.
+        Returns success for unknown tokens per RFC 7009 semantics.
       operationId: postOAuthRevoke
-      x-z0-status: planned
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - token
+                - client_id
+              properties:
+                token:
+                  type: string
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                  description: Required for confidential clients.
       responses:
         "200":
-          description: Token revoked (or unknown token accepted per RFC 7009)
+          description: Token revoked or accepted as already unknown
+        "401":
+          description: Client authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                invalidClient:
+                  value:
+                    error: "invalid_client"
+                    error_description: "client authentication failed"
+  /.well-known/openid-configuration:
+    get:
+      tags: [OAuth]
+      summary: OpenID Provider metadata
+      description: Returns OIDC discovery metadata for client auto-configuration.
+      operationId: getOpenIdConfiguration
+      responses:
+        "200":
+          description: Discovery metadata document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcDiscoveryResponse"
+  /.well-known/jwks.json:
+    get:
+      tags: [OAuth]
+      summary: JSON Web Key Set
+      description: Returns public signing keys used to verify issued ID tokens.
+      operationId: getJwks
+      responses:
+        "200":
+          description: Public JWK set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JwksResponse"
+  /oauth/userinfo:
+    get:
+      tags: [OAuth]
+      summary: OIDC userinfo endpoint
+      description: Returns scope-filtered user claims for a valid bearer access token.
+      operationId: getUserinfo
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User claims for authenticated app user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserinfoResponse"
+        "401":
+          description: Missing, expired, or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                invalidToken:
+                  value:
+                    error: "invalid_token"
+                    error_description: "access token is invalid or expired"
+        "403":
+          description: Access token does not grant required OIDC scopes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
+              examples:
+                insufficientScope:
+                  value:
+                    error: "insufficient_scope"
+                    error_description: "token does not grant required scope"
   /api/oauth/clients:
     post:
       tags: [OAuth]
-      summary: Register OAuth client (planned)
+      summary: Register OAuth client
       operationId: postOAuthClient
-      x-z0-status: planned
       responses:
         "201":
           description: Client created
         "400":
           $ref: "common.openapi.yaml#/components/responses/ValidationError"
+components:
+  schemas:
+    OAuthTokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          minimum: 1
+        refresh_token:
+          type: string
+          description: Optional in P4M1; policy finalized in P4M4.
+        id_token:
+          type: string
+          description: OIDC ID token when `openid` scope is granted.
+        scope:
+          type: string
+          description: Space-delimited scope string actually granted.
+    OAuthErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_request
+            - invalid_client
+            - invalid_grant
+            - unauthorized_client
+            - unsupported_grant_type
+            - invalid_scope
+            - invalid_token
+            - insufficient_scope
+        error_description:
+          type: string
+    OidcDiscoveryResponse:
+      type: object
+      required:
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - userinfo_endpoint
+        - jwks_uri
+        - response_types_supported
+        - grant_types_supported
+        - subject_types_supported
+        - id_token_signing_alg_values_supported
+        - scopes_supported
+      properties:
+        issuer:
+          type: string
+          format: uri
+        authorization_endpoint:
+          type: string
+          format: uri
+        token_endpoint:
+          type: string
+          format: uri
+        userinfo_endpoint:
+          type: string
+          format: uri
+        jwks_uri:
+          type: string
+          format: uri
+        response_types_supported:
+          type: array
+          items:
+            type: string
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+        subject_types_supported:
+          type: array
+          items:
+            type: string
+        id_token_signing_alg_values_supported:
+          type: array
+          items:
+            type: string
+        scopes_supported:
+          type: array
+          items:
+            type: string
+    JwksResponse:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/Jwk"
+    Jwk:
+      type: object
+      required: [kty, kid, use, alg]
+      properties:
+        kty:
+          type: string
+        kid:
+          type: string
+        use:
+          type: string
+          enum: [sig]
+        alg:
+          type: string
+          enum: [RS256]
+        n:
+          type: string
+          description: RSA modulus (base64url) when `kty` is RSA.
+        e:
+          type: string
+          description: RSA exponent (base64url) when `kty` is RSA.
+    UserinfoResponse:
+      type: object
+      required: [sub]
+      properties:
+        sub:
+          type: string
+        email:
+          type: string
+          format: email
+        email_verified:
+          type: boolean
+        name:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer

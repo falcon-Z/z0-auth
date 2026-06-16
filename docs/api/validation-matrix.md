@@ -199,9 +199,42 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST /auth/register` | `client_id` | Email unique per app | `app_user_exists` | 409 | Inline on email |
 | `POST /auth/register` | Password | Policy + confirm | `password_policy` / `password_mismatch` | 400 | Checklist |
 | `POST /auth/register` | Success | Creates `app_users` + `z0_app_session` | — | 303 | OAuth resume |
-| `GET /oauth/authorize` | — | No app session → login with `client_id` | — | 302 | Hosted login |
-| `GET /oauth/authorize` | — | App session for same app → code redirect | — | 302 | Back to app |
+| `GET /oauth/authorize` | `response_type` | Must be `code` | `invalid_request` | 400 | OAuth error page / response |
+| `GET /oauth/authorize` | `client_id` | Active credential and active app required | `invalid_client` | 400 | App unavailable state |
+| `GET /oauth/authorize` | `redirect_uri` | Exact match with registered URI | `invalid_redirect_uri` | 400 | OAuth error page / response |
+| `GET /oauth/authorize` | `scope` | Requested scopes subset of app scope registry | `invalid_scope` | 400 | Scope error with retry |
+| `GET /oauth/authorize` | PKCE | Public clients require `code_challenge` + `S256` | `pkce_required` | 400 | PKCE guidance error |
+| `GET /oauth/authorize` | Session | No app session for resolved app → login with `client_id` | — | 302 | Hosted login |
+| `GET /oauth/authorize` | Session | App session for same app + consent accepted → code redirect | — | 302 | Back to app |
+| `GET /oauth/authorize` | Consent | P4M1 always shows consent before issuing code | — | 200/302 | Consent screen then redirect |
 | Cross-app | Same email | Separate `app_users` rows; A password fails on B `client_id` | `invalid_credentials` | 401 | — |
+
+## OAuth token APIs (`/oauth/token`, `/oauth/revoke`)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| `POST /oauth/token` | `grant_type` | `authorization_code` only in P4M1 | `unsupported_grant_type` | 400 | Integration logs / API client |
+| `POST /oauth/token` | `code` | Exists, unexpired, unused, bound to client and redirect URI | `invalid_grant` | 400 | Integration logs / API client |
+| `POST /oauth/token` | `client_id` | Active credential + app | `invalid_client` | 401 | Integration logs / API client |
+| `POST /oauth/token` | `client_secret` | Required for confidential clients and must match | `invalid_client` | 401 | Integration logs / API client |
+| `POST /oauth/token` | `code_verifier` | Required and valid for public clients | `invalid_grant` | 400 | Integration logs / API client |
+| `POST /oauth/token` | Success | Returns opaque access token (`Bearer`, `expires_in`, granted scope) | — | 200 | Integration logs / API client |
+| `POST /oauth/revoke` | `token` | Known or unknown token both return success | — | 200 | Integration logs / API client |
+| `POST /oauth/revoke` | `client_id`/secret | Client authentication rules same as token endpoint | `invalid_client` | 401 | Integration logs / API client |
+
+## OIDC (`/.well-known/*`, `/oauth/userinfo`)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| `GET /.well-known/openid-configuration` | — | Returns stable issuer and endpoint metadata that matches runtime routes | — | 200 | Integration logs / API client |
+| `GET /.well-known/openid-configuration` | `id_token_signing_alg_values_supported` | Includes `RS256` | — | 200 | Integration logs / API client |
+| `GET /.well-known/jwks.json` | — | Returns public keys only; no private key material | — | 200 | Integration logs / API client |
+| `GET /.well-known/jwks.json` | `kid` | Every active signing `kid` resolves to a public JWK entry | — | 200 | Integration logs / API client |
+| `POST /oauth/token` | OIDC scopes | When `openid` is granted, token response includes `id_token` | `invalid_scope` | 400 | Integration logs / API client |
+| `POST /oauth/token` | ID token claims | `iss`, `sub`, `aud`, `exp`, `iat` always present; profile/email claims scope-gated | — | 200 | Integration logs / API client |
+| `GET /oauth/userinfo` | `Authorization` header | Bearer access token required | `invalid_token` | 401 | Integration logs / API client |
+| `GET /oauth/userinfo` | Access token state | Token must be active, unexpired, and not revoked | `invalid_token` | 401 | Integration logs / API client |
+| `GET /oauth/userinfo` | Scope to claims | Returns only claims allowed by granted scope | `insufficient_scope` | 403 | Integration logs / API client |
 
 ## Password reset (`/api/auth/forgot-password`, `/api/auth/reset-password`)
 

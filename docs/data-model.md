@@ -207,6 +207,100 @@ Self-registration (M06) also creates `app_users` directly when `client_id` resol
 
 Cookie `z0_app_session` (HttpOnly, SameSite=Lax). OAuth and `/auth` resume read this cookie — not `z0_session`. A browser may hold both cookies when an operator tests an app while signed into the console.
 
+### OAuth storage (P4M1 foundation)
+
+OAuth token material is never stored in plaintext. Persist only hashed references (same model as session tokens).
+
+### `oauth_authorization_codes` (P4M1)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Internal row id |
+| `code_hash` | TEXT | Unique hash of one-time authorization code |
+| `app_id` | UUID → `apps` | App context from resolved `client_id` |
+| `app_user_id` | UUID → `app_users` | Subject for code exchange |
+| `app_credential_id` | UUID → `app_credentials` | Issuing client credential |
+| `redirect_uri` | TEXT | Exact URI validated at authorize + token exchange |
+| `scope` | TEXT | Granted scope string (space-delimited) |
+| `code_challenge` | TEXT | PKCE challenge as sent by client |
+| `code_challenge_method` | TEXT | `S256` for public clients |
+| `expires_at` | TIMESTAMPTZ | Short TTL (target 10 minutes) |
+| `used_at` | TIMESTAMPTZ | First successful token exchange marks one-time use |
+| `created_at` | TIMESTAMPTZ | |
+
+Indexes/constraints:
+- Unique `code_hash`
+- Lookup index on (`app_credential_id`, `expires_at`)
+- Lookup index on (`app_user_id`, `created_at`)
+
+### `oauth_access_tokens` (P4M1)
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Internal row id |
+| `token_hash` | TEXT | Unique hash of opaque access token |
+| `app_id` | UUID → `apps` | Token audience app |
+| `app_user_id` | UUID → `app_users` | Subject (`sub`) |
+| `app_credential_id` | UUID → `app_credentials` | Client that obtained token |
+| `scope` | TEXT | Granted scope string |
+| `expires_at` | TIMESTAMPTZ | Access token expiry |
+| `revoked_at` | TIMESTAMPTZ | Revocation timestamp (nullable) |
+| `created_at` | TIMESTAMPTZ | |
+| `last_used_at` | TIMESTAMPTZ | Optional observability field |
+
+Indexes/constraints:
+- Unique `token_hash`
+- Lookup index on (`app_user_id`, `revoked_at`, `expires_at`)
+- Lookup index on (`app_credential_id`, `revoked_at`)
+
+### `oauth_refresh_tokens` (schema hooks in P4M1, policy in P4M4)
+
+Refresh rotation and family-reuse policy are implemented in P4M4. P4M1 may store minimal refresh metadata only if needed by integration tests.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Internal row id |
+| `token_hash` | TEXT | Unique hash of refresh token |
+| `app_id` | UUID → `apps` | |
+| `app_user_id` | UUID → `app_users` | |
+| `app_credential_id` | UUID → `app_credentials` | |
+| `scope` | TEXT | |
+| `family_id` | UUID | Rotation family identifier |
+| `replaced_by_token_id` | UUID → `oauth_refresh_tokens` | For rotation chains |
+| `revoked_at` | TIMESTAMPTZ | |
+| `expires_at` | TIMESTAMPTZ | |
+| `created_at` | TIMESTAMPTZ | |
+
+Indexes/constraints:
+- Unique `token_hash`
+- Index on `family_id`
+- Index on (`app_user_id`, `revoked_at`, `expires_at`)
+
+### `oidc_signing_keys` (P4M2)
+
+OIDC ID tokens are signed with an instance-managed keyset. Private key material is encrypted at rest and never returned by API responses.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Internal row id |
+| `kid` | TEXT | Public key identifier exposed in JWKS; unique |
+| `algorithm` | TEXT | Signing algorithm (`RS256` in P4M2) |
+| `public_jwk` | JSONB | Public JWK document returned by `/.well-known/jwks.json` |
+| `private_key_ciphertext` | TEXT | Encrypted private key material for signing |
+| `status` | TEXT | `active`, `retired`, `revoked` |
+| `activated_at` | TIMESTAMPTZ | Key activation time (nullable until active) |
+| `retired_at` | TIMESTAMPTZ | Set when key is no longer used for new tokens |
+| `revoked_at` | TIMESTAMPTZ | Emergency revocation marker |
+| `created_at` | TIMESTAMPTZ | |
+| `updated_at` | TIMESTAMPTZ | |
+
+Indexes/constraints:
+- Unique `kid`
+- One active signing key at a time (partial unique index on `status = 'active'`)
+- Index on (`status`, `activated_at`)
+
+P4M2 starts with one active key and rotation-ready schema. Rotation policy and automation are expanded in a later security module.
+
 ### `app_memberships` (0015 — superseded)
 
 Bridged global `users` to apps. **Do not build on this.** Removed in migration `0016` when Option B ships.
@@ -215,6 +309,7 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 
 | Table | Purpose |
 |-------|---------|
+| `oauth_authorization_codes`, `oauth_access_tokens`, `oauth_refresh_tokens` | OAuth code and token lifecycle |
 | `platform_resources`, `platform_scopes` | RBAC catalog (seeded) |
 | `instance_roles`, `instance_role_scopes` | Predefined + custom roles |
 | `instance_member_roles`, `instance_invite_roles` | Role assignments |

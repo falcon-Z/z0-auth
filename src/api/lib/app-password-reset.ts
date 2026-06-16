@@ -17,6 +17,7 @@ import { hashPassword } from "./password";
 import { isSmtpReady } from "./smtp-settings";
 import { checkRateLimit, clientIp } from "./rate-limit";
 import { revokeAllAppUserSessions } from "./app-session";
+import { revokeAllOAuthTokensForAppUser, revokePendingAuthorizationCodesForAppUser } from "./oauth";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 const GENERIC_MESSAGE = "If an account exists for that email, you will receive a reset link shortly.";
@@ -301,6 +302,8 @@ export async function completeAppPasswordReset(
   }
 
   await revokeAllAppUserSessions(row.app_user_id);
+  await revokePendingAuthorizationCodesForAppUser(row.app_user_id);
+  await revokeAllOAuthTokensForAppUser(row.app_user_id);
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,

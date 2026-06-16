@@ -39,6 +39,13 @@ function appSessionFromResponse(res: Response): string | undefined {
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
 }
 
+function extractCookieValue(res: Response, key: string): string | undefined {
+  const cookies = res.headers.getSetCookie?.() ?? [];
+  const raw = cookies.find((c) => c.startsWith(`${key}=`));
+  const match = raw?.match(new RegExp(`${key}=([^;]+)`));
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
 async function completeSetup() {
   const csrfRes = await dispatchWeb(new Request("http://localhost/auth/setup"));
   const csrf = extractCsrfFromSetCookie(csrfRes) ?? extractCsrfFromHtml(await csrfRes.text())!;
@@ -183,16 +190,51 @@ run("M06 app hosted auth", () => {
     expect(appSession).toBeTruthy();
 
     const authorizeUrl = `/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=abc`;
-    const authRes = await dispatchWeb(
+    const consentPageRes = await dispatchWeb(
       new Request(`http://localhost${authorizeUrl}`, {
         headers: {
           cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession!)}`,
         },
       }),
     );
+    expect(consentPageRes.status).toBe(200);
+    const consentHtml = await consentPageRes.text();
+    const consentCsrf = extractCsrfFromHtml(consentHtml)!;
+    const consentNonce = consentHtml.match(/name="consent_nonce" value="([^"]+)"/)?.[1] ?? "";
+    expect(consentNonce).toBeTruthy();
+    const consentCookieState = extractCookieValue(consentPageRes, "z0_oauth_consent");
+    expect(consentCookieState).toBeTruthy();
+    const consentCookie = extractCsrfFromSetCookie(consentPageRes) ?? consentCsrf;
+
+    const authRes = await dispatchWeb(
+      new Request("http://localhost/oauth/authorize", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(consentCookie)}; z0_oauth_consent=${encodeURIComponent(consentCookieState!)}; ${APP_SESSION_COOKIE}=${encodeURIComponent(appSession!)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: consentCsrf,
+          response_type: "code",
+          client_id: clientId,
+          redirect_uri: REDIRECT,
+          scope: "",
+          state: "abc",
+          code_challenge: "",
+          code_challenge_method: "",
+          consent_nonce: consentNonce,
+          consent: "approve",
+        }).toString(),
+      }),
+    );
     expect(authRes.status).toBe(302);
     const location = authRes.headers.get("location") ?? "";
-    expect(location).toContain("code=dev-auth-code");
+    const redirect = new URL(location);
+    const code = redirect.searchParams.get("code");
+    expect(code).toBeTruthy();
+    expect(code!.startsWith("z0_ac_")).toBe(true);
     expect(location).toContain("state=abc");
   });
 
