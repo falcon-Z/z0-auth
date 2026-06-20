@@ -32,10 +32,10 @@ export const SEARCH_ITEMS: SearchItem[] = [
     group: "Settings",
   },
   {
-    id: "app-groups",
-    label: "App groups",
-    path: "/settings/app-groups",
-    keywords: ["sso", "group", "related apps"],
+    id: "sign-in-providers",
+    label: "Sign-in providers",
+    path: "/settings/sign-in-providers",
+    keywords: ["oauth", "google", "github", "federation", "social"],
     group: "Settings",
   },
   {
@@ -92,6 +92,11 @@ export const SETTINGS_LINKS: SettingsLink[] = [
     title: "Sign-in",
     description: "How console members sign in to this instance.",
     path: "/settings/sign-in",
+  },
+  {
+    title: "Sign-in providers",
+    description: "External OAuth providers for app hosted sign-in.",
+    path: "/settings/sign-in-providers",
   },
   {
     title: "App groups",

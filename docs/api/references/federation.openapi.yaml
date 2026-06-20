@@ -1,0 +1,202 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Federation API
+  version: 0.1.0
+  description: Instance and app-level external OAuth provider configuration (P5).
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Federation
+paths:
+  /api/v1/federation/providers:
+    get:
+      tags: [Federation]
+      summary: List identity providers
+      operationId: listIdentityProviders
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Provider list (secrets never returned)
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Federation]
+      summary: Create custom OAuth provider
+      operationId: createCustomIdentityProvider
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomIdentityProviderRequest"
+      responses:
+        "201":
+          description: Created provider
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+  /api/v1/federation/providers/from-template:
+    post:
+      tags: [Federation]
+      summary: Create built-in provider from template
+      operationId: createIdentityProviderFromTemplate
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIdentityProviderFromTemplateRequest"
+      responses:
+        "201":
+          description: Created provider
+  /api/v1/federation/providers/{providerId}:
+    get:
+      tags: [Federation]
+      summary: Get provider
+      operationId: getIdentityProvider
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Provider detail
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Federation]
+      summary: Update provider
+      operationId: patchIdentityProvider
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: providerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Updated provider
+    delete:
+      tags: [Federation]
+      summary: Delete provider
+      operationId: deleteIdentityProvider
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: providerId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+  /api/v1/apps/{appId}/federation:
+    get:
+      tags: [Federation]
+      summary: Get app federation settings
+      operationId: getAppFederationSettings
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: App federation enablement
+    put:
+      tags: [Federation]
+      summary: Update app federation settings
+      operationId: putAppFederationSettings
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: appId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Updated settings
+components:
+  schemas:
+    CreateIdentityProviderFromTemplateRequest:
+      type: object
+      required: [builtinId, clientId, clientSecret]
+      properties:
+        builtinId:
+          type: string
+          enum: [google, apple, github, facebook]
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+        displayName:
+          type: string
+        enabled:
+          type: boolean
+    CreateCustomIdentityProviderRequest:
+      type: object
+      required: [key, displayName, authorizationUrl, tokenUrl, userinfoUrl, clientId, clientSecret]
+      properties:
+        key:
+          type: string
+        displayName:
+          type: string
+        authorizationUrl:
+          type: string
+          format: uri
+        tokenUrl:
+          type: string
+          format: uri
+        userinfoUrl:
+          type: string
+          format: uri
+        defaultScopes:
+          type: string
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+        enabled:
+          type: boolean

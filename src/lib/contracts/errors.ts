@@ -85,6 +85,16 @@ export const ErrorCodes = {
   APP_USER_EXISTS: "app_user_exists",
   /** Optional metadata JSON is invalid or too large. */
   INVALID_METADATA: "invalid_metadata",
+  /** Federation provider id is unknown. */
+  PROVIDER_NOT_FOUND: "provider_not_found",
+  /** Provider key is already registered. */
+  PROVIDER_KEY_TAKEN: "provider_key_taken",
+  /** Provider is still enabled on one or more apps. */
+  PROVIDER_IN_USE: "provider_in_use",
+  /** Federation sign-in could not complete (generic). */
+  FEDERATION_FAILED: "federation_failed",
+  /** Email from provider conflicts with an existing account. */
+  FEDERATION_EMAIL_CONFLICT: "federation_email_conflict",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

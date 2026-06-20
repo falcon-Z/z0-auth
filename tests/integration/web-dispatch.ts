@@ -2,6 +2,7 @@ import type { BunRequest } from "bun";
 
 import { appInviteWebRoutes } from "../../src/web/auth/app-invite-routes";
 import { authWebRoutes } from "../../src/web/auth/routes";
+import { federationWebRoutes } from "../../src/web/auth/federation-routes";
 import { inviteWebRoutes } from "../../src/web/auth/invite-routes";
 import { oauthWebRoutes } from "../../src/web/oauth/routes";
 
@@ -35,6 +36,23 @@ export async function dispatchWeb(req: Request): Promise<Response> {
     const handler = handlers[method];
     if (!handler) return new Response("Method not allowed", { status: 405 });
     return handler(req as BunRequest);
+  }
+
+  const federationMatch = url.pathname.match(/^\/auth\/federation\/([^/]+)\/(start|callback)$/);
+  if (federationMatch) {
+    const providerKey = decodeURIComponent(federationMatch[1]!);
+    const suffix = federationMatch[2] as "start" | "callback";
+    const routeKey =
+      suffix === "start"
+        ? "/auth/federation/:providerKey/start"
+        : "/auth/federation/:providerKey/callback";
+    const handlers = federationWebRoutes[routeKey];
+    const method = req.method as keyof MethodHandlers;
+    const handler = handlers[method];
+    if (!handler) return new Response("Method not allowed", { status: 405 });
+    const bunReq = req as BunRequest;
+    (bunReq as BunRequest & { params: { providerKey: string } }).params = { providerKey };
+    return handler(bunReq);
   }
 
   const routes = {

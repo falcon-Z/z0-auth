@@ -22,7 +22,7 @@ export type AppAuthResult =
   | { ok: true; setCookie: string; appUserId: string }
   | { ok: false; response: Response; fieldErrors?: { field: string; message: string }[] };
 
-async function findAppUserForLogin(appId: string, email: string): Promise<{ id: string; password_hash: string } | null> {
+async function findAppUserForLogin(appId: string, email: string): Promise<{ id: string; password_hash: string | null } | null> {
   const [row] = await getDb()`
     SELECT id, password_hash
     FROM app_users
@@ -33,7 +33,7 @@ async function findAppUserForLogin(appId: string, email: string): Promise<{ id: 
   if (!row) return null;
   return {
     id: String((row as { id: string }).id),
-    password_hash: (row as { password_hash: string }).password_hash,
+    password_hash: (row as { password_hash: string | null }).password_hash,
   };
 }
 
@@ -96,7 +96,7 @@ export async function runAppLogin(
   const invalidMessage = "Invalid email or password";
 
   const user = await findAppUserForLogin(appId, email);
-  if (!user) {
+  if (!user || !user.password_hash) {
     return {
       ok: false,
       response: problem(401, "Unauthorized", invalidMessage, {

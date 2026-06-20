@@ -19,6 +19,7 @@ import { appInviteWebRoutes } from "./web/auth/app-invite-routes";
 import { inviteWebRoutes } from "./web/auth/invite-routes";
 import { passwordResetWebRoutes } from "./web/auth/password-reset-routes";
 import { magicLinkWebRoutes } from "./web/auth/magic-link-routes";
+import { federationWebRoutes } from "./web/auth/federation-routes";
 import { oauthWebRoutes } from "./web/oauth/routes";
 import consoleApp from "./app/console/index.html";
 
@@ -34,6 +35,7 @@ const server = serve({
     ...appInviteWebRoutes,
     ...passwordResetWebRoutes,
     ...magicLinkWebRoutes,
+    ...federationWebRoutes,
     ...oauthWebRoutes,
     ...apiRouteMap,
     "/api/*": dispatchApiRequest,

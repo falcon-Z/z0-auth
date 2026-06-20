@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import { StubPage } from "../../components/layout/StubPage";
+import { FederationProvidersPage } from "./pages/FederationProvidersPage";
 import { InstanceSignInSettingsPage } from "./pages/InstanceSignInSettingsPage";
 import { EmailSettingsPage } from "../communications/pages/EmailSettingsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -13,7 +14,7 @@ export function SettingsModule() {
       <Route path="sign-in" element={<InstanceSignInSettingsPage />} />
       <Route
         path="sign-in-providers"
-        element={<InstanceSignInSettingsPage />}
+        element={<FederationProvidersPage />}
       />
       <Route
         path="app-groups"

@@ -7,6 +7,7 @@ import { runAppLogin, runAppRegister } from "../../api/lib/app-auth";
 import type { AppAuthRealm, AuthRealm } from "../../api/lib/auth-realm";
 import { resolveAuthRealm } from "../../api/lib/auth-realm";
 import { resolveAuthConfigForApp, resolveHostedSignInMethods } from "../../api/lib/auth-settings";
+import { listHostedFederationProviders } from "../../api/lib/federation-providers";
 import { isSmtpReady } from "../../api/lib/smtp-settings";
 import { buildSessionResponse } from "../../api/lib/auth";
 import { validateFormCsrf } from "../../api/lib/csrf";
@@ -198,6 +199,7 @@ type LoginFormOptions = {
   mode?: LoginFormMode;
   smtpReady?: boolean;
   branding?: AuthPageBranding;
+  federationProviders?: import("@z0/contracts/federation").HostedFederationProvider[];
 };
 
 function registerHref(clientId: string, returnTo?: string): string {
@@ -346,7 +348,24 @@ export function renderLoginForm(
     </form>`
       : "";
 
-  const body = `${emailFirstForm}${passwordForm}${magicForm}`;
+  const bodyForms = `${emailFirstForm}${passwordForm}${magicForm}`;
+  const federationProviders = options.federationProviders ?? [];
+  const federationSection =
+    app && federationProviders.length
+      ? `
+    <div class="auth-card auth-federation">
+      <p class="auth-federation-label">Or continue with</p>
+      <div class="auth-federation-buttons">
+        ${federationProviders
+          .map(
+            (provider) =>
+              `<a class="auth-button auth-button-secondary" href="${escapeHtml(provider.startUrl)}">${escapeHtml(provider.displayName)}</a>`,
+          )
+          .join("")}
+      </div>
+    </div>`
+      : "";
+  const body = `${bodyForms}${federationSection}`;
 
   return renderAuthPage({
     title: "Sign in",
@@ -528,6 +547,14 @@ async function brandingForRealm(realm: AuthRealm): Promise<AuthPageBranding | un
   return config.branding;
 }
 
+async function federationProvidersForLogin(
+  realm: AuthRealm,
+  returnTo?: string,
+): Promise<import("@z0/contracts/federation").HostedFederationProvider[]> {
+  if (realm.mode !== "app") return [];
+  return listHostedFederationProviders(realm.appId, realm.clientId, returnTo);
+}
+
 async function resolveLoginFormOptions(
   realm: AuthRealm,
   modeParam?: string,
@@ -608,6 +635,7 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
   const modeParam = url.searchParams.get("mode") ?? undefined;
   const formOptions = await resolveLoginFormOptions(realm, modeParam);
   const branding = await brandingForRealm(realm);
+  const federationProviders = await federationProvidersForLogin(realm, returnTo);
 
   if (formOptions.signInMethods.length === 0) {
     const { token, setCookie } = preparePageCsrf(req);
@@ -637,6 +665,7 @@ async function getLoginPage(req: BunRequest): Promise<Response> {
           mode: formOptions.mode,
           smtpReady: formOptions.smtpReady,
           branding,
+          federationProviders,
         },
       ),
     ),
@@ -664,11 +693,13 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
   const formOptions = await resolveLoginFormOptions(realm, intent === "password" ? "password" : undefined);
   const app = appContextFromRealm(realm);
   const branding = await brandingForRealm(realm);
+  const federationProviders = await federationProvidersForLogin(realm, form.return_to);
   const loginFormOptions = {
     signInMethods: formOptions.signInMethods,
     mode: formOptions.mode,
     smtpReady: formOptions.smtpReady,
     branding,
+    federationProviders,
   };
 
   if (csrfError) {

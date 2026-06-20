@@ -17,6 +17,7 @@ import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchAppSignInSettings, putAppSignInSettings } from "../../../lib/auth-settings-api";
+import { fetchAppFederationSettings, putAppFederationSettings } from "../../../lib/federation-api";
 
 const METHOD_LABELS: Record<SignInMethod, string> = {
   password: "Email and password",
@@ -34,6 +35,9 @@ export function AppSignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [federationProviders, setFederationProviders] = useState<
+    { providerId: string; displayName: string; instanceEnabled: boolean; appEnabled: boolean }[]
+  >([]);
 
   usePageBreadcrumbs(
     [
@@ -53,6 +57,15 @@ export function AppSignInPage() {
       setBrandingName(settings.branding.name ?? app.name);
       setLogoUrl(settings.branding.logoUrl ?? "");
       setPrimaryColor(settings.branding.primaryColor ?? "");
+      const federation = await fetchAppFederationSettings(appId);
+      setFederationProviders(
+        federation.providers.map((provider) => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          instanceEnabled: provider.instanceEnabled,
+          appEnabled: provider.appEnabled,
+        })),
+      );
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load sign-in settings.");
     } finally {
@@ -69,6 +82,14 @@ export function AppSignInPage() {
       const next = checked ? [...new Set([...current, method])] : current.filter((item) => item !== method);
       return next.length ? next : ["password"];
     });
+  }
+
+  function toggleFederationProvider(providerId: string, checked: boolean) {
+    setFederationProviders((current) =>
+      current.map((provider) =>
+        provider.providerId === providerId ? { ...provider, appEnabled: checked } : provider,
+      ),
+    );
   }
 
   async function handleSave(event: React.FormEvent) {
@@ -89,6 +110,21 @@ export function AppSignInPage() {
       setBrandingName(updated.branding.name ?? app.name);
       setLogoUrl(updated.branding.logoUrl ?? "");
       setPrimaryColor(updated.branding.primaryColor ?? "");
+      const federation = await putAppFederationSettings(appId, {
+        providers: federationProviders.map((provider, index) => ({
+          providerId: provider.providerId,
+          enabled: provider.appEnabled,
+          sortOrder: index,
+        })),
+      });
+      setFederationProviders(
+        federation.providers.map((provider) => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          instanceEnabled: provider.instanceEnabled,
+          appEnabled: provider.appEnabled,
+        })),
+      );
       setNotice("Sign-in page settings saved.");
     } catch (e) {
       if (e instanceof ApiError) {
@@ -146,6 +182,26 @@ export function AppSignInPage() {
               ))}
             </CardContent>
           </Card>
+
+          {federationProviders.some((provider) => provider.instanceEnabled) ? (
+            <Card>
+              <CardContent className="space-y-4 py-4">
+                <p className="text-sm font-medium">Social sign-in</p>
+                {federationProviders
+                  .filter((provider) => provider.instanceEnabled)
+                  .map((provider) => (
+                    <div key={provider.providerId} className="flex items-start gap-3">
+                      <Checkbox
+                        id={`fed-${provider.providerId}`}
+                        checked={provider.appEnabled}
+                        onCheckedChange={(checked) => toggleFederationProvider(provider.providerId, checked === true)}
+                      />
+                      <Label htmlFor={`fed-${provider.providerId}`}>{provider.displayName}</Label>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <FormField label="App name on sign-in page" htmlFor="brandingName">
             <Input id="brandingName" value={brandingName} onChange={(e) => setBrandingName(e.target.value)} />
