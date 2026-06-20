@@ -9,10 +9,24 @@ import { validateFormCsrf } from "../../api/lib/csrf";
 import { problem } from "../../api/lib/http";
 import { clientIp, isRateLimited, recordRateLimitHit } from "../../api/lib/rate-limit";
 import {
+  buildOAuthCorsHeaders,
+  isOAuthCorsOriginAllowed,
+  isOriginAllowedForClient,
+  withOAuthCors,
+} from "../../api/lib/oauth-cors";
+import {
+  getOAuthConsentPageContext,
+  getOAuthUserConsent,
+  scopeIsSubset,
+  upsertOAuthUserConsent,
+} from "../../api/lib/oauth-consent";
+import {
   exchangeAuthorizationCode,
+  exchangeRefreshToken,
   findOAuthAccessToken,
   findActiveOAuthClient,
   isAllowedRedirectUri,
+  issueClientCredentialsToken,
   parseScopeSet,
   previewAuthorizationCodeForExchange,
   issueAuthorizationCode,
@@ -199,7 +213,22 @@ async function redirectWithCode(url: URL, appId: string, appUserId: string): Pro
   return new Response(null, { status: 302, headers });
 }
 
-function renderConsentPage(req: BunRequest, params: {
+function renderScopeList(scopes: Array<{ name: string; description: string | null }>): string {
+  if (scopes.length === 0) {
+    return `<p class="auth-lead">This app wants to sign you in.</p>`;
+  }
+  const items = scopes
+    .map((scope) => {
+      const label = scope.description?.trim() || scope.name;
+      return `<li>${escapeHtml(label)}</li>`;
+    })
+    .join("");
+  return `<p class="auth-lead">This app is requesting the following access:</p>
+      <ul class="auth-scope-list">${items}</ul>`;
+}
+
+async function renderConsentPage(req: BunRequest, params: {
+  appId: string;
   appUserId: string;
   clientId: string;
   redirectUri: string;
@@ -207,7 +236,7 @@ function renderConsentPage(req: BunRequest, params: {
   scope: string;
   codeChallenge: string | null;
   codeChallengeMethod: string | null;
-}): Response {
+}): Promise<Response> {
   const csrf = preparePageCsrf(req);
   const consentNonce = randomToken(16);
   const consentState: ConsentState = {
@@ -220,10 +249,10 @@ function renderConsentPage(req: BunRequest, params: {
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
   };
+  const context = await getOAuthConsentPageContext(params.appId, params.scope);
   const body = `<form method="post" action="/oauth/authorize" class="auth-card">
-      <h2>Authorize application</h2>
-      <p class="auth-lead">This app is requesting access to your account.</p>
-      <p><strong>Requested scope:</strong> <code>${escapeHtml(params.scope || "(none)")}</code></p>
+      <h2>Authorize ${escapeHtml(context.appName)}</h2>
+      ${renderScopeList(context.scopes)}
       <input type="hidden" name="_csrf" value="${escapeHtml(csrf.token)}" />
       <input type="hidden" name="response_type" value="code" />
       <input type="hidden" name="client_id" value="${escapeHtml(params.clientId)}" />
@@ -242,9 +271,10 @@ function renderConsentPage(req: BunRequest, params: {
     new Response(
       renderAuthPage({
         title: "Authorize access",
-        description: "Review requested access before continuing.",
+        description: `Review what ${context.appName} can access before continuing.`,
         csrfToken: csrf.token,
         body,
+        branding: context.branding,
       }),
       { headers: { "Content-Type": "text/html; charset=utf-8" } },
     ),
@@ -290,6 +320,11 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
       code: "invalid_scope",
     });
   }
+  if (client.clientType === "public" && (!url.searchParams.get("state")?.trim())) {
+    return problem(400, "Bad Request", "state is required for public clients", {
+      code: "invalid_request",
+    });
+  }
   const challenge = url.searchParams.get("code_challenge")?.trim() ?? "";
   const challengeMethod = url.searchParams.get("code_challenge_method");
   if (client.clientType === "public" && (!challenge || challengeMethod !== "S256")) {
@@ -308,7 +343,13 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
     return loginRedirectForAuthorize(req, `${url.pathname}${url.search}`);
   }
 
+  const storedConsent = await getOAuthUserConsent(appSession.appUserId, client.appId);
+  if (storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)) {
+    return redirectWithCode(url, client.appId, appSession.appUserId);
+  }
+
   return renderConsentPage(req, {
+    appId: client.appId,
     appUserId: appSession.appUserId,
     clientId,
     redirectUri: url.searchParams.get("redirect_uri")!,
@@ -336,90 +377,187 @@ async function getResume(req: BunRequest): Promise<Response> {
   return Response.redirect(new URL(pending, req.url), 302);
 }
 
-async function postToken(req: BunRequest): Promise<Response> {
-  const body = await parseFormBody(req);
-  if (body.grant_type !== "authorization_code") {
-    return oauthErrorResponse(400, "unsupported_grant_type", "grant_type must be authorization_code");
+async function oauthCorsPreflight(req: BunRequest): Promise<Response> {
+  const origin = req.headers.get("Origin");
+  const allowed = await isOAuthCorsOriginAllowed(origin);
+  if (!allowed) {
+    return new Response(null, { status: 403 });
   }
-  if (!body.code || !body.redirect_uri || !body.client_id) {
-    return oauthErrorResponse(400, "invalid_request", "code, redirect_uri, and client_id are required");
-  }
-  const authRateLimited = oauthClientAuthRateLimitedResponse(req, body.client_id);
+  return new Response(null, { status: 204, headers: buildOAuthCorsHeaders(origin) });
+}
+
+async function authenticateOAuthClient(
+  req: BunRequest,
+  clientId: string,
+  clientSecret: string | undefined,
+): Promise<{ client: NonNullable<Awaited<ReturnType<typeof findActiveOAuthClient>>> } | Response> {
+  const authRateLimited = oauthClientAuthRateLimitedResponse(req, clientId);
   if (authRateLimited) return authRateLimited;
 
-  const client = await findActiveOAuthClient(body.client_id);
+  const client = await findActiveOAuthClient(clientId);
   if (!client) {
-    recordOAuthClientAuthFailure(req, body.client_id);
+    recordOAuthClientAuthFailure(req, clientId);
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
-  const clientAuthOk = await verifyOAuthClientSecret(client, body.client_secret);
+  const clientAuthOk = await verifyOAuthClientSecret(client, clientSecret);
   if (!clientAuthOk) {
-    recordOAuthClientAuthFailure(req, body.client_id);
+    recordOAuthClientAuthFailure(req, clientId);
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
+  return { client };
+}
 
-  const preview = await previewAuthorizationCodeForExchange({
-    code: body.code,
-    client,
-    redirectUri: body.redirect_uri,
-    codeVerifier: body.code_verifier,
-  });
-  if (!preview.ok) {
-    return oauthErrorResponse(400, "invalid_grant", "authorization code is invalid, expired, or already used");
+function jsonOAuthResponse(
+  req: BunRequest,
+  payload: Record<string, unknown>,
+  client: { redirectUris: string[] },
+  status = 200,
+): Response {
+  const origin = req.headers.get("Origin");
+  const allowed = isOriginAllowedForClient(origin, client.redirectUris);
+  return withOAuthCors(Response.json(payload, { status }), origin, allowed);
+}
+
+function oauthErrorResponseWithCors(
+  req: BunRequest,
+  client: { redirectUris: string[] } | null,
+  status: number,
+  error: string,
+  description: string,
+): Response {
+  const origin = req.headers.get("Origin");
+  const allowed = client ? isOriginAllowedForClient(origin, client.redirectUris) : false;
+  return withOAuthCors(oauthErrorResponse(status, error, description), origin, allowed);
+}
+
+async function postToken(req: BunRequest): Promise<Response> {
+  const body = await parseFormBody(req);
+  if (!body.grant_type || !body.client_id) {
+    return oauthErrorResponse(400, "invalid_request", "grant_type and client_id are required");
   }
 
-  let idToken: string | null = null;
-  if (hasOpenIdScope(preview.preview.scope)) {
-    const [appUserRow] = await getDb()`
-      SELECT id, email, name, email_verified_at
-      FROM app_users
-      WHERE id = ${preview.preview.appUserId}
-        AND status = 'active'
-      LIMIT 1
-    `;
-    if (!appUserRow) {
-      return oauthErrorResponse(400, "invalid_grant", "authorization code is invalid, expired, or already used");
+  const auth = await authenticateOAuthClient(req, body.client_id, body.client_secret);
+  if (auth instanceof Response) return auth;
+  const { client } = auth;
+
+  if (body.grant_type === "authorization_code") {
+    if (!body.code || !body.redirect_uri) {
+      return oauthErrorResponseWithCors(req, client, 400, "invalid_request", "code and redirect_uri are required");
     }
-    const appUser = appUserRow as {
-      id: string;
-      email: string | null;
-      name: string | null;
-      email_verified_at: Date | null;
-    };
-    idToken = await issueIdToken({
-      issuer: requestPublicOrigin(req),
-      audience: body.client_id,
-      subject: appUser.id,
-      email: appUser.email,
-      emailVerified: Boolean(appUser.email_verified_at),
-      name: appUser.name,
-      grantedScope: preview.preview.scope,
-      expiresInSeconds: 60 * 60,
+
+    const preview = await previewAuthorizationCodeForExchange({
+      code: body.code,
+      client,
+      redirectUri: body.redirect_uri,
+      codeVerifier: body.code_verifier,
     });
+    if (!preview.ok) {
+      return oauthErrorResponseWithCors(
+        req,
+        client,
+        400,
+        "invalid_grant",
+        "authorization code is invalid, expired, or already used",
+      );
+    }
+
+    let idToken: string | null = null;
+    if (hasOpenIdScope(preview.preview.scope)) {
+      const [appUserRow] = await getDb()`
+        SELECT id, email, name, email_verified_at
+        FROM app_users
+        WHERE id = ${preview.preview.appUserId}
+          AND status = 'active'
+        LIMIT 1
+      `;
+      if (!appUserRow) {
+        return oauthErrorResponseWithCors(
+          req,
+          client,
+          400,
+          "invalid_grant",
+          "authorization code is invalid, expired, or already used",
+        );
+      }
+      const appUser = appUserRow as {
+        id: string;
+        email: string | null;
+        name: string | null;
+        email_verified_at: Date | null;
+      };
+      idToken = await issueIdToken({
+        issuer: requestPublicOrigin(req),
+        audience: body.client_id,
+        subject: appUser.id,
+        email: appUser.email,
+        emailVerified: Boolean(appUser.email_verified_at),
+        name: appUser.name,
+        grantedScope: preview.preview.scope,
+        expiresInSeconds: 60 * 60,
+      });
+    }
+
+    const exchanged = await exchangeAuthorizationCode({
+      code: body.code,
+      client,
+      redirectUri: body.redirect_uri,
+      codeVerifier: body.code_verifier,
+    });
+    if (!exchanged.ok) {
+      return oauthErrorResponseWithCors(
+        req,
+        client,
+        400,
+        "invalid_grant",
+        "authorization code is invalid, expired, or already used",
+      );
+    }
+
+    const payload: Record<string, unknown> = {
+      access_token: exchanged.accessToken,
+      token_type: exchanged.tokenType,
+      expires_in: exchanged.expiresIn,
+      scope: exchanged.scope,
+      refresh_token: exchanged.refreshToken,
+    };
+    if (idToken) payload.id_token = idToken;
+    return jsonOAuthResponse(req, payload, client);
   }
 
-  const exchanged = await exchangeAuthorizationCode({
-    code: body.code,
-    client,
-    redirectUri: body.redirect_uri,
-    codeVerifier: body.code_verifier,
-  });
-  if (!exchanged.ok) {
-    return oauthErrorResponse(400, "invalid_grant", "authorization code is invalid, expired, or already used");
+  if (body.grant_type === "refresh_token") {
+    if (!body.refresh_token) {
+      return oauthErrorResponseWithCors(req, client, 400, "invalid_request", "refresh_token is required");
+    }
+    const refreshed = await exchangeRefreshToken({ refreshToken: body.refresh_token, client });
+    if (!refreshed.ok) {
+      return oauthErrorResponseWithCors(req, client, 400, "invalid_grant", "refresh token is invalid or expired");
+    }
+    return jsonOAuthResponse(req, {
+      access_token: refreshed.accessToken,
+      token_type: refreshed.tokenType,
+      expires_in: refreshed.expiresIn,
+      scope: refreshed.scope,
+      refresh_token: refreshed.refreshToken,
+    }, client);
   }
 
-  const payload: Record<string, unknown> = {
-    access_token: exchanged.accessToken,
-    token_type: exchanged.tokenType,
-    expires_in: exchanged.expiresIn,
-    scope: exchanged.scope,
-  };
-
-  if (idToken) {
-    payload.id_token = idToken;
+  if (body.grant_type === "client_credentials") {
+    const issued = await issueClientCredentialsToken({ client, scope: body.scope ?? "" });
+    if (!issued.ok) {
+      if (issued.error === "unauthorized_client") {
+        return oauthErrorResponseWithCors(req, client, 400, "unauthorized_client", "client is not allowed to use this grant");
+      }
+      return oauthErrorResponseWithCors(req, client, 400, "invalid_scope", "requested scope is not allowed for this app");
+    }
+    return jsonOAuthResponse(req, {
+      access_token: issued.accessToken,
+      token_type: issued.tokenType,
+      expires_in: issued.expiresIn,
+      scope: issued.scope,
+    }, client);
   }
 
-  return Response.json(payload);
+  return oauthErrorResponseWithCors(req, client, 400, "unsupported_grant_type", "grant_type is not supported");
 }
 
 async function postAuthorize(req: BunRequest): Promise<Response> {
@@ -494,6 +632,12 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     return problem(400, "Bad Request", "Consent confirmation has already been used");
   }
 
+  await upsertOAuthUserConsent({
+    appUserId: appSession.appUserId,
+    appId: client.appId,
+    requestedScope: normalizedScopeResult.normalizedScope,
+  });
+
   const authorizeUrl = new URL("http://localhost/oauth/authorize");
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("client_id", body.client_id);
@@ -551,18 +695,31 @@ function bearerToken(req: Request): string | null {
 }
 
 async function getUserinfo(req: BunRequest): Promise<Response> {
+  const origin = req.headers.get("Origin");
   const token = bearerToken(req);
   if (!token) {
-    return oauthErrorResponse(401, "invalid_token", "access token is required");
+    const res = oauthErrorResponse(401, "invalid_token", "access token is required");
+    const allowed = await isOAuthCorsOriginAllowed(origin);
+    return withOAuthCors(res, origin, allowed);
   }
   const accessToken = await findOAuthAccessToken(token);
   if (!accessToken || accessToken.revokedAt || new Date(accessToken.expiresAt).getTime() <= Date.now()) {
-    return oauthErrorResponse(401, "invalid_token", "access token is invalid or expired");
+    const res = oauthErrorResponse(401, "invalid_token", "access token is invalid or expired");
+    const allowed = await isOAuthCorsOriginAllowed(origin);
+    return withOAuthCors(res, origin, allowed);
   }
 
   const scopes = parseScopeSet(accessToken.scope);
   if (!scopes.has("openid")) {
-    return oauthErrorResponse(403, "insufficient_scope", "token does not grant required scope");
+    const res = oauthErrorResponse(403, "insufficient_scope", "token does not grant required scope");
+    const allowed = await isOAuthCorsOriginAllowed(origin);
+    return withOAuthCors(res, origin, allowed);
+  }
+
+  if (!accessToken.appUserId) {
+    const res = oauthErrorResponse(401, "invalid_token", "access token subject is invalid");
+    const allowed = await isOAuthCorsOriginAllowed(origin);
+    return withOAuthCors(res, origin, allowed);
   }
 
   const [appUserRow] = await getDb()`
@@ -591,7 +748,8 @@ async function getUserinfo(req: BunRequest): Promise<Response> {
     claims.name = appUser.name;
   }
 
-  return Response.json(claims);
+  const allowed = await isOAuthCorsOriginAllowed(origin);
+  return withOAuthCors(Response.json(claims), origin, allowed);
 }
 
 export const oauthWebRoutes = {
@@ -600,6 +758,7 @@ export const oauthWebRoutes = {
     POST: withDatabaseErrorHandling(postAuthorize),
   },
   "/oauth/token": {
+    OPTIONS: withDatabaseErrorHandling(oauthCorsPreflight),
     POST: withDatabaseErrorHandling(postToken),
   },
   "/oauth/revoke": {
@@ -612,6 +771,7 @@ export const oauthWebRoutes = {
     GET: withDatabaseErrorHandling(getJwksRoute),
   },
   "/oauth/userinfo": {
+    OPTIONS: withDatabaseErrorHandling(oauthCorsPreflight),
     GET: withDatabaseErrorHandling(getUserinfo),
   },
   "/oauth/resume": {

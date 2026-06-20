@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>z0-auth OAuth SPA sample</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+      pre { background: #f4f4f5; padding: 1rem; overflow: auto; border-radius: 0.5rem; }
+      button { padding: 0.5rem 1rem; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <h1>OAuth SPA sample</h1>
+    <p>Demonstrates authorization code + PKCE against a local z0-auth instance.</p>
+    <label>
+      IAM base URL
+      <input id="baseUrl" type="url" value="http://localhost:3000" style="width: 100%;" />
+    </label>
+    <label>
+      Client ID
+      <input id="clientId" type="text" placeholder="z0_..." style="width: 100%;" />
+    </label>
+    <label>
+      Redirect URI (must match app registration)
+      <input id="redirectUri" type="url" value="http://localhost:5173/callback" style="width: 100%;" />
+    </label>
+    <p><button id="signIn" type="button">Sign in</button></p>
+    <pre id="output">Configure client ID, then click Sign in.</pre>
+    <script>
+      const output = document.getElementById("output");
+
+      function log(message) {
+        output.textContent = typeof message === "string" ? message : JSON.stringify(message, null, 2);
+      }
+
+      function randomString(bytes = 32) {
+        const arr = new Uint8Array(bytes);
+        crypto.getRandomValues(arr);
+        return btoa(String.fromCharCode(...arr)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      async function sha256Base64Url(value) {
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+        const bytes = new Uint8Array(digest);
+        return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      }
+
+      document.getElementById("signIn").addEventListener("click", () => {
+        const baseUrl = document.getElementById("baseUrl").value.replace(/\/+$/, "");
+        const clientId = document.getElementById("clientId").value.trim();
+        const redirectUri = document.getElementById("redirectUri").value.trim();
+        if (!clientId) {
+          log("Enter a public client ID from the console.");
+          return;
+        }
+
+        const verifier = randomString();
+        const state = randomString(16);
+        sessionStorage.setItem("z0_pkce_verifier", verifier);
+        sessionStorage.setItem("z0_oauth_state", state);
+
+        sha256Base64Url(verifier).then((challenge) => {
+          const params = new URLSearchParams({
+            response_type: "code",
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            scope: "openid profile email",
+            state,
+            code_challenge: challenge,
+            code_challenge_method: "S256",
+          });
+          window.location.href = `${baseUrl}/oauth/authorize?${params.toString()}`;
+        });
+      });
+
+      (async () => {
+        if (!window.location.pathname.endsWith("/callback") && !window.location.search.includes("code=")) {
+          return;
+        }
+        const params = new URLSearchParams(window.location.search);
+        const error = params.get("error");
+        if (error) {
+          log({ error, state: params.get("state") });
+          return;
+        }
+        const code = params.get("code");
+        const state = params.get("state");
+        const expectedState = sessionStorage.getItem("z0_oauth_state");
+        const verifier = sessionStorage.getItem("z0_pkce_verifier");
+        if (!code || !verifier || state !== expectedState) {
+          log("Missing code, verifier, or state mismatch.");
+          return;
+        }
+
+        const baseUrl = document.getElementById("baseUrl").value.replace(/\/+$/, "");
+        const clientId = document.getElementById("clientId").value.trim();
+        const redirectUri = document.getElementById("redirectUri").value.trim();
+
+        const tokenRes = await fetch(`${baseUrl}/oauth/token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            redirect_uri: redirectUri,
+            client_id: clientId,
+            code_verifier: verifier,
+          }),
+        });
+        const tokens = await tokenRes.json();
+        if (!tokenRes.ok) {
+          log(tokens);
+          return;
+        }
+
+        const userinfoRes = await fetch(`${baseUrl}/oauth/userinfo`, {
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+        });
+        const userinfo = await userinfoRes.json();
+        log({ tokens, userinfo });
+      })();
+    </script>
+  </body>
+</html>

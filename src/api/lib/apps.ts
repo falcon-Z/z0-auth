@@ -15,6 +15,7 @@ import { validateRequiredString } from "@z0/contracts/validation";
 
 import { loadConfig } from "./config";
 import { randomToken } from "./crypto";
+import { seedDefaultOidcScopesForApp } from "./default-app-scopes";
 import { getDb, pgTextArray } from "./db";
 import { problem } from "./http";
 import { hashPassword } from "./password";
@@ -285,6 +286,7 @@ export async function createApp(
         `;
 
         const credRow = credInserted as CredentialRow;
+        await seedDefaultOidcScopesForApp(tx, appId);
         return {
           app: mapAppRow(
             {

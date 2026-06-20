@@ -54,9 +54,9 @@ One **platform instance** per deployment (single account owner). **No** internal
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
-Planned for v1: OAuth/OIDC for customer apps (M09–M10), MFA, passkeys, audit, Docker self-host.
+**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create.
 
-**Shipped:** app-user hosted sign-in/sign-up + redirect (M06), per-app branding on hosted pages, app-user password reset, SPA vs server client types.
+**Not yet shipped:** MFA, passkeys, audit, Docker self-host.
 
 **Social connections** (Google, Apple, GitHub, Facebook, etc. per app — Clerk/Auth0-style): planned module after core hosted auth + OAuth ship; console Federation nav is placeholder until then.
 

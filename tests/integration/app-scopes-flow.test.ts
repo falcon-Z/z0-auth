@@ -175,7 +175,8 @@ run("M04 application scopes", () => {
         cookies: { [SESSION_COOKIE]: cookie },
       }),
     );
-    const body = (await list.json()) as { scopes: unknown[] };
-    expect(body.scopes).toHaveLength(0);
+    const body = (await list.json()) as { scopes: Array<{ name: string }> };
+    expect(body.scopes).toHaveLength(3);
+    expect(body.scopes.map((s) => s.name).sort()).toEqual(["email", "openid", "profile"]);
   });
 });

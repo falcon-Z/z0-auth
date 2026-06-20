@@ -172,7 +172,22 @@ These rules are required for the OAuth authorization server baseline.
 
 ### Refresh tokens
 
-- Rotation on use; reuse detection revokes token family (Phase 3 acceptance)
+- Issued on authorization code exchange; 30-day absolute TTL
+- Rotation on each `refresh_token` grant — old refresh invalidated, new pair issued
+- Reuse of a rotated refresh token revokes the entire token family
+- Revoking a refresh token revokes all refresh tokens in the same family
+
+### CORS (browser clients)
+
+- `POST /oauth/token` and `GET /oauth/userinfo` return CORS headers when `Origin` matches an origin derived from the client’s registered `redirect_uris`
+- `OPTIONS` preflight uses the same origin allow-list (any active app’s redirect origins on this instance)
+- Public clients must send `state` on `/oauth/authorize`
+
+### Client credentials (machine-to-machine)
+
+- Confidential clients only; `grant_type=client_credentials` at `/oauth/token`
+- Optional `scope` must be a subset of the app scope registry
+- Access tokens have no `app_user_id` — not valid for `/oauth/userinfo`
 
 ### Client authentication
 

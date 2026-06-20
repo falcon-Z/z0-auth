@@ -205,21 +205,26 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `GET /oauth/authorize` | `scope` | Requested scopes subset of app scope registry | `invalid_scope` | 400 | Scope error with retry |
 | `GET /oauth/authorize` | PKCE | Public clients require `code_challenge` + `S256` | `pkce_required` | 400 | PKCE guidance error |
 | `GET /oauth/authorize` | Session | No app session for resolved app → login with `client_id` | — | 302 | Hosted login |
-| `GET /oauth/authorize` | Session | App session for same app + consent accepted → code redirect | — | 302 | Back to app |
-| `GET /oauth/authorize` | Consent | P4M1 always shows consent before issuing code | — | 200/302 | Consent screen then redirect |
+| `GET /oauth/authorize` | Session | App session for same app + stored consent covers requested scopes → code redirect | — | 302 | Back to app (skip consent) |
+| `GET /oauth/authorize` | Consent | No stored consent or requested scope expands beyond stored → consent screen | — | 200 | Consent screen |
+| `GET /oauth/authorize` | Consent | Stored consent superset of request → skip consent, issue code | — | 302 | Back to app |
+| `POST /oauth/authorize` | Consent approve | Upsert `oauth_user_consents` with union of stored + requested scopes, then issue code | — | 302 | Back to app |
+| `POST /oauth/authorize` | Consent deny | Redirect with `error=access_denied`, preserve `state` | — | 302 | Back to app |
 | Cross-app | Same email | Separate `app_users` rows; A password fails on B `client_id` | `invalid_credentials` | 401 | — |
 
 ## OAuth token APIs (`/oauth/token`, `/oauth/revoke`)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |
 |----------|-------|------|------|------|-----|
-| `POST /oauth/token` | `grant_type` | `authorization_code` only in P4M1 | `unsupported_grant_type` | 400 | Integration logs / API client |
-| `POST /oauth/token` | `code` | Exists, unexpired, unused, bound to client and redirect URI | `invalid_grant` | 400 | Integration logs / API client |
-| `POST /oauth/token` | `client_id` | Active credential + app | `invalid_client` | 401 | Integration logs / API client |
-| `POST /oauth/token` | `client_secret` | Required for confidential clients and must match | `invalid_client` | 401 | Integration logs / API client |
-| `POST /oauth/token` | `code_verifier` | Required and valid for public clients | `invalid_grant` | 400 | Integration logs / API client |
-| `POST /oauth/token` | Success | Returns opaque access token (`Bearer`, `expires_in`, granted scope) | — | 200 | Integration logs / API client |
-| `POST /oauth/revoke` | `token` | Known or unknown token both return success | — | 200 | Integration logs / API client |
+| `POST /oauth/token` | `grant_type` | `authorization_code`, `refresh_token`, `client_credentials` | `unsupported_grant_type` | 400 | Integration logs / API client |
+| `POST /oauth/token` | `code_verifier` | Required and valid for public clients on code exchange | `invalid_grant` | 400 | Integration logs / API client |
+| `POST /oauth/token` | Code exchange success | Returns opaque access token + refresh token | — | 200 | Integration logs / API client |
+| `POST /oauth/token` | `refresh_token` grant | Rotates refresh; reuse of old refresh revokes family | `invalid_grant` | 400 | Integration logs / API client |
+| `POST /oauth/token` | `client_credentials` | Confidential only; optional scope subset | `unauthorized_client` / `invalid_scope` | 400 | Integration logs / API client |
+| `GET /oauth/authorize` | `state` | Required for public clients | `invalid_request` | 400 | OAuth error page |
+| `POST /oauth/token` | CORS | `Origin` must match redirect URI origin | — | 403 preflight | Browser integration |
+| `GET /oauth/userinfo` | CORS | Same as token endpoint | — | 403 preflight | Browser integration |
+| `POST /oauth/revoke` | `token` | Known or unknown token both return success; refresh revokes family | — | 200 | Integration logs / API client |
 | `POST /oauth/revoke` | `client_id`/secret | Client authentication rules same as token endpoint | `invalid_client` | 401 | Integration logs / API client |
 
 ## OIDC (`/.well-known/*`, `/oauth/userinfo`)

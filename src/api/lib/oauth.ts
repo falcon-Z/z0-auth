@@ -4,6 +4,16 @@ import { verifyPassword } from "./password";
 
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export type OAuthTokenSuccess = {
+  accessToken: string;
+  tokenType: "Bearer";
+  expiresIn: number;
+  scope: string;
+  refreshToken?: string;
+  appUserId?: string;
+};
 
 export type OAuthClient = {
   credentialId: string;
@@ -34,11 +44,23 @@ type AuthorizationCodePreview = {
 
 export type OAuthAccessTokenRecord = {
   appId: string;
-  appUserId: string;
+  appUserId: string | null;
   scope: string;
   expiresAt: Date;
   revokedAt: Date | null;
   appCredentialId: string;
+};
+
+type RefreshTokenRow = {
+  id: string;
+  app_id: string;
+  app_user_id: string;
+  app_credential_id: string;
+  scope: string;
+  family_id: string;
+  replaced_by_token_id: string | null;
+  revoked_at: Date | null;
+  expires_at: Date;
 };
 
 export async function findActiveOAuthClient(clientId: string): Promise<OAuthClient | null> {
@@ -177,10 +199,7 @@ export async function exchangeAuthorizationCode(input: {
   client: OAuthClient;
   redirectUri: string;
   codeVerifier?: string;
-}): Promise<
-  | { ok: true; accessToken: string; tokenType: "Bearer"; expiresIn: number; scope: string; appUserId: string }
-  | { ok: false; error: "invalid_grant" | "invalid_request" }
-> {
+}): Promise<{ ok: true } & OAuthTokenSuccess | { ok: false; error: "invalid_grant" | "invalid_request" }> {
   const preview = await previewAuthorizationCodeForExchange(input);
   if (!preview.ok) return preview;
   const codeHash = await sha256Hex(input.code);
@@ -196,6 +215,10 @@ export async function exchangeAuthorizationCode(input: {
   const accessToken = `z0_at_${randomToken(24)}`;
   const tokenHash = await sha256Hex(accessToken);
   const expiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
+  const refreshToken = `z0_rt_${randomToken(24)}`;
+  const refreshHash = await sha256Hex(refreshToken);
+  const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+  const familyId = crypto.randomUUID();
 
   try {
     await getDb().begin(async (tx) => {
@@ -241,6 +264,27 @@ export async function exchangeAuthorizationCode(input: {
           ${expiresAt}
         )
       `;
+
+      await tx`
+        INSERT INTO oauth_refresh_tokens (
+          token_hash,
+          app_id,
+          app_user_id,
+          app_credential_id,
+          scope,
+          family_id,
+          expires_at
+        )
+        VALUES (
+          ${refreshHash},
+          ${codeRow.app_id},
+          ${codeRow.app_user_id},
+          ${codeRow.app_credential_id},
+          ${codeRow.scope},
+          ${familyId},
+          ${refreshExpiresAt}
+        )
+      `;
     });
   } catch (error) {
     if (error instanceof Error && error.message === "invalid_grant") {
@@ -255,6 +299,7 @@ export async function exchangeAuthorizationCode(input: {
     tokenType: "Bearer",
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     scope: codeRow.scope ?? "",
+    refreshToken,
     appUserId: String(codeRow.app_user_id),
   };
 }
@@ -317,6 +362,183 @@ export async function previewAuthorizationCodeForExchange(input: {
   };
 }
 
+async function revokeRefreshTokenFamily(tx: ReturnType<typeof getDb>, familyId: string): Promise<void> {
+  await tx`
+    UPDATE oauth_refresh_tokens
+    SET revoked_at = NOW()
+    WHERE family_id = ${familyId}
+      AND revoked_at IS NULL
+  `;
+}
+
+export async function exchangeRefreshToken(input: {
+  refreshToken: string;
+  client: OAuthClient;
+}): Promise<{ ok: true } & OAuthTokenSuccess | { ok: false; error: "invalid_grant" }> {
+  const tokenHash = await sha256Hex(input.refreshToken);
+  const accessToken = `z0_at_${randomToken(24)}`;
+  const accessHash = await sha256Hex(accessToken);
+  const accessExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
+  const newRefreshToken = `z0_rt_${randomToken(24)}`;
+  const newRefreshHash = await sha256Hex(newRefreshToken);
+  const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+  try {
+    const result = await getDb().begin(async (tx) => {
+      const [row] = await tx`
+        SELECT
+          r.id,
+          r.app_id,
+          r.app_user_id,
+          r.app_credential_id,
+          r.scope,
+          r.family_id,
+          r.replaced_by_token_id,
+          r.revoked_at,
+          r.expires_at
+        FROM oauth_refresh_tokens r
+        JOIN app_users u ON u.id = r.app_user_id
+        JOIN apps a ON a.id = r.app_id
+        JOIN app_credentials ac ON ac.id = r.app_credential_id
+        WHERE r.token_hash = ${tokenHash}
+          AND u.status = 'active'
+          AND a.status = 'active'
+          AND ac.status = 'active'
+        FOR UPDATE
+      `;
+      if (!row) throw new Error("invalid_grant");
+      const refresh = row as RefreshTokenRow;
+
+      if (String(refresh.app_credential_id) !== input.client.credentialId) {
+        throw new Error("invalid_grant");
+      }
+
+      if (refresh.replaced_by_token_id || refresh.revoked_at) {
+        await revokeRefreshTokenFamily(tx, refresh.family_id);
+        throw new Error("invalid_grant");
+      }
+
+      if (new Date(refresh.expires_at).getTime() <= Date.now()) {
+        throw new Error("invalid_grant");
+      }
+
+      const [replacement] = await tx`
+        INSERT INTO oauth_refresh_tokens (
+          token_hash,
+          app_id,
+          app_user_id,
+          app_credential_id,
+          scope,
+          family_id,
+          expires_at
+        )
+        VALUES (
+          ${newRefreshHash},
+          ${refresh.app_id},
+          ${refresh.app_user_id},
+          ${refresh.app_credential_id},
+          ${refresh.scope},
+          ${refresh.family_id},
+          ${refreshExpiresAt}
+        )
+        RETURNING id
+      `;
+      const replacementId = (replacement as { id: string }).id;
+
+      await tx`
+        UPDATE oauth_refresh_tokens
+        SET replaced_by_token_id = ${replacementId}, revoked_at = NOW()
+        WHERE id = ${refresh.id}
+      `;
+
+      await tx`
+        INSERT INTO oauth_access_tokens (
+          token_hash,
+          app_id,
+          app_user_id,
+          app_credential_id,
+          scope,
+          expires_at
+        )
+        VALUES (
+          ${accessHash},
+          ${refresh.app_id},
+          ${refresh.app_user_id},
+          ${refresh.app_credential_id},
+          ${refresh.scope},
+          ${accessExpiresAt}
+        )
+      `;
+
+      return {
+        scope: refresh.scope ?? "",
+        appUserId: String(refresh.app_user_id),
+      };
+    });
+
+    return {
+      ok: true,
+      accessToken,
+      tokenType: "Bearer",
+      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      scope: result.scope,
+      refreshToken: newRefreshToken,
+      appUserId: result.appUserId,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "invalid_grant") {
+      return { ok: false, error: "invalid_grant" };
+    }
+    throw error;
+  }
+}
+
+export async function issueClientCredentialsToken(input: {
+  client: OAuthClient;
+  scope: string;
+}): Promise<
+  | ({ ok: true } & OAuthTokenSuccess)
+  | { ok: false; error: "invalid_scope" | "unauthorized_client" }
+> {
+  if (input.client.clientType !== "confidential") {
+    return { ok: false, error: "unauthorized_client" };
+  }
+
+  const scopeResult = await validateRequestedScopes(input.client.appId, input.scope);
+  if (!scopeResult.ok) return { ok: false, error: "invalid_scope" };
+
+  const accessToken = `z0_at_${randomToken(24)}`;
+  const tokenHash = await sha256Hex(accessToken);
+  const expiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
+
+  await getDb()`
+    INSERT INTO oauth_access_tokens (
+      token_hash,
+      app_id,
+      app_user_id,
+      app_credential_id,
+      scope,
+      expires_at
+    )
+    VALUES (
+      ${tokenHash},
+      ${input.client.appId},
+      NULL,
+      ${input.client.credentialId},
+      ${scopeResult.normalizedScope},
+      ${expiresAt}
+    )
+  `;
+
+  return {
+    ok: true,
+    accessToken,
+    tokenType: "Bearer",
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+    scope: scopeResult.normalizedScope,
+  };
+}
+
 export async function revokeOAuthToken(input: { token: string; client: OAuthClient }): Promise<void> {
   const tokenHash = await sha256Hex(input.token);
   await getDb().begin(async (tx) => {
@@ -327,13 +549,17 @@ export async function revokeOAuthToken(input: { token: string; client: OAuthClie
         AND app_credential_id = ${input.client.credentialId}
         AND revoked_at IS NULL
     `;
-    await tx`
-      UPDATE oauth_refresh_tokens
-      SET revoked_at = NOW()
+
+    const [refreshRow] = await tx`
+      SELECT family_id
+      FROM oauth_refresh_tokens
       WHERE token_hash = ${tokenHash}
         AND app_credential_id = ${input.client.credentialId}
-        AND revoked_at IS NULL
+      LIMIT 1
     `;
+    if (refreshRow) {
+      await revokeRefreshTokenFamily(tx, String((refreshRow as { family_id: string }).family_id));
+    }
   });
 }
 
@@ -368,12 +594,12 @@ export async function findOAuthAccessToken(token: string): Promise<OAuthAccessTo
   const tokenHash = await sha256Hex(token);
   const [row] = await getDb()`
     SELECT
-      app_id,
-      app_user_id,
-      app_credential_id,
-      scope,
-      expires_at,
-      revoked_at
+      t.app_id,
+      t.app_user_id,
+      t.app_credential_id,
+      t.scope,
+      t.expires_at,
+      t.revoked_at
     FROM oauth_access_tokens t
     JOIN apps a ON a.id = t.app_id
     JOIN app_credentials ac ON ac.id = t.app_credential_id
@@ -385,7 +611,7 @@ export async function findOAuthAccessToken(token: string): Promise<OAuthAccessTo
   if (!row) return null;
   const data = row as {
     app_id: string;
-    app_user_id: string;
+    app_user_id: string | null;
     app_credential_id: string;
     scope: string;
     expires_at: Date;
@@ -393,7 +619,7 @@ export async function findOAuthAccessToken(token: string): Promise<OAuthAccessTo
   };
   return {
     appId: data.app_id,
-    appUserId: data.app_user_id,
+    appUserId: data.app_user_id ? String(data.app_user_id) : null,
     appCredentialId: data.app_credential_id,
     scope: data.scope ?? "",
     expiresAt: data.expires_at,

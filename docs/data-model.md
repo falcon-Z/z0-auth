@@ -240,7 +240,7 @@ Indexes/constraints:
 | `id` | UUID PK | Internal row id |
 | `token_hash` | TEXT | Unique hash of opaque access token |
 | `app_id` | UUID → `apps` | Token audience app |
-| `app_user_id` | UUID → `app_users` | Subject (`sub`) |
+| `app_user_id` | UUID → `app_users` | Subject (`sub`); **nullable** for machine tokens (P4M5) |
 | `app_credential_id` | UUID → `app_credentials` | Client that obtained token |
 | `scope` | TEXT | Granted scope string |
 | `expires_at` | TIMESTAMPTZ | Access token expiry |
@@ -300,6 +300,25 @@ Indexes/constraints:
 - Index on (`status`, `activated_at`)
 
 P4M2 starts with one active key and rotation-ready schema. Rotation policy and automation are expanded in a later security module.
+
+### `oauth_user_consents` (P4M3)
+
+Stores prior scope approval per app user and app. Used to skip the consent screen when stored scopes are a superset of the requested scopes.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Internal row id |
+| `app_user_id` | UUID → `app_users` | Who approved |
+| `app_id` | UUID → `apps` | Which app |
+| `scope` | TEXT | Space-delimited granted scopes (union of all approvals) |
+| `granted_at` | TIMESTAMPTZ | First approval time |
+| `updated_at` | TIMESTAMPTZ | Updated when user approves expanded scopes |
+
+Indexes/constraints:
+- Unique (`app_user_id`, `app_id`)
+- Index on `app_id`
+
+Skip policy: on `GET /oauth/authorize`, if stored `scope` is a superset of the requested scope, issue the authorization code without showing consent. On approve, upsert with the union of stored + requested scopes.
 
 ### `app_memberships` (0015 — superseded)
 

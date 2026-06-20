@@ -24,6 +24,9 @@ paths:
         Starts OAuth authorization code flow for an app client.
         If the app user is not authenticated for the resolved app context, the user is redirected
         to hosted auth (`/auth/login`) and then resumed.
+        When the user is authenticated and prior consent in `oauth_user_consents` covers the requested
+        scopes, the authorization code is issued without showing the consent screen.
+        Otherwise returns an HTML consent page listing requested scopes with human-readable descriptions.
       operationId: getOAuthAuthorize
       parameters:
         - name: response_type
@@ -98,11 +101,12 @@ paths:
   /oauth/token:
     post:
       tags: [OAuth]
-      summary: Token endpoint (authorization_code grant)
+      summary: Token endpoint
       description: |
-        Exchanges an authorization code for OAuth tokens.
-        In P4M1, only `grant_type=authorization_code` is supported.
-        Access tokens are opaque. Refresh token lifecycle is finalized in P4M4.
+        Exchanges grants for OAuth tokens.
+        Supported `grant_type` values: `authorization_code`, `refresh_token`, `client_credentials`.
+        Access tokens are opaque. Authorization code exchange returns a refresh token (30-day TTL, rotated on use).
+        Browser clients require CORS `Origin` to match a registered redirect URI origin.
       operationId: postOAuthToken
       requestBody:
         required: true
@@ -112,18 +116,24 @@ paths:
               type: object
               required:
                 - grant_type
-                - code
-                - redirect_uri
                 - client_id
               properties:
                 grant_type:
                   type: string
-                  enum: [authorization_code]
+                  enum: [authorization_code, refresh_token, client_credentials]
                 code:
                   type: string
+                  description: Required for `authorization_code`.
                 redirect_uri:
                   type: string
                   format: uri
+                  description: Required for `authorization_code`.
+                refresh_token:
+                  type: string
+                  description: Required for `refresh_token`.
+                scope:
+                  type: string
+                  description: Optional for `client_credentials`; subset of app scopes.
                 client_id:
                   type: string
                 client_secret:
@@ -131,7 +141,7 @@ paths:
                   description: Required for confidential clients.
                 code_verifier:
                   type: string
-                  description: Required for public clients and validated against stored PKCE challenge.
+                  description: Required for public clients on `authorization_code` and validated against stored PKCE challenge.
       responses:
         "200":
           description: Tokens issued
@@ -306,7 +316,7 @@ components:
           minimum: 1
         refresh_token:
           type: string
-          description: Optional in P4M1; policy finalized in P4M4.
+          description: Returned on authorization code and refresh_token grants.
         id_token:
           type: string
           description: OIDC ID token when `openid` scope is granted.
