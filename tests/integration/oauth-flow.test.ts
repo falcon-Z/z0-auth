@@ -405,6 +405,7 @@ run("OAuth authorization code flow", () => {
       response_type: "code",
       client_id: confidentialClientId,
       redirect_uri: REDIRECT,
+      scope: "openid profile email read:orders",
       state: "deny-state",
     });
     const consentPageRes = await dispatchWeb(
@@ -412,6 +413,7 @@ run("OAuth authorization code flow", () => {
         headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` },
       }),
     );
+    expect(consentPageRes.status).toBe(200);
     const consentHtml = await consentPageRes.text();
     const consentCsrf = extractCsrfFromHtml(consentHtml)!;
     const consentNonce = consentHtml.match(/name="consent_nonce" value="([^"]+)"/)?.[1] ?? "";
@@ -432,6 +434,7 @@ run("OAuth authorization code flow", () => {
           response_type: "code",
           client_id: confidentialClientId,
           redirect_uri: REDIRECT,
+          scope: "openid profile email read:orders",
           state: "deny-state",
           consent_nonce: consentNonce,
           consent: "deny",

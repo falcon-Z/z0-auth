@@ -709,15 +709,15 @@ async function getUserinfo(req: BunRequest): Promise<Response> {
     return withOAuthCors(res, origin, allowed);
   }
 
-  const scopes = parseScopeSet(accessToken.scope);
-  if (!scopes.has("openid")) {
-    const res = oauthErrorResponse(403, "insufficient_scope", "token does not grant required scope");
+  if (!accessToken.appUserId) {
+    const res = oauthErrorResponse(401, "invalid_token", "access token subject is invalid");
     const allowed = await isOAuthCorsOriginAllowed(origin);
     return withOAuthCors(res, origin, allowed);
   }
 
-  if (!accessToken.appUserId) {
-    const res = oauthErrorResponse(401, "invalid_token", "access token subject is invalid");
+  const scopes = parseScopeSet(accessToken.scope);
+  if (!scopes.has("openid")) {
+    const res = oauthErrorResponse(403, "insufficient_scope", "token does not grant required scope");
     const allowed = await isOAuthCorsOriginAllowed(origin);
     return withOAuthCors(res, origin, allowed);
   }
