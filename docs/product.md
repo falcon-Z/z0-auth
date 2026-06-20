@@ -26,7 +26,7 @@ Self-hostable **Auth0 / Clerk** for your apps: you run the IAM instance; your ap
 3. After success, we redirect back to **your app’s redirect URI** with an authorization code (or session, per integration).
 4. Your app exchanges the code for tokens and treats the user as logged in.
 
-Same email on two different apps = two separate accounts (isolated per app), unless you explicitly link identities later.
+Same email on two different apps = two separate accounts (isolated per app), unless both apps belong to an SSO-enabled **app group** (see grouped services).
 
 ### Console vs app sign-in (two audiences)
 
@@ -54,7 +54,7 @@ One **platform instance** per deployment (single account owner). **No** internal
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
-**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create.
+**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create. **Grouped services (SSO):** console app groups with shared sign-in across sibling apps (Google-style session handoff and consent reuse within the group).
 
 **Not yet shipped:** MFA, passkeys, audit, Docker self-host.
 

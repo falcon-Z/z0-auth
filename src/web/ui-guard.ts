@@ -3,6 +3,7 @@ import type { BunRequest } from "bun";
 import type { AppAuthRealm, AuthRealm } from "../api/lib/auth-realm";
 import { handleDatabaseConnectionError } from "../api/lib/database-errors";
 import { resolveAppSession } from "../api/lib/app-session";
+import { appendSetCookie, tryGroupSsoSession } from "../api/lib/group-sso";
 import { isSetupComplete } from "../api/lib/instance";
 import { resolveSession } from "../api/lib/session";
 import { safeReturnPath } from "./safe-return-path";
@@ -42,6 +43,16 @@ export async function redirectForAuthPage(
       if (signedInToApp && (page === "login" || page === "register")) {
         const location = safeReturnPath(url.searchParams.get("return_to"), "/oauth/resume");
         return Response.redirect(new URL(location, url), 302);
+      }
+
+      if ((page === "login" || page === "register") && !signedInToApp) {
+        const sso = await tryGroupSsoSession(req, app.appId);
+        if (sso.ok) {
+          const location = safeReturnPath(url.searchParams.get("return_to"), "/oauth/resume");
+          const headers = new Headers({ Location: new URL(location, url).toString() });
+          appendSetCookie(headers, sso.setCookie);
+          return new Response(null, { status: 302, headers });
+        }
       }
 
       return null;

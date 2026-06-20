@@ -7,6 +7,8 @@ import {
   readAppSessionToken,
   revokeAppSessionByToken,
 } from "../../api/lib/app-session";
+import { ensureGroupMemberForAppUser } from "../../api/lib/group-sso";
+import { getDb } from "../../api/lib/db";
 import {
   FEDERATION_STATE_COOKIE,
   buildFederationState,
@@ -179,6 +181,14 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
     if (existingToken) await revokeAppSessionByToken(existingToken);
 
     const session = await createAppSession(linked.appUserId, stored.appId, req);
+    const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${linked.appUserId} LIMIT 1`;
+    if (userRow) {
+      await ensureGroupMemberForAppUser(
+        linked.appUserId,
+        stored.appId,
+        String((userRow as { email: string }).email),
+      );
+    }
     const resumeTarget = safeReturnPath(stored.returnTo) ?? "/oauth/resume";
     const headers = new Headers({ Location: resumeTarget });
     headers.append("Set-Cookie", appSessionCookieHeader(session.token, session.expiresAt));

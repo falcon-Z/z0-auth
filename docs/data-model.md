@@ -20,7 +20,9 @@ One z0-auth deployment serves one account owner team and their registered apps. 
 | **Console** | Developers operating this IAM instance | `users` + `password_credentials` + `instance_members` | Globally on `users` |
 | **App** | End users of a registered app | `app_users` per `app_id` | Per app: `(app_id, email)` |
 
-**Option B:** Apps do not share end-user identities. The same email on App A and App B is **two accounts**, two passwords, two sign-in flows. Console `users` are not used for app sign-in.
+**Option B:** Apps do not share end-user identities by default. The same email on App A and App B is **two accounts**, two passwords, two sign-in flows. Console `users` are not used for app sign-in.
+
+**Group SSO exception (P6):** When apps belong to an SSO-enabled **service group**, end users share a **group member** identity across those apps only. Signing in to one app allows opening sibling apps without signing in again (consent granted on any group app covers siblings). Apps outside the group remain isolated.
 
 ## Authorization (v1)
 
@@ -319,6 +321,17 @@ Indexes/constraints:
 - Index on `app_id`
 
 Skip policy: on `GET /oauth/authorize`, if stored `scope` is a superset of the requested scope, issue the authorization code without showing consent. On approve, upsert with the union of stored + requested scopes.
+
+### Grouped services (P6)
+
+| Table | Purpose |
+|-------|---------|
+| `service_groups` | Named app group; `sso_enabled` toggles shared sign-in |
+| `service_group_apps` | Apps in a group (one group per app) |
+| `service_group_members` | Logical person within a group (canonical email) |
+| `service_group_app_users` | Links each `app_users` row to a group member |
+
+Console API: `GET/POST /api/v1/service-groups`, `GET/PATCH/DELETE …/:groupId`, `PUT …/:groupId/apps`. Scope: `settings.service_groups:*`.
 
 ### `app_memberships` (0015 — superseded)
 

@@ -78,6 +78,14 @@ import {
   handleGetAppFederationSettings,
   handlePutAppFederationSettings,
 } from "./apps/federation-handlers";
+import {
+  handleCreateServiceGroup,
+  handleDeleteServiceGroup,
+  handleGetServiceGroup,
+  handleListServiceGroups,
+  handlePatchServiceGroup,
+  handlePutServiceGroupApps,
+} from "./service-groups/handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/settings/email/test", handlers: { POST: handleTestEmail } },
@@ -87,6 +95,9 @@ export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/federation/providers/from-template", handlers: { POST: handleCreateProviderFromTemplate } },
   { pattern: "/api/v1/federation/providers", handlers: { GET: handleListIdentityProviders, POST: handleCreateCustomProvider } },
   { pattern: "/api/v1/federation/providers/:providerId", handlers: { GET: handleGetIdentityProvider, PATCH: handlePatchIdentityProvider, DELETE: handleDeleteIdentityProvider } },
+  { pattern: "/api/v1/service-groups", handlers: { GET: handleListServiceGroups, POST: handleCreateServiceGroup } },
+  { pattern: "/api/v1/service-groups/:groupId", handlers: { GET: handleGetServiceGroup, PATCH: handlePatchServiceGroup, DELETE: handleDeleteServiceGroup } },
+  { pattern: "/api/v1/service-groups/:groupId/apps", handlers: { PUT: handlePutServiceGroupApps } },
   { pattern: "/api/v1/apps", handlers: { GET: handleListApps, POST: handleCreateApp } },
   { pattern: "/api/v1/apps/:appId", handlers: { GET: handleGetApp, PATCH: handlePatchApp } },
   { pattern: "/api/v1/apps/:appId/sign-in", handlers: { GET: handleGetAppSignInSettings, PUT: handlePutAppSignInSettings } },

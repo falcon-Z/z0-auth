@@ -2,6 +2,7 @@ import { ErrorCodes } from "@z0/contracts/errors";
 import { normalizeEmail } from "@z0/contracts/validation";
 
 import { getDb } from "./db";
+import { ensureGroupMemberForAppUser } from "./group-sso";
 import { problem } from "./http";
 
 export type NormalizedIdpProfile = {
@@ -97,6 +98,11 @@ export async function linkFederationIdentity(options: {
           profile = ${JSON.stringify(profile.raw)}::jsonb
       WHERE id = ${existing.id}
     `;
+    await ensureGroupMemberForAppUser(
+      existing.app_user_id,
+      appId,
+      email ?? profile.email ?? `${profile.subject}@federated.local`,
+    );
     return { ok: true, appUserId: existing.app_user_id, created: false };
   }
 
@@ -154,6 +160,7 @@ export async function linkFederationIdentity(options: {
         `;
       }
 
+      await ensureGroupMemberForAppUser(appUser.id, appId, email);
       return { ok: true, appUserId: appUser.id, created: false };
     }
   }
@@ -203,6 +210,7 @@ export async function linkFederationIdentity(options: {
     )
   `;
 
+  await ensureGroupMemberForAppUser(appUserId, appId, insertEmail);
   return { ok: true, appUserId, created: true };
 }
 

@@ -95,6 +95,8 @@ export const ErrorCodes = {
   FEDERATION_FAILED: "federation_failed",
   /** Email from provider conflicts with an existing account. */
   FEDERATION_EMAIL_CONFLICT: "federation_email_conflict",
+  /** Application already belongs to another service group. */
+  APP_ALREADY_GROUPED: "app_already_grouped",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

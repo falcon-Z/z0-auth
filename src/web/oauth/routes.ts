@@ -4,6 +4,12 @@ import { clientIdFromAuthorizePath, resolveAuthRealm } from "../../api/lib/auth-
 import { randomToken } from "../../api/lib/crypto";
 import { withDatabaseErrorHandling } from "../../api/lib/database-errors";
 import { resolveAppSession } from "../../api/lib/app-session";
+import {
+  appendSetCookie,
+  getGroupMemberIdForAppUser,
+  groupSsoCoversScope,
+  resolveTargetAppSession,
+} from "../../api/lib/group-sso";
 import { loadConfig, requestPublicOrigin } from "../../api/lib/config";
 import { validateFormCsrf } from "../../api/lib/csrf";
 import { problem } from "../../api/lib/http";
@@ -338,17 +344,29 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
     });
   }
 
-  const appSession = await resolveAppSession(req);
-  if (!appSession || appSession.appId !== client.appId) {
+  const resolved = await resolveTargetAppSession(req, client.appId);
+  if (!resolved) {
     return loginRedirectForAuthorize(req, `${url.pathname}${url.search}`);
   }
 
+  const appSession = resolved.session;
+
   const storedConsent = await getOAuthUserConsent(appSession.appUserId, client.appId);
-  if (storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)) {
-    return redirectWithCode(url, client.appId, appSession.appUserId);
+  const groupMemberId = await getGroupMemberIdForAppUser(appSession.appUserId);
+  const groupCoversScope =
+    groupMemberId !== null &&
+    (await groupSsoCoversScope(groupMemberId, normalizedScopeResult.normalizedScope));
+
+  if (
+    (storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)) ||
+    groupCoversScope
+  ) {
+    const redirect = await redirectWithCode(url, client.appId, appSession.appUserId);
+    appendSetCookie(redirect.headers, resolved.setCookie);
+    return redirect;
   }
 
-  return renderConsentPage(req, {
+  const consentResponse = await renderConsentPage(req, {
     appId: client.appId,
     appUserId: appSession.appUserId,
     clientId,
@@ -358,6 +376,8 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
     codeChallenge: url.searchParams.get("code_challenge")?.trim() ?? null,
     codeChallengeMethod: url.searchParams.get("code_challenge_method"),
   });
+  appendSetCookie(consentResponse.headers, resolved.setCookie);
+  return consentResponse;
 }
 
 async function getResume(req: BunRequest): Promise<Response> {
@@ -368,10 +388,13 @@ async function getResume(req: BunRequest): Promise<Response> {
 
   const realm = await resolveAuthRealm(req, { returnTo: pending });
   if (realm.mode === "app") {
-    const appSession = await resolveAppSession(req);
-    if (!appSession || appSession.appId !== realm.appId) {
+    const resolved = await resolveTargetAppSession(req, realm.appId);
+    if (!resolved) {
       return loginRedirectForAuthorize(req, pending);
     }
+    const redirect = Response.redirect(new URL(pending, req.url), 302);
+    appendSetCookie(redirect.headers, resolved.setCookie);
+    return redirect;
   }
 
   return Response.redirect(new URL(pending, req.url), 302);
@@ -611,8 +634,8 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     return problem(400, "Bad Request", "Public clients require PKCE (S256)");
   }
 
-  const appSession = await resolveAppSession(req);
-  if (!appSession || appSession.appId !== client.appId) {
+  const resolved = await resolveTargetAppSession(req, client.appId);
+  if (!resolved) {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: body.client_id,
@@ -624,6 +647,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     if (consentState.codeChallengeMethod) params.set("code_challenge_method", consentState.codeChallengeMethod);
     return loginRedirectForAuthorize(req, `/oauth/authorize?${params.toString()}`);
   }
+  const appSession = resolved.session;
   if (appSession.appUserId !== consentState.appUserId) {
     return problem(400, "Bad Request", "Consent approval is no longer valid for this session");
   }
@@ -651,6 +675,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
   const response = await redirectWithCode(authorizeUrl, client.appId, appSession.appUserId);
   const headers = new Headers(response.headers);
   headers.append("Set-Cookie", clearConsentCookie());
+  appendSetCookie(headers, resolved.setCookie);
   return new Response(response.body, { status: response.status, headers });
 }
 

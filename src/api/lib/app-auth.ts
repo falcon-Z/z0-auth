@@ -17,14 +17,15 @@ import {
   readAppSessionToken,
   revokeAppSessionByToken,
 } from "./app-session";
+import { ensureGroupMemberForAppUser } from "./group-sso";
 
 export type AppAuthResult =
   | { ok: true; setCookie: string; appUserId: string }
   | { ok: false; response: Response; fieldErrors?: { field: string; message: string }[] };
 
-async function findAppUserForLogin(appId: string, email: string): Promise<{ id: string; password_hash: string | null } | null> {
+async function findAppUserForLogin(appId: string, email: string): Promise<{ id: string; password_hash: string | null; email: string } | null> {
   const [row] = await getDb()`
-    SELECT id, password_hash
+    SELECT id, password_hash, email
     FROM app_users
     WHERE app_id = ${appId}
       AND lower(email) = ${email}
@@ -34,6 +35,7 @@ async function findAppUserForLogin(appId: string, email: string): Promise<{ id: 
   return {
     id: String((row as { id: string }).id),
     password_hash: (row as { password_hash: string | null }).password_hash,
+    email: (row as { email: string }).email,
   };
 }
 
@@ -118,6 +120,7 @@ export async function runAppLogin(
   }
 
   const session = await issueAppSession(req, user.id, appId);
+  await ensureGroupMemberForAppUser(user.id, appId, user.email);
   return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
 }
 
@@ -185,6 +188,7 @@ export async function runAppRegister(
     `;
     const appUserId = String((inserted as { id: string }).id);
     const session = await issueAppSession(req, appUserId, appId);
+    await ensureGroupMemberForAppUser(appUserId, appId, email);
     return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
@@ -212,5 +216,9 @@ export async function runAppInviteAcceptSignIn(
   appUserId: string,
 ): Promise<AppAuthResult> {
   const session = await issueAppSession(req, appUserId, appId);
+  const [row] = await getDb()`SELECT email FROM app_users WHERE id = ${appUserId} LIMIT 1`;
+  if (row) {
+    await ensureGroupMemberForAppUser(appUserId, appId, String((row as { email: string }).email));
+  }
   return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
 }

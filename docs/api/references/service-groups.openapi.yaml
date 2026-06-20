@@ -1,0 +1,249 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Service Groups API
+  version: 0.1.0
+  description: Group related apps and enable shared sign-in (SSO) across them (P6).
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: ServiceGroups
+paths:
+  /api/v1/service-groups:
+    get:
+      tags: [ServiceGroups]
+      summary: List app groups
+      operationId: listServiceGroups
+      security:
+        - SessionCookie: []
+      responses:
+        "200":
+          description: Groups for this instance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups]
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ServiceGroupSummary"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+    post:
+      tags: [ServiceGroups]
+      summary: Create app group
+      operationId: createServiceGroup
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceGroupRequest"
+      responses:
+        "201":
+          description: Created group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceGroupDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+  /api/v1/service-groups/{groupId}:
+    get:
+      tags: [ServiceGroups]
+      summary: Get app group
+      operationId: getServiceGroup
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Group detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceGroupDetail"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+    patch:
+      tags: [ServiceGroups]
+      summary: Update app group
+      operationId: patchServiceGroup
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchServiceGroupRequest"
+      responses:
+        "200":
+          description: Updated group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceGroupDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+    delete:
+      tags: [ServiceGroups]
+      summary: Delete app group
+      operationId: deleteServiceGroup
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "204":
+          description: Group deleted
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/v1/service-groups/{groupId}/apps:
+    put:
+      tags: [ServiceGroups]
+      summary: Replace apps in group
+      operationId: putServiceGroupApps
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "#/components/parameters/GroupId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutServiceGroupAppsRequest"
+      responses:
+        "200":
+          description: Updated membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceGroupDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+components:
+  parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ServiceGroupAppSummary:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+    ServiceGroupSummary:
+      type: object
+      required: [id, name, slug, ssoEnabled, appCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        ssoEnabled:
+          type: boolean
+        appCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ServiceGroupDetail:
+      allOf:
+        - $ref: "#/components/schemas/ServiceGroupSummary"
+        - type: object
+          required: [apps]
+          properties:
+            apps:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServiceGroupAppSummary"
+    CreateServiceGroupRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        slug:
+          type: string
+          maxLength: 64
+        ssoEnabled:
+          type: boolean
+          default: false
+        appIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    PatchServiceGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        slug:
+          type: string
+          maxLength: 64
+        ssoEnabled:
+          type: boolean
+    PutServiceGroupAppsRequest:
+      type: object
+      required: [appIds]
+      properties:
+        appIds:
+          type: array
+          items:
+            type: string
+            format: uuid

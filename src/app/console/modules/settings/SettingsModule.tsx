@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { StubPage } from "../../components/layout/StubPage";
 import { FederationProvidersPage } from "./pages/FederationProvidersPage";
+import { AppGroupsPage } from "./pages/AppGroupsPage";
 import { InstanceSignInSettingsPage } from "./pages/InstanceSignInSettingsPage";
 import { EmailSettingsPage } from "../communications/pages/EmailSettingsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -16,15 +17,7 @@ export function SettingsModule() {
         path="sign-in-providers"
         element={<FederationProvidersPage />}
       />
-      <Route
-        path="app-groups"
-        element={
-          <StubPage
-            title="App groups"
-            message="Grouping related apps is not ready yet."
-          />
-        }
-      />
+      <Route path="app-groups" element={<AppGroupsPage />} />
       <Route
         path="security"
         element={
