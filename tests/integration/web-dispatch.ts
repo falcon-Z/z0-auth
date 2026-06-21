@@ -1,6 +1,7 @@
 import type { BunRequest } from "bun";
 
 import { appInviteWebRoutes } from "../../src/web/auth/app-invite-routes";
+import { appSessionsWebRoutes } from "../../src/web/auth/app-sessions-routes";
 import { authWebRoutes } from "../../src/web/auth/routes";
 import { federationWebRoutes } from "../../src/web/auth/federation-routes";
 import { inviteWebRoutes } from "../../src/web/auth/invite-routes";
@@ -57,6 +58,7 @@ export async function dispatchWeb(req: Request): Promise<Response> {
 
   const routes = {
     ...authWebRoutes,
+    ...appSessionsWebRoutes,
     ...oauthWebRoutes,
   } as const;
   const handlers = (routes as Record<string, MethodHandlers>)[url.pathname];

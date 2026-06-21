@@ -53,6 +53,24 @@ Non-members with a valid session are denied console APIs (**403**).
 | `POST /api/auth/forgot-password` | JSON; **503** when SMTP off |
 | `POST /api/auth/reset-password` | JSON body with `token`, `password`, `passwordConfirm`; **503** when SMTP off |
 
+## Activity (audit log) — P7M1
+
+| Surface | Behavior |
+|---------|----------|
+| Console `GET /activity` | Table of recent audit events (sign-ins, config changes); **Load more** uses `before` cursor |
+| `GET /api/v1/audit-events` | JSON list; requires `settings.audit:read` |
+
+## App user sessions — P7M2
+
+| Surface | Behavior |
+|---------|----------|
+| Console app user detail | Lists active sessions (device, network, last active); **Revoke** per row |
+| `GET /auth/sessions?client_id=…` | App user must be signed in (`z0_app_session`); lists devices for that app only |
+| `POST /auth/sessions/revoke` | CSRF form; revokes one other session → **303** back to sessions page |
+| `POST /auth/sessions/revoke-others` | CSRF form; revokes all except current device → **303** |
+
+Console member self-service sessions remain at `/profile/sessions` (`GET/DELETE /api/v1/sessions`).
+
 ## HTTP status codes (auth/setup)
 
 | Code | When |

@@ -8,6 +8,7 @@ import {
   revokeAppSessionByToken,
 } from "../../api/lib/app-session";
 import { ensureGroupMemberForAppUser } from "../../api/lib/group-sso";
+import { writeAuditEvent } from "../../api/lib/audit";
 import { getDb } from "../../api/lib/db";
 import {
   FEDERATION_STATE_COOKIE,
@@ -189,6 +190,14 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
         String((userRow as { email: string }).email),
       );
     }
+
+    await writeAuditEvent({
+      action: "auth.app_federation_login_succeeded",
+      resourceType: "app",
+      resourceId: stored.appId,
+      payload: { appUserId: linked.appUserId, providerKey: provider.key },
+    });
+
     const resumeTarget = safeReturnPath(stored.returnTo) ?? "/oauth/resume";
     const headers = new Headers({ Location: resumeTarget });
     headers.append("Set-Cookie", appSessionCookieHeader(session.token, session.expiresAt));

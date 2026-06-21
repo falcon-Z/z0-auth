@@ -8,6 +8,7 @@ import { getDb } from "../lib/db";
 import { problem } from "../lib/http";
 import { verifyPassword } from "../lib/password";
 import { checkRateLimit, clientIp } from "../lib/rate-limit";
+import { writeAuditEvent } from "../lib/audit";
 import {
   createSession,
   revokeSessionByToken,
@@ -58,6 +59,11 @@ export async function runLogin(
   `;
 
   if (!row) {
+    await writeAuditEvent({
+      action: "auth.login_failed",
+      resourceType: "auth",
+      payload: { audience: "console", reason: "unknown_user" },
+    });
     return {
       ok: false,
       response: problem(401, "Unauthorized", invalidMessage, {
@@ -70,6 +76,12 @@ export async function runLogin(
   const user = row as { id: string; password_hash: string };
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
+    await writeAuditEvent({
+      actorUserId: String(user.id),
+      action: "auth.login_failed",
+      resourceType: "auth",
+      payload: { audience: "console", reason: "invalid_password" },
+    });
     return {
       ok: false,
       response: problem(401, "Unauthorized", invalidMessage, {
@@ -84,5 +96,13 @@ export async function runLogin(
   if (existingToken) await revokeSessionByToken(existingToken);
 
   const { token, expiresAt } = await createSession(userId, req);
+
+  await writeAuditEvent({
+    actorUserId: userId,
+    action: "auth.login_succeeded",
+    resourceType: "auth",
+    payload: { audience: "console" },
+  });
+
   return { ok: true, setCookie: sessionCookieHeader(token, expiresAt), userId };
 }

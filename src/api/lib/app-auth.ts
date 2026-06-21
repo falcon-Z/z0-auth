@@ -18,6 +18,7 @@ import {
   revokeAppSessionByToken,
 } from "./app-session";
 import { ensureGroupMemberForAppUser } from "./group-sso";
+import { writeAuditEvent } from "./audit";
 
 export type AppAuthResult =
   | { ok: true; setCookie: string; appUserId: string }
@@ -99,6 +100,12 @@ export async function runAppLogin(
 
   const user = await findAppUserForLogin(appId, email);
   if (!user || !user.password_hash) {
+    await writeAuditEvent({
+      action: "auth.app_login_failed",
+      resourceType: "app",
+      resourceId: appId,
+      payload: { reason: "unknown_user" },
+    });
     return {
       ok: false,
       response: problem(401, "Unauthorized", invalidMessage, {
@@ -110,6 +117,12 @@ export async function runAppLogin(
 
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
+    await writeAuditEvent({
+      action: "auth.app_login_failed",
+      resourceType: "app",
+      resourceId: appId,
+      payload: { appUserId: user.id, reason: "invalid_password" },
+    });
     return {
       ok: false,
       response: problem(401, "Unauthorized", invalidMessage, {
@@ -121,6 +134,14 @@ export async function runAppLogin(
 
   const session = await issueAppSession(req, user.id, appId);
   await ensureGroupMemberForAppUser(user.id, appId, user.email);
+
+  await writeAuditEvent({
+    action: "auth.app_login_succeeded",
+    resourceType: "app",
+    resourceId: appId,
+    payload: { appUserId: user.id },
+  });
+
   return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
 }
 
@@ -189,6 +210,14 @@ export async function runAppRegister(
     const appUserId = String((inserted as { id: string }).id);
     const session = await issueAppSession(req, appUserId, appId);
     await ensureGroupMemberForAppUser(appUserId, appId, email);
+
+    await writeAuditEvent({
+      action: "auth.app_register_succeeded",
+      resourceType: "app",
+      resourceId: appId,
+      payload: { appUserId },
+    });
+
     return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {

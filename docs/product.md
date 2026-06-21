@@ -54,9 +54,9 @@ One **platform instance** per deployment (single account owner). **No** internal
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
-**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create. **Grouped services (SSO):** console app groups with shared sign-in across sibling apps (Google-style session handoff and consent reuse within the group).
+**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create. **Grouped services (SSO):** console app groups with shared sign-in across sibling apps (Google-style session handoff and consent reuse within the group). **Security & observability:** audit log API + Activity console, session/device management for console members and app users, encryption-at-rest inventory documented in the security contract.
 
-**Not yet shipped:** MFA, passkeys, audit, Docker self-host.
+**Not yet shipped:** MFA, passkeys, Docker self-host.
 
 **Social connections** (Google, Apple, GitHub, Facebook, etc. per app — Clerk/Auth0-style): planned module after core hosted auth + OAuth ship; console Federation nav is placeholder until then.
 

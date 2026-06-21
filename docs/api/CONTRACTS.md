@@ -103,6 +103,9 @@ Use underscore-prefixed fields for non-input failures:
 | `health.openapi.yaml` | `/api/health`, `/api/live`, `/api/ready` |
 | `setup.openapi.yaml` | `/api/setup/*` |
 | `auth.openapi.yaml` | `/api/auth/*` |
+| `audit.openapi.yaml` | `/api/v1/audit-events` (P7M1) |
+| `sessions.openapi.yaml` | Console self-service sessions (`/api/v1/sessions`) |
+| `app-users.openapi.yaml` | App users + admin session list/revoke (P7M2) |
 | `oauth.openapi.yaml` | OAuth/OIDC (planned) |
 
 External references use relative paths, e.g. `$ref: "common.openapi.yaml#/components/responses/ValidationError"`.

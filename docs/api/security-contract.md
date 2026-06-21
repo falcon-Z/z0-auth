@@ -37,6 +37,8 @@ Two session cookies — same lifetime and CSRF rules. **App context** (`client_i
 
 **Sign-in mode on `/auth/*`:** If the request includes a resolvable `client_id` (query or preserved in `z0_oauth_return`), treat as **app user** sign-in: authenticate `app_users`, issue `z0_app_session`, then redirect to the app (via OAuth `return_to`). Otherwise **console** sign-in: `users` + `z0_session`. Same HTML shell and CSRF; social provider buttons only on app sign-in when configured.
 
+**App user session management (P7M2):** Signed-in app users may open `GET /auth/sessions?client_id=…` to list devices and revoke others. Requires valid `z0_app_session` for that app.
+
 **Future APIs** that accept bearer tokens must document their own lifetime and revocation; browser console continues to use `z0_session` unless stated otherwise.
 
 ---
@@ -93,6 +95,30 @@ Keys are **not** regenerated on every restart.
 - **Production:** Keys may be auto-generated on first start for a single instance. For multiple replicas, set `INSTANCE_DATA_KEY` and the token keypair (or mount a shared keys file) so every pod uses the same material.
 
 Rotating the data key without re-saving SMTP settings breaks existing ciphertext (same as losing the key).
+
+### Encryption at rest inventory (P7M3)
+
+Operator-managed **`INSTANCE_DATA_KEY`** (AES-256-GCM) encrypts reversible secrets before they are stored in PostgreSQL:
+
+| Stored value | Table / column | Protection |
+|--------------|----------------|------------|
+| SMTP password | `smtp_settings.password_ciphertext` | AES-256-GCM via data key |
+| Federation provider client secret | `identity_providers.client_secret_ciphertext` | AES-256-GCM via data key |
+| OIDC signing private key | `oidc_signing_keys.private_key_ciphertext` | AES-256-GCM via data key |
+| Federated user refresh/access tokens | `app_user_provider_tokens.*_ciphertext` | AES-256-GCM via data key |
+
+One-way hashes (not encrypted — verification only, plaintext never stored):
+
+| Stored value | Table / column | Protection |
+|--------------|----------------|------------|
+| OAuth client secret | `app_credentials.client_secret_hash` | Password-style hash |
+| OAuth / refresh tokens | `oauth_* .token_hash` | SHA-256 hash |
+| Session tokens | `sessions.token_hash`, `app_user_sessions.token_hash` | SHA-256 hash |
+| Console / app user passwords | `password_credentials`, `app_users.password_hash` | Password hash |
+
+**Production:** set `INSTANCE_DATA_KEY` explicitly on every replica. Without it, dev may auto-generate a file-backed key; production pods with independent keys cannot decrypt each other's SMTP or federation secrets.
+
+**Rotation:** changing `INSTANCE_DATA_KEY` without re-entering encrypted secrets breaks decryption. Document key backup with operator runbooks (P9M3).
 
 ### Kubernetes (multiple pods)
 

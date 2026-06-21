@@ -86,6 +86,11 @@ import {
   handlePatchServiceGroup,
   handlePutServiceGroupApps,
 } from "./service-groups/handlers";
+import { handleListAuditEvents } from "./audit/handlers";
+import {
+  handleListAppUserSessions,
+  handleRevokeAppUserSession,
+} from "./apps/app-user-sessions-handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/settings/email/test", handlers: { POST: handleTestEmail } },
@@ -98,6 +103,7 @@ export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/service-groups", handlers: { GET: handleListServiceGroups, POST: handleCreateServiceGroup } },
   { pattern: "/api/v1/service-groups/:groupId", handlers: { GET: handleGetServiceGroup, PATCH: handlePatchServiceGroup, DELETE: handleDeleteServiceGroup } },
   { pattern: "/api/v1/service-groups/:groupId/apps", handlers: { PUT: handlePutServiceGroupApps } },
+  { pattern: "/api/v1/audit-events", handlers: { GET: handleListAuditEvents } },
   { pattern: "/api/v1/apps", handlers: { GET: handleListApps, POST: handleCreateApp } },
   { pattern: "/api/v1/apps/:appId", handlers: { GET: handleGetApp, PATCH: handlePatchApp } },
   { pattern: "/api/v1/apps/:appId/sign-in", handlers: { GET: handleGetAppSignInSettings, PUT: handlePutAppSignInSettings } },
@@ -133,6 +139,14 @@ export const v1PatternRoutes: PathRoute[] = [
   {
     pattern: "/api/v1/apps/:appId/users",
     handlers: { GET: handleListAppUsers, POST: handleCreateAppUser },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users/:userId/sessions",
+    handlers: { GET: handleListAppUserSessions },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users/:userId/sessions/:sessionId",
+    handlers: { DELETE: handleRevokeAppUserSession },
   },
   {
     pattern: "/api/v1/apps/:appId/users/:userId",

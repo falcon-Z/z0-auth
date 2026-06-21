@@ -122,6 +122,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppUserDetail"
+  /api/v1/apps/{appId}/users/{userId}/sessions:
+    get:
+      tags: [AppUsers]
+      summary: List active sessions for an app user
+      operationId: listAppUserSessions
+      description: |
+        Console admin view of devices where the app user is signed in (P7M2).
+        Requires `apps.users:read`.
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Active app user sessions
+          content:
+            application/json:
+              schema:
+                $ref: "sessions.openapi.yaml#/components/schemas/ListSessionsResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/v1/apps/{appId}/users/{userId}/sessions/{sessionId}:
+    delete:
+      tags: [AppUsers]
+      summary: Revoke an app user session
+      operationId: revokeAppUserSession
+      description: |
+        Signs the app user out of one device (P7M2). Requires `apps.users:manage`.
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
   /api/v1/apps/{appId}/users/invites:
     get:
       tags: [AppUsers]

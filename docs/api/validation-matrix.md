@@ -255,6 +255,41 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST reset` | `password` | Policy + confirm match | `password_policy` / `password_mismatch` | 400 | Checklist + inline |
 | `POST reset` | Success | Revokes all sessions for user | — | 200 | Redirect to login |
 
+## Audit log (`GET /api/v1/audit-events`) — P7M1
+
+| Input | Rule | Code | HTTP | UI |
+|-------|------|------|------|-----|
+| Session | Instance member with `settings.audit:read` | `permission_denied` | 403 | Activity page error |
+| `limit` | Integer 1–100; default 50 | — | 200 | Load more button |
+| `before` | ISO 8601 cursor from previous page | — | 200 | Pagination |
+| `action` | Exact match on `audit_events.action` | — | 200 | Future filter UI |
+| `resourceType` | Exact match on `audit_events.resource_type` | — | 200 | Future filter UI |
+| Success | Newest-first; `hasMore` when more rows exist | — | 200 | Activity table |
+
+Append-only: no create/update/delete API. Events written by handlers (auth, members, apps, SMTP, federation, sessions).
+
+## App user sessions — console admin (P7M2)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| `GET …/users/:userId/sessions` | Scope | `apps.users:read` | `permission_denied` | 403 | App user detail |
+| `GET …/users/:userId/sessions` | `userId` | Must belong to `appId` | `app_user_not_found` | 404 | Not found |
+| `DELETE …/sessions/:sessionId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh |
+| `DELETE …/sessions/:sessionId` | Scope | `apps.users:manage` | `permission_denied` | 403 | — |
+| `DELETE …/sessions/:sessionId` | Session | Active for user | `session_not_found` | 404 | — |
+| `DELETE …/sessions/:sessionId` | Success | Writes `app_user_session.revoked` audit | — | 200 | Session removed from table |
+
+## App user sessions — hosted self-service (P7M2)
+
+| Surface | Input | Rule | Code | HTTP | UI |
+|---------|-------|------|------|------|-----|
+| `GET /auth/sessions` | `client_id` | Valid active app credential | — | 400 | Error page |
+| `GET /auth/sessions` | Session | Valid `z0_app_session` for app | — | 302 | Redirect to app login |
+| `POST /auth/sessions/revoke` | CSRF + `session_id` | Session belongs to current app user | — | 303 | Back to sessions list |
+| `POST /auth/sessions/revoke-others` | CSRF | Keeps current session | — | 303 | Updated list |
+
+Device label and masked IP (`client_label`, `ip_display`) match console session list behavior.
+
 ## Notes
 
 - Multi-tenant rules are removed.

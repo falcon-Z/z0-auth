@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Audit API
+  version: 0.1.0
+  description: Read-only audit trail for security-relevant instance events (P7M1).
+servers:
+  - url: http://localhost:3000
+tags:
+  - name: Audit
+paths:
+  /api/v1/audit-events:
+    get:
+      tags: [Audit]
+      summary: List audit events
+      operationId: listAuditEvents
+      description: Returns recent audit events newest-first. Requires `settings.audit:read`.
+      security:
+        - SessionCookie: []
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: before
+          in: query
+          description: Cursor — ISO timestamp of the last event from the previous page.
+          schema: { type: string, format: date-time }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: resourceType
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAuditEventsResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+components:
+  schemas:
+    AuditEventSummary:
+      type: object
+      required: [id, action, resourceType, payload, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid, nullable: true }
+        actorName: { type: string, nullable: true }
+        actorEmail: { type: string, format: email, nullable: true }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string, nullable: true }
+        payload:
+          type: object
+          additionalProperties: true
+        createdAt: { type: string, format: date-time }
+    ListAuditEventsResponse:
+      type: object
+      required: [events, hasMore]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEventSummary"
+        hasMore: { type: boolean }

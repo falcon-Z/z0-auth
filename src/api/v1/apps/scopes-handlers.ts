@@ -7,6 +7,7 @@ import {
   listScopesForApi,
   patchScopeForApi,
 } from "../../lib/app-scopes";
+import { writeAuditEvent } from "../../lib/audit";
 import { json } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
@@ -31,6 +32,15 @@ export async function handleCreateScope(req: RoutedRequest): Promise<Response> {
 
   const result = await createScopeForApi(appId, parsed.body);
   if (!result.ok) return result.response;
+
+  await writeAuditEvent({
+    actorUserId: auth.userId,
+    action: "scope.created",
+    resourceType: "scope",
+    resourceId: result.scope.id,
+    payload: { appId, name: result.scope.name },
+  });
+
   return json(result.scope, { status: 201 });
 }
 
@@ -45,6 +55,15 @@ export async function handlePatchScope(req: RoutedRequest): Promise<Response> {
 
   const result = await patchScopeForApi(appId, scopeId, parsed.body);
   if (!result.ok) return result.response;
+
+  await writeAuditEvent({
+    actorUserId: auth.userId,
+    action: "scope.updated",
+    resourceType: "scope",
+    resourceId: scopeId,
+    payload: { appId },
+  });
+
   return json(result.scope);
 }
 
@@ -56,5 +75,14 @@ export async function handleDeleteScope(req: RoutedRequest): Promise<Response> {
 
   const result = await deleteScopeForApi(appId, scopeId);
   if (!result.ok) return result.response;
+
+  await writeAuditEvent({
+    actorUserId: auth.userId,
+    action: "scope.deleted",
+    resourceType: "scope",
+    resourceId: scopeId,
+    payload: { appId },
+  });
+
   return json({ ok: true });
 }

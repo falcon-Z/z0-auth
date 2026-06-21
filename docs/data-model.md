@@ -333,6 +333,20 @@ Skip policy: on `GET /oauth/authorize`, if stored `scope` is a superset of the r
 
 Console API: `GET/POST /api/v1/service-groups`, `GET/PATCH/DELETE …/:groupId`, `PUT …/:groupId/apps`. Scope: `settings.service_groups:*`.
 
+### Audit events (P7M1)
+
+Append-only security log. `actor_user_id` references console `users` when the actor is an operator; app-user and system events use `payload` (e.g. `appUserId`, `appId`) without a FK.
+
+Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `app_user_session.revoked`, `app_user.*`.
+
+Console API: `GET /api/v1/audit-events` with optional `limit`, `before`, `action`, `resourceType`. Scope: `settings.audit:read`.
+
+### App user sessions (P7M2)
+
+`app_user_sessions` stores device label and masked IP (`client_label`, `ip_display`) like console `sessions`.
+
+Console admin API: `GET/DELETE /api/v1/apps/:appId/users/:userId/sessions/:sessionId`. Hosted self-service: `/auth/sessions?client_id=…` when signed in with `z0_app_session`.
+
 ### `app_memberships` (0015 — superseded)
 
 Bridged global `users` to apps. **Do not build on this.** Removed in migration `0016` when Option B ships.

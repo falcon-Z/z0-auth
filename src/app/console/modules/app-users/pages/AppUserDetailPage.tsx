@@ -16,10 +16,18 @@ import { FormField } from "../../../components/forms/FormField";
 import { FormActions } from "../../../components/forms/FormActions";
 import { DangerZone } from "../../../components/forms/DangerZone";
 import { DestructiveButton } from "../../../components/forms/DestructiveButton";
+import type { SessionSummary } from "@z0/contracts/sessions";
+import { Badge } from "@z0/components/ui/badge";
+import { Button } from "@z0/components/ui/button";
+import { DataTable } from "../../../components/crud/DataTable";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchAppUser, patchAppUser } from "../../../lib/app-users-api";
 import { fetchApp } from "../../../lib/apps-api";
+import {
+  fetchAppUserSessions,
+  revokeAppUserSession,
+} from "../../../lib/app-user-sessions-api";
 
 export function AppUserDetailPage() {
   const { appId, userId } = useParams<{ appId: string; userId: string }>();
@@ -34,6 +42,21 @@ export function AppUserDetailPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [busyStatus, setBusyStatus] = useState(false);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [busySessionId, setBusySessionId] = useState<string | null>(null);
+
+  const reloadSessions = useCallback(async () => {
+    if (!appId || !userId) return;
+    setSessionsLoading(true);
+    try {
+      setSessions(await fetchAppUserSessions(appId, userId));
+    } catch {
+      setSessions([]);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [appId, userId]);
 
   const reload = useCallback(async () => {
     if (!appId || !userId) return;
@@ -53,7 +76,8 @@ export function AppUserDetailPage() {
 
   useEffect(() => {
     void reload();
-  }, [reload]);
+    void reloadSessions();
+  }, [reload, reloadSessions]);
 
   usePageBreadcrumbs(
     user && appId
@@ -115,6 +139,30 @@ export function AppUserDetailPage() {
       setNotice(e instanceof ApiError ? e.message : "Could not update status.");
     } finally {
       setBusyStatus(false);
+    }
+  }
+
+  async function handleRevokeSession(session: SessionSummary) {
+    if (!appId || !userId) return;
+    const ok = await confirm({
+      title: "Revoke session",
+      description: `Sign out ${session.clientLabel}?`,
+      confirmLabel: "Revoke",
+      destructive: true,
+    });
+    if (!ok) return;
+
+    setBusySessionId(session.id);
+    setNotice(null);
+    try {
+      await revokeAppUserSession(appId, userId, session.id);
+      setNotice("Session revoked.");
+      await reload();
+      await reloadSessions();
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "Could not revoke session.");
+    } finally {
+      setBusySessionId(null);
     }
   }
 
@@ -187,6 +235,56 @@ export function AppUserDetailPage() {
           </Button>
         </FormActions>
       </form>
+
+      <section className="mt-8 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold">Active sessions</h2>
+          <p className="text-sm text-muted-foreground">
+            Devices where this user is signed in to the application.
+          </p>
+        </div>
+
+        {sessionsLoading ? (
+          <ListPageSkeleton />
+        ) : (
+          <DataTable<SessionSummary>
+            columns={[
+              {
+                id: "device",
+                header: "Device",
+                accessorFn: (row) => row.clientLabel,
+                cell: (row) => <span className="font-medium">{row.clientLabel}</span>,
+              },
+              {
+                id: "location",
+                header: "Network",
+                accessorFn: (row) => row.ipDisplay ?? "",
+                cell: (row) => row.ipDisplay ?? "Unknown",
+              },
+              {
+                id: "lastSeen",
+                header: "Last active",
+                accessorFn: (row) => new Date(row.lastSeenAt).getTime(),
+                cell: (row) => new Date(row.lastSeenAt).toLocaleString(),
+              },
+            ]}
+            rows={sessions}
+            rowKey={(row) => row.id}
+            emptyMessage="No active sessions"
+            rowActions={(row) => (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busySessionId === row.id}
+                onClick={() => void handleRevokeSession(row)}
+              >
+                Revoke
+              </Button>
+            )}
+          />
+        )}
+      </section>
 
       {user.membershipStatus === "active" ? (
         <DangerZone
