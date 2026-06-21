@@ -18,7 +18,7 @@ export async function writeAuditEvent(
     INSERT INTO audit_events (tenant_id, actor_user_id, action, resource_type, resource_id, payload)
     VALUES (
       ${input.tenantId ?? null},
-      ${input.actorUserId ?? null},
+      ${input.actorUserId ? input.actorUserId : null},
       ${input.action},
       ${input.resourceType},
       ${input.resourceId ?? null},

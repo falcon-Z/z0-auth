@@ -176,7 +176,7 @@ run("M04 application scopes", () => {
       }),
     );
     const body = (await list.json()) as { scopes: Array<{ name: string }> };
-    expect(body.scopes).toHaveLength(3);
-    expect(body.scopes.map((s) => s.name).sort()).toEqual(["email", "openid", "profile"]);
+    expect(body.scopes).toHaveLength(4);
+    expect(body.scopes.map((s) => s.name).sort()).toEqual(["email", "federation:token", "openid", "profile"]);
   });
 });

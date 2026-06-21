@@ -4,6 +4,7 @@ export const DEFAULT_OIDC_APP_SCOPES = [
   { name: "openid", description: "Sign in with OpenID Connect" },
   { name: "profile", description: "View your name" },
   { name: "email", description: "View your email address" },
+  { name: "federation:token", description: "Retrieve upstream provider tokens for signed-in users" },
 ] as const;
 
 export async function seedDefaultOidcScopesForApp(tx: ReturnType<typeof getDb>, appId: string): Promise<void> {

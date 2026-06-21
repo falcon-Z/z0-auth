@@ -107,6 +107,8 @@ Operator-managed **`INSTANCE_DATA_KEY`** (AES-256-GCM) encrypts reversible secre
 | OIDC signing private key | `oidc_signing_keys.private_key_ciphertext` | AES-256-GCM via data key |
 | Federated user refresh/access tokens | `app_user_provider_tokens.*_ciphertext` | AES-256-GCM via data key |
 
+**Federation token API:** App backends with the `federation:token` scope (via client credentials or user access token) may call `GET/POST …/federation/{providerId}/token` to read or refresh upstream provider tokens. Tokens are never returned to browsers; audit events `federation.token_accessed` and `federation.token_refreshed` are written on use.
+
 One-way hashes (not encrypted — verification only, plaintext never stored):
 
 | Stored value | Table / column | Protection |

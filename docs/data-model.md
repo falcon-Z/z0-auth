@@ -347,6 +347,23 @@ Console API: `GET /api/v1/audit-events` with optional `limit`, `before`, `action
 
 Console admin API: `GET/DELETE /api/v1/apps/:appId/users/:userId/sessions/:sessionId`. Hosted self-service: `/auth/sessions?client_id=…` when signed in with `z0_app_session`.
 
+### External OAuth providers (P5)
+
+| Table | Purpose |
+|-------|---------|
+| `identity_providers` | Instance-level Google, Apple, GitHub, Facebook, or custom OAuth/OIDC config; secrets encrypted |
+| `app_identity_providers` | Per-app enablement, sort order, optional extra scopes |
+| `app_user_identities` | Links `app_users` to upstream provider subject |
+| `app_user_provider_tokens` | Encrypted upstream access/refresh tokens |
+
+`identity_providers.provider_metadata` stores non-secret config (e.g. Apple Team ID and Key ID). Apple private keys are stored in `client_secret_ciphertext`.
+
+**Account linking:** returning provider subject signs in to the linked account; verified upstream email auto-links to an existing `app_users` row; conflicts return `federation_email_conflict`.
+
+**Token API:** `GET /api/v1/apps/:appId/users/:userId/federation/:providerId/token` (auto-refreshes when possible). `POST …/token/refresh` forces upstream refresh. Console (`apps.federation:*`) or OAuth bearer with `federation:token` scope.
+
+Hosted routes: `/auth/federation/:providerKey/start` and `…/callback`. After success, resumes OAuth at `/oauth/resume`.
+
 ### `app_memberships` (0015 — superseded)
 
 Bridged global `users` to apps. **Do not build on this.** Removed in migration `0016` when Option B ships.
@@ -387,6 +404,7 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 | Email settings (M08) | `GET/PUT /api/v1/settings/email`, `POST …/email/test` |
 | Password reset (M08) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (when SMTP enabled) |
 | App user hosted auth (M06) | `/auth/login`, `/auth/register` with `client_id`; `/auth/app-invite/:token` |
+| Federation (P5) | `GET/POST/PATCH/DELETE /api/v1/federation/providers`, app federation under `…/apps/:appId/federation`, upstream tokens under `…/users/:userId/federation/:providerId/token` |
 | Console session | `z0_session` — `isInstanceMember`, `organizationName` |
 | App user session | `z0_app_session` — scoped to one `app_id`; no console access |
 

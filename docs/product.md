@@ -15,14 +15,14 @@ Self-hosted **identity and access management** for developers building apps (sim
 Self-hostable **Auth0 / Clerk** for your apps: you run the IAM instance; your apps redirect end users to us; users come back signed in.
 
 - **Console** — React admin UI for instance setup, members, apps, credentials, scopes, app users, email settings, profile/security.
-- **Hosted app auth** — Branded sign-in/sign-up pages your end users see (email + password today; Google, Apple, GitHub, Facebook, etc. per app when social connections ship).
+- **Hosted app auth** — Branded sign-in/sign-up pages with email/password and social providers (Google, Apple, GitHub, Facebook) when enabled per app.
 - **Authorization server** — `/oauth/*` + token and OIDC endpoints (M09–M10): your app is the OAuth client; we are the identity provider.
 - **JSON API** — `/api/*` for the console and server-side integration.
 
 ### End-user experience (target)
 
 1. Your app sends the user to us (OAuth authorize URL with your `client_id`).
-2. The user sees **your app’s hosted page** — sign up or sign in (email/password, and later “Continue with Google” / Apple / GitHub / Facebook when enabled for that app).
+2. The user sees **your app’s hosted page** — sign up or sign in with email/password or enabled social providers.
 3. After success, we redirect back to **your app’s redirect URI** with an authorization code (or session, per integration).
 4. Your app exchanges the code for tokens and treats the user as logged in.
 
@@ -54,10 +54,8 @@ One **platform instance** per deployment (single account owner). **No** internal
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
-**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create. **Grouped services (SSO):** console app groups with shared sign-in across sibling apps (Google-style session handoff and consent reuse within the group). **Security & observability:** audit log API + Activity console, session/device management for console members and app users, encryption-at-rest inventory documented in the security contract.
+**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create. **Grouped services (SSO):** console app groups with shared sign-in across sibling apps (Google-style session handoff and consent reuse within the group). **External OAuth providers (P5):** Google, Apple, GitHub, Facebook, and custom OIDC at instance level; per-app enablement; hosted sign-in buttons; account linking; encrypted upstream token storage with refresh; `federation:token` scope for app backends. **Security & observability:** audit log API + Activity console, session/device management for console members and app users, encryption-at-rest inventory documented in the security contract.
 
 **Not yet shipped:** MFA, passkeys, Docker self-host.
-
-**Social connections** (Google, Apple, GitHub, Facebook, etc. per app — Clerk/Auth0-style): planned module after core hosted auth + OAuth ship; console Federation nav is placeholder until then.
 
 Post-v1 / TBD: enterprise SSO (SAML/OIDC broker for workforce), analytics, device flow.

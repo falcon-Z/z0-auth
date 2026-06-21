@@ -22,6 +22,7 @@ import {
   loadSecretsForProviderId,
   normalizeProviderProfile,
   resolveFederationOrigin,
+  resolveRequestedScopes,
 } from "../../api/lib/federation-broker";
 import { isProviderEnabledForApp } from "../../api/lib/federation-providers";
 import { linkFederationIdentity, storeProviderTokens } from "../../api/lib/federation-linking";
@@ -97,13 +98,14 @@ export async function getFederationStart(req: BunRequest): Promise<Response> {
     returnTo: returnTo ?? null,
   });
 
+  const scopes = await resolveRequestedScopes(realm.appId, provider.id, secrets.defaultScopes);
   const origin = resolveFederationOrigin(req);
   const upstream = buildUpstreamAuthorizeUrl({
     secrets,
     providerKey: provider.key,
     origin,
     state: state.nonce,
-    scopes: secrets.defaultScopes,
+    scopes,
   });
 
   const headers = new Headers({ Location: upstream });
@@ -150,7 +152,7 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
   try {
     const origin = resolveFederationOrigin(req);
     const tokens = await exchangeUpstreamCode({ secrets, providerKey, origin, code });
-    const profile = await normalizeProviderProfile(secrets, tokens.access_token);
+    const profile = await normalizeProviderProfile(secrets, tokens.access_token, tokens.id_token);
 
     const linked = await linkFederationIdentity({
       appId: stored.appId,

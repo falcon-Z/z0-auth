@@ -79,6 +79,10 @@ import {
   handlePutAppFederationSettings,
 } from "./apps/federation-handlers";
 import {
+  handleGetFederationUserToken,
+  handleRefreshFederationUserToken,
+} from "./apps/federation-token-handlers";
+import {
   handleCreateServiceGroup,
   handleDeleteServiceGroup,
   handleGetServiceGroup,
@@ -108,6 +112,14 @@ export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/apps/:appId", handlers: { GET: handleGetApp, PATCH: handlePatchApp } },
   { pattern: "/api/v1/apps/:appId/sign-in", handlers: { GET: handleGetAppSignInSettings, PUT: handlePutAppSignInSettings } },
   { pattern: "/api/v1/apps/:appId/federation", handlers: { GET: handleGetAppFederationSettings, PUT: handlePutAppFederationSettings } },
+  {
+    pattern: "/api/v1/apps/:appId/users/:userId/federation/:providerId/token",
+    handlers: { GET: handleGetFederationUserToken },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users/:userId/federation/:providerId/token/refresh",
+    handlers: { POST: handleRefreshFederationUserToken },
+  },
   {
     pattern: "/api/v1/apps/:appId/credentials",
     handlers: { GET: handleListCredentials, POST: handleCreateCredential },

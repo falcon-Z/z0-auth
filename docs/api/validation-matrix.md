@@ -268,6 +268,20 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 
 Append-only: no create/update/delete API. Events written by handlers (auth, members, apps, SMTP, federation, sessions).
 
+## Federation providers (P5)
+
+| Endpoint | Input | Rule | Code | HTTP | UI |
+|----------|-------|------|------|------|-----|
+| `POST …/providers/from-template` | `builtinId` | One of google, apple, github, facebook | `required` | 400 | Provider picker |
+| `POST …/providers/from-template` | Apple | `appleTeamId`, `appleKeyId`, `applePrivateKey` required | `required` | 400 | Apple setup form |
+| `POST …/providers/from-template` | Others | `clientId`, `clientSecret` required | `required` | 400 | Credential fields |
+| `POST …/providers/from-template` | Duplicate builtin | Key unique | `provider_key_taken` | 409 | Already configured |
+| `PUT …/apps/:appId/federation` | `providers[]` | Unique provider ids; must exist | `provider_not_found` | 400 | Sign-in page toggles |
+| `GET …/users/:userId/federation/:providerId/token` | Auth | Console `apps.federation:read` or bearer `federation:token` | `permission_denied` / `invalid_scope` | 403 | Server integration |
+| `GET …/token` | Token row | Active or auto-refreshable | `federation_token_expired` | 410 | Re-auth prompt |
+| `POST …/token/refresh` | Upstream | Refresh grant succeeds | `federation_token_refresh_failed` | 502 | Retry |
+| Hosted `/auth/federation/*` | Linking | Verified email auto-link; conflicts blocked | `federation_email_conflict` | 409 HTML | Error card |
+
 ## App user sessions — console admin (P7M2)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

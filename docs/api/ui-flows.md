@@ -71,6 +71,18 @@ Non-members with a valid session are denied console APIs (**403**).
 
 Console member self-service sessions remain at `/profile/sessions` (`GET/DELETE /api/v1/sessions`).
 
+## External sign-in providers (P5)
+
+| Surface | Behavior |
+|---------|----------|
+| Console **Settings → Sign-in providers** | Configure Google, Apple, GitHub, Facebook (or custom OAuth); callback URL shown per provider |
+| Console **App → Sign-in page** | Enable instance providers for the app; order on hosted page |
+| Hosted `/auth/login?client_id=…` | Password form plus **Or continue with** provider buttons when enabled |
+| `/auth/federation/:key/start` | Redirect to upstream IdP (PKCE/state cookie) |
+| `/auth/federation/:key/callback` | Link or create `app_users`, store encrypted upstream tokens, resume OAuth |
+| `GET …/users/:userId/federation/:providerId/token` | Console or bearer `federation:token`; auto-refresh when expired |
+| `POST …/token/refresh` | Force upstream refresh; bearer allowed without CSRF |
+
 ## HTTP status codes (auth/setup)
 
 | Code | When |

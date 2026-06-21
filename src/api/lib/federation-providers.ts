@@ -16,6 +16,7 @@ import { getDb, pgTextArray } from "./db";
 import { problem } from "./http";
 import { encryptSecret } from "./settings-crypto";
 import { BUILTIN_PROVIDER_TEMPLATES, builtinTemplate } from "./federation-builtin";
+import { parseAppleMetadata } from "./federation-apple";
 
 type ProviderRow = {
   id: string;
@@ -33,6 +34,7 @@ type ProviderRow = {
   client_id: string | null;
   client_secret_ciphertext: string | null;
   status: "active" | "disabled";
+  provider_metadata: unknown;
   created_at: Date;
   updated_at: Date;
 };
@@ -42,6 +44,7 @@ function callbackUrlForKey(origin: string, key: string): string {
 }
 
 function mapProviderRow(row: ProviderRow, origin: string): IdentityProviderResponse {
+  const apple = parseAppleMetadata(row.provider_metadata);
   return {
     id: String(row.id),
     key: row.key,
@@ -57,6 +60,8 @@ function mapProviderRow(row: ProviderRow, origin: string): IdentityProviderRespo
     defaultScopes: row.default_scopes,
     clientId: row.client_id,
     hasClientSecret: Boolean(row.client_secret_ciphertext),
+    appleTeamId: apple?.teamId ?? null,
+    appleKeyId: apple?.keyId ?? null,
     status: row.status,
     callbackUrl: callbackUrlForKey(origin, row.key),
     createdAt: new Date(row.created_at).toISOString(),
@@ -150,7 +155,34 @@ export async function createProviderFromTemplate(
       }),
     };
   }
-  if (!body.clientSecret?.trim()) {
+
+  const isApple = body.builtinId === "apple";
+  if (isApple) {
+    if (!body.appleTeamId?.trim()) {
+      return {
+        ok: false,
+        response: problem(400, "Validation Error", "Invalid request", {
+          errors: [{ field: "appleTeamId", code: ErrorCodes.REQUIRED, message: "Enter your Apple Team ID" }],
+        }),
+      };
+    }
+    if (!body.appleKeyId?.trim()) {
+      return {
+        ok: false,
+        response: problem(400, "Validation Error", "Invalid request", {
+          errors: [{ field: "appleKeyId", code: ErrorCodes.REQUIRED, message: "Enter your Apple Key ID" }],
+        }),
+      };
+    }
+    if (!body.applePrivateKey?.trim()) {
+      return {
+        ok: false,
+        response: problem(400, "Validation Error", "Invalid request", {
+          errors: [{ field: "applePrivateKey", code: ErrorCodes.REQUIRED, message: "Paste your Apple private key (.p8)" }],
+        }),
+      };
+    }
+  } else if (!body.clientSecret?.trim()) {
     return {
       ok: false,
       response: problem(400, "Validation Error", "Invalid request", {
@@ -158,6 +190,8 @@ export async function createProviderFromTemplate(
       }),
     };
   }
+
+  const secretMaterial = isApple ? body.applePrivateKey!.trim() : body.clientSecret!.trim();
 
   const template = builtinTemplate(body.builtinId);
   if (await providerKeyTaken(template.key)) {
@@ -169,7 +203,16 @@ export async function createProviderFromTemplate(
     };
   }
 
-  const secretCiphertext = await encryptSecret(body.clientSecret.trim());
+  const secretCiphertext = await encryptSecret(secretMaterial);
+  const providerMetadata = isApple
+    ? JSON.stringify({
+        apple: {
+          teamId: body.appleTeamId!.trim(),
+          keyId: body.appleKeyId!.trim(),
+        },
+      })
+    : null;
+
   const [row] = await getDb()`
     INSERT INTO identity_providers (
       key,
@@ -185,6 +228,7 @@ export async function createProviderFromTemplate(
       default_scopes,
       client_id,
       client_secret_ciphertext,
+      provider_metadata,
       status
     )
     VALUES (
@@ -201,6 +245,7 @@ export async function createProviderFromTemplate(
       ${template.defaultScopes},
       ${body.clientId.trim()},
       ${secretCiphertext},
+      ${providerMetadata}::jsonb,
       'active'
     )
     RETURNING *
@@ -303,6 +348,9 @@ export async function patchIdentityProvider(
     };
   }
 
+  const [existingRow] = await getDb()`SELECT provider_metadata FROM identity_providers WHERE id = ${providerId} LIMIT 1`;
+  const existingMetadata = existingRow ? (existingRow as { provider_metadata: unknown }).provider_metadata : null;
+
   const errors: { field: string; code: string; message: string }[] = [];
   if (body.authorizationUrl !== undefined) errors.push(...validateHttpsUrl(body.authorizationUrl, "authorizationUrl", "Authorization URL"));
   if (body.tokenUrl !== undefined) errors.push(...validateHttpsUrl(body.tokenUrl, "tokenUrl", "Token URL"));
@@ -312,7 +360,21 @@ export async function patchIdentityProvider(
   }
 
   const secretCiphertext =
-    body.clientSecret?.trim() ? await encryptSecret(body.clientSecret.trim()) : undefined;
+    body.clientSecret?.trim()
+      ? await encryptSecret(body.clientSecret.trim())
+      : body.applePrivateKey?.trim()
+        ? await encryptSecret(body.applePrivateKey.trim())
+        : undefined;
+
+  const providerMetadata =
+    body.appleTeamId !== undefined || body.appleKeyId !== undefined
+      ? JSON.stringify({
+          apple: {
+            teamId: body.appleTeamId?.trim() || parseAppleMetadata(existingMetadata)?.teamId || "",
+            keyId: body.appleKeyId?.trim() || parseAppleMetadata(existingMetadata)?.keyId || "",
+          },
+        })
+      : undefined;
 
   await getDb()`
     UPDATE identity_providers
@@ -327,6 +389,7 @@ export async function patchIdentityProvider(
       default_scopes = COALESCE(${body.defaultScopes?.trim() ?? null}, default_scopes),
       client_id = COALESCE(${body.clientId?.trim() ?? null}, client_id),
       client_secret_ciphertext = COALESCE(${secretCiphertext ?? null}, client_secret_ciphertext),
+      provider_metadata = CASE WHEN ${providerMetadata !== undefined} THEN ${providerMetadata ?? null}::jsonb ELSE provider_metadata END,
       status = COALESCE(${body.status ?? null}, status),
       updated_at = NOW()
     WHERE id = ${providerId}
@@ -515,6 +578,7 @@ export type ProviderSecrets = {
   userinfoUrl: string | null;
   defaultScopes: string;
   builtinId: string | null;
+  providerMetadata: unknown;
 };
 
 export async function getProviderSecrets(providerId: string): Promise<ProviderSecrets | null> {
@@ -526,7 +590,8 @@ export async function getProviderSecrets(providerId: string): Promise<ProviderSe
       token_url,
       userinfo_url,
       default_scopes,
-      builtin_id
+      builtin_id,
+      provider_metadata
     FROM identity_providers
     WHERE id = ${providerId}
       AND status = 'active'
@@ -542,6 +607,7 @@ export async function getProviderSecrets(providerId: string): Promise<ProviderSe
     userinfo_url: string | null;
     default_scopes: string;
     builtin_id: string | null;
+    provider_metadata: unknown;
   };
   if (!r.client_id || !r.client_secret_ciphertext || !r.authorization_url || !r.token_url) return null;
 
@@ -555,6 +621,7 @@ export async function getProviderSecrets(providerId: string): Promise<ProviderSe
     userinfoUrl: r.userinfo_url,
     defaultScopes: r.default_scopes,
     builtinId: r.builtin_id,
+    providerMetadata: r.provider_metadata,
   };
 }
 

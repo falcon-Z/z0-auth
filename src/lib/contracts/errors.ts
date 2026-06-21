@@ -95,6 +95,10 @@ export const ErrorCodes = {
   FEDERATION_FAILED: "federation_failed",
   /** Email from provider conflicts with an existing account. */
   FEDERATION_EMAIL_CONFLICT: "federation_email_conflict",
+  /** Stored upstream provider token expired. */
+  FEDERATION_TOKEN_EXPIRED: "federation_token_expired",
+  /** Upstream provider rejected a token refresh. */
+  FEDERATION_TOKEN_REFRESH_FAILED: "federation_token_refresh_failed",
   /** Application already belongs to another service group. */
   APP_ALREADY_GROUPED: "app_already_grouped",
 } as const;

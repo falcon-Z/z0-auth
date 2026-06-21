@@ -25,3 +25,7 @@ CROSS JOIN platform_scopes s
 WHERE r.key = 'developer'
   AND s.key = 'settings.audit:read'
 ON CONFLICT DO NOTHING;
+
+INSERT INTO schema_migrations (version)
+VALUES ('0030_p7_security_observability')
+ON CONFLICT (version) DO NOTHING;

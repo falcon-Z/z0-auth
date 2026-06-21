@@ -158,11 +158,80 @@ paths:
       responses:
         "200":
           description: Updated settings
+  /api/v1/apps/{appId}/users/{userId}/federation/{providerId}/token:
+    get:
+      tags: [Federation]
+      summary: Get upstream provider access token for a user
+      operationId: getFederationUserToken
+      security:
+        - SessionCookie: []
+        - BearerAccessToken: []
+      parameters:
+        - name: appId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: providerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Valid upstream access token (refreshed automatically when possible)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationUserTokenResponse"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "410":
+          description: Token expired and cannot be refreshed
+  /api/v1/apps/{appId}/users/{userId}/federation/{providerId}/token/refresh:
+    post:
+      tags: [Federation]
+      summary: Force refresh upstream provider token
+      operationId: refreshFederationUserToken
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+        - BearerAccessToken: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: appId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: providerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Refreshed upstream access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FederationUserTokenResponse"
+        "502":
+          description: Upstream refresh failed
 components:
   schemas:
     CreateIdentityProviderFromTemplateRequest:
       type: object
-      required: [builtinId, clientId, clientSecret]
+      required: [builtinId, clientId]
       properties:
         builtinId:
           type: string
@@ -170,6 +239,12 @@ components:
         clientId:
           type: string
         clientSecret:
+          type: string
+        appleTeamId:
+          type: string
+        appleKeyId:
+          type: string
+        applePrivateKey:
           type: string
         displayName:
           type: string
@@ -199,4 +274,21 @@ components:
         clientSecret:
           type: string
         enabled:
+          type: boolean
+    FederationUserTokenResponse:
+      type: object
+      required: [accessToken, tokenType, refreshed]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+        scope:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        refreshed:
           type: boolean

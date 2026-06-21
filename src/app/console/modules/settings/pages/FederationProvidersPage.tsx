@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { BuiltinProviderId, IdentityProviderResponse } from "@z0/contracts/federation";
 import { BUILTIN_PROVIDER_IDS } from "@z0/contracts/federation";
+import { BUILTIN_PROVIDER_SETUP_GUIDES } from "@z0/api/lib/federation-builtin";
 import { Button } from "@z0/components/ui/button";
 import { Card, CardContent } from "@z0/components/ui/card";
 import { Input } from "@z0/components/ui/input";
 import { Label } from "@z0/components/ui/label";
 import { Switch } from "@z0/components/ui/switch";
+import { Textarea } from "@z0/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -37,6 +39,9 @@ const BUILTIN_LABELS: Record<BuiltinProviderId, string> = {
   facebook: "Facebook",
 };
 
+const CALLBACK_PREVIEW_ORIGIN =
+  typeof window !== "undefined" ? window.location.origin : "https://auth.example.com";
+
 export function FederationProvidersPage() {
   const [providers, setProviders] = useState<IdentityProviderResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,11 +51,14 @@ export function FederationProvidersPage() {
   const [saving, setSaving] = useState(false);
 
   const [mode, setMode] = useState<"builtin" | "custom">("builtin");
-  const [builtinId, setBuiltinId] = useState<BuiltinProviderId>("github");
+  const [builtinId, setBuiltinId] = useState<BuiltinProviderId>("google");
   const [customKey, setCustomKey] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [appleTeamId, setAppleTeamId] = useState("");
+  const [appleKeyId, setAppleKeyId] = useState("");
+  const [applePrivateKey, setApplePrivateKey] = useState("");
   const [authorizationUrl, setAuthorizationUrl] = useState("");
   const [tokenUrl, setTokenUrl] = useState("");
   const [userinfoUrl, setUserinfoUrl] = useState("");
@@ -73,6 +81,9 @@ export function FederationProvidersPage() {
     void reload();
   }, [reload]);
 
+  const setupGuide = useMemo(() => BUILTIN_PROVIDER_SETUP_GUIDES[builtinId], [builtinId]);
+  const callbackPreview = `${CALLBACK_PREVIEW_ORIGIN}/auth/federation/${builtinId}/callback`;
+
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -84,7 +95,10 @@ export function FederationProvidersPage() {
           builtinId,
           displayName: displayName.trim() || undefined,
           clientId: clientId.trim(),
-          clientSecret: clientSecret.trim(),
+          clientSecret: builtinId === "apple" ? undefined : clientSecret.trim(),
+          appleTeamId: builtinId === "apple" ? appleTeamId.trim() : undefined,
+          appleKeyId: builtinId === "apple" ? appleKeyId.trim() : undefined,
+          applePrivateKey: builtinId === "apple" ? applePrivateKey.trim() : undefined,
           enabled: true,
         });
       } else {
@@ -101,6 +115,7 @@ export function FederationProvidersPage() {
         });
       }
       setClientSecret("");
+      setApplePrivateKey("");
       setNotice("Provider saved.");
       await reload();
     } catch (e) {
@@ -144,12 +159,13 @@ export function FederationProvidersPage() {
   }
 
   const configuredKeys = new Set(providers.map((provider) => provider.key));
+  const availableBuiltins = BUILTIN_PROVIDER_IDS.filter((id) => !configuredKeys.has(id));
 
   return (
     <div className="space-y-6">
       <ListPageHeader title="Sign-in providers" />
       <p className="text-sm text-muted-foreground">
-        Connect external OAuth providers. App developers choose which ones to show on their hosted sign-in page.
+        Connect Google, Apple, GitHub, and Facebook. App developers choose which providers appear on their hosted sign-in page.
       </p>
 
       <ActionNotice message={notice} />
@@ -164,7 +180,7 @@ export function FederationProvidersPage() {
               <li key={provider.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 space-y-1">
                   <p className="font-medium">{provider.displayName}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground break-all">
                     Key: {provider.key} · Callback: {provider.callbackUrl}
                   </p>
                 </div>
@@ -197,27 +213,45 @@ export function FederationProvidersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="builtin">Built-in (Google, GitHub, …)</SelectItem>
+                  <SelectItem value="builtin">Built-in provider</SelectItem>
                   <SelectItem value="custom">Custom OAuth</SelectItem>
                 </SelectContent>
               </Select>
             </FormField>
 
             {mode === "builtin" ? (
-              <FormField label="Provider" htmlFor="builtinId">
-                <Select value={builtinId} onValueChange={(value) => setBuiltinId(value as BuiltinProviderId)}>
-                  <SelectTrigger id="builtinId">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BUILTIN_PROVIDER_IDS.filter((id) => !configuredKeys.has(id)).map((id) => (
-                      <SelectItem key={id} value={id}>
-                        {BUILTIN_LABELS[id]}
-                      </SelectItem>
+              <>
+                <FormField label="Provider" htmlFor="builtinId">
+                  <Select value={builtinId} onValueChange={(value) => setBuiltinId(value as BuiltinProviderId)}>
+                    <SelectTrigger id="builtinId">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableBuiltins.map((id) => (
+                        <SelectItem key={id} value={id}>
+                          {BUILTIN_LABELS[id]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormField>
+
+                <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-2">
+                  <p className="font-medium">{setupGuide.displayName}</p>
+                  <p className="text-muted-foreground">{setupGuide.summary}</p>
+                  <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+                    {setupGuide.steps.map((step) => (
+                      <li key={step}>{step}</li>
                     ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
+                  </ol>
+                  <p className="text-muted-foreground">
+                    Callback URL: <span className="font-mono text-foreground break-all">{callbackPreview}</span>
+                  </p>
+                  <a className="text-primary underline-offset-4 hover:underline" href={setupGuide.docsUrl} target="_blank" rel="noreferrer">
+                    Provider documentation
+                  </a>
+                </div>
+              </>
             ) : (
               <>
                 <FormField label="Key" htmlFor="customKey" error={fieldErrors.key}>
@@ -241,15 +275,36 @@ export function FederationProvidersPage() {
             <FormField label="Display name" htmlFor="displayName">
               <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Optional" />
             </FormField>
-            <FormField label="Client ID" htmlFor="clientId" error={fieldErrors.clientId}>
+            <FormField label={builtinId === "apple" && mode === "builtin" ? "Services ID" : "Client ID"} htmlFor="clientId" error={fieldErrors.clientId}>
               <Input id="clientId" value={clientId} onChange={(e) => setClientId(e.target.value)} />
             </FormField>
-            <FormField label="Client secret" htmlFor="clientSecret" error={fieldErrors.clientSecret}>
-              <Input id="clientSecret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
-            </FormField>
+
+            {mode === "builtin" && builtinId === "apple" ? (
+              <>
+                <FormField label="Team ID" htmlFor="appleTeamId" error={fieldErrors.appleTeamId}>
+                  <Input id="appleTeamId" value={appleTeamId} onChange={(e) => setAppleTeamId(e.target.value)} />
+                </FormField>
+                <FormField label="Key ID" htmlFor="appleKeyId" error={fieldErrors.appleKeyId}>
+                  <Input id="appleKeyId" value={appleKeyId} onChange={(e) => setAppleKeyId(e.target.value)} />
+                </FormField>
+                <FormField label="Private key (.p8)" htmlFor="applePrivateKey" error={fieldErrors.applePrivateKey}>
+                  <Textarea
+                    id="applePrivateKey"
+                    value={applePrivateKey}
+                    onChange={(e) => setApplePrivateKey(e.target.value)}
+                    rows={6}
+                    placeholder="-----BEGIN PRIVATE KEY-----"
+                  />
+                </FormField>
+              </>
+            ) : (
+              <FormField label="Client secret" htmlFor="clientSecret" error={fieldErrors.clientSecret}>
+                <Input id="clientSecret" type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} />
+              </FormField>
+            )}
 
             <FormActions>
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving || (mode === "builtin" && availableBuiltins.length === 0)}>
                 {saving ? "Saving…" : "Add provider"}
               </Button>
             </FormActions>

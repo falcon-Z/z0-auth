@@ -21,6 +21,8 @@ export type IdentityProviderResponse = {
   defaultScopes: string;
   clientId: string | null;
   hasClientSecret: boolean;
+  appleTeamId: string | null;
+  appleKeyId: string | null;
   status: IdentityProviderStatus;
   callbackUrl: string;
   createdAt: string;
@@ -31,7 +33,10 @@ export type CreateIdentityProviderFromTemplateRequest = {
   builtinId: BuiltinProviderId;
   displayName?: string;
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
+  appleTeamId?: string;
+  appleKeyId?: string;
+  applePrivateKey?: string;
   enabled?: boolean;
 };
 
@@ -58,6 +63,9 @@ export type PatchIdentityProviderRequest = {
   defaultScopes?: string;
   clientId?: string;
   clientSecret?: string;
+  appleTeamId?: string;
+  appleKeyId?: string;
+  applePrivateKey?: string;
   issuer?: string | null;
   jwksUrl?: string | null;
   status?: IdentityProviderStatus;
@@ -92,4 +100,22 @@ export type HostedFederationProvider = {
   key: string;
   displayName: string;
   startUrl: string;
+};
+
+export type FederationUserTokenResponse = {
+  accessToken: string;
+  tokenType: string;
+  scope: string | null;
+  expiresAt: string | null;
+  refreshed: boolean;
+};
+
+export type BuiltinProviderSetupGuide = {
+  id: BuiltinProviderId;
+  displayName: string;
+  key: string;
+  summary: string;
+  steps: string[];
+  docsUrl: string;
+  credentialFields: ("clientId" | "clientSecret" | "appleTeamId" | "appleKeyId" | "applePrivateKey")[];
 };

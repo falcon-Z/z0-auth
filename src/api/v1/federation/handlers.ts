@@ -21,6 +21,7 @@ import {
   listIdentityProvidersForApi,
   patchIdentityProvider,
 } from "../../lib/federation-providers";
+import { listBuiltinSetupGuides } from "../../lib/federation-builtin";
 
 export async function handleListIdentityProviders(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "settings.federation:read");
@@ -32,7 +33,10 @@ export async function handleListIdentityProviders(req: RoutedRequest): Promise<R
 export async function handleListBuiltinTemplates(_req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(_req, "settings.federation:read");
   if (!auth.ok) return auth.response;
-  return json({ templates: listAvailableBuiltinTemplates() });
+  return json({
+    templates: listAvailableBuiltinTemplates(),
+    guides: listBuiltinSetupGuides(),
+  });
 }
 
 export async function handleGetIdentityProvider(req: RoutedRequest): Promise<Response> {
