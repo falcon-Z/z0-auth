@@ -24,8 +24,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:password@localhost:5432/z0auth
-      TEST_DATABASE_URL: postgresql://postgres:password@localhost:5432/z0auth_test
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/z0auth_test
     steps:
       - uses: actions/checkout@v4
 
@@ -40,4 +39,4 @@ jobs:
         run: bun run db:test:init
 
       - name: Run tests
-        run: bun test
+        run: bun run test --no-env-file

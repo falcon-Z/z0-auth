@@ -1,14 +1,6 @@
-import path from "node:path";
-
 import { defineConfig, devices } from "@playwright/test";
 
-import { loadEnvFile, loadRootEnv } from "./src/lib/load-root-env";
-
-loadRootEnv();
-loadEnvFile(path.join(process.cwd(), ".env.test"));
-
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
-const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim() ?? "";
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -46,9 +38,6 @@ export default defineConfig({
     url: `${baseURL}/api/live`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: {
-      ...process.env,
-      DATABASE_URL: testDatabaseUrl,
-    },
+    env: process.env,
   },
 });

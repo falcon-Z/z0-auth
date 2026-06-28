@@ -8,9 +8,6 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { createPgSql } from "../api/lib/create-pg-sql";
-import { loadRootEnv } from "../lib/load-root-env";
-
-loadRootEnv();
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {

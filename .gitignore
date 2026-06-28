@@ -21,12 +21,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Instance keys (symmetric data key + Ed25519 token signing keypair)
 .data/
 
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+# dotenv environment variable files (keep .env.example as the single template)
+.env*
+!.env.example
 
 # caches
 .eslintcache

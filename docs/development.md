@@ -8,7 +8,8 @@
 ## First-time setup
 
 ```bash
-cp .env.example .env   # if you do not already have .env
+cp .env.example .env     # dev — adjust values as needed
+cp .env.example .env.test # test — set DATABASE_URL to z0auth_test (see comments in .env.example)
 bun install
 ```
 
@@ -50,16 +51,16 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). If `DATABASE_URL` or instan
 
 ## Tests and the dev database
 
-Integration tests use **`TEST_DATABASE_URL`** (`z0auth_test` on the same Postgres as dev), loaded from `.env.test` via `tests/preload.ts`. They call `resetTestDatabase()` in `beforeAll`, which drops and migrates **only that test database**.
+Integration tests use a separate Postgres database (`z0auth_test`). Bun loads `.env` then `.env.test` when you run `bun test` (`NODE_ENV=test`); **`.env.test` overrides `DATABASE_URL`** to point at the test database. They call `resetTestDatabase()` in `beforeAll`, which drops and migrates only that database.
 
-| Database | Env var | Used by |
-|----------|---------|---------|
-| `z0auth` | `DATABASE_URL` | `bun dev`, manual browser work |
-| `z0auth_test` | `TEST_DATABASE_URL` | `bun test`, Playwright e2e |
+| Database | Env file | Used by |
+|----------|----------|---------|
+| `z0auth` | `.env` | `bun dev`, manual browser work |
+| `z0auth_test` | `.env.test` (overrides `DATABASE_URL`) | `bun test`, Playwright e2e |
+
+Test resets refuse to run unless `NODE_ENV=test` and the database name ends with `_test`, so dev data is not wiped by mistake.
 
 Tests still create owner accounts with **dynamic passwords** (full setup → user flows). That state is ephemeral — wiped on every test run and discarded when CI finishes. It never touches your dev database.
-
-If `TEST_DATABASE_URL` matches `DATABASE_URL`, test resets fail fast instead of wiping dev data.
 
 For a clean dev slate, run `bun run db:reset` and complete `/auth/setup` again with credentials you choose.
 
@@ -107,7 +108,7 @@ Reference minimal setup (outside this repo): `/home/madhan/projects/z0-tailwind-
 ### Playwright (console UI)
 
 ```bash
-# Uses TEST_DATABASE_URL from .env.test when set (resets DB before e2e)
+# Loads .env.test via NODE_ENV=test (see package.json test:e2e script)
 export E2E_PASSWORD='your-strong-password'   # must not contain name/email substrings
 bun run test:e2e
 ```

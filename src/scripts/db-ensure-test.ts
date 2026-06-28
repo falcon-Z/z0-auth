@@ -1,20 +1,14 @@
 #!/usr/bin/env bun
 /**
  * Creates the integration-test database on the same Postgres instance as dev.
- * Usage: bun run db:test:init
+ * Usage: bun run db:test:init  (NODE_ENV=test — reads DATABASE_URL from .env.test)
  */
 
-import path from "node:path";
-
 import { createPgSql } from "../api/lib/create-pg-sql";
-import { loadEnvFile, loadRootEnv } from "../lib/load-root-env";
 
-loadRootEnv();
-loadEnvFile(path.join(import.meta.dir, "../../.env.test"));
-
-const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
-if (!testDatabaseUrl) {
-  console.error("TEST_DATABASE_URL is required (see .env.test).");
+const databaseUrl = process.env.DATABASE_URL?.trim();
+if (!databaseUrl) {
+  console.error("DATABASE_URL is required (see .env.test when NODE_ENV=test).");
   process.exit(1);
 }
 
@@ -22,7 +16,7 @@ function databaseNameFromUrl(url: string): string {
   const parsed = new URL(url.replace(/^postgresql:/, "http:"));
   const name = parsed.pathname.replace(/^\//, "");
   if (!name || !/^[a-zA-Z0-9_]+$/.test(name)) {
-    throw new Error(`Invalid database name in TEST_DATABASE_URL: ${name || "(empty)"}`);
+    throw new Error(`Invalid database name in DATABASE_URL: ${name || "(empty)"}`);
   }
   return name;
 }
@@ -33,8 +27,8 @@ function adminUrlFromDatabaseUrl(url: string): string {
   return parsed.toString().replace(/^http:/, "postgresql:");
 }
 
-const databaseName = databaseNameFromUrl(testDatabaseUrl);
-const adminUrl = adminUrlFromDatabaseUrl(testDatabaseUrl);
+const databaseName = databaseNameFromUrl(databaseUrl);
+const adminUrl = adminUrlFromDatabaseUrl(databaseUrl);
 
 const db = createPgSql(adminUrl);
 const existing = await db`

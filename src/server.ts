@@ -3,9 +3,6 @@ import { serve } from "bun";
 import { apiRouteMap, dispatchApiRequest } from "./api/dispatch";
 import { checkDatabaseHealth, closeDatabase } from "./api/lib/db";
 import { loadConfig } from "./api/lib/config";
-import { loadRootEnv } from "./lib/load-root-env";
-
-loadRootEnv();
 import { initializeInstanceKeys } from "./api/lib/instance-keys";
 import { printStartupSummary } from "./api/lib/startup-log";
 
