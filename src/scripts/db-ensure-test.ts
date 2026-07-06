@@ -28,6 +28,13 @@ function adminUrlFromDatabaseUrl(url: string): string {
 }
 
 const databaseName = databaseNameFromUrl(databaseUrl);
+if (!databaseName.endsWith("_test")) {
+  throw new Error(
+    `db:test:init only creates databases whose name ends with "_test" (got "${databaseName}"). ` +
+      "Set DATABASE_URL in .env.test to a dedicated test database.",
+  );
+}
+
 const adminUrl = adminUrlFromDatabaseUrl(databaseUrl);
 
 const db = createPgSql(adminUrl);
