@@ -25,7 +25,7 @@ Spec-driven contracts for the single-account IAM model. Product context: [../pro
 | [references/console.openapi.yaml](./references/console.openapi.yaml) | Dashboard summary |
 | [references/app-users.openapi.yaml](./references/app-users.openapi.yaml) | App end users per application (M05) |
 | [references/sessions.openapi.yaml](./references/sessions.openapi.yaml) | Session management |
-| [references/oauth.openapi.yaml](./references/oauth.openapi.yaml) | OAuth 2.1 (planned) |
+| [references/oauth.openapi.yaml](./references/oauth.openapi.yaml) | OAuth 2.1 and OIDC |
 
 TypeScript mirrors: `src/lib/contracts/`.
 
