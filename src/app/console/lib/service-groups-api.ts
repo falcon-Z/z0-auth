@@ -19,7 +19,7 @@ export async function fetchServiceGroup(groupId: string): Promise<ServiceGroupDe
 export async function createServiceGroup(body: CreateServiceGroupRequest): Promise<ServiceGroupDetail> {
   return apiFetch<ServiceGroupDetail>("/api/v1/service-groups", {
     method: "POST",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -29,7 +29,7 @@ export async function patchServiceGroup(
 ): Promise<ServiceGroupDetail> {
   return apiFetch<ServiceGroupDetail>(`/api/v1/service-groups/${groupId}`, {
     method: "PATCH",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -39,7 +39,7 @@ export async function putServiceGroupApps(
 ): Promise<ServiceGroupDetail> {
   return apiFetch<ServiceGroupDetail>(`/api/v1/service-groups/${groupId}/apps`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body,
   });
 }
 

@@ -18,7 +18,7 @@ export async function createProviderFromTemplate(
 ): Promise<IdentityProviderResponse> {
   return apiFetch<IdentityProviderResponse>("/api/v1/federation/providers/from-template", {
     method: "POST",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -27,7 +27,7 @@ export async function createCustomProvider(
 ): Promise<IdentityProviderResponse> {
   return apiFetch<IdentityProviderResponse>("/api/v1/federation/providers", {
     method: "POST",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -37,7 +37,7 @@ export async function patchIdentityProvider(
 ): Promise<IdentityProviderResponse> {
   return apiFetch<IdentityProviderResponse>(`/api/v1/federation/providers/${providerId}`, {
     method: "PATCH",
-    body: JSON.stringify(body),
+    body,
   });
 }
 
@@ -55,6 +55,6 @@ export async function putAppFederationSettings(
 ): Promise<AppFederationSettingsResponse> {
   return apiFetch<AppFederationSettingsResponse>(`/api/v1/apps/${appId}/federation`, {
     method: "PUT",
-    body: JSON.stringify(body),
+    body,
   });
 }

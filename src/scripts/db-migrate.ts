@@ -18,6 +18,13 @@ if (!databaseUrl) {
 const migrationsDir = path.join(import.meta.dir, "sql", "migrations");
 const db = createPgSql(databaseUrl);
 
+await db`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+`;
+
 const appliedRows = await db`SELECT version FROM schema_migrations`;
 const applied = new Set(appliedRows.map((r) => String((r as { version: string }).version)));
 
