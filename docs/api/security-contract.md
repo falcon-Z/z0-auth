@@ -78,6 +78,19 @@ When `INSTALL_TOKEN` is set in the environment:
 
 ---
 
+## Configured first-owner bootstrap
+
+Operators may create the first owner from deployment configuration instead of the browser setup form.
+
+- Supported variables: `Z0_BOOTSTRAP_ORG_NAME`, `Z0_BOOTSTRAP_ADMIN_NAME`, `Z0_BOOTSTRAP_ADMIN_EMAIL`, `Z0_BOOTSTRAP_ADMIN_PASSWORD`
+- If any `Z0_BOOTSTRAP_*` variable is set, all four are required before automatic setup runs.
+- Automatic setup runs only while platform setup is incomplete.
+- The owner is inserted in the same atomic setup transaction as `POST /api/setup`.
+- Bootstrap passwords must satisfy the normal setup password policy.
+- After setup completes, bootstrap variables are ignored.
+
+---
+
 ## Instance keys (startup)
 
 Two separate purposes — do not conflate them:

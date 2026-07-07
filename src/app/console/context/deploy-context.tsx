@@ -27,6 +27,11 @@ function SetupRedirect() {
   return <SessionGate message="Redirecting to platform setup…" />;
 }
 
+function needsBootstrapConfigSetup(status: DeployStatusResponse): boolean {
+  const bootstrap = status.platform?.bootstrap;
+  return Boolean(bootstrap?.configured && !bootstrap.ready && !status.platform?.setupComplete);
+}
+
 export function DeployProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<DeployStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +59,12 @@ export function DeployProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (!status || status.ready) return;
+    if (!status || (status.ready && !needsBootstrapConfigSetup(status))) return;
     const intervalId = window.setInterval(() => {
       void refresh();
     }, 5000);
     return () => window.clearInterval(intervalId);
-  }, [status?.ready, refresh]);
+  }, [status, refresh]);
 
   if (error) {
     return (
@@ -73,7 +78,7 @@ export function DeployProvider({ children }: { children: ReactNode }) {
     return <SessionGate />;
   }
 
-  if (!status.ready) {
+  if (!status.ready || needsBootstrapConfigSetup(status)) {
     return <DeploySetupPage status={status} onRefresh={() => void refresh()} refreshing={refreshing} />;
   }
 

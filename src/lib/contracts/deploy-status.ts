@@ -10,6 +10,12 @@ export type DeployProviderId =
 
 export type InstanceKeySource = "env" | "file" | "generated" | "missing";
 
+export type BootstrapOwnerField =
+  | "organizationName"
+  | "adminName"
+  | "adminEmail"
+  | "adminPassword";
+
 export type DeployStatusResponse = {
   /** True when database is connected and instance keys are ready. */
   ready: boolean;
@@ -32,5 +38,10 @@ export type DeployStatusResponse = {
   platform: {
     setupComplete: boolean;
     organizationName?: string;
+    bootstrap: {
+      configured: boolean;
+      ready: boolean;
+      missing: BootstrapOwnerField[];
+    };
   } | null;
 };

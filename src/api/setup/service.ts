@@ -26,6 +26,22 @@ export type SetupResult =
   | { ok: true; response: SetupResponse }
   | { ok: false; response: Response };
 
+type SetupSource = "api" | "config";
+
+async function requireSetupSchema(): Promise<Response | null> {
+  const schema = await checkDatabaseSchema();
+  if (schema.ready) return null;
+  return problem(503, "Service Unavailable", "Database schema is not ready. Run migrations first.", {
+    errors: [
+      {
+        field: "_schema",
+        code: ErrorCodes.DATABASE_UNAVAILABLE,
+        message: "Apply database migrations before setup (bun run db:migrate).",
+      },
+    ],
+  });
+}
+
 function tokensMatch(provided: string, expected: string): boolean {
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
@@ -65,57 +81,24 @@ function validateInstallToken(
   return null;
 }
 
-export async function runSetup(
-  req: BunRequest,
-  body: SetupRequest,
-  options: SetupRunOptions = {},
-): Promise<SetupResult> {
-  const config = loadConfig();
-
-  const schema = await checkDatabaseSchema();
-  if (!schema.ready) {
-    return {
-      ok: false,
-      response: problem(503, "Service Unavailable", "Database schema is not ready. Run migrations first.", {
-        errors: [
-          {
-            field: "_schema",
-            code: ErrorCodes.DATABASE_UNAVAILABLE,
-            message: "Apply database migrations before setup (bun run db:migrate).",
-          },
-        ],
-      }),
-    };
-  }
-
-  const installToken = options.installToken ?? req.headers.get("x-install-token");
-  const installError = validateInstallToken(config, installToken);
-  if (installError) {
-    return { ok: false, response: installError };
-  }
-
-  const rate = checkRateLimit({
-    key: `setup:${clientIp(req)}`,
-    limit: 3,
-    windowMs: 60 * 60 * 1000,
-  });
-  if (!rate.allowed) {
-    return {
-      ok: false,
-      response: problem(429, "Too Many Requests", "Setup rate limit exceeded", {
-        errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Too many setup attempts" }],
-        retryAfter: rate.retryAfterSec,
-      }),
-    };
-  }
-
-  const errors = [
+function validateSetupBody(body: SetupRequest) {
+  return [
     ...validateRequiredString(body.name, "name", "Name"),
     ...validateEmail(body.email),
     ...validateRequiredString(body.organizationName, "organizationName", "Organization name"),
     ...validatePassword(body.password ?? "", { email: body.email, name: body.name }),
     ...validatePasswordConfirm(body.password ?? "", body.passwordConfirm ?? ""),
   ];
+}
+
+export async function createBootstrapOwner(
+  body: SetupRequest,
+  options: { source: SetupSource; ip?: string } = { source: "config" },
+): Promise<SetupResult> {
+  const schemaError = await requireSetupSchema();
+  if (schemaError) return { ok: false, response: schemaError };
+
+  const errors = validateSetupBody(body);
 
   if (errors.length > 0) {
     return {
@@ -175,7 +158,13 @@ export async function runSetup(
     });
 
     if (result.conflict) {
-      console.warn(JSON.stringify({ event: "setup.attempted_after_complete", ip: clientIp(req) }));
+      console.warn(
+        JSON.stringify({
+          event: "setup.attempted_after_complete",
+          source: options.source,
+          ...(options.ip ? { ip: options.ip } : {}),
+        }),
+      );
       return {
         ok: false,
         response: problem(409, "Conflict", "Platform setup has already been completed.", {
@@ -196,6 +185,7 @@ export async function runSetup(
     console.info(
       JSON.stringify({
         event: "setup.completed",
+        source: options.source,
         userId: result.userId,
       }),
     );
@@ -210,4 +200,39 @@ export async function runSetup(
     }
     throw error;
   }
+}
+
+export async function runSetup(
+  req: BunRequest,
+  body: SetupRequest,
+  options: SetupRunOptions = {},
+): Promise<SetupResult> {
+  const config = loadConfig();
+
+  const schemaError = await requireSetupSchema();
+  if (schemaError) return { ok: false, response: schemaError };
+
+  const installToken = options.installToken ?? req.headers.get("x-install-token");
+  const installError = validateInstallToken(config, installToken);
+  if (installError) {
+    return { ok: false, response: installError };
+  }
+
+  const ip = clientIp(req);
+  const rate = checkRateLimit({
+    key: `setup:${ip}`,
+    limit: 3,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rate.allowed) {
+    return {
+      ok: false,
+      response: problem(429, "Too Many Requests", "Setup rate limit exceeded", {
+        errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Too many setup attempts" }],
+        retryAfter: rate.retryAfterSec,
+      }),
+    };
+  }
+
+  return createBootstrapOwner(body, { source: "api", ip });
 }

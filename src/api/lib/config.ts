@@ -17,7 +17,29 @@ export type AppConfig = {
   allowIncompleteSetup: boolean;
   /** Public HTTPS origin for OAuth/OIDC issuer (e.g. https://auth.example.com). Falls back to request origin. */
   publicOrigin?: string;
+  /** Optional first-owner bootstrap from deployment configuration. */
+  bootstrapOwner: BootstrapOwnerConfig;
 };
+
+export type BootstrapOwnerConfig = {
+  organizationName?: string;
+  adminName?: string;
+  adminEmail?: string;
+  adminPassword?: string;
+};
+
+export type BootstrapOwnerField =
+  | "organizationName"
+  | "adminName"
+  | "adminEmail"
+  | "adminPassword";
+
+const bootstrapOwnerFields = {
+  organizationName: "Z0_BOOTSTRAP_ORG_NAME",
+  adminName: "Z0_BOOTSTRAP_ADMIN_NAME",
+  adminEmail: "Z0_BOOTSTRAP_ADMIN_EMAIL",
+  adminPassword: "Z0_BOOTSTRAP_ADMIN_PASSWORD",
+} as const satisfies Record<BootstrapOwnerField, string>;
 
 /** True when DATABASE_URL is set to a non-empty value. */
 export function isDatabaseConfigured(): boolean {
@@ -39,6 +61,12 @@ function resolveBindAddress(nodeEnv: string): string {
 
 export function loadConfig(): AppConfig {
   const nodeEnv = process.env.NODE_ENV ?? "development";
+  const bootstrapOwner: BootstrapOwnerConfig = {
+    organizationName: process.env.Z0_BOOTSTRAP_ORG_NAME?.trim() || undefined,
+    adminName: process.env.Z0_BOOTSTRAP_ADMIN_NAME?.trim() || undefined,
+    adminEmail: process.env.Z0_BOOTSTRAP_ADMIN_EMAIL?.trim() || undefined,
+    adminPassword: process.env.Z0_BOOTSTRAP_ADMIN_PASSWORD?.trim() || undefined,
+  };
   return {
     nodeEnv,
     port: Number(process.env.PORT ?? "3000"),
@@ -48,6 +76,22 @@ export function loadConfig(): AppConfig {
     installToken: process.env.INSTALL_TOKEN,
     allowIncompleteSetup: process.env.ALLOW_INCOMPLETE_SETUP === "true",
     publicOrigin: process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, "") || undefined,
+    bootstrapOwner,
+  };
+}
+
+export function bootstrapOwnerStatus(config: BootstrapOwnerConfig): {
+  configured: boolean;
+  ready: boolean;
+  missing: BootstrapOwnerField[];
+} {
+  const entries = Object.keys(bootstrapOwnerFields) as BootstrapOwnerField[];
+  const configured = entries.some((field) => Boolean(config[field]));
+  const missing = configured ? entries.filter((field) => !config[field]) : [];
+  return {
+    configured,
+    ready: configured && missing.length === 0,
+    missing,
   };
 }
 

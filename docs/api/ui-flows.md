@@ -19,6 +19,15 @@ Security (CSRF, sessions, cookies): [security-contract.md](./security-contract.m
 1. User opens `/auth/setup`.
 2. `POST /auth/setup` with CSRF — creates owner account and organization profile.
 3. Server **303** redirect to `/auth/login?setup=complete&org=...`.
+
+Automated deployments may skip the browser setup form by setting all first-owner bootstrap variables before startup:
+
+- `Z0_BOOTSTRAP_ORG_NAME`
+- `Z0_BOOTSTRAP_ADMIN_NAME`
+- `Z0_BOOTSTRAP_ADMIN_EMAIL`
+- `Z0_BOOTSTRAP_ADMIN_PASSWORD`
+
+If only some bootstrap variables are set, automatic setup does not run and the deploy checklist shows the missing owner fields.
 4. User signs in → `POST /auth/login` → **303** to `/`.
 
 ## Authenticated

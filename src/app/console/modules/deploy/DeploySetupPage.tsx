@@ -1,5 +1,5 @@
 import type { DeployStatusResponse } from "@z0/contracts/deploy-status";
-import { CheckCircle2, Database, KeyRound, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Database, KeyRound, RefreshCw, UserRound, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
@@ -9,6 +9,7 @@ import { cn } from "../../lib/utils";
 
 import { DatabaseSetupPanel } from "./DatabaseSetupPanel";
 import { SecretsSetupPanel } from "./SecretsSetupPanel";
+import { BootstrapOwnerSetupPanel } from "./BootstrapOwnerSetupPanel";
 
 type DeploySetupPageProps = {
   status: DeployStatusResponse;
@@ -16,11 +17,14 @@ type DeploySetupPageProps = {
   refreshing: boolean;
 };
 
-type SetupStep = "database" | "keys";
+type SetupStep = "database" | "keys" | "owner";
 
 function stepComplete(status: DeployStatusResponse, step: SetupStep): boolean {
   if (step === "database") {
     return status.database.configured && status.database.connected && status.database.schemaReady;
+  }
+  if (step === "owner") {
+    return Boolean(status.platform?.setupComplete || status.platform?.bootstrap.ready);
   }
   return status.instanceKeys.ready;
 }
@@ -75,12 +79,15 @@ function StepNavButton({
 export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPageProps) {
   const dbComplete = stepComplete(status, "database");
   const keysComplete = stepComplete(status, "keys");
+  const bootstrapConfigured = Boolean(status.platform?.bootstrap.configured);
+  const ownerComplete = stepComplete(status, "owner");
 
   const suggestedStep = useMemo((): SetupStep => {
     if (!dbComplete) return "database";
     if (!keysComplete) return "keys";
+    if (bootstrapConfigured && !ownerComplete) return "owner";
     return "database";
-  }, [dbComplete, keysComplete]);
+  }, [bootstrapConfigured, dbComplete, keysComplete, ownerComplete]);
 
   const [activeStep, setActiveStep] = useState<SetupStep>(suggestedStep);
 
@@ -95,7 +102,7 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
           <div className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Instance setup</h1>
             <p className="max-w-xl text-sm text-muted-foreground">
-              Complete each step on the left. When both are done, you will continue to platform setup
+              Complete each step on the left. When deployment setup is done, you will continue
               automatically.
             </p>
           </div>
@@ -132,6 +139,18 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
                 if (dbComplete) setActiveStep("keys");
               }}
             />
+            {bootstrapConfigured ? (
+              <StepNavButton
+                active={activeStep === "owner"}
+                complete={ownerComplete}
+                label="First owner"
+                icon={UserRound}
+                muted={!dbComplete || !keysComplete}
+                onClick={() => {
+                  if (dbComplete && keysComplete) setActiveStep("owner");
+                }}
+              />
+            ) : null}
           </div>
         </nav>
 
@@ -140,7 +159,7 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
           <CardContent className="p-6 sm:p-8">
           {activeStep === "database" ? (
             <DatabaseSetupPanel status={status} />
-          ) : !dbComplete ? (
+          ) : activeStep === "keys" && !dbComplete ? (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold tracking-tight">Encryption keys</h2>
               <Alert>
@@ -151,8 +170,20 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
                 </AlertDescription>
               </Alert>
             </div>
-          ) : (
+          ) : activeStep === "keys" ? (
             <SecretsSetupPanel status={status} />
+          ) : !dbComplete || !keysComplete ? (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold tracking-tight">First owner</h2>
+              <Alert>
+                <AlertTitle>Deployment setup first</AlertTitle>
+                <AlertDescription>
+                  Complete database and encryption key setup before creating the first owner.
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : (
+            <BootstrapOwnerSetupPanel status={status} />
           )}
           </CardContent>
         </Card>

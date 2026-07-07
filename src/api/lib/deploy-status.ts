@@ -1,6 +1,6 @@
 import type { DeployStatusResponse } from "@z0/contracts/deploy-status";
 
-import { loadConfig } from "./config";
+import { bootstrapOwnerStatus, loadConfig } from "./config";
 import { checkDatabaseHealth, checkDatabaseSchema } from "./db";
 import { areInstanceKeysReady, getInstanceKeySources } from "./instance-keys";
 import { getInstanceSettings } from "./instance";
@@ -11,6 +11,7 @@ export async function buildDeployStatus(): Promise<DeployStatusResponse> {
   const schema = db.ok ? await checkDatabaseSchema() : { ready: false as const };
   const keySources = getInstanceKeySources();
   const keysReady = areInstanceKeysReady();
+  const bootstrap = bootstrapOwnerStatus(config.bootstrapOwner);
 
   const unstableInProduction =
     config.nodeEnv === "production" &&
@@ -22,6 +23,7 @@ export async function buildDeployStatus(): Promise<DeployStatusResponse> {
       const settings = await getInstanceSettings();
       platform = {
         setupComplete: settings.setupCompleted,
+        bootstrap,
         ...(settings.organizationName ? { organizationName: settings.organizationName } : {}),
       };
     } catch {

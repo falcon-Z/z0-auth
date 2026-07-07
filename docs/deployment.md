@@ -2,7 +2,7 @@
 
 z0-auth is designed to run **where you host it** — Cloud Run, Railway, Render, EC2, Kubernetes, or local Docker. You provide PostgreSQL and instance secrets; the app does not provision a database or encryption keys on your behalf.
 
-The management console shows a **setup checklist** until `DATABASE_URL` works, migrations are applied, and instance keys are configured (production). After that, you are redirected to `/auth/setup` to create the first console account.
+The management console shows a **setup checklist** until `DATABASE_URL` works, migrations are applied, and instance keys are configured (production). After that, z0-auth either creates the first owner from bootstrap configuration or redirects you to `/auth/setup` for manual setup.
 
 ## Required configuration
 
@@ -22,7 +22,18 @@ bun src/scripts/generate-instance-token-keys.ts
 
 In **development**, keys may be auto-created under `.data/instance-keys.json` when env vars are unset. A single production instance may also auto-generate keys on first start; use env vars or a shared keys file before scaling to multiple replicas.
 
-Optional: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/auth/setup` form), `ALLOW_INCOMPLETE_SETUP` (bypass setup guard for maintenance), `PORT`, `BIND_ADDRESS`, `APP_NAME`. See `.env.example`.
+Optional first-owner bootstrap:
+
+| Variable | Purpose |
+|----------|---------|
+| `Z0_BOOTSTRAP_ORG_NAME` | Organization name stored on the instance |
+| `Z0_BOOTSTRAP_ADMIN_NAME` | First owner display name |
+| `Z0_BOOTSTRAP_ADMIN_EMAIL` | First owner email address |
+| `Z0_BOOTSTRAP_ADMIN_PASSWORD` | First owner password |
+
+If any `Z0_BOOTSTRAP_*` value is set, all four are required before automatic setup runs. z0-auth only uses these values while platform setup is incomplete; after the first owner exists, they are ignored.
+
+Other optional settings: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/auth/setup` form), `ALLOW_INCOMPLETE_SETUP` (bypass setup guard for maintenance), `PORT`, `BIND_ADDRESS`, `APP_NAME`. See `.env.example`.
 
 ## Fresh production sequence
 
@@ -33,9 +44,12 @@ Optional: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/auth/setup` form
    ```
    Run from a machine or job that can reach the database with the same `DATABASE_URL` the app uses.
 3. **Set instance keys** in production (`INSTANCE_DATA_KEY`, token keypair). Restart the app if you change env vars.
-4. **Open the console root URL** — the checklist should turn green and redirect to `/auth/setup`.
-5. **Complete platform setup** — organization name, your name, email, and password. If `INSTALL_TOKEN` is set, enter it on the setup form.
-6. **Sign in** at `/auth/login` with the account you just created.
+4. **Choose first-owner setup**:
+   - Set all four `Z0_BOOTSTRAP_*` variables before startup for fully automated setup, or
+   - Leave them unset and create the owner in `/auth/setup`.
+5. **Open the console root URL** — the checklist should turn green. If bootstrap configuration is complete, the first owner is created automatically; otherwise you are redirected to `/auth/setup`.
+6. **Complete platform setup** if you are using the manual browser flow — organization name, your name, email, and password. If `INSTALL_TOKEN` is set, enter it on the setup form.
+7. **Sign in** at `/auth/login` with the owner account.
 
 For local development, use `bun run db:reset` instead of `db:migrate` when you want a clean database. See [development.md](./development.md).
 

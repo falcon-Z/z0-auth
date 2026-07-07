@@ -5,12 +5,21 @@ import { checkDatabaseHealth, closeDatabase } from "./api/lib/db";
 import { loadConfig } from "./api/lib/config";
 import { initializeInstanceKeys } from "./api/lib/instance-keys";
 import { printStartupSummary } from "./api/lib/startup-log";
+import { runConfiguredBootstrap } from "./api/setup/bootstrap";
 
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
 });
 
 await initializeInstanceKeys();
+const configuredBootstrap = await runConfiguredBootstrap();
+if (configuredBootstrap.status === "created") {
+  console.info(
+    JSON.stringify({
+      event: "setup.bootstrap_config_created",
+    }),
+  );
+}
 import { authWebRoutes } from "./web/auth/routes";
 import { appInviteWebRoutes } from "./web/auth/app-invite-routes";
 import { inviteWebRoutes } from "./web/auth/invite-routes";

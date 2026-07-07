@@ -282,3 +282,89 @@ bun src/scripts/generate-instance-token-keys.ts`,
     },
   ],
 };
+
+const BOOTSTRAP_ENV_CODE = `Z0_BOOTSTRAP_ORG_NAME="Acme IAM"
+Z0_BOOTSTRAP_ADMIN_NAME="Owner User"
+Z0_BOOTSTRAP_ADMIN_EMAIL="owner@example.com"
+Z0_BOOTSTRAP_ADMIN_PASSWORD="use-a-strong-unique-password"`;
+
+const BOOTSTRAP_SHARED_STEPS: GuideStep[] = [
+  {
+    title: "Set all first-owner variables",
+    body: "Automatic first-owner setup runs only when all four values are present. If you leave them all unset, z0-auth uses the browser setup form instead.",
+    code: BOOTSTRAP_ENV_CODE,
+  },
+  {
+    title: "Restart the app",
+    body: "The app reads bootstrap configuration during startup. After setup completes, these variables are ignored by z0-auth.",
+  },
+];
+
+export const BOOTSTRAP_OWNER_GUIDES: Record<DeployProviderId, GuideStep[]> = {
+  docker: [
+    ...BOOTSTRAP_SHARED_STEPS,
+    {
+      title: "Pass the variables to Docker",
+      body: "Add the four values to your compose file, env-file, or container run command alongside DATABASE_URL and instance keys.",
+      links: [
+        {
+          label: "Set environment variables (Docker Docs)",
+          href: "https://docs.docker.com/compose/environment-variables/set-environment-variables/",
+        },
+      ],
+    },
+  ],
+  "google-cloud-run": [
+    ...BOOTSTRAP_SHARED_STEPS,
+    {
+      title: "Store sensitive values as secrets",
+      body: "Store the admin password in Secret Manager and map it to Z0_BOOTSTRAP_ADMIN_PASSWORD. The other values may be service variables or secrets, depending on your policy.",
+      links: [
+        {
+          label: "Configure secrets on Cloud Run",
+          href: "https://cloud.google.com/run/docs/configuring/secrets",
+        },
+        {
+          label: "Configure environment variables (Cloud Run)",
+          href: "https://cloud.google.com/run/docs/configuring/services/environment-variables",
+        },
+      ],
+    },
+  ],
+  railway: [
+    ...BOOTSTRAP_SHARED_STEPS,
+    {
+      title: "Add service variables",
+      body: "Add the four Z0_BOOTSTRAP variables on your z0-auth service, then redeploy so startup can create the first owner.",
+      links: [{ label: "Variables on Railway", href: "https://docs.railway.com/guides/variables" }],
+    },
+  ],
+  render: [
+    ...BOOTSTRAP_SHARED_STEPS,
+    {
+      title: "Add environment values",
+      body: "Add the four Z0_BOOTSTRAP values under Environment on your web service, save, and deploy.",
+      links: [{ label: "Environment variables (Render)", href: "https://render.com/docs/environment-variables" }],
+    },
+  ],
+  "aws-ec2": [
+    ...BOOTSTRAP_SHARED_STEPS,
+    {
+      title: "Load values at process start",
+      body: "Store the password in AWS Secrets Manager or Parameter Store, then expose all four variables to the z0-auth process through systemd, Docker, ECS, or your orchestrator.",
+      links: [
+        {
+          label: "AWS Secrets Manager",
+          href: "https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html",
+        },
+      ],
+    },
+  ],
+  generic: [
+    ...BOOTSTRAP_SHARED_STEPS,
+    {
+      title: "Use your host's secret store",
+      body: "Put the password in your deployment secret manager and expose the other values as normal environment configuration. Restart after saving.",
+    },
+  ],
+};
