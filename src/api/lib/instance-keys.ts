@@ -9,19 +9,27 @@ type StoredKeysFile = {
   version: number;
   /** Present when data key is file-backed (dev or shared volume). Omitted when using INSTANCE_DATA_KEY. */
   dataKey?: string;
+  dataKeyId?: string;
   tokenPrivateKey: string;
   tokenPublicKey: string;
+  tokenKeyId?: string;
 };
 
 type LoadedKeys = {
   dataKey: CryptoKey;
+  dataKeyId: string;
+  dataKeys: Map<string, CryptoKey>;
   tokenPrivateKey: CryptoKey;
   tokenPublicKey: CryptoKey;
+  tokenKeyId: string;
+  tokenPublicKeys: Map<string, CryptoKey>;
 };
 
 export type InstanceKeySources = {
   dataKey: "env" | "file" | "generated" | "missing";
   tokenKeys: "env" | "file" | "generated" | "missing";
+  dataKeyId?: string;
+  tokenKeyId?: string;
   keysFilePath: string;
 };
 
@@ -40,6 +48,41 @@ function base64ToBytes(b64: string): Uint8Array {
 
 function bytesToBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  return Buffer.from(bytes)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function base64UrlEncodeText(text: string): string {
+  return base64UrlEncode(new TextEncoder().encode(text));
+}
+
+function base64UrlDecode(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = (4 - (padded.length % 4)) % 4;
+  return new Uint8Array(Buffer.from(padded + "=".repeat(pad), "base64"));
+}
+
+function base64UrlDecodeText(value: string): string {
+  return new TextDecoder().decode(base64UrlDecode(value));
+}
+
+function configuredKeyId(envName: string, fallback: string): string {
+  const configured = process.env[envName]?.trim();
+  if (!configured) return fallback;
+  if (configured.includes(".") || configured.includes(":")) {
+    throw new Error(`${envName} must not contain "." or ":".`);
+  }
+  return configured;
+}
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
 }
 
 /** Parse a 32-byte AES key from hex (64 chars) or base64. */
@@ -133,22 +176,30 @@ async function tokenKeysFromEnv(): Promise<{ privateKey: CryptoKey; publicKey: C
 async function resolveDataKey(
   filePath: string,
   stored: StoredKeysFile | null,
-): Promise<{ key: CryptoKey | null; source: InstanceKeySources["dataKey"] }> {
+): Promise<{ key: CryptoKey | null; kid?: string; source: InstanceKeySources["dataKey"] }> {
   const envKey = process.env.INSTANCE_DATA_KEY?.trim();
   if (envKey) {
     const bytes = parseDataKeyMaterial(envKey);
     if (!bytes) {
       throw new Error("INSTANCE_DATA_KEY must be 32 bytes as 64-char hex or base64.");
     }
-    return { key: await importDataKeyBytes(bytes), source: "env" };
+    return {
+      key: await importDataKeyBytes(bytes),
+      kid: configuredKeyId("INSTANCE_DATA_KEY_ID", "env-data-key"),
+      source: "env",
+    };
+  }
+
+  if (isProduction()) {
+    return { key: null, source: "missing" };
   }
 
   if (stored?.dataKey) {
-    return { key: await importDataKeyB64(stored.dataKey), source: "file" };
+    return { key: await importDataKeyB64(stored.dataKey), kid: stored.dataKeyId ?? "file-data-key", source: "file" };
   }
 
   const key = await generateDataKey();
-  return { key, source: "generated" };
+  return { key, kid: "dev-generated-data-key", source: "generated" };
 }
 
 async function resolveTokenKeys(
@@ -156,6 +207,7 @@ async function resolveTokenKeys(
   stored: StoredKeysFile | null,
 ): Promise<{
   keys: { privateKey: CryptoKey; publicKey: CryptoKey } | null;
+  kid?: string;
   source: InstanceKeySources["tokenKeys"];
   exported: { tokenPrivateKey: string; tokenPublicKey: string };
 }> {
@@ -163,11 +215,20 @@ async function resolveTokenKeys(
   if (fromEnv) {
     return {
       keys: fromEnv,
+      kid: configuredKeyId("INSTANCE_TOKEN_KEY_ID", "env-token-key"),
       source: "env",
       exported: {
         tokenPrivateKey: process.env.INSTANCE_TOKEN_PRIVATE_KEY!.trim(),
         tokenPublicKey: process.env.INSTANCE_TOKEN_PUBLIC_KEY!.trim(),
       },
+    };
+  }
+
+  if (isProduction()) {
+    return {
+      keys: null,
+      source: "missing",
+      exported: { tokenPrivateKey: "", tokenPublicKey: "" },
     };
   }
 
@@ -177,6 +238,7 @@ async function resolveTokenKeys(
         privateKey: await importTokenPrivateKey(stored.tokenPrivateKey),
         publicKey: await importTokenPublicKey(stored.tokenPublicKey),
       },
+      kid: stored.tokenKeyId ?? "file-token-key",
       source: "file",
       exported: {
         tokenPrivateKey: stored.tokenPrivateKey,
@@ -188,6 +250,7 @@ async function resolveTokenKeys(
   const generated = await generateTokenKeyPair();
   return {
     keys: generated,
+    kid: "dev-generated-token-key",
     source: "generated",
     exported: {
       tokenPrivateKey: await exportTokenPrivateKey(generated.privateKey),
@@ -198,8 +261,10 @@ async function resolveTokenKeys(
 
 async function persistIfNeeded(
   filePath: string,
-  data: { key: CryptoKey | null; source: InstanceKeySources["dataKey"] },
+  stored: StoredKeysFile | null,
+  data: { key: CryptoKey | null; kid?: string; source: InstanceKeySources["dataKey"] },
   token: {
+    kid?: string;
     source: InstanceKeySources["tokenKeys"];
     exported: { tokenPrivateKey: string; tokenPublicKey: string };
   },
@@ -209,17 +274,25 @@ async function persistIfNeeded(
 
   if (!shouldWriteData && !shouldWriteToken) return;
 
-  const stored: StoredKeysFile = {
+  const nextStored: StoredKeysFile = {
+    ...stored,
     version: KEYS_VERSION,
-    tokenPrivateKey: token.exported.tokenPrivateKey,
-    tokenPublicKey: token.exported.tokenPublicKey,
+    tokenPrivateKey: shouldWriteToken ? token.exported.tokenPrivateKey : stored?.tokenPrivateKey ?? token.exported.tokenPrivateKey,
+    tokenPublicKey: shouldWriteToken ? token.exported.tokenPublicKey : stored?.tokenPublicKey ?? token.exported.tokenPublicKey,
   };
 
   if (shouldWriteData && data.key) {
-    stored.dataKey = await exportDataKeyRaw(data.key);
+    nextStored.dataKey = await exportDataKeyRaw(data.key);
+    nextStored.dataKeyId = data.kid ?? "dev-generated-data-key";
+  } else if (stored?.dataKey && data.kid) {
+    nextStored.dataKeyId = data.kid;
   }
 
-  await writeKeysFile(filePath, stored);
+  if (shouldWriteToken) {
+    nextStored.tokenKeyId = token.kid ?? "dev-generated-token-key";
+  }
+
+  await writeKeysFile(filePath, nextStored);
 }
 
 /** Load or create instance keys before handling secrets or signed tokens. */
@@ -235,20 +308,31 @@ export async function initializeInstanceKeys(): Promise<void> {
   sources = {
     dataKey: data.source,
     tokenKeys: token.source,
+    ...(data.kid ? { dataKeyId: data.kid } : {}),
+    ...(token.kid ? { tokenKeyId: token.kid } : {}),
     keysFilePath: filePath,
   };
 
   if (!data.key || !token.keys) {
     loaded = null;
+    if (isProduction()) {
+      throw new Error(
+        "Production instance keys are not configured. Set INSTANCE_DATA_KEY, INSTANCE_TOKEN_PRIVATE_KEY, and INSTANCE_TOKEN_PUBLIC_KEY.",
+      );
+    }
     return;
   }
 
-  await persistIfNeeded(filePath, data, token);
+  await persistIfNeeded(filePath, stored, data, token);
 
   loaded = {
     dataKey: data.key,
+    dataKeyId: data.kid ?? "active-data-key",
+    dataKeys: new Map([[data.kid ?? "active-data-key", data.key]]),
     tokenPrivateKey: token.keys.privateKey,
     tokenPublicKey: token.keys.publicKey,
+    tokenKeyId: token.kid ?? "active-token-key",
+    tokenPublicKeys: new Map([[token.kid ?? "active-token-key", token.keys.publicKey]]),
   };
 }
 
@@ -271,7 +355,7 @@ export function requireInstanceKeys(): LoadedKeys {
 
 /** AES-GCM encrypt instance secrets (SMTP password, etc.). */
 export async function encryptWithDataKey(plaintext: string): Promise<string> {
-  const { dataKey } = requireInstanceKeys();
+  const { dataKey, dataKeyId } = requireInstanceKeys();
   const iv = crypto.getRandomValues(new Uint8Array(DATA_IV_BYTES));
   const cipher = await crypto.subtle.encrypt(
     { name: DATA_ALGO, iv },
@@ -281,31 +365,27 @@ export async function encryptWithDataKey(plaintext: string): Promise<string> {
   const combined = new Uint8Array(iv.length + cipher.byteLength);
   combined.set(iv, 0);
   combined.set(new Uint8Array(cipher), iv.length);
-  return bytesToBase64(combined);
+  return `z0enc:v1:${base64UrlEncodeText(dataKeyId)}:${base64UrlEncode(combined)}`;
 }
 
 /** AES-GCM decrypt instance secrets. */
 export async function decryptWithDataKey(ciphertextB64: string): Promise<string> {
-  const { dataKey } = requireInstanceKeys();
-  const combined = base64ToBytes(ciphertextB64);
+  const keys = requireInstanceKeys();
+  const parts = ciphertextB64.split(":");
+  if (parts.length !== 4 || parts[0] !== "z0enc" || parts[1] !== "v1") {
+    throw new Error("Unsupported encrypted secret format.");
+  }
+
+  const kid = base64UrlDecodeText(parts[2]!);
+  const dataKey = keys.dataKeys.get(kid);
+  if (!dataKey) {
+    throw new Error(`Data key ${kid} is not available for decryption.`);
+  }
+  const combined = base64UrlDecode(parts[3]!);
   const iv = combined.subarray(0, DATA_IV_BYTES);
   const data = combined.subarray(DATA_IV_BYTES);
   const plain = await crypto.subtle.decrypt({ name: DATA_ALGO, iv }, dataKey, data);
   return new TextDecoder().decode(plain);
-}
-
-function base64UrlEncode(bytes: Uint8Array): string {
-  return Buffer.from(bytes)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
-function base64UrlDecode(value: string): Uint8Array {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = (4 - (padded.length % 4)) % 4;
-  return new Uint8Array(Buffer.from(padded + "=".repeat(pad), "base64"));
 }
 
 export type SignedResetPayload = {
@@ -321,23 +401,32 @@ export type SignedResetPayload = {
 
 /** Sign a password-reset token (Ed25519). Returns URL-safe token string. */
 export async function signResetToken(payload: SignedResetPayload): Promise<string> {
-  const { tokenPrivateKey } = requireInstanceKeys();
+  const { tokenPrivateKey, tokenKeyId } = requireInstanceKeys();
   const body = new TextEncoder().encode(JSON.stringify(payload));
   const signature = await crypto.subtle.sign("Ed25519", tokenPrivateKey, body);
-  return `${base64UrlEncode(body)}.${base64UrlEncode(new Uint8Array(signature))}`;
+  return `z0rt.v1.${base64UrlEncodeText(tokenKeyId)}.${base64UrlEncode(body)}.${base64UrlEncode(
+    new Uint8Array(signature),
+  )}`;
 }
 
 /** Verify reset token signature and parse payload. */
 export async function verifyResetToken(
   token: string,
 ): Promise<{ ok: true; payload: SignedResetPayload } | { ok: false }> {
-  const { tokenPublicKey } = requireInstanceKeys();
+  const keys = requireInstanceKeys();
   const parts = token.split(".");
-  if (parts.length !== 2) return { ok: false };
+  if (parts.length !== 5 || parts[0] !== "z0rt" || parts[1] !== "v1") {
+    return { ok: false };
+  }
 
   try {
-    const body = base64UrlDecode(parts[0]!);
-    const signature = base64UrlDecode(parts[1]!);
+    const kid = base64UrlDecodeText(parts[2]!);
+    const tokenPublicKey = keys.tokenPublicKeys.get(kid);
+    if (!tokenPublicKey) return { ok: false };
+    const bodyPart = parts[3]!;
+    const signaturePart = parts[4]!;
+    const body = base64UrlDecode(bodyPart);
+    const signature = base64UrlDecode(signaturePart);
     const valid = await crypto.subtle.verify("Ed25519", tokenPublicKey, signature, body);
     if (!valid) return { ok: false };
 

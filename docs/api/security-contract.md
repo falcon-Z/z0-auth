@@ -100,14 +100,16 @@ Two separate purposes — do not conflate them:
 | **Data key** | AES-256-GCM (symmetric) | Encrypt SMTP password and other instance secrets in the DB | **Restarts and all pods** |
 | **Token keypair** | Ed25519 (asymmetric) | Sign / verify password-reset links | **All pods** (any pod may verify a link another pod signed) |
 
+Each key also has a stable key ID (`kid`). Newly encrypted values and newly signed reset tokens include the `kid` so a future key-ring provider can decrypt or verify with older keys during rotation.
+
 ### Restarts (single instance)
 
 Keys are **not** regenerated on every restart.
 
 - **Development:** If `INSTANCE_DATA_KEY` is unset, the first start may create `.data/instance-keys.json` (including a data key). Keep that file (or set `INSTANCE_DATA_KEY`) so SMTP settings remain decryptable.
-- **Production:** Keys may be auto-generated on first start for a single instance. For multiple replicas, set `INSTANCE_DATA_KEY` and the token keypair (or mount a shared keys file) so every pod uses the same material.
+- **Production:** Root keys are required at startup. z0-auth does not auto-generate production data or token keys. Set `INSTANCE_DATA_KEY_ID`, `INSTANCE_DATA_KEY`, `INSTANCE_TOKEN_KEY_ID`, `INSTANCE_TOKEN_PRIVATE_KEY`, and `INSTANCE_TOKEN_PUBLIC_KEY` in the deployment environment.
 
-Rotating the data key without re-saving SMTP settings breaks existing ciphertext (same as losing the key).
+Changing a root key without a key-ring rotation workflow can break existing ciphertext or outstanding signed links.
 
 ### Encryption at rest inventory (P7M3)
 
@@ -131,9 +133,15 @@ One-way hashes (not encrypted — verification only, plaintext never stored):
 | Session tokens | `sessions.token_hash`, `app_user_sessions.token_hash` | SHA-256 hash |
 | Console / app user passwords | `password_credentials`, `app_users.password_hash` | Password hash |
 
-**Production:** set `INSTANCE_DATA_KEY` explicitly on every replica. Without it, dev may auto-generate a file-backed key; production pods with independent keys cannot decrypt each other's SMTP or federation secrets.
+Encrypted value format:
 
-**Rotation:** changing `INSTANCE_DATA_KEY` without re-entering encrypted secrets breaks decryption. Document key backup with operator runbooks (P9M3).
+```text
+z0enc:v1:<base64url-kid>:<base64url-nonce-and-ciphertext>
+```
+
+**Production:** set the same `INSTANCE_DATA_KEY_ID` and `INSTANCE_DATA_KEY` explicitly on every replica. Pods with independent keys cannot decrypt each other's SMTP or federation secrets.
+
+**Rotation:** future key providers should support one active data key for new writes and older decrypt-only keys until stored values are re-encrypted. Until that ships, key changes are a maintenance event.
 
 ### Kubernetes (multiple pods)
 
@@ -148,6 +156,16 @@ env:
       secretKeyRef:
         name: z0-auth-instance-keys
         key: data_key
+  - name: INSTANCE_DATA_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: z0-auth-instance-keys
+        key: data_key_id
+  - name: INSTANCE_TOKEN_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: z0-auth-instance-keys
+        key: token_key_id
   - name: INSTANCE_TOKEN_PRIVATE_KEY
     valueFrom:
       secretKeyRef:
@@ -162,13 +180,17 @@ env:
 
 Generate the data key once: `bun src/scripts/generate-instance-data-key.ts`.
 
-**Alternative:** mount a **ReadWriteMany** volume at the same `INSTANCE_KEYS_PATH` on all pods (single shared keys file). Simpler for token keys; data key via env is still preferred so pods stay stateless.
-
-**Do not** run multiple pods with independent `.data/` volumes — each would generate different keys and SMTP decryption / reset links would fail unpredictably.
+**Do not** run production pods with generated `.data/` keys or independent volumes — each pod would use different keys and SMTP decryption / reset links would fail unpredictably.
 
 ### Reset tokens
 
 Signed payload (`uid`, `exp`, `jti`); `password_reset_tokens.token_hash` stores `jti` for one-time use. Old links stop working when token keys rotate; SMTP secrets require data key stability or re-configuration.
+
+Reset token format:
+
+```text
+z0rt.v1.<base64url-kid>.<base64url-payload>.<base64url-signature>
+```
 
 ---
 

@@ -9,7 +9,9 @@ The management console shows a **setup checklist** until `DATABASE_URL` works, m
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL 16+ connection string |
-| `INSTANCE_DATA_KEY` | AES-256 key for encrypting SMTP password and other instance secrets (recommended for multi-replica; same on every pod) |
+| `INSTANCE_DATA_KEY_ID` | Stable identifier for the active data key, included with encrypted values |
+| `INSTANCE_DATA_KEY` | AES-256 key for encrypting SMTP password and other instance secrets; same on every pod |
+| `INSTANCE_TOKEN_KEY_ID` | Stable identifier for the active token signing key, included with signed reset tokens |
 | `INSTANCE_TOKEN_PRIVATE_KEY` | Ed25519 private key for password-reset link signatures (production; same on every replica) |
 | `INSTANCE_TOKEN_PUBLIC_KEY` | Matching public key |
 
@@ -20,7 +22,7 @@ bun src/scripts/generate-instance-data-key.ts
 bun src/scripts/generate-instance-token-keys.ts
 ```
 
-In **development**, keys may be auto-created under `.data/instance-keys.json` when env vars are unset. A single production instance may also auto-generate keys on first start; use env vars or a shared keys file before scaling to multiple replicas.
+In **development**, keys may be auto-created under `.data/instance-keys.json` when env vars are unset. In **production**, z0-auth fails startup when root keys are missing or incomplete. Do not rely on generated keys for production, even for a single container.
 
 Optional first-owner bootstrap:
 
@@ -43,7 +45,7 @@ Other optional settings: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/a
    bun run db:migrate
    ```
    Run from a machine or job that can reach the database with the same `DATABASE_URL` the app uses.
-3. **Set instance keys** in production (`INSTANCE_DATA_KEY`, token keypair). Restart the app if you change env vars.
+3. **Set instance keys** in production (`INSTANCE_DATA_KEY_ID`, `INSTANCE_DATA_KEY`, `INSTANCE_TOKEN_KEY_ID`, and token keypair). Restart the app if you change env vars.
 4. **Choose first-owner setup**:
    - Set all four `Z0_BOOTSTRAP_*` variables before startup for fully automated setup, or
    - Leave them unset and create the owner in `/auth/setup`.
@@ -88,7 +90,7 @@ Until images are published, build from this repository and pass env vars at runt
 
 ### Kubernetes
 
-- One Secret (or external secrets operator) with `DATABASE_URL`, `INSTANCE_DATA_KEY`, and token keys — **identical on every pod**.
+- One Secret (or external secrets operator) with `DATABASE_URL`, `INSTANCE_DATA_KEY_ID`, `INSTANCE_DATA_KEY`, `INSTANCE_TOKEN_KEY_ID`, and token keys — **identical on every pod**.
 - Do not use independent `.data/` volumes per pod.
 - Run migrations via an init Job or your CI pipeline before rolling out new app pods.
 
@@ -106,5 +108,6 @@ See also `docs/api/security-contract.md` (instance keys section).
 
 ## Rotating keys
 
-- **Data key:** existing SMTP ciphertext cannot be decrypted with a new key; re-save email settings in the console after rotation.
-- **Token keys:** outstanding password-reset links stop verifying; users can request a new reset.
+- **Data keys:** encrypted values carry a key ID. A future rotation flow will add a new active data key, keep older keys available for decryption, re-encrypt stored values, then retire old keys.
+- **Token keys:** reset tokens carry a signing key ID. A future rotation flow will sign new tokens with the active key and keep previous public keys available for verification until outstanding tokens expire.
+- Until the key-ring rotation workflow ships, treat root-key changes as a maintenance event and avoid changing production key material unless you are prepared to reconfigure encrypted settings and invalidate outstanding reset links.
