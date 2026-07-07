@@ -50,7 +50,7 @@ One **platform instance** per deployment (single account owner). **No** internal
 - **Console:** React + shadcn.
 - **Auth pages:** HTML + HTMX (not React).
 
-## v1 scope (Todoist Auth project)
+## v1 scope (local module ledger)
 
 Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
 
