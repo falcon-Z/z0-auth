@@ -25,6 +25,10 @@ export const DEPLOY_PROVIDERS: { id: DeployProviderId; label: string }[] = [
 export const POSTGRESQL_CONNSTRING_DOC =
   "https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING";
 
+const GENERATE_KEYS_CODE = "bun run generate-keys";
+const INSTANCE_KEY_ENV_NAMES =
+  "INSTANCE_DATA_KEY_ID, INSTANCE_DATA_KEY, INSTANCE_TOKEN_KEY_ID, INSTANCE_TOKEN_PRIVATE_KEY, and INSTANCE_TOKEN_PUBLIC_KEY";
+
 export const DATABASE_GUIDES: Record<DeployProviderId, GuideStep[]> = {
   docker: [
     {
@@ -179,13 +183,12 @@ export const SECRETS_GUIDES: Record<DeployProviderId, GuideStep[]> = {
   docker: [
     {
       title: "Generate keys once",
-      body: "Run these commands on a trusted machine. Keep the output private.",
-      code: `bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts`,
+      body: "Run this command on a trusted machine. Keep the output private.",
+      code: GENERATE_KEYS_CODE,
     },
     {
       title: "Pass them to the container",
-      body: "Set INSTANCE_DATA_KEY, INSTANCE_TOKEN_PRIVATE_KEY, and INSTANCE_TOKEN_PUBLIC_KEY alongside DATABASE_URL when you run the container.",
+      body: `Set ${INSTANCE_KEY_ENV_NAMES} alongside DATABASE_URL when you run the container.`,
       links: [
         {
           label: "Set environment variables (Docker Docs)",
@@ -201,9 +204,8 @@ bun src/scripts/generate-instance-token-keys.ts`,
   "google-cloud-run": [
     {
       title: "Generate keys once",
-      body: "Run these commands locally. Store the output in Secret Manager, not in your container image.",
-      code: `bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts`,
+      body: "Run this command locally. Store the output in Secret Manager, not in your container image.",
+      code: GENERATE_KEYS_CODE,
       links: [{ label: "Secret Manager documentation", href: "https://cloud.google.com/secret-manager/docs" }],
     },
     {
@@ -224,35 +226,32 @@ bun src/scripts/generate-instance-token-keys.ts`,
   railway: [
     {
       title: "Generate keys once",
-      body: "Run these commands locally, then add each line as a variable on your z0-auth service.",
-      code: `bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts`,
+      body: "Run this command locally, then add each line as a variable on your z0-auth service.",
+      code: GENERATE_KEYS_CODE,
     },
     {
       title: "Add service variables",
-      body: "Create variables for INSTANCE_DATA_KEY, INSTANCE_TOKEN_PRIVATE_KEY, and INSTANCE_TOKEN_PUBLIC_KEY, then redeploy.",
+      body: `Create variables for ${INSTANCE_KEY_ENV_NAMES}, then redeploy.`,
       links: [{ label: "Variables on Railway", href: "https://docs.railway.com/guides/variables" }],
     },
   ],
   render: [
     {
       title: "Generate keys once",
-      body: "Run these commands locally, then add each value under Environment on your web service.",
-      code: `bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts`,
+      body: "Run this command locally, then add each value under Environment on your web service.",
+      code: GENERATE_KEYS_CODE,
     },
     {
       title: "Save and deploy",
-      body: "After adding the three variables, save and deploy so the service restarts with the new secrets.",
+      body: "After adding the generated variables, save and deploy so the service restarts with the new secrets.",
       links: [{ label: "Environment variables (Render)", href: "https://render.com/docs/environment-variables" }],
     },
   ],
   "aws-ec2": [
     {
       title: "Generate keys once",
-      body: "Run these commands locally. Store the values in AWS Secrets Manager or Parameter Store.",
-      code: `bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts`,
+      body: "Run this command locally. Store the values in AWS Secrets Manager or Parameter Store.",
+      code: GENERATE_KEYS_CODE,
       links: [
         {
           label: "AWS Secrets Manager",
@@ -268,13 +267,12 @@ bun src/scripts/generate-instance-token-keys.ts`,
   generic: [
     {
       title: "Generate keys once",
-      body: "Run these commands on a trusted machine. Store the output in your platform’s secret manager.",
-      code: `bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts`,
+      body: "Run this command on a trusted machine. Store the output in your platform’s secret manager.",
+      code: GENERATE_KEYS_CODE,
     },
     {
-      title: "Set three environment variables",
-      body: "INSTANCE_DATA_KEY encrypts stored secrets such as your SMTP password. The token pair secures password-reset links. Restart the app after setting them.",
+      title: "Set environment variables",
+      body: "The data key encrypts stored secrets such as your SMTP password. The token pair secures password-reset links. Restart the app after setting the generated values.",
     },
     {
       title: "Keep keys stable",

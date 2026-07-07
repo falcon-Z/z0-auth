@@ -57,7 +57,7 @@ export function SecretsSetupPanel({ status }: SecretsSetupPanelProps) {
         <h2 className="text-lg font-semibold tracking-tight">Set encryption keys</h2>
         <p className="text-sm text-muted-foreground">
           These keys protect sensitive settings and password-reset links. Generate them once, store
-          them in your host&apos;s secret configuration, and use the{" "}
+          the generated key IDs and key material in your host&apos;s secret configuration, and use the{" "}
           <strong>same values on every replica</strong>.
         </p>
       </div>
@@ -67,13 +67,17 @@ export function SecretsSetupPanel({ status }: SecretsSetupPanelProps) {
         <AlertDescription>
           Set{" "}
           {status.instanceKeys.dataKey === "missing" ? (
-            <code className="rounded bg-muted px-1 text-xs">INSTANCE_DATA_KEY</code>
+            <span>
+              <code className="rounded bg-muted px-1 text-xs">INSTANCE_DATA_KEY_ID</code> /{" "}
+              <code className="rounded bg-muted px-1 text-xs">INSTANCE_DATA_KEY</code>
+            </span>
           ) : null}
           {status.instanceKeys.dataKey === "missing" && status.instanceKeys.tokenKeys === "missing"
             ? " and "
             : null}
           {status.instanceKeys.tokenKeys === "missing" ? (
             <span>
+              <code className="rounded bg-muted px-1 text-xs">INSTANCE_TOKEN_KEY_ID</code> /{" "}
               <code className="rounded bg-muted px-1 text-xs">INSTANCE_TOKEN_PRIVATE_KEY</code> /{" "}
               <code className="rounded bg-muted px-1 text-xs">INSTANCE_TOKEN_PUBLIC_KEY</code>
             </span>

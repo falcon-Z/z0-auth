@@ -178,7 +178,7 @@ env:
         key: token_public_key
 ```
 
-Generate the data key once: `bun src/scripts/generate-instance-data-key.ts`.
+Generate the instance keys once: `bun run generate-keys`.
 
 **Do not** run production pods with generated `.data/` keys or independent volumes — each pod would use different keys and SMTP decryption / reset links would fail unpredictably.
 

@@ -18,8 +18,7 @@ The management console shows a **setup checklist** until `DATABASE_URL` works, m
 Generate keys once per environment:
 
 ```bash
-bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts
+bun run generate-keys
 ```
 
 In **development**, keys may be auto-created under `.data/instance-keys.json` when env vars are unset. In **production**, z0-auth fails startup when root keys are missing or incomplete. Do not rely on generated keys for production, even for a single container.
