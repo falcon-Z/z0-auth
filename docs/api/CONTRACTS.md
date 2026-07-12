@@ -109,3 +109,5 @@ Use underscore-prefixed fields for non-input failures:
 | `oauth.openapi.yaml` | OAuth/OIDC authorization server |
 
 External references use relative paths, e.g. `$ref: "common.openapi.yaml#/components/responses/ValidationError"`.
+
+`bun run quality:alpha` parses every OpenAPI document, requires unique operation IDs, resolves local file and JSON Pointer references, and checks the alpha-critical endpoint inventory. Run it before merging contract changes.

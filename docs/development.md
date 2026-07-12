@@ -137,3 +137,21 @@ When shipping a screen: add the page under `src/app/console/modules/<name>/`, re
 | `bun test` | Unit + integration tests serialized against the isolated test DB |
 | `bun run db:test:init` | Create `z0auth_test` on existing Postgres |
 | `bun run db:reset` | Drop schema, migrate (fresh platform) |
+| `bun run quality:alpha` | Run the complete alpha contract, smoke, regression, and production-build gate |
+
+## Alpha quality gate
+
+Use the canonical release check after creating the dedicated test database:
+
+```bash
+bun run db:test:init
+bun run quality:alpha
+```
+
+`quality:alpha` refuses to run unless `NODE_ENV=test` and `DATABASE_URL` names a database ending in `_test`. It validates every OpenAPI document and local `$ref`, proves fresh migrations are checksummed and idempotent, runs focused setup-to-app-login, OAuth/OIDC, recovery/captured-email, authorization, key, and health smoke suites, runs the complete unit/integration/API regression suite, and builds the production bundles. It stops at the first failed phase and returns a non-zero status. The command never sends real email.
+
+The browser-backed console journey remains a separate environment check because it requires Playwright Chromium and a running server:
+
+```bash
+bun run test:e2e
+```

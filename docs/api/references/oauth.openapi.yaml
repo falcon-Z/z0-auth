@@ -90,7 +90,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "common.openapi.yaml#/components/schemas/Problem"
+                $ref: "common.openapi.yaml#/components/schemas/ProblemDetail"
               examples:
                 invalidRequest:
                   value:

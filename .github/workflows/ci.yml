@@ -38,5 +38,5 @@ jobs:
       - name: Create test database
         run: bun run db:test:init
 
-      - name: Run tests
-        run: bun run test --no-env-file
+      - name: Run alpha quality gate
+        run: bun run quality:alpha --no-env-file
