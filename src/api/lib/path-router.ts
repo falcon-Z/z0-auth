@@ -2,6 +2,7 @@ import type { BunRequest } from "bun";
 
 import type { MethodHandlers, RouteHandler } from "./http";
 import { methodNotAllowed } from "./http";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 export type PathParams = Record<string, string>;
 
@@ -20,7 +21,9 @@ function matchPath(pattern: string, pathname: string): PathParams | null {
     const segment = patternParts[i];
     const value = pathParts[i];
     if (segment.startsWith(":")) {
-      params[segment.slice(1)] = decodeURIComponent(value);
+      const decoded = safeDecodeURIComponent(value);
+      if (decoded === null) return null;
+      params[segment.slice(1)] = decoded;
     } else if (segment !== value) {
       return null;
     }

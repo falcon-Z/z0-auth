@@ -43,6 +43,7 @@ import { renderMagicLinkOutcomePage } from "./login-ui";
 const STATIC_DIR = path.join(import.meta.dir, "../static");
 const AUTH_CSS = Bun.file(path.join(STATIC_DIR, "auth.css"));
 const AUTH_FORMS_JS = Bun.file(path.join(STATIC_DIR, "auth-forms.js"));
+const HTMX_JS = Bun.file(path.join(import.meta.dir, "../../../node_modules/htmx.org/dist/htmx.min.js"));
 
 type FormFields = Record<string, string>;
 
@@ -1064,5 +1065,8 @@ export const authWebRoutes = {
   },
   "/static/auth-forms.js": {
     GET: serveAuthFormsJs,
+  },
+  "/static/htmx.min.js": {
+    GET: () => new Response(HTMX_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8" } }),
   },
 } as const;

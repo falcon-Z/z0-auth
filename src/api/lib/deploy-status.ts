@@ -4,6 +4,8 @@ import { bootstrapOwnerStatus, loadConfig } from "./config";
 import { checkDatabaseHealth, checkDatabaseSchema } from "./db";
 import { areInstanceKeysReady, getInstanceKeySources } from "./instance-keys";
 import { getInstanceSettings } from "./instance";
+import { requestPublicOrigin } from "./config";
+import { getSmtpEnvCredentials } from "./smtp-env";
 
 export async function buildDeployStatus(): Promise<DeployStatusResponse> {
   const config = loadConfig();
@@ -12,6 +14,13 @@ export async function buildDeployStatus(): Promise<DeployStatusResponse> {
   const keySources = getInstanceKeySources();
   const keysReady = areInstanceKeysReady();
   const bootstrap = bootstrapOwnerStatus(config.bootstrapOwner);
+  let configurationReady = true;
+  try {
+    requestPublicOrigin(new Request("http://localhost"));
+    getSmtpEnvCredentials();
+  } catch {
+    configurationReady = false;
+  }
 
   const unstableInProduction =
     config.nodeEnv === "production" &&
@@ -31,7 +40,7 @@ export async function buildDeployStatus(): Promise<DeployStatusResponse> {
     }
   }
 
-  const ready = db.ok && schema.ready && keysReady;
+  const ready = db.ok && schema.ready && keysReady && configurationReady;
 
   return {
     ready,
@@ -41,7 +50,7 @@ export async function buildDeployStatus(): Promise<DeployStatusResponse> {
       connected: db.ok,
       schemaReady: schema.ready,
       ...(db.latencyMs !== undefined ? { latencyMs: db.latencyMs } : {}),
-      ...(db.error ? { error: db.error } : {}),
+      ...(db.error ? { error: "Database connection failed." } : {}),
       ...(db.ok && !schema.ready
         ? {
             error:

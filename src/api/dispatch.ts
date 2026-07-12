@@ -5,6 +5,7 @@ import { applySetupGuard, dispatchRoute } from "./lib/router";
 import { setupApiRoutes } from "./setup/routes";
 import { v1PatternRoutes } from "./v1/pattern-routes";
 import { v1ApiRoutes } from "./v1/routes";
+import { problem } from "./lib/http";
 
 export const apiRouteMap = applySetupGuard({
   ...healthApiRoutes,
@@ -16,5 +17,5 @@ export const apiRouteMap = applySetupGuard({
 
 export async function dispatchApiRequest(req: Request): Promise<Response> {
   const res = await dispatchRoute(apiRouteMap, req, v1PatternRoutes);
-  return res ?? new Response("Not found", { status: 404 });
+  return res ?? problem(404, "Not Found", "API route not found");
 }

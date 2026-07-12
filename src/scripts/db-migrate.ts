@@ -4,10 +4,8 @@
  * Usage: bun run db:migrate
  */
 
-import { readdir } from "node:fs/promises";
-import path from "node:path";
-
 import { createPgSql } from "../api/lib/create-pg-sql";
+import { applyMigrations } from "./migrations";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -15,33 +13,8 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-const migrationsDir = path.join(import.meta.dir, "sql", "migrations");
 const db = createPgSql(databaseUrl);
-
-await db`
-  CREATE TABLE IF NOT EXISTS schema_migrations (
-    version TEXT PRIMARY KEY,
-    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )
-`;
-
-const appliedRows = await db`SELECT version FROM schema_migrations`;
-const applied = new Set(appliedRows.map((r) => String((r as { version: string }).version)));
-
-const migrationFiles = (await readdir(migrationsDir))
-  .filter((f) => f.endsWith(".sql"))
-  .sort();
-
-let count = 0;
-for (const file of migrationFiles) {
-  const version = file.replace(/\.sql$/, "");
-  if (applied.has(version)) continue;
-
-  const migrationSql = await Bun.file(path.join(migrationsDir, file)).text();
-  console.log(`Applying migration ${file}…`);
-  await db.unsafe(migrationSql);
-  count += 1;
-}
+const count = await applyMigrations(db);
 
 await db.close();
 

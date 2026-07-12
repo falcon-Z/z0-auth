@@ -4,7 +4,6 @@ import { getDb } from "./db";
 
 export async function writeAuditEvent(
   input: {
-    tenantId?: string | null;
     actorUserId?: string | null;
     action: string;
     resourceType: string;
@@ -15,9 +14,8 @@ export async function writeAuditEvent(
 ): Promise<void> {
   const db = tx ?? getDb();
   await db`
-    INSERT INTO audit_events (tenant_id, actor_user_id, action, resource_type, resource_id, payload)
+    INSERT INTO audit_events (actor_user_id, action, resource_type, resource_id, payload)
     VALUES (
-      ${input.tenantId ?? null},
       ${input.actorUserId ? input.actorUserId : null},
       ${input.action},
       ${input.resourceType},

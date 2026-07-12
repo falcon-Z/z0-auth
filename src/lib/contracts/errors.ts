@@ -19,6 +19,7 @@ export type ProblemDetail = {
 /** Machine-readable codes returned in `errors[].code` or top-level `code`. */
 export const ErrorCodes = {
   REQUIRED: "required",
+  TOO_LONG: "too_long",
   INVALID_EMAIL: "invalid_email",
   PASSWORD_POLICY: "password_policy",
   PASSWORD_MISMATCH: "password_mismatch",

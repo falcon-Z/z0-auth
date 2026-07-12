@@ -7,7 +7,7 @@ import { parseCookies } from "../lib/csrf";
 import { getDb } from "../lib/db";
 import { problem } from "../lib/http";
 import { verifyPassword } from "../lib/password";
-import { checkRateLimit, clientIp } from "../lib/rate-limit";
+import { clientIp, isRateLimited, recordRateLimitHit } from "../lib/rate-limit";
 import { writeAuditEvent } from "../lib/audit";
 import {
   createSession,
@@ -25,12 +25,13 @@ export async function runLogin(
   emailRaw: string,
   password: string,
 ): Promise<LoginResult> {
-  const rate = checkRateLimit({
-    key: `login:${clientIp(req)}`,
+  const rateConfig = {
+    key: `login:${clientIp(req)}:${normalizeEmail(emailRaw)}`,
     limit: 10,
     windowMs: 15 * 60 * 1000,
-  });
-  if (!rate.allowed) {
+  };
+  const rate = await isRateLimited(rateConfig);
+  if (rate.limited) {
     return {
       ok: false,
       response: problem(429, "Too Many Requests", "Too many login attempts", {
@@ -41,6 +42,7 @@ export async function runLogin(
 
   const emailErrors = validateEmail(emailRaw);
   if (emailErrors.length > 0) {
+    await recordRateLimitHit(rateConfig);
     return {
       ok: false,
       response: problem(400, "Validation Error", "Invalid request", { errors: emailErrors }),
@@ -59,6 +61,7 @@ export async function runLogin(
   `;
 
   if (!row) {
+    await recordRateLimitHit(rateConfig);
     await writeAuditEvent({
       action: "auth.login_failed",
       resourceType: "auth",
@@ -76,6 +79,7 @@ export async function runLogin(
   const user = row as { id: string; password_hash: string };
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
+    await recordRateLimitHit(rateConfig);
     await writeAuditEvent({
       actorUserId: String(user.id),
       action: "auth.login_failed",

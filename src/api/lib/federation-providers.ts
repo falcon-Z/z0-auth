@@ -511,27 +511,20 @@ export async function putAppFederationSettings(
     }
   }
 
-  await getDb()`DELETE FROM app_identity_providers WHERE app_id = ${appId}`;
-
-  for (const entry of body.providers ?? []) {
-    if (!entry.enabled) continue;
-    await getDb()`
-      INSERT INTO app_identity_providers (
-        app_id,
-        identity_provider_id,
-        enabled,
-        requested_scopes,
-        sort_order
-      )
-      VALUES (
-        ${appId},
-        ${entry.providerId},
-        true,
-        ${entry.requestedScopes?.trim() || null},
-        ${entry.sortOrder ?? 0}
-      )
-    `;
-  }
+  await getDb().begin(async (tx) => {
+    await tx`DELETE FROM app_identity_providers WHERE app_id = ${appId}`;
+    for (const entry of body.providers ?? []) {
+      if (!entry.enabled) continue;
+      await tx`
+        INSERT INTO app_identity_providers (
+          app_id, identity_provider_id, enabled, requested_scopes, sort_order
+        ) VALUES (
+          ${appId}, ${entry.providerId}, true,
+          ${entry.requestedScopes?.trim() || null}, ${entry.sortOrder ?? 0}
+        )
+      `;
+    }
+  });
 
   const settings = await getAppFederationSettingsForApi(req, appId);
   return { ok: true, settings: settings! };
@@ -578,6 +571,8 @@ export type ProviderSecrets = {
   userinfoUrl: string | null;
   defaultScopes: string;
   builtinId: string | null;
+  issuer: string | null;
+  jwksUrl: string | null;
   providerMetadata: unknown;
 };
 
@@ -591,6 +586,8 @@ export async function getProviderSecrets(providerId: string): Promise<ProviderSe
       userinfo_url,
       default_scopes,
       builtin_id,
+      issuer,
+      jwks_url,
       provider_metadata
     FROM identity_providers
     WHERE id = ${providerId}
@@ -607,6 +604,8 @@ export async function getProviderSecrets(providerId: string): Promise<ProviderSe
     userinfo_url: string | null;
     default_scopes: string;
     builtin_id: string | null;
+    issuer: string | null;
+    jwks_url: string | null;
     provider_metadata: unknown;
   };
   if (!r.client_id || !r.client_secret_ciphertext || !r.authorization_url || !r.token_url) return null;
@@ -621,6 +620,8 @@ export async function getProviderSecrets(providerId: string): Promise<ProviderSe
     userinfoUrl: r.userinfo_url,
     defaultScopes: r.default_scopes,
     builtinId: r.builtin_id,
+    issuer: r.issuer,
+    jwksUrl: r.jwks_url,
     providerMetadata: r.provider_metadata,
   };
 }

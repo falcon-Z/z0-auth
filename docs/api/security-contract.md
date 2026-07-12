@@ -28,12 +28,12 @@ Two session cookies — same lifetime and CSRF rules. **App context** (`client_i
 | Rule | Value / behavior |
 |------|------------------|
 | Cookie name | `z0_app_session` |
-| Storage | HttpOnly cookie; token stored hashed in `app_user_sessions` (`app_user_id` → `app_users`, `app_id` enforced) |
+| Storage | HttpOnly cookie; token stored hashed in `app_browser_sessions`; per-app grants live in `app_user_sessions` with composite app-user realm enforcement |
 | Issuance | After successful **app** login, self-registration, or invite accept — request must carry app context (`client_id` on authorize/login/register, or invite token → `app_id`) |
 | Absolute lifetime | **14 days** (same as console) |
-| Revocation | App logout sets `revoked_at` on the app session only; does not clear `z0_session` |
+| Revocation | Hosted logout revokes the browser broker and its app grants; it never clears the separate `z0_session` console cookie |
 | OAuth | `/oauth/authorize` and `/oauth/resume` use **app** session when returning from hosted auth |
-| Cross-app | Session valid for **one `app_id` only**; new login for another app replaces the app session cookie |
+| Cross-app | One browser credential may contain isolated grants for several apps. OAuth resolves only the requested app grant; service-group SSO may deliberately provision a sibling grant. |
 
 **Sign-in mode on `/auth/*`:** If the request includes a resolvable `client_id` (query or preserved in `z0_oauth_return`), treat as **app user** sign-in: authenticate `app_users`, issue `z0_app_session`, then redirect to the app (via OAuth `return_to`). Otherwise **console** sign-in: `users` + `z0_session`. Same HTML shell and CSRF; social provider buttons only on app sign-in when configured.
 
@@ -130,7 +130,7 @@ One-way hashes (not encrypted — verification only, plaintext never stored):
 |--------------|----------------|------------|
 | OAuth client secret | `app_credentials.client_secret_hash` | Password-style hash |
 | OAuth / refresh tokens | `oauth_* .token_hash` | SHA-256 hash |
-| Session tokens | `sessions.token_hash`, `app_user_sessions.token_hash` | SHA-256 hash |
+| Session tokens | `sessions.token_hash`, `app_browser_sessions.token_hash` | SHA-256 hash |
 | Console / app user passwords | `password_credentials`, `app_users.password_hash` | Password hash |
 
 Encrypted value format:
@@ -199,8 +199,10 @@ z0rt.v1.<base64url-kid>.<base64url-payload>.<base64url-signature>
 | Action | Limit | Window | Error |
 |--------|-------|--------|-------|
 | Setup | 3 / IP | 1 hour | **429** `rate_limited`, field `_rate`, optional `retryAfter` |
-| Login | 10 / IP | 15 minutes | **429** `rate_limited`, field `_rate` |
-| OAuth confidential client auth (`/oauth/token`, `/oauth/revoke`) | 10 / IP + `client_id` | 15 minutes | **429** `invalid_client` |
+| Failed login | 10 / trusted client IP + normalized email | 15 minutes | **429** `rate_limited`, field `_rate` |
+| OAuth confidential client auth (`/oauth/token`, `/oauth/revoke`, `/oauth/introspect`) | 10 / trusted client IP + `client_id` | 15 minutes | **429** `invalid_client` |
+
+Rate-limit counters are stored in PostgreSQL so replicas share enforcement. `X-Forwarded-For` is ignored unless `TRUST_PROXY_HOPS` explicitly identifies the trusted proxy chain.
 
 ---
 

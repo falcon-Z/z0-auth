@@ -51,6 +51,7 @@ run("M03 applications and credentials", () => {
   let appId = "";
   let credentialId = "";
   let clientId = "";
+  let secondaryCredentialId = "";
   let publicAppId = "";
   let publicCredentialId = "";
 
@@ -67,6 +68,23 @@ run("M03 applications and credentials", () => {
   test("non-member cannot list apps", async () => {
     const res = await dispatchApi(buildRequest("GET", "/api/v1/apps"));
     expect(res.status).toBe(401);
+  });
+
+  test("create app requires CSRF", async () => {
+    const { cookie } = await login();
+    const res = await dispatchApi(
+      buildRequest("POST", "/api/v1/apps", {
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: {
+          name: "No CSRF App",
+          redirectUris: [REDIRECT],
+          clientType: "confidential",
+        },
+      }),
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { errors: { code: string }[] };
+    expect(body.errors.some((e) => e.code === "csrf_invalid")).toBe(true);
   });
 
   test("create confidential app with default credential", async () => {
@@ -145,6 +163,14 @@ run("M03 applications and credentials", () => {
   test("rotate confidential credential secret", async () => {
     const { csrf, cookie } = await login();
 
+    const missingCsrf = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${appId}/credentials`, {
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: { label: "No CSRF" },
+      }),
+    );
+    expect(missingCsrf.status).toBe(403);
+
     const createRes = await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${appId}/credentials`, {
         csrfToken: csrf,
@@ -153,6 +179,7 @@ run("M03 applications and credentials", () => {
       }),
     );
     expect(createRes.status).toBe(201);
+    secondaryCredentialId = ((await createRes.clone().json()) as { credential: { id: string } }).credential.id;
 
     const listRes = await dispatchApi(
       buildRequest("GET", `/api/v1/apps/${appId}/credentials`, {
@@ -213,6 +240,18 @@ run("M03 applications and credentials", () => {
     expect(res.status).toBe(409);
     const body = (await res.json()) as { errors: { code: string }[] };
     expect(body.errors.some((e) => e.code === "last_active_credential")).toBe(true);
+  });
+
+  test("concurrent revocations cannot remove every active credential", async () => {
+    const { csrf, cookie } = await login();
+    const revoke = (id: string) => dispatchApi(
+      buildRequest("DELETE", `/api/v1/apps/${appId}/credentials/${id}`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+      }),
+    );
+    const responses = await Promise.all([revoke(credentialId), revoke(secondaryCredentialId)]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
   });
 
   test("disable app blocks new credentials", async () => {

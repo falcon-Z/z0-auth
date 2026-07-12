@@ -13,4 +13,5 @@ export type AuditEventSummary = {
 export type ListAuditEventsResponse = {
   events: AuditEventSummary[];
   hasMore: boolean;
+  nextCursor: string | null;
 };

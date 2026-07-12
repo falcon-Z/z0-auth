@@ -4,6 +4,8 @@ import { sha256Hex, randomToken } from "./crypto";
 import { maskIpForDisplay, parseClientLabel } from "./client-hint";
 import { getDb } from "./db";
 import { loadConfig } from "./config";
+import { clientIp } from "./rate-limit";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 export const SESSION_COOKIE = "z0_session";
 const SESSION_DAYS = 14;
@@ -93,7 +95,9 @@ export async function resolveSession(req: Request): Promise<ActiveSession | null
   if (!row) return null;
 
   await getDb()`
-    UPDATE sessions SET last_seen_at = NOW() WHERE id = ${(row as { session_id: string }).session_id}
+    UPDATE sessions SET last_seen_at = NOW()
+    WHERE id = ${(row as { session_id: string }).session_id}
+      AND last_seen_at < NOW() - INTERVAL '5 minutes'
   `;
 
   return {
@@ -131,13 +135,8 @@ function parseCookies(req: Request): Map<string, string> {
   for (const part of header.split(";")) {
     const [rawKey, ...rest] = part.trim().split("=");
     if (!rawKey) continue;
-    map.set(rawKey, decodeURIComponent(rest.join("=")));
+    const decoded = safeDecodeURIComponent(rest.join("="));
+    if (decoded !== null) map.set(rawKey, decoded);
   }
   return map;
-}
-
-function clientIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return "local";
 }

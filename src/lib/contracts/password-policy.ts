@@ -1,49 +1,38 @@
 import type { FieldError } from "./errors";
 import { ErrorCodes } from "./errors";
 
-export const PASSWORD_MIN_LENGTH = 14;
+export const PASSWORD_MIN_LENGTH = 15;
 export const PASSWORD_MAX_LENGTH = 128;
 
-const SPECIAL_CHAR_RE = /[!-/:-@[-`{-~]/;
-
-/** Common weak passwords (subset; extend as needed). */
-const WEAK_PASSWORDS = new Set(
+/** Project-local compromised/common password blocklist; no network dependency at validation time. */
+const BLOCKED_PASSWORDS = new Set(
   [
-    "test",
-    "test123",
-    "testing",
-    "password",
-    "password1",
-    "password123",
-    "qwerty",
-    "qwerty123",
-    "qwerty123456",
-    "123456",
-    "123456789",
-    "admin",
-    "admin123",
-    "admin123456",
-    "letmein",
-    "letmein123",
-    "welcome",
-    "welcome123",
-    "changeme",
-    "changeme123",
-    "iloveyou",
-    "monkey",
-    "dragon",
-    "master",
-    "login",
-    "abc123",
-    "P@ssw0rd123!",
-    "Password123!",
-    "SuperAdmin123!",
-  ].map((p) => p.toLowerCase()),
+    "123456", "123456789", "12345678", "12345", "1234567", "1234567890",
+    "password", "password1", "password123", "qwerty", "qwerty123", "abc123",
+    "111111", "123123", "admin", "letmein", "welcome", "monkey", "dragon",
+    "master", "login", "princess", "football", "baseball", "shadow", "sunshine",
+    "iloveyou", "trustno1", "passw0rd", "p@ssw0rd", "qwertyuiop", "asdfghjkl",
+    "zaq12wsx", "1q2w3e4r", "1qaz2wsx", "000000", "666666", "654321",
+    "superman", "charlie", "donald", "secret", "freedom", "whatever", "killer",
+    "jordan", "michael", "batman", "computer", "internet", "changeme", "testing",
+    "test", "superadmin",
+  ],
 );
 
-/** True when password is an exact match for a known weak or common choice. */
+function normalizedForBlocklist(password: string): string {
+  return password.toLowerCase().replace(/[^a-z0-9@]/g, "");
+}
+
 export function isBlockedPassword(password: string): boolean {
-  return WEAK_PASSWORDS.has(password.toLowerCase());
+  const normalized = normalizedForBlocklist(password);
+  const withoutNumericSuffix = normalized.replace(/\d{1,8}$/, "");
+  return (
+    BLOCKED_PASSWORDS.has(normalized) ||
+    BLOCKED_PASSWORDS.has(withoutNumericSuffix) ||
+    /^(.)\1{7,}$/.test(normalized) ||
+    "1234567890".includes(normalized) ||
+    "0987654321".includes(normalized)
+  );
 }
 
 function passesNotWeakRule(password: string): boolean {
@@ -83,26 +72,6 @@ const passwordRulesBase: PasswordRule[] = [
     test: (p) => p.length <= PASSWORD_MAX_LENGTH,
   },
   {
-    id: "uppercase",
-    label: "One uppercase letter",
-    test: (p) => /[A-Z]/.test(p),
-  },
-  {
-    id: "lowercase",
-    label: "One lowercase letter",
-    test: (p) => /[a-z]/.test(p),
-  },
-  {
-    id: "digit",
-    label: "One number",
-    test: (p) => /\d/.test(p),
-  },
-  {
-    id: "special",
-    label: "One special character",
-    test: (p) => SPECIAL_CHAR_RE.test(p),
-  },
-  {
     id: "not_weak",
     label: "Not a commonly used password",
     test: (p) => passesNotWeakRule(p),
@@ -119,26 +88,12 @@ export const passwordRules: PasswordRule[] = passwordRulesBase.map((rule) => ({
   test: requireNonEmpty(rule.test),
 }));
 
-function hasCharacterMix(password: string): boolean {
-  return (
-    /[A-Z]/.test(password) &&
-    /[a-z]/.test(password) &&
-    /\d/.test(password) &&
-    SPECIAL_CHAR_RE.test(password)
-  );
-}
-
 /** Checklist shown in the setup form (subset of validation rules). */
 export const passwordChecklistRules: PasswordRule[] = [
   {
     id: "min_length",
     label: `At least ${PASSWORD_MIN_LENGTH} characters`,
     test: requireNonEmpty((p) => p.length >= PASSWORD_MIN_LENGTH),
-  },
-  {
-    id: "character_mix",
-    label: "Includes uppercase, lowercase, a number, and a special character",
-    test: requireNonEmpty(hasCharacterMix),
   },
   {
     id: "not_weak",
@@ -155,10 +110,6 @@ export const passwordChecklistRules: PasswordRule[] = [
 /** Maps API validation messages to checklist rule ids. */
 export const passwordValidationToChecklistId: Record<string, string> = {
   [`At least ${PASSWORD_MIN_LENGTH} characters`]: "min_length",
-  "One uppercase letter": "character_mix",
-  "One lowercase letter": "character_mix",
-  "One number": "character_mix",
-  "One special character": "character_mix",
   "Not a commonly used password": "not_weak",
   "Does not contain your name or email": "not_contextual",
 };
@@ -296,4 +247,3 @@ export function getPasswordChecklistStates(
     })),
   };
 }
-

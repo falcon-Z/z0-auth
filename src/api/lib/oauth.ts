@@ -33,6 +33,7 @@ type AuthorizationCodeRow = {
   scope: string;
   code_challenge: string | null;
   code_challenge_method: string | null;
+  oidc_nonce: string | null;
   expires_at: Date;
   used_at: Date | null;
 };
@@ -40,6 +41,7 @@ type AuthorizationCodeRow = {
 type AuthorizationCodePreview = {
   appUserId: string;
   scope: string;
+  nonce: string | null;
 };
 
 export type OAuthAccessTokenRecord = {
@@ -145,6 +147,7 @@ export async function issueAuthorizationCode(input: {
   scope: string;
   codeChallenge: string | null;
   codeChallengeMethod: string | null;
+  nonce: string | null;
 }): Promise<string> {
   const code = `z0_ac_${randomToken(16)}`;
   const codeHash = await sha256Hex(code);
@@ -160,6 +163,7 @@ export async function issueAuthorizationCode(input: {
       scope,
       code_challenge,
       code_challenge_method,
+      oidc_nonce,
       expires_at
     )
     VALUES (
@@ -171,6 +175,7 @@ export async function issueAuthorizationCode(input: {
       ${input.scope},
       ${input.codeChallenge},
       ${input.codeChallengeMethod},
+      ${input.nonce},
       ${expiresAt}
     )
   `;
@@ -320,6 +325,7 @@ export async function previewAuthorizationCodeForExchange(input: {
       c.scope,
       c.code_challenge,
       c.code_challenge_method,
+      c.oidc_nonce,
       c.expires_at,
       c.used_at
     FROM oauth_authorization_codes c
@@ -358,6 +364,7 @@ export async function previewAuthorizationCodeForExchange(input: {
     preview: {
       appUserId: String(codeRow.app_user_id),
       scope: codeRow.scope ?? "",
+      nonce: codeRow.oidc_nonce ?? null,
     },
   };
 }
@@ -383,8 +390,7 @@ export async function exchangeRefreshToken(input: {
   const newRefreshHash = await sha256Hex(newRefreshToken);
   const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
-  try {
-    const result = await getDb().begin(async (tx) => {
+  const result = await getDb().begin(async (tx) => {
       const [row] = await tx`
         SELECT
           r.id,
@@ -406,20 +412,34 @@ export async function exchangeRefreshToken(input: {
           AND ac.status = 'active'
         FOR UPDATE
       `;
-      if (!row) throw new Error("invalid_grant");
+      if (!row) return { ok: false as const };
       const refresh = row as RefreshTokenRow;
 
       if (String(refresh.app_credential_id) !== input.client.credentialId) {
-        throw new Error("invalid_grant");
+        return { ok: false as const };
       }
 
       if (refresh.replaced_by_token_id || refresh.revoked_at) {
         await revokeRefreshTokenFamily(tx, refresh.family_id);
-        throw new Error("invalid_grant");
+        return { ok: false as const };
       }
 
       if (new Date(refresh.expires_at).getTime() <= Date.now()) {
-        throw new Error("invalid_grant");
+        return { ok: false as const };
+      }
+
+      const requestedScopes = [...parseScopeSet(refresh.scope ?? "")];
+      if (requestedScopes.length) {
+        const activeScopeRows = await tx`
+          SELECT name
+          FROM app_scopes
+          WHERE app_id = ${refresh.app_id}
+            AND name IN ${tx(requestedScopes)}
+        `;
+        if (activeScopeRows.length !== requestedScopes.length) {
+          await revokeRefreshTokenFamily(tx, refresh.family_id);
+          return { ok: false as const };
+        }
       }
 
       const [replacement] = await tx`
@@ -471,26 +491,25 @@ export async function exchangeRefreshToken(input: {
       `;
 
       return {
+        ok: true as const,
         scope: refresh.scope ?? "",
         appUserId: String(refresh.app_user_id),
       };
-    });
+  });
 
-    return {
-      ok: true,
-      accessToken,
-      tokenType: "Bearer",
-      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-      scope: result.scope,
-      refreshToken: newRefreshToken,
-      appUserId: result.appUserId,
-    };
-  } catch (error) {
-    if (error instanceof Error && error.message === "invalid_grant") {
-      return { ok: false, error: "invalid_grant" };
-    }
-    throw error;
+  if (!result.ok) {
+    return { ok: false, error: "invalid_grant" };
   }
+
+  return {
+    ok: true,
+    accessToken,
+    tokenType: "Bearer",
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+    scope: result.scope,
+    refreshToken: newRefreshToken,
+    appUserId: result.appUserId,
+  };
 }
 
 export async function issueClientCredentialsToken(input: {

@@ -67,6 +67,18 @@ run("invite flow", () => {
   test("member creates invite for new user", async () => {
     const csrf = await fetchCsrfToken(dispatchApi);
     const { cookie } = await login("admin@example.com", adminPassword);
+
+    const missingCsrf = await dispatchApi(
+      buildRequest("POST", "/api/v1/members/invites", {
+        cookies: { [SESSION_COOKIE]: cookie! },
+        body: {
+          email: "csrf-missing@example.com",
+          invitedName: "Missing CSRF",
+        },
+      }),
+    );
+    expect(missingCsrf.status).toBe(403);
+
     const res = await dispatchApi(
       buildRequest("POST", "/api/v1/members/invites", {
         csrfToken: csrf,
@@ -349,6 +361,7 @@ run("invite flow", () => {
 
   test("cannot remove instance owner", async () => {
     const admin = await login("admin@example.com", adminPassword);
+    expect(admin.res.status).toBe(200);
     const csrf = await fetchCsrfToken(dispatchApi);
     const [adminRow] = await getDb()`SELECT id FROM users WHERE email = 'admin@example.com'`;
     const adminUserId = String((adminRow as { id: string }).id);

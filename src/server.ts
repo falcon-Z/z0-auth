@@ -6,6 +6,8 @@ import { loadConfig } from "./api/lib/config";
 import { initializeInstanceKeys } from "./api/lib/instance-keys";
 import { printStartupSummary } from "./api/lib/startup-log";
 import { runConfiguredBootstrap } from "./api/setup/bootstrap";
+import { applySecurityHeaders, secureRouteMap } from "./api/lib/security-headers";
+import { loadConsoleHandler } from "./api/lib/console-assets";
 
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
@@ -28,27 +30,26 @@ import { magicLinkWebRoutes } from "./web/auth/magic-link-routes";
 import { federationWebRoutes } from "./web/auth/federation-routes";
 import { appSessionsWebRoutes } from "./web/auth/app-sessions-routes";
 import { oauthWebRoutes } from "./web/oauth/routes";
-import consoleApp from "./app/console/index.html";
-
 const config = loadConfig();
 const dbHealth = await checkDatabaseHealth();
+const consoleHandler = await loadConsoleHandler(import.meta.dir);
 
 const server = serve({
   hostname: config.bindAddress,
   port: config.port,
   routes: {
-    ...authWebRoutes,
-    ...inviteWebRoutes,
-    ...appInviteWebRoutes,
-    ...passwordResetWebRoutes,
-    ...magicLinkWebRoutes,
-    ...federationWebRoutes,
-    ...appSessionsWebRoutes,
-    ...oauthWebRoutes,
-    ...apiRouteMap,
-    "/api/*": dispatchApiRequest,
-    "/": consoleApp,
-    "/*": consoleApp,
+    ...secureRouteMap(authWebRoutes),
+    ...secureRouteMap(inviteWebRoutes),
+    ...secureRouteMap(appInviteWebRoutes),
+    ...secureRouteMap(passwordResetWebRoutes),
+    ...secureRouteMap(magicLinkWebRoutes),
+    ...secureRouteMap(federationWebRoutes),
+    ...secureRouteMap(appSessionsWebRoutes),
+    ...secureRouteMap(oauthWebRoutes),
+    ...secureRouteMap(apiRouteMap),
+    "/api/*": async (request) => applySecurityHeaders(await dispatchApiRequest(request)),
+    "/": consoleHandler,
+    "/*": consoleHandler,
   },
   development:
     config.nodeEnv !== "production"

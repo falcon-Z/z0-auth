@@ -18,6 +18,9 @@ export function buildRequest(
   if (options.csrfToken) {
     headers.set(CSRF_HEADER, options.csrfToken);
   }
+  if (options.body !== undefined && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
 
   const cookieParts: string[] = [];
   if (options.csrfToken) {

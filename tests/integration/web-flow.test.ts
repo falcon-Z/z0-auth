@@ -72,6 +72,13 @@ run("web auth pages", () => {
     expect(res.headers.get("content-type")).toContain("javascript");
   });
 
+  test("GET /static/htmx.min.js serves the local package", async () => {
+    const res = await dispatchWeb(new Request("http://localhost/static/htmx.min.js"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/javascript");
+    expect((await res.text()).length).toBeGreaterThan(10_000);
+  });
+
   test("POST /auth/setup redirects to login", async () => {
     const csrf = await fetchSetupCsrf();
     const body = new URLSearchParams({

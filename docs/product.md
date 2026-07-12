@@ -42,20 +42,10 @@ We use one `/auth/*` UI stack for both; **app context** (`client_id`) decides wh
 - **Browser / SPA apps** — Authorization code with **PKCE** (public client; no secret in the browser).
 - **Server-side apps** — Confidential client (client secret); same code flow; secret only on the server.
 
-One **platform instance** per deployment (single account owner). **No** internal multi-tenancy or platform RBAC.
+One **platform instance** per deployment. There is no internal multi-tenant organization boundary; console access within the instance is controlled by built-in or custom roles and platform scopes.
 
 ## Stack
 
 - **Backend:** Bun (`Bun.serve`, minimal dependencies), PostgreSQL.
 - **Console:** React + shadcn.
 - **Auth pages:** HTML + HTMX (not React).
-
-## v1 scope (local module ledger)
-
-Shipped or in progress: instance setup, members, apps, credentials, scopes, app users (M05 Option B), SMTP, console modules for the above.
-
-**Shipped:** OAuth 2.1 authorization code flow with PKCE, consent (scope descriptions, branding, skip on repeat approval), opaque access tokens, refresh token rotation, token revocation, CORS for browser clients, and client credentials for machine-to-machine. OIDC discovery, JWKS, RS256 ID tokens, and userinfo. Default OIDC scopes on app create. **Grouped services (SSO):** console app groups with shared sign-in across sibling apps (Google-style session handoff and consent reuse within the group). **External OAuth providers (P5):** Google, Apple, GitHub, Facebook, and custom OIDC at instance level; per-app enablement; hosted sign-in buttons; account linking; encrypted upstream token storage with refresh; `federation:token` scope for app backends. **Security & observability:** audit log API + Activity console, session/device management for console members and app users, encryption-at-rest inventory documented in the security contract.
-
-**Not yet shipped:** MFA, passkeys, Docker self-host.
-
-Post-v1 / TBD: enterprise SSO (SAML/OIDC broker for workforce), analytics, device flow.

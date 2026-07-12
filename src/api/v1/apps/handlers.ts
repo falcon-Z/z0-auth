@@ -12,6 +12,7 @@ import {
   rotateCredential,
 } from "../../lib/apps";
 import { writeAuditEvent } from "../../lib/audit";
+import { validateCsrf } from "../../lib/csrf";
 import { json } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
@@ -24,6 +25,9 @@ export async function handleListApps(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handleCreateApp(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const auth = await requireScope(req, "apps:create");
   if (!auth.ok) return auth.response;
 
@@ -55,6 +59,9 @@ export async function handleGetApp(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handlePatchApp(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const auth = await requireScope(req, "apps:update");
   if (!auth.ok) return auth.response;
@@ -87,6 +94,9 @@ export async function handleListCredentials(req: RoutedRequest): Promise<Respons
 }
 
 export async function handleCreateCredential(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const auth = await requireScope(req, "apps.credentials:create");
   if (!auth.ok) return auth.response;
@@ -109,6 +119,9 @@ export async function handleCreateCredential(req: RoutedRequest): Promise<Respon
 }
 
 export async function handleRevokeCredential(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const credentialId = req.pathParams?.credentialId ?? "";
   const auth = await requireScope(req, "apps.credentials:revoke");
@@ -129,6 +142,9 @@ export async function handleRevokeCredential(req: RoutedRequest): Promise<Respon
 }
 
 export async function handleRotateCredential(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const credentialId = req.pathParams?.credentialId ?? "";
   const auth = await requireScope(req, "apps.credentials:rotate");

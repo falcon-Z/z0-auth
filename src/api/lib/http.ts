@@ -4,7 +4,7 @@ import { createProblemDetail } from "@z0/contracts/errors";
 
 export type RouteHandler = (req: BunRequest) => Response | Promise<Response>;
 
-export type MethodHandlers = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE", RouteHandler>>;
+export type MethodHandlers = Partial<Record<"GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS", RouteHandler>>;
 
 export function json(data: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
@@ -20,9 +20,14 @@ export function problem(
   detail?: string,
   extra?: Record<string, unknown>,
 ): Response {
-  return json(createProblemDetail(status, title, detail, extra), { status });
+  return json(createProblemDetail(status, title, detail, extra), {
+    status,
+    headers: { "Content-Type": "application/problem+json; charset=utf-8" },
+  });
 }
 
 export function methodNotAllowed(allowed: string[]): Response {
-  return problem(405, "Method Not Allowed", undefined, { allowed });
+  const response = problem(405, "Method Not Allowed", undefined, { allowed });
+  response.headers.set("Allow", allowed.join(", "));
+  return response;
 }

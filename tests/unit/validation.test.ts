@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { ErrorCodes } from "@z0/contracts/errors";
-import { normalizeEmail, validateEmail, validateRequiredString } from "@z0/contracts/validation";
+import {
+  normalizeEmail,
+  parseJsonBody,
+  safeDecodeURIComponent,
+  validateEmail,
+  validateRequiredString,
+} from "@z0/contracts/validation";
 
 describe("validation", () => {
   test("validateEmail rejects missing and invalid", () => {
@@ -19,5 +25,15 @@ describe("validation", () => {
     const errors = validateRequiredString("  ", "name", "Name");
     expect(errors[0]?.field).toBe("name");
     expect(errors[0]?.code).toBe(ErrorCodes.REQUIRED);
+  });
+
+  test("parseJsonBody requires JSON content type", async () => {
+    const result = await parseJsonBody(new Request("http://localhost", { method: "POST", body: "{}" }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(415);
+  });
+
+  test("malformed percent encoding is rejected safely", () => {
+    expect(safeDecodeURIComponent("%E0%A4%A")).toBeNull();
   });
 });

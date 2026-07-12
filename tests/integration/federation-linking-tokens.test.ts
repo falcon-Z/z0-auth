@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
 import { FEDERATION_STATE_COOKIE } from "../../src/api/lib/federation-broker";
 import { closeDatabase } from "../../src/api/lib/db";
+import { linkFederationIdentity } from "../../src/api/lib/federation-linking";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
@@ -212,6 +213,55 @@ run("federation linking and tokens", () => {
     const body = (await res.json()) as { key: string; builtinId: string };
     expect(body.key).toBe("github");
     expect(body.builtinId).toBe("github");
+  });
+
+  test("the same provider subject remains isolated between unrelated apps", async () => {
+    const first = await createAppWithProvider("realm");
+    const secondAppRes = await dispatchApi(
+      buildRequest("POST", "/api/v1/apps", {
+        csrfToken: first.csrf,
+        cookies: { [SESSION_COOKIE]: first.session },
+        body: {
+          name: "Second Realm App",
+          redirectUris: ["http://localhost:3000/second-callback"],
+          clientType: "confidential",
+        },
+      }),
+    );
+    expect(secondAppRes.status).toBe(201);
+    const second = (await secondAppRes.json()) as { app: { id: string } };
+    const enableRes = await dispatchApi(
+      buildRequest("PUT", `/api/v1/apps/${second.app.id}/federation`, {
+        csrfToken: first.csrf,
+        cookies: { [SESSION_COOKIE]: first.session },
+        body: { providers: [{ providerId: first.providerId, enabled: true, sortOrder: 0 }] },
+      }),
+    );
+    expect(enableRes.status).toBe(200);
+
+    const profile = {
+      subject: "shared-upstream-subject",
+      email: "same-person@example.com",
+      emailVerified: true,
+      name: "Same Person",
+      raw: { sub: "shared-upstream-subject" },
+    };
+    const firstLink = await linkFederationIdentity({
+      appId: first.appId,
+      providerId: first.providerId,
+      profile,
+    });
+    const secondLink = await linkFederationIdentity({
+      appId: second.app.id,
+      providerId: first.providerId,
+      profile,
+    });
+
+    expect(firstLink.ok).toBe(true);
+    expect(secondLink.ok).toBe(true);
+    if (firstLink.ok && secondLink.ok) {
+      expect(secondLink.appUserId).not.toBe(firstLink.appUserId);
+    }
   });
 
   test("federated sign-in links to existing password account", async () => {

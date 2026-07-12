@@ -34,6 +34,7 @@ import {
 import { memberInviteEmailText, sendTransactionalEmail } from "./transactional-email";
 import { resolveSession } from "./session";
 import { createSession, sessionCookieHeader, revokeAllUserSessions } from "./session";
+import { requestPublicOrigin } from "./config";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -68,8 +69,7 @@ function inviteStatus(row: InviteRow): InvitePreviewResponse["status"] {
 }
 
 export function inviteUrlFromRequest(req: Request, rawToken: string): string {
-  const origin = new URL(req.url).origin;
-  return `${origin}/auth/invite/${rawToken}`;
+  return `${requestPublicOrigin(req)}/auth/invite/${rawToken}`;
 }
 
 async function findInviteByToken(rawToken: string): Promise<InviteRow | null> {
@@ -730,4 +730,3 @@ export async function revokeInstanceInvite(
 
   return { ok: true };
 }
-

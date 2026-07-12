@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { CSRF_COOKIE } from "@z0/contracts/http";
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
 import { closeDatabase } from "../../src/api/lib/db";
+import { getDb } from "../../src/api/lib/db";
+import { ensureGroupMemberForAppUser } from "../../src/api/lib/group-sso";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { resetConsumedConsentNoncesForTests } from "../../src/web/oauth/routes";
@@ -144,12 +146,13 @@ async function approveConsent(input: {
   clientId: string;
   redirectUri: string;
   appSession: string;
+  scope?: string;
 }): Promise<string> {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: input.clientId,
     redirect_uri: input.redirectUri,
-    scope: "openid profile email",
+    scope: input.scope ?? "openid profile email",
     state: "test-state",
   });
 
@@ -183,7 +186,7 @@ async function approveConsent(input: {
         response_type: "code",
         client_id: input.clientId,
         redirect_uri: input.redirectUri,
-        scope: "openid profile email",
+        scope: input.scope ?? "openid profile email",
         state: "test-state",
         consent_nonce: consentNonce,
         consent: "approve",
@@ -255,6 +258,18 @@ run("Group SSO flow", () => {
       appUserPassword,
       "Group User",
     );
+    const [sourceUser] = await getDb()`
+      UPDATE app_users
+      SET email_verified_at = NOW()
+      WHERE app_id = ${appAId}
+        AND email = 'group-user@example.com'
+      RETURNING id
+    `;
+    await ensureGroupMemberForAppUser(
+      String((sourceUser as { id: string }).id),
+      appAId,
+      "group-user@example.com",
+    );
     await approveConsent({ clientId: clientA, redirectUri: REDIRECT_A, appSession: appSessionA });
 
     const params = new URLSearchParams({
@@ -279,7 +294,71 @@ run("Group SSO flow", () => {
 
     const upgradedSession = appSessionFromResponse(authorizeRes);
     expect(upgradedSession).toBeTruthy();
-    expect(upgradedSession).not.toBe(appSessionA);
+    expect(upgradedSession).toBe(appSessionA);
+  });
+
+  test("an unverified matching email cannot claim an existing sibling-app account", async () => {
+    await registerAppUser(clientB, "victim@example.com", appUserPassword, "Victim");
+    const attackerSession = await registerAppUser(
+      clientA,
+      "victim@example.com",
+      appUserPassword,
+      "Attacker",
+    );
+
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: clientB,
+      redirect_uri: REDIRECT_B,
+      scope: "openid profile email",
+      state: "takeover-check",
+    });
+    const authorizeRes = await dispatchWeb(
+      new Request(`http://localhost/oauth/authorize?${params.toString()}`, {
+        headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(attackerSession)}` },
+      }),
+    );
+
+    expect(authorizeRes.status).toBe(302);
+    expect(authorizeRes.headers.get("location") ?? "").toContain("/auth/login");
+    const [victimLink] = await getDb()`
+      SELECT 1
+      FROM service_group_app_users sgau
+      JOIN app_users u ON u.id = sgau.app_user_id
+      WHERE u.app_id = ${appBId}
+        AND u.email = 'victim@example.com'
+    `;
+    expect(victimLink).toBeUndefined();
+  });
+
+  test("same-named developer scopes do not transfer consent between grouped apps", async () => {
+    const { csrf, cookie } = await ownerLogin();
+    for (const appId of [appAId, appBId]) {
+      const scopeRes = await dispatchApi(
+        buildRequest("POST", `/api/v1/apps/${appId}/scopes`, {
+          csrfToken: csrf,
+          cookies: { [SESSION_COOKIE]: cookie },
+          body: { name: "read:records", description: `Records for ${appId}` },
+        }),
+      );
+      expect(scopeRes.status).toBe(201);
+    }
+
+    const appSessionA = await loginAppUser(clientA, "group-user@example.com", appUserPassword);
+    await approveConsent({
+      clientId: clientA,
+      redirectUri: REDIRECT_A,
+      appSession: appSessionA,
+      scope: "openid read:records",
+    });
+    const authorizeB = await dispatchWeb(
+      new Request(
+        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientB)}&redirect_uri=${encodeURIComponent(REDIRECT_B)}&scope=${encodeURIComponent("openid read:records")}&state=scope-isolation`,
+        { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSessionA)}` } },
+      ),
+    );
+    expect(authorizeB.status).toBe(200);
+    expect(await authorizeB.text()).toContain("Records for");
   });
 
   test("apps outside a group still require separate sign-in", async () => {

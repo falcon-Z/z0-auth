@@ -9,7 +9,7 @@ import { normalizeEmail, validateEmail } from "@z0/contracts/validation";
 import { decryptSecret, encryptSecret } from "./settings-crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
-import { getSmtpEnvCredentials, isSmtpEnvManaged } from "./smtp-env";
+import { getSmtpEnvCredentials, isSmtpEnvDisabled, isSmtpEnvManaged } from "./smtp-env";
 
 type SmtpRow = {
   host: string;
@@ -27,7 +27,10 @@ type SmtpRow = {
 function mapDatabaseRow(row: SmtpRow): EmailSettingsResponse {
   const host = row.host?.trim() ?? "";
   const fromAddress = row.from_address?.trim() ?? "";
-  const configured = host.length > 0 && fromAddress.length > 0 && Boolean(row.password_ciphertext);
+  const configured =
+    host.length > 0 &&
+    fromAddress.length > 0 &&
+    (!row.username || Boolean(row.password_ciphertext));
   return {
     configured,
     enabled: row.enabled && configured,
@@ -58,7 +61,7 @@ function mapEnvSettings(): EmailSettingsResponse | null {
     port: creds.port,
     encryption: creds.encryption,
     username: creds.username,
-    hasPassword: true,
+    hasPassword: Boolean(creds.password),
     fromAddress: creds.fromAddress,
     fromName: creds.fromName,
     verifiedAt: now,
@@ -67,6 +70,13 @@ function mapEnvSettings(): EmailSettingsResponse | null {
 }
 
 export async function getEmailSettingsForApi(): Promise<EmailSettingsResponse> {
+  if (isSmtpEnvDisabled()) {
+    return {
+      configured: false, enabled: false, source: "env", readOnly: true,
+      host: "", port: 587, encryption: "starttls", username: null,
+      hasPassword: false, fromAddress: "", fromName: null, verifiedAt: null, updatedAt: null,
+    };
+  }
   const fromEnv = mapEnvSettings();
   if (fromEnv) return fromEnv;
 
@@ -169,7 +179,7 @@ export async function putEmailSettings(
   const passwordInput = body.password;
   if (passwordInput !== undefined && passwordInput !== null && passwordInput !== "") {
     passwordCipher = await encryptSecret(passwordInput);
-  } else if (!existingCipher && body.enabled) {
+  } else if (!existingCipher && body.enabled && body.username?.trim()) {
     return {
       ok: false,
       response: problem(400, "Validation Error", "SMTP password is required.", {
@@ -233,7 +243,7 @@ export async function getSmtpCredentialsForSend(): Promise<
       port: number;
       encryption: SmtpEncryption;
       username: string | null;
-      password: string;
+      password: string | null;
       fromAddress: string;
       fromName: string | null;
     }
@@ -257,9 +267,10 @@ export async function getSmtpCredentialsForSend(): Promise<
   `;
   if (!row) return null;
   const r = row as SmtpRow;
-  if (!r.enabled || !r.password_ciphertext || !r.host?.trim() || !r.from_address?.trim()) return null;
+  if (!r.enabled || !r.host?.trim() || !r.from_address?.trim()) return null;
+  if (r.username && !r.password_ciphertext) return null;
 
-  const password = await decryptSecret(r.password_ciphertext);
+  const password = r.password_ciphertext ? await decryptSecret(r.password_ciphertext) : null;
   return {
     host: r.host.trim(),
     port: Number(r.port) || 587,

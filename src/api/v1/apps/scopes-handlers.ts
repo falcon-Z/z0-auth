@@ -8,6 +8,7 @@ import {
   patchScopeForApi,
 } from "../../lib/app-scopes";
 import { writeAuditEvent } from "../../lib/audit";
+import { validateCsrf } from "../../lib/csrf";
 import { json } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
@@ -23,6 +24,9 @@ export async function handleListScopes(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handleCreateScope(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const auth = await requireScope(req, "apps.scopes:manage");
   if (!auth.ok) return auth.response;
@@ -45,6 +49,9 @@ export async function handleCreateScope(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handlePatchScope(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const scopeId = req.pathParams?.scopeId ?? "";
   const auth = await requireScope(req, "apps.scopes:manage");
@@ -68,6 +75,9 @@ export async function handlePatchScope(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handleDeleteScope(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const appId = req.pathParams?.appId ?? "";
   const scopeId = req.pathParams?.scopeId ?? "";
   const auth = await requireScope(req, "apps.scopes:manage");

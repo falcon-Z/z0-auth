@@ -4,6 +4,8 @@ import { sha256Hex, randomToken } from "./crypto";
 import { maskIpForDisplay, parseClientLabel } from "./client-hint";
 import { getDb } from "./db";
 import { loadConfig } from "./config";
+import { clientIp } from "./rate-limit";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 export const APP_SESSION_COOKIE = "z0_app_session";
 const SESSION_DAYS = 14;
@@ -19,9 +21,11 @@ export async function createAppSession(
   appId: string,
   req: Request,
 ): Promise<{ token: string; expiresAt: Date }> {
-  const token = randomToken(32);
-  const tokenHash = await sha256Hex(token);
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const existingToken = parseCookies(req).get(APP_SESSION_COOKIE);
+  const existingHash = existingToken ? await sha256Hex(existingToken) : null;
+  const generatedToken = randomToken(32);
+  const generatedHash = await sha256Hex(generatedToken);
+  const generatedExpiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const ip = clientIp(req);
   const ipHash = await sha256Hex(ip);
   const ua = req.headers.get("user-agent") ?? "";
@@ -29,38 +33,72 @@ export async function createAppSession(
   const clientLabel = parseClientLabel(ua);
   const ipDisplay = maskIpForDisplay(ip);
 
-  await getDb()`
-    INSERT INTO app_user_sessions (
-      app_user_id,
-      app_id,
-      token_hash,
-      expires_at,
-      ip_hash,
-      user_agent_hash,
-      client_label,
-      ip_display
-    )
-    VALUES (
-      ${appUserId},
-      ${appId},
-      ${tokenHash},
-      ${expiresAt},
-      ${ipHash},
-      ${userAgentHash},
-      ${clientLabel},
-      ${ipDisplay}
-    )
-  `;
+  return getDb().begin(async (tx) => {
+    const [existingBrowser] = existingHash
+      ? await tx`
+          SELECT id, expires_at
+          FROM app_browser_sessions
+          WHERE token_hash = ${existingHash}
+            AND revoked_at IS NULL
+            AND expires_at > NOW()
+          FOR UPDATE
+        `
+      : [];
+    let browserSessionId: string;
+    let token: string;
+    let expiresAt: Date;
+    if (existingBrowser && existingToken) {
+      browserSessionId = String((existingBrowser as { id: string }).id);
+      token = existingToken;
+      expiresAt = new Date((existingBrowser as { expires_at: Date }).expires_at);
+    } else {
+      const [createdBrowser] = await tx`
+        INSERT INTO app_browser_sessions (
+          token_hash, expires_at, ip_hash, user_agent_hash, client_label, ip_display
+        ) VALUES (
+          ${generatedHash}, ${generatedExpiresAt}, ${ipHash}, ${userAgentHash}, ${clientLabel}, ${ipDisplay}
+        ) RETURNING id
+      `;
+      browserSessionId = String((createdBrowser as { id: string }).id);
+      token = generatedToken;
+      expiresAt = generatedExpiresAt;
+    }
 
-  return { token, expiresAt };
+    await tx`
+      UPDATE app_user_sessions
+      SET revoked_at = NOW()
+      WHERE browser_session_id = ${browserSessionId}
+        AND app_id = ${appId}
+        AND revoked_at IS NULL
+    `;
+    await tx`
+      INSERT INTO app_user_sessions (
+        app_user_id, app_id, browser_session_id, token_hash, expires_at,
+        ip_hash, user_agent_hash, client_label, ip_display
+      ) VALUES (
+        ${appUserId}, ${appId}, ${browserSessionId}, NULL, ${expiresAt},
+        ${ipHash}, ${userAgentHash}, ${clientLabel}, ${ipDisplay}
+      )
+    `;
+    return { token, expiresAt };
+  });
 }
 
 export async function revokeAppSessionByToken(token: string): Promise<void> {
   const tokenHash = await sha256Hex(token);
-  await getDb()`
-    UPDATE app_user_sessions SET revoked_at = NOW()
-    WHERE token_hash = ${tokenHash} AND revoked_at IS NULL
-  `;
+  await getDb().begin(async (tx) => {
+    const [browser] = await tx`
+      UPDATE app_browser_sessions SET revoked_at = NOW()
+      WHERE token_hash = ${tokenHash} AND revoked_at IS NULL
+      RETURNING id
+    `;
+    if (browser) {
+      await tx`
+        UPDATE app_user_sessions SET revoked_at = NOW()
+        WHERE browser_session_id = ${(browser as { id: string }).id} AND revoked_at IS NULL
+      `;
+    }
+  });
 }
 
 export async function revokeAllAppUserSessions(appUserId: string): Promise<void> {
@@ -71,26 +109,40 @@ export async function revokeAllAppUserSessions(appUserId: string): Promise<void>
 }
 
 export async function resolveAppSession(req: Request): Promise<ActiveAppSession | null> {
+  return resolveAppSessionForApp(req, null);
+}
+
+export async function resolveAppSessionForApp(
+  req: Request,
+  appId: string | null,
+): Promise<ActiveAppSession | null> {
   const token = parseCookies(req).get(APP_SESSION_COOKIE);
   if (!token) return null;
 
   const tokenHash = await sha256Hex(token);
   const [row] = await getDb()`
-    SELECT s.id AS session_id, s.app_user_id, s.app_id
-    FROM app_user_sessions s
+    SELECT s.id AS session_id, s.app_user_id, s.app_id, b.id AS browser_session_id
+    FROM app_browser_sessions b
+    JOIN app_user_sessions s ON s.browser_session_id = b.id
     JOIN app_users u ON u.id = s.app_user_id AND u.app_id = s.app_id
-    WHERE s.token_hash = ${tokenHash}
+    WHERE b.token_hash = ${tokenHash}
+      AND b.revoked_at IS NULL
+      AND b.expires_at > NOW()
       AND s.revoked_at IS NULL
       AND s.expires_at > NOW()
       AND u.status = 'active'
+      AND (${appId}::uuid IS NULL OR s.app_id = ${appId})
+    ORDER BY s.last_seen_at DESC
+    LIMIT 1
   `;
 
   if (!row) return null;
 
   await getDb()`
-    UPDATE app_user_sessions
+    UPDATE app_browser_sessions
     SET last_seen_at = NOW()
-    WHERE id = ${(row as { session_id: string }).session_id}
+    WHERE id = ${(row as { browser_session_id: string }).browser_session_id}
+      AND last_seen_at < NOW() - INTERVAL '5 minutes'
   `;
 
   return {
@@ -140,16 +192,12 @@ function parseCookies(req: Request): Map<string, string> {
   for (const part of header.split(";")) {
     const [rawKey, ...rest] = part.trim().split("=");
     if (!rawKey) continue;
-    map.set(rawKey, decodeURIComponent(rest.join("=")));
+    const decoded = safeDecodeURIComponent(rest.join("="));
+    if (decoded !== null) map.set(rawKey, decoded);
   }
   return map;
 }
 
-function clientIp(req: Request): string {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim() ?? "unknown";
-  return "local";
-}
 
 export function readAppSessionToken(req: BunRequest): string | undefined {
   return parseCookies(req).get(APP_SESSION_COOKIE);

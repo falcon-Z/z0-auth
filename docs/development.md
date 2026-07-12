@@ -66,11 +66,11 @@ For a clean dev slate, run `bun run db:reset` and complete `/auth/setup` again w
 
 ### Postgres: `too many clients already`
 
-Bun’s SQL client opens a **connection pool** per `new SQL()` (default **10** connections, created eagerly). This repo uses **`max: 1`** via `createPgSql()` so one process holds one connection.
+Bun’s SQL client opens a connection pool per process. z0-auth defaults to 10 connections in every environment; set `DATABASE_POOL_MAX` when the database connection budget requires another bounded value. Tests are serialized where they share mutable database state, while browser tests retain enough connections for realistic concurrent requests. The global development pool survives hot reloads and closes during graceful shutdown.
 
 Common causes on a single Docker Postgres:
 
-1. **`bun dev` (`--hot`)** — each hot reload can leave old pools open until you restart the dev process. Restart `bun dev` after many saves, or stop dev before a long `bun test` run.
+1. **Multiple development processes** — every process owns a pool; stop unused servers before a long test run.
 2. **Dev server + tests + scripts at once** — each process needs its own slot; stop the dev server when running the full test suite.
 3. **Stale backends** — list and terminate idle clients:
    ```sql
@@ -134,6 +134,6 @@ When shipping a screen: add the page under `src/app/console/modules/<name>/`, re
 | Command | Purpose |
 |---------|---------|
 | `bun dev` | Dev server with hot reload |
-| `bun test` | Unit + integration tests (isolated test DB) |
+| `bun test` | Unit + integration tests serialized against the isolated test DB |
 | `bun run db:test:init` | Create `z0auth_test` on existing Postgres |
 | `bun run db:reset` | Drop schema, migrate (fresh platform) |

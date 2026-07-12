@@ -7,8 +7,6 @@ import { resolveHostedSignInMethods } from "../../api/lib/auth-settings";
 import {
   appSessionCookieHeader,
   createAppSession,
-  readAppSessionToken,
-  revokeAppSessionByToken,
 } from "../../api/lib/app-session";
 import { ensureGroupMemberForAppUser } from "../../api/lib/group-sso";
 import { getDb } from "../../api/lib/db";
@@ -326,8 +324,6 @@ async function postMagicLinkAcceptPage(req: BunRequest): Promise<Response> {
   let setCookie: string;
   const returnTo = form.return_to;
   if (consumed.realm === "app" && consumed.appId) {
-    const existingToken = readAppSessionToken(req);
-    if (existingToken) await revokeAppSessionByToken(existingToken);
     const session = await createAppSession(consumed.userId, consumed.appId, req);
     const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${consumed.userId} LIMIT 1`;
     if (userRow) {

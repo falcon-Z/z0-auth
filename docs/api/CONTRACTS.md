@@ -87,11 +87,11 @@ Use underscore-prefixed fields for non-input failures:
 
 ---
 
-## OAuth and future APIs
+## OAuth and OIDC APIs
 
-- Stub in `oauth.openapi.yaml` until implemented; mark `x-z0-status: planned` if needed.
-- Implement **security-contract.md** rules before exposing token endpoints.
-- Reserved codes already exist in `ErrorCodes` for redirect, scope, PKCE, and client errors.
+- `oauth.openapi.yaml` documents the shipped authorization, token, refresh, revocation, introspection, discovery, JWKS, and userinfo endpoints.
+- OAuth protocol errors use OAuth response bodies or trusted redirect URIs rather than generic API problems where the standards require them.
+- Opaque access tokens are validated by confidential resource servers through RFC 7662 introspection.
 
 ---
 
@@ -106,6 +106,6 @@ Use underscore-prefixed fields for non-input failures:
 | `audit.openapi.yaml` | `/api/v1/audit-events` (P7M1) |
 | `sessions.openapi.yaml` | Console self-service sessions (`/api/v1/sessions`) |
 | `app-users.openapi.yaml` | App users + admin session list/revoke (P7M2) |
-| `oauth.openapi.yaml` | OAuth/OIDC (planned) |
+| `oauth.openapi.yaml` | OAuth/OIDC authorization server |
 
 External references use relative paths, e.g. `$ref: "common.openapi.yaml#/components/responses/ValidationError"`.

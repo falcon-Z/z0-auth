@@ -4,6 +4,7 @@ import { randomToken } from "./crypto";
 import { problem } from "./http";
 import { ErrorCodes } from "@z0/contracts/errors";
 import { CSRF_COOKIE, CSRF_HEADER } from "@z0/contracts/http";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 export { CSRF_COOKIE, CSRF_HEADER };
 
@@ -17,7 +18,8 @@ export function parseCookies(req: Request): Map<string, string> {
   for (const part of header.split(";")) {
     const [rawKey, ...rest] = part.trim().split("=");
     if (!rawKey) continue;
-    map.set(rawKey, decodeURIComponent(rest.join("=")));
+    const decoded = safeDecodeURIComponent(rest.join("="));
+    if (decoded !== null) map.set(rawKey, decoded);
   }
   return map;
 }

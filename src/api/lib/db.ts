@@ -2,6 +2,7 @@ import { SQL } from "bun";
 
 import { loadConfig } from "./config";
 import { createPgSql } from "./create-pg-sql";
+import { CURRENT_SCHEMA_VERSION } from "./schema-version";
 
 export type DatabaseHealth = {
   ok: boolean;
@@ -111,12 +112,13 @@ export async function checkDatabaseSchema(): Promise<DatabaseSchemaHealth> {
 
   try {
     const [row] = await getDb()`
-      SELECT EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_name = 'instance_settings'
-      ) AS ready
+      SELECT
+        to_regclass('public.instance_settings') IS NOT NULL
+        AND to_regclass('public.app_browser_sessions') IS NOT NULL
+        AND to_regclass('public.rate_limit_buckets') IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM schema_migrations WHERE version = ${CURRENT_SCHEMA_VERSION}
+        ) AS ready
     `;
     return { ready: Boolean((row as { ready: boolean }).ready) };
   } catch (error) {

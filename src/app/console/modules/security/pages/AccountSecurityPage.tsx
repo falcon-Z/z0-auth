@@ -97,8 +97,9 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
       {formError ? <PageError message={formError} /> : null}
 
       <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
-        <FormField label="Current password" error={fieldErrors.currentPassword}>
+        <FormField label="Current password" htmlFor="currentPassword" error={fieldErrors.currentPassword}>
           <Input
+            id="currentPassword"
             type="password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -106,8 +107,9 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
             required
           />
         </FormField>
-        <FormField label="New password" error={fieldErrors.password}>
+        <FormField label="New password" htmlFor="newPassword" error={fieldErrors.password}>
           <Input
+            id="newPassword"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -116,8 +118,9 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
           />
         </FormField>
         {password.length > 0 ? <PasswordChecklist password={password} /> : null}
-        <FormField label="Confirm new password" error={fieldErrors.passwordConfirm}>
+        <FormField label="Confirm new password" htmlFor="passwordConfirm" error={fieldErrors.passwordConfirm}>
           <Input
+            id="passwordConfirm"
             type="password"
             value={passwordConfirm}
             onChange={(e) => setPasswordConfirm(e.target.value)}

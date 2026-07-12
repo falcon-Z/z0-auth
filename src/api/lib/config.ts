@@ -15,7 +15,7 @@ export type AppConfig = {
   installToken?: string;
   /** Allow server start when setup is incomplete (development escape hatch). */
   allowIncompleteSetup: boolean;
-  /** Public HTTPS origin for OAuth/OIDC issuer (e.g. https://auth.example.com). Falls back to request origin. */
+  /** Canonical public origin for issuer, callbacks, and security links. Required HTTPS in production. */
   publicOrigin?: string;
   /** Optional first-owner bootstrap from deployment configuration. */
   bootstrapOwner: BootstrapOwnerConfig;
@@ -97,8 +97,32 @@ export function bootstrapOwnerStatus(config: BootstrapOwnerConfig): {
 
 /** Origin clients use to reach this instance (OIDC issuer, absolute URLs). */
 export function requestPublicOrigin(req: Request): string {
-  const configured = loadConfig().publicOrigin;
-  if (configured) return configured;
+  const config = loadConfig();
+  const configured = config.publicOrigin;
+  if (configured) {
+    let url: URL;
+    try {
+      url = new URL(configured);
+    } catch {
+      throw new Error("PUBLIC_ORIGIN must be a valid absolute origin");
+    }
+    if (
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    ) {
+      throw new Error("PUBLIC_ORIGIN must contain only scheme, host, and optional port");
+    }
+    if (config.nodeEnv === "production" && url.protocol !== "https:") {
+      throw new Error("PUBLIC_ORIGIN must use https in production");
+    }
+    return url.origin;
+  }
+  if (config.nodeEnv === "production") {
+    throw new Error("PUBLIC_ORIGIN is required in production");
+  }
   return new URL(req.url).origin;
 }
 

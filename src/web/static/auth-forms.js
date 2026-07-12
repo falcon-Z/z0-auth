@@ -3,49 +3,36 @@
  * Password checklist mirrors @z0/contracts/password-policy (display rules only).
  */
 (function () {
-  const PASSWORD_MIN_LENGTH = 14;
+  const PASSWORD_MIN_LENGTH = 15;
   const PASSWORD_MAX_LENGTH = 128;
-  const SPECIAL_CHAR_RE = /[!-/:-@[-`{-~]/;
-  const WEAK_PASSWORDS = new Set(
+  const BLOCKED_PASSWORDS = new Set(
     [
-      "test",
-      "test123",
-      "testing",
-      "password",
-      "password1",
-      "password123",
-      "qwerty",
-      "qwerty123",
-      "qwerty123456",
-      "123456",
-      "123456789",
-      "admin",
-      "admin123",
-      "admin123456",
-      "letmein",
-      "letmein123",
-      "welcome",
-      "welcome123",
-      "changeme",
-      "changeme123",
-      "iloveyou",
-      "monkey",
-      "dragon",
-      "master",
-      "login",
-      "abc123",
-      "P@ssw0rd123!",
-      "Password123!",
-      "SuperAdmin123!",
-    ].map((p) => p.toLowerCase()),
+      "123456", "123456789", "12345678", "12345", "1234567", "1234567890",
+      "password", "password1", "password123", "qwerty", "qwerty123", "abc123",
+      "111111", "123123", "admin", "letmein", "welcome", "monkey", "dragon",
+      "master", "login", "princess", "football", "baseball", "shadow", "sunshine",
+      "iloveyou", "trustno1", "passw0rd", "p@ssw0rd", "qwertyuiop", "asdfghjkl",
+      "zaq12wsx", "1q2w3e4r", "1qaz2wsx", "000000", "666666", "654321",
+      "superman", "charlie", "donald", "secret", "freedom", "whatever", "killer",
+      "jordan", "michael", "batman", "computer", "internet", "changeme", "testing",
+      "test", "superadmin",
+    ],
   );
 
   function passesNotWeakRule(password) {
     if (password.length < PASSWORD_MIN_LENGTH) return false;
-    return !WEAK_PASSWORDS.has(password.toLowerCase());
+    const normalized = password.toLowerCase().replace(/[^a-z0-9@]/g, "");
+    const withoutNumericSuffix = normalized.replace(/\d{1,8}$/, "");
+    return !(
+      BLOCKED_PASSWORDS.has(normalized) ||
+      BLOCKED_PASSWORDS.has(withoutNumericSuffix) ||
+      /^(.)\1{7,}$/.test(normalized) ||
+      "1234567890".includes(normalized) ||
+      "0987654321".includes(normalized)
+    );
   }
 
-  const CHECKLIST_RULE_IDS = ["min_length", "character_mix", "not_weak", "not_contextual"];
+  const CHECKLIST_RULE_IDS = ["min_length", "not_weak", "not_contextual"];
 
   const SVG_CHECK = `<svg class="auth-status-icon auth-status-icon--success" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6.25" fill="none" stroke="currentColor" stroke-width="1.25"/><path fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M4.5 7.25 6.1 8.85 9.75 5.35"/></svg>`;
 
@@ -96,23 +83,11 @@
     return parts.some((part) => lower.includes(part));
   }
 
-  function hasCharacterMix(password) {
-    if (password.length === 0) return false;
-    return (
-      /[A-Z]/.test(password) &&
-      /[a-z]/.test(password) &&
-      /\d/.test(password) &&
-      SPECIAL_CHAR_RE.test(password)
-    );
-  }
-
   function testChecklistRule(id, password, ctx) {
     if (password.length === 0) return false;
     switch (id) {
       case "min_length":
         return password.length >= PASSWORD_MIN_LENGTH;
-      case "character_mix":
-        return hasCharacterMix(password);
       case "not_weak":
         return passesNotWeakRule(password);
       case "not_contextual":

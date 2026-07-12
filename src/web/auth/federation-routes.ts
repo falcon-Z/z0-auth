@@ -1,11 +1,10 @@
 import type { BunRequest } from "bun";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 import { resolveAuthRealm } from "../../api/lib/auth-realm";
 import {
   appSessionCookieHeader,
   createAppSession,
-  readAppSessionToken,
-  revokeAppSessionByToken,
 } from "../../api/lib/app-session";
 import { ensureGroupMemberForAppUser } from "../../api/lib/group-sso";
 import { writeAuditEvent } from "../../api/lib/audit";
@@ -38,7 +37,7 @@ function getCookie(req: Request, key: string): string | null {
   const raw = req.headers.get("cookie") ?? "";
   for (const part of raw.split(";")) {
     const [k, ...rest] = part.trim().split("=");
-    if (k === key) return decodeURIComponent(rest.join("="));
+    if (k === key) return safeDecodeURIComponent(rest.join("="));
   }
   return null;
 }
@@ -58,7 +57,7 @@ export async function getFederationStart(req: BunRequest): Promise<Response> {
   const providerKey = req.params.providerKey;
   if (!providerKey) return new Response("Not found", { status: 404 });
 
-  const rate = checkRateLimit({
+  const rate = await checkRateLimit({
     key: `federation-start:${clientIp(req)}`,
     limit: 30,
     windowMs: 15 * 60 * 1000,
@@ -117,7 +116,7 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
   const providerKey = req.params.providerKey;
   if (!providerKey) return new Response("Not found", { status: 404 });
 
-  const rate = checkRateLimit({
+  const rate = await checkRateLimit({
     key: `federation-callback:${clientIp(req)}`,
     limit: 30,
     windowMs: 15 * 60 * 1000,
@@ -152,7 +151,12 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
   try {
     const origin = resolveFederationOrigin(req);
     const tokens = await exchangeUpstreamCode({ secrets, providerKey, origin, code });
-    const profile = await normalizeProviderProfile(secrets, tokens.access_token, tokens.id_token);
+    const profile = await normalizeProviderProfile(
+      secrets,
+      tokens.access_token,
+      tokens.id_token,
+      stored.nonce,
+    );
 
     const linked = await linkFederationIdentity({
       appId: stored.appId,
@@ -179,9 +183,6 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
       scope: tokens.scope ?? secrets.defaultScopes,
       expiresIn: tokens.expires_in ?? null,
     });
-
-    const existingToken = readAppSessionToken(req);
-    if (existingToken) await revokeAppSessionByToken(existingToken);
 
     const session = await createAppSession(linked.appUserId, stored.appId, req);
     const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${linked.appUserId} LIMIT 1`;

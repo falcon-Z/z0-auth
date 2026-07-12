@@ -1,8 +1,6 @@
-import { readdir } from "node:fs/promises";
-import path from "node:path";
-
 import { closeDatabase } from "../../src/api/lib/db";
 import { createPgSql } from "../../src/api/lib/create-pg-sql";
+import { resetAndMigrateDatabase } from "../../src/scripts/migrations";
 
 export function databaseNameFromUrl(url: string): string {
   const parsed = new URL(url.replace(/^postgresql:/, "http:"));
@@ -36,18 +34,8 @@ export async function resetTestDatabase(): Promise<void> {
 
   await closeDatabase();
 
-  const sqlDir = path.join(import.meta.dir, "../../src/scripts/sql");
-  const resetSql = await Bun.file(path.join(sqlDir, "reset.sql")).text();
-  const schemaSql = await Bun.file(path.join(sqlDir, "schema.sql")).text();
-  const migrationsDir = path.join(sqlDir, "migrations");
-  const migrationFiles = (await readdir(migrationsDir)).filter((f) => f.endsWith(".sql")).sort();
-
   const db = createPgSql(url);
-  await db.unsafe(resetSql);
-  await db.unsafe(schemaSql);
-  for (const file of migrationFiles) {
-    await db.unsafe(await Bun.file(path.join(migrationsDir, file)).text());
-  }
+  await resetAndMigrateDatabase(db, undefined, false);
   await db.close();
 }
 

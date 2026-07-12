@@ -95,6 +95,14 @@ run("M04 application scopes", () => {
   test("create and list scopes", async () => {
     const { csrf, cookie } = await login();
 
+    const missingCsrf = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${appId}/scopes`, {
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: { name: "read:invoices", description: "Read invoices" },
+      }),
+    );
+    expect(missingCsrf.status).toBe(403);
+
     const create = await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${appId}/scopes`, {
         csrfToken: csrf,

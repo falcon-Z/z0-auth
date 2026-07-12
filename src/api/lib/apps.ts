@@ -558,8 +558,42 @@ export async function revokeCredential(
   const app = await getAppForApi(appId);
   if (!app.ok) return app;
 
-  const cred = await findCredential(appId, credentialId);
-  if (!cred) {
+  const outcome = await getDb().begin(async (tx) => {
+    const [appRow] = await tx`SELECT status FROM apps WHERE id = ${appId} FOR UPDATE`;
+    if (!appRow) return "missing_app" as const;
+    const [cred] = await tx`
+      SELECT status FROM app_credentials
+      WHERE id = ${credentialId} AND app_id = ${appId}
+      FOR UPDATE
+    `;
+    if (!cred) return "missing_credential" as const;
+    if ((cred as { status: string }).status === "revoked") return "ok" as const;
+
+    if ((appRow as { status: string }).status === "active") {
+      const activeCredentials = await tx`
+        SELECT id FROM app_credentials
+        WHERE app_id = ${appId} AND status = 'active'
+        FOR UPDATE
+      `;
+      if (activeCredentials.length <= 1) return "last_active" as const;
+    }
+    await tx`
+      UPDATE app_credentials
+      SET status = 'revoked', revoked_at = NOW()
+      WHERE id = ${credentialId} AND app_id = ${appId} AND status = 'active'
+    `;
+    return "ok" as const;
+  });
+
+  if (outcome === "missing_app") {
+    return {
+      ok: false,
+      response: problem(404, "Not Found", "Application not found.", {
+        errors: [{ field: "appId", code: ErrorCodes.APP_NOT_FOUND, message: "Application not found" }],
+      }),
+    };
+  }
+  if (outcome === "missing_credential") {
     return {
       ok: false,
       response: problem(404, "Not Found", "Credential not found.", {
@@ -570,34 +604,18 @@ export async function revokeCredential(
     };
   }
 
-  if (cred.status === "revoked") {
-    return { ok: true };
+  if (outcome === "last_active") {
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "Cannot revoke the last active credential.", {
+        errors: [{
+          field: "credentialId",
+          code: ErrorCodes.LAST_ACTIVE_CREDENTIAL,
+          message: "An active application must keep at least one active credential",
+        }],
+      }),
+    };
   }
-
-  if (app.app.status === "active") {
-    const activeCount = await countActiveCredentials(appId);
-    if (activeCount <= 1) {
-      return {
-        ok: false,
-        response: problem(409, "Conflict", "Cannot revoke the last active credential.", {
-          errors: [
-            {
-              field: "credentialId",
-              code: ErrorCodes.LAST_ACTIVE_CREDENTIAL,
-              message: "An active application must keep at least one active credential",
-            },
-          ],
-        }),
-      };
-    }
-  }
-
-  await getDb()`
-    UPDATE app_credentials
-    SET status = 'revoked', revoked_at = NOW()
-    WHERE id = ${credentialId}
-      AND app_id = ${appId}
-  `;
 
   return { ok: true };
 }

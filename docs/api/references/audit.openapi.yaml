@@ -16,16 +16,14 @@ paths:
       description: Returns recent audit events newest-first. Requires `settings.audit:read`.
       security:
         - SessionCookie: []
-      security:
-        - SessionCookie: []
       parameters:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
         - name: before
           in: query
-          description: Cursor — ISO timestamp of the last event from the previous page.
-          schema: { type: string, format: date-time }
+          description: Opaque `nextCursor` value returned by the previous page.
+          schema: { type: string }
         - name: action
           in: query
           schema: { type: string }
@@ -62,10 +60,14 @@ components:
         createdAt: { type: string, format: date-time }
     ListAuditEventsResponse:
       type: object
-      required: [events, hasMore]
+      required: [events, hasMore, nextCursor]
       properties:
         events:
           type: array
           items:
             $ref: "#/components/schemas/AuditEventSummary"
         hasMore: { type: boolean }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page, or null when `hasMore` is false.

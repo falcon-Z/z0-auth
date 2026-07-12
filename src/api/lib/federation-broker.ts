@@ -1,4 +1,4 @@
-import { generateAppleClientSecret, decodeJwtPayload, parseAppleMetadata } from "./federation-apple";
+import { generateAppleClientSecret, parseAppleMetadata, verifyAppleIdToken } from "./federation-apple";
 import type { NormalizedIdpProfile } from "./federation-linking";
 import { loadConfig, requestPublicOrigin } from "./config";
 import { getDb } from "./db";
@@ -120,6 +120,7 @@ export function buildUpstreamAuthorizeUrl(options: {
 
   if (options.secrets.builtinId === "apple") {
     url.searchParams.set("response_mode", "query");
+    url.searchParams.set("nonce", options.state);
   }
 
   return url.toString();
@@ -239,8 +240,18 @@ async function normalizeFacebookProfile(accessToken: string, userinfoUrl: string
   };
 }
 
-function normalizeAppleIdToken(idToken: string): NormalizedIdpProfile {
-  const claims = decodeJwtPayload(idToken);
+async function normalizeAppleIdToken(
+  secrets: ProviderSecrets,
+  idToken: string,
+  expectedNonce: string,
+): Promise<NormalizedIdpProfile> {
+  if (!secrets.jwksUrl) throw new Error("Apple signing-key URL is not configured");
+  const claims = await verifyAppleIdToken({
+    token: idToken,
+    clientId: secrets.clientId,
+    nonce: expectedNonce,
+    jwksUrl: secrets.jwksUrl,
+  });
   const subject = String(claims.sub ?? "");
   const email = typeof claims.email === "string" ? claims.email : null;
   const emailVerified =
@@ -272,10 +283,12 @@ export async function normalizeProviderProfile(
   secrets: ProviderSecrets,
   accessToken: string,
   idToken?: string | null,
+  expectedNonce?: string | null,
 ): Promise<NormalizedIdpProfile> {
   if (secrets.builtinId === "apple") {
     if (!idToken) throw new Error("Apple sign-in did not return an id_token");
-    return normalizeAppleIdToken(idToken);
+    if (!expectedNonce) throw new Error("Apple sign-in nonce is missing");
+    return normalizeAppleIdToken(secrets, idToken, expectedNonce);
   }
 
   if (secrets.builtinId === "github") {

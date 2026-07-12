@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot src/server.ts",
-    "start": "NODE_ENV=production bun src/server.ts",
+    "start": "NODE_ENV=production bun dist/server.js",
     "build": "bun src/scripts/build.ts",
-    "test": "bun test --preload ./tests/preload.ts --concurrency=1 tests/unit tests/integration tests/api",
+    "test": "bun test --preload ./tests/preload.ts --max-concurrency=1 --parallel=1 tests/unit tests/integration tests/api",
     "db:test:init": "NODE_ENV=test bun src/scripts/db-ensure-test.ts",
     "test:e2e": "NODE_ENV=test bun --env-file=.env.test playwright test",
     "test:e2e:ui": "NODE_ENV=test bun --env-file=.env.test playwright test --ui",

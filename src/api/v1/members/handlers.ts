@@ -2,6 +2,7 @@ import type { CreateInviteRequest } from "@z0/contracts/invites";
 import { parseJsonBody } from "@z0/contracts/validation";
 
 import { json, problem } from "../../lib/http";
+import { validateCsrf } from "../../lib/csrf";
 import {
   createInstanceInvite,
   listInstanceMembersForApi,
@@ -29,6 +30,9 @@ export async function handleListInvites(req: RoutedRequest): Promise<Response> {
 }
 
 export async function handleCreateInvite(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const auth = await requireScope(req, "members:invite");
   if (!auth.ok) return auth.response;
 
@@ -41,6 +45,9 @@ export async function handleCreateInvite(req: RoutedRequest): Promise<Response> 
 }
 
 export async function handleRevokeInvite(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const inviteId = req.pathParams?.inviteId ?? "";
   const auth = await requireScope(req, "members:invite");
   if (!auth.ok) return auth.response;
@@ -51,6 +58,9 @@ export async function handleRevokeInvite(req: RoutedRequest): Promise<Response> 
 }
 
 export async function handleRemoveMember(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
   const userId = req.pathParams?.userId ?? "";
   const auth = await requireScope(req, "members:remove");
   if (!auth.ok) return auth.response;

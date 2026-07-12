@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "console",
-      testMatch: /(console|members|owner-journey)-.*\.spec\.ts/,
+      testMatch: /(?:console-shell|members-console|owner-journey-console)\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
@@ -34,9 +34,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "bun --hot src/server.ts",
+    command: "bun src/server.ts",
     url: `${baseURL}/api/live`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     env: process.env,
   },

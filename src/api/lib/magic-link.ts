@@ -11,6 +11,7 @@ import { problem } from "./http";
 import { isSmtpReady } from "./smtp-settings";
 import { checkRateLimit, clientIp } from "./rate-limit";
 import { magicLinkEmailText, sendTransactionalEmail } from "./transactional-email";
+import { requestPublicOrigin } from "./config";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 const GENERIC_MESSAGE = "Check your email for a sign-in link.";
@@ -32,9 +33,8 @@ type MagicLinkDeliveryOptions = {
 };
 
 function magicLinkUrlFromRequest(req: Request, rawToken: string, options?: { clientId?: string; returnTo?: string }): string {
-  const url = new URL(req.url);
   const path = `/auth/magic-link/${encodeURIComponent(rawToken)}`;
-  const link = new URL(path, url.origin);
+  const link = new URL(path, requestPublicOrigin(req));
   if (options?.clientId) link.searchParams.set("client_id", options.clientId);
   if (options?.returnTo) link.searchParams.set("return_to", options.returnTo);
   return link.toString();
@@ -134,7 +134,7 @@ export async function sendMagicLinkForHostedAuth(
   }
 
   const ip = clientIp(req);
-  const ipLimit = checkRateLimit({ key: `magic:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
+  const ipLimit = await checkRateLimit({ key: `magic:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
   if (!ipLimit.allowed) {
     return {
       ok: false,
@@ -146,7 +146,7 @@ export async function sendMagicLinkForHostedAuth(
     };
   }
 
-  const emailLimit = checkRateLimit({
+  const emailLimit = await checkRateLimit({
     key: `magic:email:${options.realm}:${options.appId ?? "console"}:${email}`,
     limit: 5,
     windowMs: 60 * 60 * 1000,

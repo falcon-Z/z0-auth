@@ -219,7 +219,7 @@ export async function runSetup(
   }
 
   const ip = clientIp(req);
-  const rate = checkRateLimit({
+  const rate = await checkRateLimit({
     key: `setup:${ip}`,
     limit: 3,
     windowMs: 60 * 60 * 1000,

@@ -1,5 +1,6 @@
 import { findAppRow } from "./apps";
 import { getDb } from "./db";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 const OAUTH_RETURN_COOKIE = "z0_oauth_return";
 
@@ -32,7 +33,8 @@ function parseCookies(req: Request): Map<string, string> {
   for (const part of header.split(";")) {
     const [rawKey, ...rest] = part.trim().split("=");
     if (!rawKey) continue;
-    map.set(rawKey, decodeURIComponent(rest.join("=")));
+    const decoded = safeDecodeURIComponent(rest.join("="));
+    if (decoded !== null) map.set(rawKey, decoded);
   }
   return map;
 }

@@ -6,9 +6,8 @@ import { normalizeEmail } from "@z0/contracts/validation";
 import {
   appSessionCookieHeader,
   createAppSession,
-  readAppSessionToken,
   resolveAppSession,
-  revokeAppSessionByToken,
+  resolveAppSessionForApp,
   type ActiveAppSession,
 } from "./app-session";
 import { getDb } from "./db";
@@ -65,6 +64,17 @@ export async function ensureGroupMemberForAppUser(
   const group = await getServiceGroupForApp(appId);
   if (!group) return null;
 
+  const [verifiedUser] = await getDb()`
+    SELECT 1
+    FROM app_users
+    WHERE id = ${appUserId}
+      AND app_id = ${appId}
+      AND status = 'active'
+      AND email_verified_at IS NOT NULL
+    LIMIT 1
+  `;
+  if (!verifiedUser) return null;
+
   const existingMemberId = await getGroupMemberIdForAppUser(appUserId);
   if (existingMemberId) return existingMemberId;
 
@@ -99,17 +109,19 @@ export async function ensureGroupMemberForAppUser(
   return groupMemberId;
 }
 
-async function getAppUserProfile(appUserId: string): Promise<{ email: string; name: string } | null> {
+async function getAppUserProfile(
+  appUserId: string,
+): Promise<{ email: string; name: string; emailVerified: boolean } | null> {
   const [row] = await getDb()`
-    SELECT email, name
+    SELECT email, name, email_verified_at
     FROM app_users
     WHERE id = ${appUserId}
       AND status = 'active'
     LIMIT 1
   `;
   if (!row) return null;
-  const data = row as { email: string; name: string };
-  return { email: data.email, name: data.name };
+  const data = row as { email: string; name: string; email_verified_at: Date | null };
+  return { email: data.email, name: data.name, emailVerified: Boolean(data.email_verified_at) };
 }
 
 async function findLinkedAppUserId(groupMemberId: string, appId: string): Promise<string | null> {
@@ -150,29 +162,25 @@ export async function provisionSiblingAppUser(input: {
       response: problem(401, "Unauthorized", "Source account is no longer available"),
     };
   }
+  if (!sourceProfile.emailVerified) {
+    return {
+      ok: false,
+      response: problem(403, "Forbidden", "Verify your email before using shared sign-in"),
+    };
+  }
 
   const existingByEmail = await findAppUserByEmail(input.targetAppId, sourceProfile.email);
   if (existingByEmail) {
-    const linkedElsewhere = await getGroupMemberIdForAppUser(existingByEmail);
-    if (linkedElsewhere && linkedElsewhere !== input.groupMemberId) {
-      return {
-        ok: false,
-        response: problem(409, "Conflict", "This email is already linked to another group account", {
-          errors: [{
-            field: "_auth",
-            code: ErrorCodes.APP_USER_EXISTS,
-            message: "Sign in with your password to continue",
-          }],
-        }),
-      };
-    }
-
-    await getDb()`
-      INSERT INTO service_group_app_users (group_member_id, app_user_id, app_id)
-      VALUES (${input.groupMemberId}, ${existingByEmail}, ${input.targetAppId})
-      ON CONFLICT (app_user_id) DO NOTHING
-    `;
-    return { ok: true, appUserId: existingByEmail };
+    return {
+      ok: false,
+      response: problem(409, "Conflict", "An account already exists for this application", {
+        errors: [{
+          field: "_auth",
+          code: ErrorCodes.APP_USER_EXISTS,
+          message: "Sign in to the existing account before linking shared sign-in",
+        }],
+      }),
+    };
   }
 
   const [created] = await getDb()`
@@ -204,15 +212,20 @@ export async function getGroupConsentedScope(groupMemberId: string): Promise<str
     WHERE sgau.group_member_id = ${groupMemberId}
   `;
   const merged = new Set<string>();
+  const portableOidcScopes = new Set(["openid", "profile", "email"]);
   for (const row of rows) {
     for (const name of parseScopeSet(String((row as { scope: string }).scope ?? ""))) {
-      merged.add(name);
+      if (portableOidcScopes.has(name)) merged.add(name);
     }
   }
   return [...merged].sort().join(" ");
 }
 
 export async function groupSsoCoversScope(groupMemberId: string, requestedScope: string): Promise<boolean> {
+  const portableOidcScopes = new Set(["openid", "profile", "email"]);
+  if ([...parseScopeSet(requestedScope)].some((scope) => !portableOidcScopes.has(scope))) {
+    return false;
+  }
   const granted = await getGroupConsentedScope(groupMemberId);
   if (!granted.trim()) return false;
   return scopeIsSubset(requestedScope, granted);
@@ -250,9 +263,6 @@ export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): 
   });
   if (!provisioned.ok) return { ok: false };
 
-  const existingToken = readAppSessionToken(req);
-  if (existingToken) await revokeAppSessionByToken(existingToken);
-
   const { token, expiresAt } = await createAppSession(provisioned.appUserId, targetAppId, req);
   return {
     ok: true,
@@ -270,8 +280,8 @@ export async function resolveTargetAppSession(
   req: BunRequest,
   targetAppId: string,
 ): Promise<ResolvedTargetAppSession> {
-  const direct = await resolveAppSession(req);
-  if (direct?.appId === targetAppId) {
+  const direct = await resolveAppSessionForApp(req, targetAppId);
+  if (direct) {
     return { session: direct };
   }
 

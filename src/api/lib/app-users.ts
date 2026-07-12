@@ -29,6 +29,7 @@ import { revokeAllOAuthTokensForAppUser, revokePendingAuthorizationCodesForAppUs
 import { hashPassword } from "./password";
 import { normalizeMetadata, validateAppUserMetadata } from "./app-user-metadata";
 import { appUserInviteEmailText, sendTransactionalEmail } from "./transactional-email";
+import { requestPublicOrigin } from "./config";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -338,8 +339,7 @@ function inviteStatus(row: AppUserInviteRow): AppUserInvitePreviewResponse["stat
 }
 
 export function appUserInviteUrlFromRequest(req: Request, rawToken: string): string {
-  const origin = new URL(req.url).origin;
-  return `${origin}/auth/app-invite/${rawToken}`;
+  return `${requestPublicOrigin(req)}/auth/app-invite/${rawToken}`;
 }
 
 async function findAppUserInviteByToken(rawToken: string): Promise<AppUserInviteRow | null> {

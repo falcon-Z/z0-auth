@@ -269,6 +269,53 @@ run("M06 app hosted auth", () => {
     expect(html).toContain("Invalid email or password");
   });
 
+  test("one browser can stay signed in to two unrelated apps", async () => {
+    const login = async (targetClientId: string, password: string, brokerToken?: string) => {
+      const page = await dispatchWeb(
+        new Request(`http://localhost/auth/login?client_id=${encodeURIComponent(targetClientId)}`),
+      );
+      const html = await page.text();
+      const csrf = extractCsrfFromHtml(html)!;
+      const csrfCookie = extractCsrfFromSetCookie(page) ?? csrf;
+      const cookies = [`${CSRF_COOKIE}=${encodeURIComponent(csrfCookie)}`];
+      if (brokerToken) cookies.push(`${APP_SESSION_COOKIE}=${encodeURIComponent(brokerToken)}`);
+      const response = await dispatchWeb(
+        new Request("http://localhost/auth/login", {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            origin: "http://localhost",
+            host: "localhost",
+            cookie: cookies.join("; "),
+          },
+          body: new URLSearchParams({
+            _csrf: csrf,
+            client_id: targetClientId,
+            email: "enduser@example.com",
+            password,
+          }).toString(),
+        }),
+      );
+      return appSessionFromResponse(response)!;
+    };
+
+    const broker = await login(clientId, appUserPassword);
+    const sameBroker = await login(clientBId, appBPassword, broker);
+    expect(sameBroker).toBe(broker);
+
+    for (const targetClientId of [clientId, clientBId]) {
+      const authorize = await dispatchWeb(
+        new Request(
+          `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(targetClientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=multi-app`,
+          { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(broker)}` } },
+        ),
+      );
+      expect([200, 302]).toContain(authorize.status);
+      expect(authorize.headers.get("location") ?? "").not.toContain("/auth/login");
+      if (authorize.status === 200) expect(await authorize.text()).toContain("Authorize");
+    }
+  });
+
   test("self-registration creates app user and session", async () => {
     const page = await dispatchWeb(
       new Request(`http://localhost/auth/register?client_id=${encodeURIComponent(clientId)}`),

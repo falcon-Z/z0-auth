@@ -17,13 +17,14 @@ import { hashPassword } from "./password";
 import { isSmtpReady } from "./smtp-settings";
 import { checkRateLimit, clientIp } from "./rate-limit";
 import { revokeAllUserSessions } from "./session";
+import { requestPublicOrigin } from "./config";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 const GENERIC_MESSAGE = "If an account exists for that email, you will receive a reset link shortly.";
 
 function resetUrlFromRequest(req: Request, token: string): string {
   const segment = encodeURIComponent(token);
-  return `${new URL(req.url).origin}/auth/reset-password/${segment}`;
+  return `${requestPublicOrigin(req)}/auth/reset-password/${segment}`;
 }
 
 async function findUserIdByEmail(email: string): Promise<string | null> {
@@ -66,7 +67,7 @@ export async function requestPasswordReset(
   }
 
   const ip = clientIp(req);
-  const ipLimit = checkRateLimit({ key: `reset:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
+  const ipLimit = await checkRateLimit({ key: `reset:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
   if (!ipLimit.allowed) {
     return problem(429, "Too Many Requests", "Too many reset attempts. Try again later.", {
       code: ErrorCodes.RATE_LIMITED,
@@ -75,7 +76,7 @@ export async function requestPasswordReset(
     });
   }
 
-  const emailLimit = checkRateLimit({ key: `reset:email:${email}`, limit: 5, windowMs: 60 * 60 * 1000 });
+  const emailLimit = await checkRateLimit({ key: `reset:email:${email}`, limit: 5, windowMs: 60 * 60 * 1000 });
   if (!emailLimit.allowed) {
     return problem(429, "Too Many Requests", "Too many reset attempts. Try again later.", {
       code: ErrorCodes.RATE_LIMITED,
@@ -165,7 +166,7 @@ export async function completePasswordReset(
   body: ResetPasswordRequest,
 ): Promise<Response> {
   const ip = clientIp(req);
-  const ipLimit = checkRateLimit({ key: `reset-complete:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
+  const ipLimit = await checkRateLimit({ key: `reset-complete:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
   if (!ipLimit.allowed) {
     return problem(429, "Too Many Requests", "Too many attempts. Try again later.", {
       code: ErrorCodes.RATE_LIMITED,
@@ -224,28 +225,35 @@ export async function completePasswordReset(
     return invalidResetTokenResponse();
   }
 
-  const userId = row.user_id;
   const passwordHash = await hashPassword(body.password);
 
-  await getDb().begin(async (tx) => {
-    await tx`
-      UPDATE password_credentials
-      SET password_hash = ${passwordHash}, updated_at = NOW()
-      WHERE user_id = ${userId}
-    `;
-    await tx`
+  const completed = await getDb().begin(async (tx) => {
+    const [consumed] = await tx`
       UPDATE password_reset_tokens
       SET used_at = NOW()
       WHERE id = ${row.id}
+        AND user_id = ${row.user_id}
+        AND used_at IS NULL
+        AND expires_at > NOW()
+      RETURNING user_id
     `;
-  });
+    if (!consumed) return false;
 
-  await revokeAllUserSessions(userId);
+    await tx`
+      UPDATE password_credentials
+      SET password_hash = ${passwordHash}, updated_at = NOW()
+      WHERE user_id = ${row.user_id}
+    `;
+    return true;
+  });
+  if (!completed) return invalidResetTokenResponse();
+
+  await revokeAllUserSessions(row.user_id);
   await writeAuditEvent({
-    actorUserId: userId,
+    actorUserId: row.user_id,
     action: "password_reset.completed",
     resourceType: "user",
-    resourceId: userId,
+    resourceId: row.user_id,
   });
 
   return new Response(JSON.stringify({ ok: true }), {

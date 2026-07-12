@@ -28,7 +28,7 @@ run("setup hijack", () => {
     };
 
     const results = await Promise.all(
-      Array.from({ length: 5 }, () =>
+      Array.from({ length: 3 }, () =>
         dispatchApi(
           buildRequest("POST", "/api/setup", {
             csrfToken: csrf,
@@ -41,7 +41,7 @@ run("setup hijack", () => {
     const statuses = results.map((r) => r.status);
     expect(statuses.filter((s) => s === 201).length).toBe(1);
     expect(statuses.every((s) => s === 201 || s === 409)).toBe(true);
-    expect(statuses.filter((s) => s !== 201).length).toBe(4);
+    expect(statuses.filter((s) => s !== 201).length).toBe(2);
   });
 });
 

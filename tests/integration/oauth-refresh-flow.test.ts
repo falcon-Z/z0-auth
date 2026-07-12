@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
-import { closeDatabase } from "../../src/api/lib/db";
+import { closeDatabase, getDb } from "../../src/api/lib/db";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { resetConsumedConsentNoncesForTests } from "../../src/web/oauth/routes";
@@ -172,6 +172,7 @@ async function exchangeToken(body: Record<string, string>): Promise<Response> {
 run("OAuth refresh token lifecycle", () => {
   let clientId = "";
   let clientSecret = "";
+  let appId = "";
   let appUserEmail = "refresh-user@example.com";
 
   beforeAll(async () => {
@@ -195,6 +196,7 @@ run("OAuth refresh token lifecycle", () => {
     };
     clientId = app.credential.clientId;
     clientSecret = app.clientSecret;
+    appId = app.app.id;
 
     await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${app.app.id}/users`, {
@@ -269,7 +271,9 @@ run("OAuth refresh token lifecycle", () => {
       client_id: clientId,
       client_secret: clientSecret,
     });
-    expect(secondRefresh.status).toBe(200);
+    expect(secondRefresh.status).toBe(400);
+    const secondRefreshBody = (await secondRefresh.json()) as { error: string };
+    expect(secondRefreshBody.error).toBe("invalid_grant");
   });
 
   test("revoking refresh token rejects further refresh", async () => {
@@ -304,5 +308,28 @@ run("OAuth refresh token lifecycle", () => {
       client_secret: clientSecret,
     });
     expect(refreshRes.status).toBe(400);
+  });
+
+  test("deleted scopes cannot be renewed by a refresh token", async () => {
+    const appSession = await loginAppUser(clientId, appUserEmail, appUserPassword);
+    const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
+    const tokenRes = await exchangeToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const token = (await tokenRes.json()) as { refresh_token: string };
+
+    await getDb()`DELETE FROM app_scopes WHERE app_id = ${appId} AND name = 'profile'`;
+    const refreshRes = await exchangeToken({
+      grant_type: "refresh_token",
+      refresh_token: token.refresh_token,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    expect(refreshRes.status).toBe(400);
+    expect(((await refreshRes.json()) as { error: string }).error).toBe("invalid_grant");
   });
 });

@@ -18,13 +18,15 @@ export type LinkFederationResult =
   | { ok: false; response: Response };
 
 async function findIdentityBySubject(
+  appId: string,
   providerId: string,
   subject: string,
 ): Promise<{ id: string; app_user_id: string; app_id: string } | null> {
   const [row] = await getDb()`
     SELECT id, app_user_id, app_id
     FROM app_user_identities
-    WHERE identity_provider_id = ${providerId}
+    WHERE app_id = ${appId}
+      AND identity_provider_id = ${providerId}
       AND provider_subject = ${subject}
     LIMIT 1
   `;
@@ -80,16 +82,8 @@ export async function linkFederationIdentity(options: {
   const { appId, providerId, profile } = options;
   const email = profile.email ? normalizeEmail(profile.email) : null;
 
-  const existing = await findIdentityBySubject(providerId, profile.subject);
+  const existing = await findIdentityBySubject(appId, providerId, profile.subject);
   if (existing) {
-    if (existing.app_id !== appId) {
-      return {
-        ok: false,
-        response: problem(409, "Conflict", "This sign-in method is linked to another account", {
-          errors: [{ field: "_auth", code: ErrorCodes.FEDERATION_FAILED, message: "This sign-in method is linked to another account" }],
-        }),
-      };
-    }
     await getDb()`
       UPDATE app_user_identities
       SET last_used_at = NOW(),

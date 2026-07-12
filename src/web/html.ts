@@ -84,9 +84,10 @@ export function renderAuthPage(options: AuthPageOptions): string {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="referrer" content="no-referrer" />
   <title>${escapeHtml(options.title)} · ${escapeHtml(options.branding?.name?.trim() || "z0-auth")}</title>
   <link rel="stylesheet" href="/static/auth.css" />
-  <script src="https://unpkg.com/htmx.org@2.0.8"></script>
+  <script src="/static/htmx.min.js" defer></script>
   <script src="/static/auth-forms.js" defer></script>
 </head>
 <body class="auth-body"${bodyStyle}>

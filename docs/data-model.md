@@ -37,7 +37,7 @@ App sign-in (M06+): credentials and sessions scoped to **one `app_id`** — no c
 | **Console** (your team) | No `client_id` | `users` | `z0_session` |
 | **App end users** | `client_id` → `app_id` | `app_users` | `z0_app_session` |
 
-Auth0 Universal Login / Clerk hosted pages work the same way: one login UI; the app’s client id picks the user directory. Social buttons (Google, GitHub, …) appear on the **app** hosted page when enabled for that app (future module).
+Auth0 Universal Login / Clerk hosted pages work the same way: one login UI; the app’s client id picks the user directory. Social buttons (Google, Apple, GitHub, Facebook, or custom OIDC) appear on the **app** hosted page when enabled for that app.
 
 ## Tables
 
@@ -194,20 +194,23 @@ Accept creates a row in `app_users` only. Unique pending invite per `(app_id, em
 
 Self-registration (M06) also creates `app_users` directly when `client_id` resolves to the app — same uniqueness rules as console-created users.
 
-### `app_user_sessions` (M06)
+### `app_browser_sessions` and `app_user_sessions`
+
+`app_browser_sessions` stores the hashed `z0_app_session` browser credential, its 14-day lifetime, revocation state, and device metadata. One browser session may hold isolated grants for several unrelated apps.
 
 | Column | Type | Notes |
 |--------|------|-------|
 | `id` | UUID PK | |
 | `app_user_id` | UUID → `app_users` | CASCADE delete |
 | `app_id` | UUID → `apps` | Denormalized for enforcement; must match `app_users.app_id` |
-| `token_hash` | TEXT | Unique |
+| `browser_session_id` | UUID → `app_browser_sessions` | Browser broker containing this app grant |
+| `token_hash` | TEXT nullable | Legacy migrated token reference; new grants store the hash on the browser session |
 | `expires_at` | TIMESTAMPTZ | 14-day absolute lifetime (same as console) |
 | `created_at`, `last_seen_at` | TIMESTAMPTZ | |
 | `revoked_at` | TIMESTAMPTZ | Logout / security revoke |
 | `ip_hash`, `user_agent_hash`, `client_label`, `ip_display` | TEXT | Same display pattern as `sessions` |
 
-Cookie `z0_app_session` (HttpOnly, SameSite=Lax). OAuth and `/auth` resume read this cookie — not `z0_session`. A browser may hold both cookies when an operator tests an app while signed into the console.
+Cookie `z0_app_session` (HttpOnly, SameSite=Lax). OAuth resolves the grant for the requested app; logging into another app adds or replaces only that app's grant. A browser may also hold the independent console cookie.
 
 ### OAuth storage (P4M1 foundation)
 
@@ -226,6 +229,7 @@ OAuth token material is never stored in plaintext. Persist only hashed reference
 | `scope` | TEXT | Granted scope string (space-delimited) |
 | `code_challenge` | TEXT | PKCE challenge as sent by client |
 | `code_challenge_method` | TEXT | `S256` for public clients |
+| `oidc_nonce` | TEXT | Optional nonce copied unchanged into the ID token |
 | `expires_at` | TIMESTAMPTZ | Short TTL (target 10 minutes) |
 | `used_at` | TIMESTAMPTZ | First successful token exchange marks one-time use |
 | `created_at` | TIMESTAMPTZ | |
@@ -376,7 +380,7 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 | `platform_resources`, `platform_scopes` | RBAC catalog (seeded) |
 | `instance_roles`, `instance_role_scopes` | Predefined + custom roles |
 | `instance_member_roles`, `instance_invite_roles` | Role assignments |
-| `audit_events` | Audit trail (`tenant_id` unused, NULL in v1) |
+| `audit_events` | Instance audit trail |
 
 ## Setup flow
 

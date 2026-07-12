@@ -127,6 +127,7 @@ async function approveConsent(input: {
   state?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+  nonce?: string;
 }): Promise<string> {
   const params = new URLSearchParams({
     response_type: "code",
@@ -139,6 +140,7 @@ async function approveConsent(input: {
     params.set("code_challenge", input.codeChallenge);
     params.set("code_challenge_method", input.codeChallengeMethod ?? "S256");
   }
+  if (input.nonce) params.set("nonce", input.nonce);
 
   const consentPageRes = await dispatchWeb(
     new Request(`http://localhost/oauth/authorize?${params.toString()}`, {
@@ -176,6 +178,7 @@ async function approveConsent(input: {
         state: input.state ?? "test-state",
         code_challenge: input.codeChallenge ?? "",
         code_challenge_method: input.codeChallengeMethod ?? "",
+        nonce: input.nonce ?? "",
         consent_nonce: consentNonce,
         consent: "approve",
       }).toString(),
@@ -321,9 +324,11 @@ run("OAuth authorization code flow", () => {
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` } },
       ),
     );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe("pkce_required");
+    expect(res.status).toBe(302);
+    const redirect = new URL(res.headers.get("location")!);
+    expect(redirect.origin + redirect.pathname).toBe(REDIRECT);
+    expect(redirect.searchParams.get("error")).toBe("invalid_request");
+    expect(redirect.searchParams.get("state")).toBe("pkce-state");
   });
 
   test("public client requires state on authorize", async () => {
@@ -336,9 +341,9 @@ run("OAuth authorization code flow", () => {
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` } },
       ),
     );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe("invalid_request");
+    expect(res.status).toBe(302);
+    const redirect = new URL(res.headers.get("location")!);
+    expect(redirect.searchParams.get("error")).toBe("invalid_request");
   });
 
   test("public client completes PKCE code flow", async () => {
@@ -394,9 +399,10 @@ run("OAuth authorization code flow", () => {
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` } },
       ),
     );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe("invalid_scope");
+    expect(res.status).toBe(302);
+    const redirect = new URL(res.headers.get("location")!);
+    expect(redirect.origin + redirect.pathname).toBe(REDIRECT);
+    expect(redirect.searchParams.get("error")).toBe("invalid_scope");
   });
 
   test("deny consent returns access_denied", async () => {
@@ -483,6 +489,7 @@ run("OAuth authorization code flow", () => {
       redirectUri: REDIRECT,
       appSession,
       scope: "openid profile email",
+      nonce: "oidc-nonce-123",
     });
 
     const tokenRes = await exchangeToken({
@@ -688,6 +695,7 @@ run("OIDC discovery and tokens", () => {
       redirectUri: REDIRECT,
       appSession,
       scope: "openid profile email",
+      nonce: "oidc-nonce-123",
     });
 
     const tokenRes = await exchangeToken({
@@ -702,6 +710,8 @@ run("OIDC discovery and tokens", () => {
     expect(token.id_token).toBeTruthy();
     const parts = token.id_token!.split(".");
     expect(parts.length).toBe(3);
+    const payload = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf8")) as { nonce?: string };
+    expect(payload.nonce).toBe("oidc-nonce-123");
   });
 
   test("userinfo returns scope-gated claims", async () => {

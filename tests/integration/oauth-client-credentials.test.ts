@@ -115,6 +115,58 @@ run("OAuth client credentials grant", () => {
     expect(body.access_token.startsWith("z0_at_")).toBe(true);
     expect(body.scope).toBe("read:orders");
     expect(body.refresh_token).toBeUndefined();
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("pragma")).toBe("no-cache");
+  });
+
+  test("confidential client can authenticate with HTTP Basic", async () => {
+    const credentials = Buffer.from(`${confidentialClientId}:${confidentialSecret}`).toString("base64");
+    const res = await dispatchWeb(
+      new Request("http://localhost/oauth/token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          authorization: `Basic ${credentials}`,
+        },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          scope: "read:orders",
+        }).toString(),
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { access_token: string }).access_token).toStartWith("z0_at_");
+  });
+
+  test("resource server can introspect an opaque access token", async () => {
+    const credentials = Buffer.from(`${confidentialClientId}:${confidentialSecret}`).toString("base64");
+    const tokenRes = await dispatchWeb(
+      new Request("http://localhost/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: confidentialClientId,
+          client_secret: confidentialSecret,
+          scope: "read:orders",
+        }).toString(),
+      }),
+    );
+    const token = (await tokenRes.json()) as { access_token: string };
+    const introspectionRes = await dispatchWeb(
+      new Request("http://localhost/oauth/introspect", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          authorization: `Basic ${credentials}`,
+        },
+        body: new URLSearchParams({ token: token.access_token }).toString(),
+      }),
+    );
+    expect(introspectionRes.status).toBe(200);
+    const introspection = (await introspectionRes.json()) as { active: boolean; scope: string };
+    expect(introspection.active).toBe(true);
+    expect(introspection.scope).toBe("read:orders");
   });
 
   test("public client is rejected for client_credentials", async () => {

@@ -8,9 +8,19 @@ export type CapturedEmail = {
   text: string;
 };
 
-const captureEnabled = () => process.env.Z0_SMTP_CAPTURE === "1";
-
 const captured: CapturedEmail[] = [];
+let testDelivery: ((email: CapturedEmail) => Promise<{ ok: true }>) | null = null;
+
+export function captureEmailsForTests(): void {
+  testDelivery = async (email) => {
+    captured.push(email);
+    return { ok: true };
+  };
+}
+
+export function restoreEmailDeliveryForTests(): void {
+  testDelivery = null;
+}
 
 export function resetCapturedEmailsForTests(): void {
   captured.length = 0;
@@ -23,9 +33,8 @@ export function getCapturedEmails(): CapturedEmail[] {
 export async function deliverEmail(
   options: Pick<SmtpSendOptions, "to" | "subject" | "text">,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  if (captureEnabled()) {
-    captured.push({ to: options.to, subject: options.subject, text: options.text });
-    return { ok: true };
+  if (testDelivery) {
+    return testDelivery({ to: options.to, subject: options.subject, text: options.text });
   }
 
   const creds = await getSmtpCredentialsForSend();

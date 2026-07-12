@@ -18,14 +18,14 @@ import { isSmtpReady } from "./smtp-settings";
 import { checkRateLimit, clientIp } from "./rate-limit";
 import { revokeAllAppUserSessions } from "./app-session";
 import { revokeAllOAuthTokensForAppUser, revokePendingAuthorizationCodesForAppUser } from "./oauth";
+import { requestPublicOrigin } from "./config";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 const GENERIC_MESSAGE = "If an account exists for that email, you will receive a reset link shortly.";
 
 function resetUrlFromRequest(req: Request, token: string, clientId: string): string {
-  const url = new URL(req.url);
   const segment = encodeURIComponent(token);
-  return `${url.origin}/auth/reset-password/${segment}?client_id=${encodeURIComponent(clientId)}`;
+  return `${requestPublicOrigin(req)}/auth/reset-password/${segment}?client_id=${encodeURIComponent(clientId)}`;
 }
 
 async function findAppUserIdByEmail(appId: string, email: string): Promise<string | null> {
@@ -79,7 +79,7 @@ export async function requestAppPasswordReset(
   }
 
   const ip = clientIp(req);
-  const ipLimit = checkRateLimit({ key: `app-reset:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
+  const ipLimit = await checkRateLimit({ key: `app-reset:ip:${ip}`, limit: 10, windowMs: 15 * 60 * 1000 });
   if (!ipLimit.allowed) {
     return problem(429, "Too Many Requests", "Too many reset attempts. Try again later.", {
       code: ErrorCodes.RATE_LIMITED,
@@ -90,7 +90,7 @@ export async function requestAppPasswordReset(
 
   const match = await findAppByClientId(clientId);
   const emailLimitKey = match ? `app-reset:email:${match.app_id}:${email}` : `app-reset:email:unknown:${email}`;
-  const emailLimit = checkRateLimit({
+  const emailLimit = await checkRateLimit({
     key: emailLimitKey,
     limit: 5,
     windowMs: 60 * 60 * 1000,
@@ -195,7 +195,7 @@ export async function completeAppPasswordReset(
   clientId?: string,
 ): Promise<Response> {
   const ip = clientIp(req);
-  const ipLimit = checkRateLimit({
+  const ipLimit = await checkRateLimit({
     key: `app-reset-complete:ip:${ip}`,
     limit: 10,
     windowMs: 15 * 60 * 1000,
@@ -276,7 +276,19 @@ export async function completeAppPasswordReset(
   const passwordHash = await hashPassword(body.password);
 
   try {
-    await getDb().begin(async (tx) => {
+    const completed = await getDb().begin(async (tx) => {
+      const [consumed] = await tx`
+        UPDATE app_password_reset_tokens
+        SET used_at = NOW()
+        WHERE id = ${row.id}
+          AND app_user_id = ${row.app_user_id}
+          AND app_id = ${row.app_id}
+          AND used_at IS NULL
+          AND expires_at > NOW()
+        RETURNING id
+      `;
+      if (!consumed) return false;
+
       const [updated] = await tx`
         UPDATE app_users
         SET password_hash = ${passwordHash}, updated_at = NOW()
@@ -288,12 +300,9 @@ export async function completeAppPasswordReset(
       if (!updated) {
         throw new Error("app_user_inactive");
       }
-      await tx`
-        UPDATE app_password_reset_tokens
-        SET used_at = NOW()
-        WHERE id = ${row.id}
-      `;
+      return true;
     });
+    if (!completed) return invalidResetTokenResponse();
   } catch (error) {
     if (error instanceof Error && error.message === "app_user_inactive") {
       return invalidResetTokenResponse();

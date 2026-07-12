@@ -9,7 +9,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `name` | Non-empty trimmed string | `required` | 400 | Inline on name field |
 | `email` | Required + valid email | `required` / `invalid_email` | 400 | Inline on email |
 | `organizationName` | Non-empty trimmed string | `required` | 400 | Inline on organization field |
-| `password` | Min 14, max 128, character mix, not weak | `password_policy` | 400 | Checklist + inline |
+| `password` | Min 15, max 128, not compromised/common, excludes name/email context | `password_policy` | 400 | Checklist + inline |
 | `passwordConfirm` | Equals `password` | `password_mismatch` | 400 | Inline on confirm |
 | CSRF | `X-CSRF-Token` matches cookie and origin check passes | `csrf_invalid` | 403 | Refresh token and retry |
 | Install token | Required and valid when configured | `install_token_required` / `install_token_invalid` | 403 | Install token field on `/auth/setup`; `X-Install-Token` on JSON API |
@@ -21,7 +21,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | Field | Rule | UI |
 |-------|------|-----|
 | `completed` | Reflects `setup_completed_at` | Redirect to login when true |
-| `schemaReady` | Core tables exist | Block setup form when false |
+| `schemaReady` | Current migration and required core tables exist | Block setup form when false |
 | `installTokenRequired` | `INSTALL_TOKEN` env is set | Show install token field on setup form |
 
 ## `POST /api/auth/login`
@@ -237,6 +237,8 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `GET /.well-known/jwks.json` | `kid` | Every active signing `kid` resolves to a public JWK entry | — | 200 | Integration logs / API client |
 | `POST /oauth/token` | OIDC scopes | When `openid` is granted, token response includes `id_token` | `invalid_scope` | 400 | Integration logs / API client |
 | `POST /oauth/token` | ID token claims | `iss`, `sub`, `aud`, `exp`, `iat` always present; profile/email claims scope-gated | — | 200 | Integration logs / API client |
+| `POST /oauth/token` | OIDC `nonce` | When supplied at authorize, included unchanged in the ID token | — | 200 | Integration logs / API client |
+| `POST /oauth/introspect` | Client auth | Confidential client Basic or form authentication required; cross-app tokens reported inactive | `invalid_client` | 401 | Resource server |
 | `GET /oauth/userinfo` | `Authorization` header | Bearer access token required | `invalid_token` | 401 | Integration logs / API client |
 | `GET /oauth/userinfo` | Access token state | Token must be active, unexpired, and not revoked | `invalid_token` | 401 | Integration logs / API client |
 | `GET /oauth/userinfo` | Scope to claims | Returns only claims allowed by granted scope | `insufficient_scope` | 403 | Integration logs / API client |
@@ -261,10 +263,10 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 |-------|------|------|------|-----|
 | Session | Instance member with `settings.audit:read` | `permission_denied` | 403 | Activity page error |
 | `limit` | Integer 1–100; default 50 | — | 200 | Load more button |
-| `before` | ISO 8601 cursor from previous page | — | 200 | Pagination |
+| `before` | Opaque `nextCursor` from previous page containing timestamp and event id | — | 200 | Pagination |
 | `action` | Exact match on `audit_events.action` | — | 200 | Future filter UI |
 | `resourceType` | Exact match on `audit_events.resource_type` | — | 200 | Future filter UI |
-| Success | Newest-first; `hasMore` when more rows exist | — | 200 | Activity table |
+| Success | Newest-first; `nextCursor` is opaque when `hasMore` is true and null otherwise | — | 200 | Activity table |
 
 Append-only: no create/update/delete API. Events written by handlers (auth, members, apps, SMTP, federation, sessions).
 

@@ -5,7 +5,12 @@ import { closeDatabase } from "../../src/api/lib/db";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { resetInstanceKeysForTests } from "../../src/api/lib/instance-keys";
-import { getCapturedEmails, resetCapturedEmailsForTests } from "../../src/api/lib/smtp-mail";
+import {
+  captureEmailsForTests,
+  getCapturedEmails,
+  resetCapturedEmailsForTests,
+  restoreEmailDeliveryForTests,
+} from "../../src/api/lib/smtp-mail";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { makeStrongPassword } from "../helpers/password";
@@ -51,7 +56,7 @@ async function login() {
 
 run("M08 SMTP and password reset", () => {
   beforeAll(async () => {
-    process.env.Z0_SMTP_CAPTURE = "1";
+    captureEmailsForTests();
     resetInstanceKeysForTests();
     const { initializeInstanceKeys } = await import("../../src/api/lib/instance-keys");
     await initializeInstanceKeys();
@@ -62,7 +67,7 @@ run("M08 SMTP and password reset", () => {
   });
 
   afterAll(async () => {
-    delete process.env.Z0_SMTP_CAPTURE;
+    restoreEmailDeliveryForTests();
     await closeDatabase();
   });
 
@@ -114,6 +119,67 @@ run("M08 SMTP and password reset", () => {
     );
     expect(testRes.status).toBe(200);
 
+    const appRes = await dispatchApi(
+      buildRequest("POST", "/api/v1/apps", {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: {
+          name: "Reset App",
+          redirectUris: ["http://localhost:3000/reset-callback"],
+          clientType: "confidential",
+        },
+      }),
+    );
+    const app = (await appRes.json()) as {
+      app: { id: string };
+      credential: { clientId: string };
+    };
+    const initialAppPassword = makeStrongPassword();
+    const appUserRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${app.app.id}/users`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: {
+          email: "reset-user@example.com",
+          name: "Reset User",
+          password: initialAppPassword,
+          passwordConfirm: initialAppPassword,
+        },
+      }),
+    );
+    expect(appUserRes.status).toBe(201);
+
+    resetCapturedEmailsForTests();
+    const appForgotCsrf = await fetchCsrfToken(dispatchApi);
+    const appForgotRes = await dispatchApi(
+      buildRequest("POST", "/api/auth/forgot-password", {
+        csrfToken: appForgotCsrf,
+        body: { email: "reset-user@example.com", clientId: app.credential.clientId },
+      }),
+    );
+    expect(appForgotRes.status).toBe(200);
+    const appResetToken = decodeURIComponent(
+      getCapturedEmails()[0]!.text.match(/\/auth\/reset-password\/([^?\s]+)/)![1]!,
+    );
+    const firstAppPassword = makeStrongPassword();
+    const secondAppPassword = makeStrongPassword();
+    const appResetRequest = (password: string) => dispatchApi(
+      buildRequest("POST", "/api/auth/reset-password", {
+        csrfToken: appForgotCsrf,
+        body: {
+          token: appResetToken,
+          clientId: app.credential.clientId,
+          password,
+          passwordConfirm: password,
+        },
+      }),
+    );
+    const appResetResults = await Promise.all([
+      appResetRequest(firstAppPassword),
+      appResetRequest(secondAppPassword),
+    ]);
+    expect(appResetResults.map((response) => response.status).sort()).toEqual([200, 400]);
+
     resetCapturedEmailsForTests();
 
     const forgotCsrf = await fetchCsrfToken(dispatchApi);
@@ -135,23 +201,29 @@ run("M08 SMTP and password reset", () => {
 
     const resetCsrf = await fetchCsrfToken(dispatchApi);
     const newPassword = makeStrongPassword();
-    const resetRes = await dispatchApi(
+    const competingPassword = makeStrongPassword();
+    const resetRequest = (password: string) => dispatchApi(
       buildRequest("POST", "/api/auth/reset-password", {
         csrfToken: resetCsrf,
         body: {
           token: rawToken,
-          password: newPassword,
-          passwordConfirm: newPassword,
+          password,
+          passwordConfirm: password,
         },
       }),
     );
-    expect(resetRes.status).toBe(200);
+    const [firstReset, competingReset] = await Promise.all([
+      resetRequest(newPassword),
+      resetRequest(competingPassword),
+    ]);
+    expect([firstReset.status, competingReset.status].sort()).toEqual([200, 400]);
+    const acceptedPassword = firstReset.status === 200 ? newPassword : competingPassword;
 
     const loginCsrf = await fetchCsrfToken(dispatchApi);
     const loginRes = await dispatchApi(
       buildRequest("POST", "/api/auth/login", {
         csrfToken: loginCsrf,
-        body: { email: "owner@example.com", password: newPassword },
+        body: { email: "owner@example.com", password: acceptedPassword },
       }),
     );
     expect(loginRes.status).toBe(200);
@@ -161,8 +233,8 @@ run("M08 SMTP and password reset", () => {
         csrfToken: resetCsrf,
         body: {
           token: rawToken,
-          password: newPassword,
-          passwordConfirm: newPassword,
+          password: acceptedPassword,
+          passwordConfirm: acceptedPassword,
         },
       }),
     );

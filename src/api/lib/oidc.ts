@@ -134,6 +134,7 @@ export async function issueIdToken(input: {
   emailVerified?: boolean;
   name?: string | null;
   grantedScope: string;
+  nonce?: string | null;
   expiresInSeconds?: number;
 }): Promise<string> {
   const signingKey = await getActiveSigningKey();
@@ -167,6 +168,7 @@ export async function issueIdToken(input: {
     iat: toNumericDate(now),
     exp: toNumericDate(expiresAt),
   };
+  if (input.nonce) claims.nonce = input.nonce;
 
   if (scopeSet.has("email") && input.email) {
     claims.email = input.email;
@@ -197,12 +199,16 @@ export function buildDiscoveryDocument(input: { issuer: string }): Record<string
     issuer,
     authorization_endpoint: `${issuer}/oauth/authorize`,
     token_endpoint: `${issuer}/oauth/token`,
+    introspection_endpoint: `${issuer}/oauth/introspect`,
     userinfo_endpoint: `${issuer}/oauth/userinfo`,
     jwks_uri: `${issuer}/.well-known/jwks.json`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token", "client_credentials"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "none"],
+    introspection_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"],
+    code_challenge_methods_supported: ["S256"],
     scopes_supported: ["openid", "profile", "email"],
   };
 }

@@ -1,4 +1,5 @@
 import type { BunRequest } from "bun";
+import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
 import { clientIdFromAuthorizePath, resolveAuthRealm } from "../../api/lib/auth-realm";
 import { randomToken } from "../../api/lib/crypto";
@@ -76,6 +77,7 @@ type ConsentState = {
   state: string | null;
   codeChallenge: string | null;
   codeChallengeMethod: string | null;
+  oidcNonce: string | null;
 };
 
 function setReturnCookie(value: string): string {
@@ -137,15 +139,12 @@ function getCookie(req: Request, key: string): string | null {
   const raw = req.headers.get("cookie") ?? "";
   for (const part of raw.split(";")) {
     const [k, ...rest] = part.trim().split("=");
-    if (k === key) return decodeURIComponent(rest.join("="));
+    if (k === key) return safeDecodeURIComponent(rest.join("="));
   }
   return null;
 }
 
 function validateAuthorizeRequest(url: URL): Response | null {
-  if (url.searchParams.get("response_type") !== "code") {
-    return problem(400, "Bad Request", "response_type=code is required");
-  }
   if (!url.searchParams.get("client_id")) {
     return problem(400, "Bad Request", "client_id is required");
   }
@@ -155,14 +154,64 @@ function validateAuthorizeRequest(url: URL): Response | null {
   return null;
 }
 
+function authorizeErrorRedirect(
+  url: URL,
+  error: string,
+  description: string,
+): Response {
+  const redirect = new URL(url.searchParams.get("redirect_uri")!);
+  redirect.searchParams.set("error", error);
+  redirect.searchParams.set("error_description", description);
+  const state = url.searchParams.get("state");
+  if (state) redirect.searchParams.set("state", state);
+  return new Response(null, { status: 302, headers: { Location: redirect.toString() } });
+}
+
 function oauthErrorResponse(status: number, error: string, description: string): Response {
-  return Response.json(
+  const response = Response.json(
     {
       error,
       error_description: description,
     },
     { status },
   );
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("Pragma", "no-cache");
+  if (status === 401) response.headers.set("WWW-Authenticate", 'Basic realm="oauth"');
+  return response;
+}
+
+function oauthClientCredentials(
+  req: Request,
+  body: Record<string, string>,
+): { clientId: string; clientSecret: string | undefined } | Response {
+  const authorization = req.headers.get("authorization");
+  if (!authorization) {
+    if (!body.client_id) return oauthErrorResponse(400, "invalid_request", "client_id is required");
+    return { clientId: body.client_id, clientSecret: body.client_secret };
+  }
+
+  const [scheme, encoded] = authorization.split(/\s+/, 2);
+  if (scheme?.toLowerCase() !== "basic" || !encoded) {
+    return oauthErrorResponse(401, "invalid_client", "client authentication failed");
+  }
+  let decoded: string;
+  try {
+    decoded = Buffer.from(encoded, "base64").toString("utf8");
+  } catch {
+    return oauthErrorResponse(401, "invalid_client", "client authentication failed");
+  }
+  const separator = decoded.indexOf(":");
+  if (separator < 1) return oauthErrorResponse(401, "invalid_client", "client authentication failed");
+  const clientId = safeDecodeURIComponent(decoded.slice(0, separator));
+  const clientSecret = safeDecodeURIComponent(decoded.slice(separator + 1));
+  if (clientId === null || clientSecret === null) {
+    return oauthErrorResponse(401, "invalid_client", "client authentication failed");
+  }
+  if (body.client_id && body.client_id !== clientId) {
+    return oauthErrorResponse(400, "invalid_request", "conflicting client credentials");
+  }
+  return { clientId, clientSecret };
 }
 
 const OAUTH_CLIENT_AUTH_RATE_LIMIT = {
@@ -174,8 +223,8 @@ function oauthClientAuthRateLimitKey(req: Request, clientId: string): string {
   return `oauth-client-auth-fail:${clientIp(req)}:${clientId}`;
 }
 
-function oauthClientAuthRateLimitedResponse(req: Request, clientId: string): Response | null {
-  const rate = isRateLimited({
+async function oauthClientAuthRateLimitedResponse(req: Request, clientId: string): Promise<Response | null> {
+  const rate = await isRateLimited({
     key: oauthClientAuthRateLimitKey(req, clientId),
     ...OAUTH_CLIENT_AUTH_RATE_LIMIT,
   });
@@ -183,8 +232,8 @@ function oauthClientAuthRateLimitedResponse(req: Request, clientId: string): Res
   return oauthErrorResponse(429, "invalid_client", "client authentication rate limit exceeded");
 }
 
-function recordOAuthClientAuthFailure(req: Request, clientId: string): void {
-  recordRateLimitHit({
+async function recordOAuthClientAuthFailure(req: Request, clientId: string): Promise<void> {
+  await recordRateLimitHit({
     key: oauthClientAuthRateLimitKey(req, clientId),
     ...OAUTH_CLIENT_AUTH_RATE_LIMIT,
   });
@@ -208,6 +257,7 @@ async function redirectWithCode(url: URL, appId: string, appUserId: string): Pro
     scope,
     codeChallenge,
     codeChallengeMethod,
+    nonce: url.searchParams.get("nonce"),
   });
 
   const redirect = new URL(redirectUri);
@@ -242,6 +292,7 @@ async function renderConsentPage(req: BunRequest, params: {
   scope: string;
   codeChallenge: string | null;
   codeChallengeMethod: string | null;
+  oidcNonce: string | null;
 }): Promise<Response> {
   const csrf = preparePageCsrf(req);
   const consentNonce = randomToken(16);
@@ -254,6 +305,7 @@ async function renderConsentPage(req: BunRequest, params: {
     state: params.state,
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
+    oidcNonce: params.oidcNonce,
   };
   const context = await getOAuthConsentPageContext(params.appId, params.scope);
   const body = `<form method="post" action="/oauth/authorize" class="auth-card">
@@ -267,6 +319,7 @@ async function renderConsentPage(req: BunRequest, params: {
       <input type="hidden" name="state" value="${escapeHtml(params.state ?? "")}" />
       <input type="hidden" name="code_challenge" value="${escapeHtml(params.codeChallenge ?? "")}" />
       <input type="hidden" name="code_challenge_method" value="${escapeHtml(params.codeChallengeMethod ?? "")}" />
+      <input type="hidden" name="nonce" value="${escapeHtml(params.oidcNonce ?? "")}" />
       <input type="hidden" name="consent_nonce" value="${escapeHtml(consentNonce)}" />
       <div class="auth-actions">
         <button type="submit" name="consent" value="deny" class="auth-button auth-button--secondary">Cancel</button>
@@ -320,28 +373,27 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
       code: "invalid_redirect_uri",
     });
   }
+  if (url.searchParams.get("response_type") !== "code") {
+    return authorizeErrorRedirect(url, "unsupported_response_type", "response_type=code is required");
+  }
   const normalizedScopeResult = await validateRequestedScopes(client.appId, url.searchParams.get("scope") ?? "");
   if (!normalizedScopeResult.ok) {
-    return problem(400, "Bad Request", "Requested scope is not allowed for this app", {
-      code: "invalid_scope",
-    });
+    return authorizeErrorRedirect(url, "invalid_scope", "Requested scope is not allowed for this app");
   }
   if (client.clientType === "public" && (!url.searchParams.get("state")?.trim())) {
-    return problem(400, "Bad Request", "state is required for public clients", {
-      code: "invalid_request",
-    });
+    return authorizeErrorRedirect(url, "invalid_request", "state is required for public clients");
   }
   const challenge = url.searchParams.get("code_challenge")?.trim() ?? "";
   const challengeMethod = url.searchParams.get("code_challenge_method");
   if (client.clientType === "public" && (!challenge || challengeMethod !== "S256")) {
-    return problem(400, "Bad Request", "Public clients require PKCE (S256)", {
-      code: "pkce_required",
-    });
+    return authorizeErrorRedirect(url, "invalid_request", "Public clients require PKCE (S256)");
   }
   if (challenge && challengeMethod !== "S256") {
-    return problem(400, "Bad Request", "code_challenge_method must be S256 when code_challenge is provided", {
-      code: "pkce_required",
-    });
+    return authorizeErrorRedirect(
+      url,
+      "invalid_request",
+      "code_challenge_method must be S256 when code_challenge is provided",
+    );
   }
 
   const resolved = await resolveTargetAppSession(req, client.appId);
@@ -375,6 +427,7 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
     scope: normalizedScopeResult.normalizedScope,
     codeChallenge: url.searchParams.get("code_challenge")?.trim() ?? null,
     codeChallengeMethod: url.searchParams.get("code_challenge_method"),
+    oidcNonce: url.searchParams.get("nonce"),
   });
   appendSetCookie(consentResponse.headers, resolved.setCookie);
   return consentResponse;
@@ -414,17 +467,17 @@ async function authenticateOAuthClient(
   clientId: string,
   clientSecret: string | undefined,
 ): Promise<{ client: NonNullable<Awaited<ReturnType<typeof findActiveOAuthClient>>> } | Response> {
-  const authRateLimited = oauthClientAuthRateLimitedResponse(req, clientId);
+  const authRateLimited = await oauthClientAuthRateLimitedResponse(req, clientId);
   if (authRateLimited) return authRateLimited;
 
   const client = await findActiveOAuthClient(clientId);
   if (!client) {
-    recordOAuthClientAuthFailure(req, clientId);
+    await recordOAuthClientAuthFailure(req, clientId);
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
   const clientAuthOk = await verifyOAuthClientSecret(client, clientSecret);
   if (!clientAuthOk) {
-    recordOAuthClientAuthFailure(req, clientId);
+    await recordOAuthClientAuthFailure(req, clientId);
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
   return { client };
@@ -438,7 +491,10 @@ function jsonOAuthResponse(
 ): Response {
   const origin = req.headers.get("Origin");
   const allowed = isOriginAllowedForClient(origin, client.redirectUris);
-  return withOAuthCors(Response.json(payload, { status }), origin, allowed);
+  const response = Response.json(payload, { status });
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("Pragma", "no-cache");
+  return withOAuthCors(response, origin, allowed);
 }
 
 function oauthErrorResponseWithCors(
@@ -455,11 +511,13 @@ function oauthErrorResponseWithCors(
 
 async function postToken(req: BunRequest): Promise<Response> {
   const body = await parseFormBody(req);
-  if (!body.grant_type || !body.client_id) {
-    return oauthErrorResponse(400, "invalid_request", "grant_type and client_id are required");
+  if (!body.grant_type) {
+    return oauthErrorResponse(400, "invalid_request", "grant_type is required");
   }
 
-  const auth = await authenticateOAuthClient(req, body.client_id, body.client_secret);
+  const credentials = oauthClientCredentials(req, body);
+  if (credentials instanceof Response) return credentials;
+  const auth = await authenticateOAuthClient(req, credentials.clientId, credentials.clientSecret);
   if (auth instanceof Response) return auth;
   const { client } = auth;
 
@@ -510,12 +568,13 @@ async function postToken(req: BunRequest): Promise<Response> {
       };
       idToken = await issueIdToken({
         issuer: requestPublicOrigin(req),
-        audience: body.client_id,
+        audience: credentials.clientId,
         subject: appUser.id,
         email: appUser.email,
         emailVerified: Boolean(appUser.email_verified_at),
         name: appUser.name,
         grantedScope: preview.preview.scope,
+        nonce: preview.preview.nonce,
         expiresInSeconds: 60 * 60,
       });
     }
@@ -601,6 +660,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     (consentState.state ?? "") !== (body.state ?? "") ||
     (consentState.codeChallenge ?? "") !== (body.code_challenge ?? "") ||
     (consentState.codeChallengeMethod ?? "") !== (body.code_challenge_method ?? "")
+    || (consentState.oidcNonce ?? "") !== (body.nonce ?? "")
   ) {
     return problem(400, "Bad Request", "Consent approval does not match the reviewed authorize request");
   }
@@ -645,6 +705,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     if (normalizedScopeResult.normalizedScope) params.set("scope", normalizedScopeResult.normalizedScope);
     if (consentState.codeChallenge) params.set("code_challenge", consentState.codeChallenge);
     if (consentState.codeChallengeMethod) params.set("code_challenge_method", consentState.codeChallengeMethod);
+    if (consentState.oidcNonce) params.set("nonce", consentState.oidcNonce);
     return loginRedirectForAuthorize(req, `/oauth/authorize?${params.toString()}`);
   }
   const appSession = resolved.session;
@@ -672,6 +733,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     authorizeUrl.searchParams.set("code_challenge_method", consentState.codeChallengeMethod);
   }
   if (consentState.state) authorizeUrl.searchParams.set("state", consentState.state);
+  if (consentState.oidcNonce) authorizeUrl.searchParams.set("nonce", consentState.oidcNonce);
   const response = await redirectWithCode(authorizeUrl, client.appId, appSession.appUserId);
   const headers = new Headers(response.headers);
   headers.append("Set-Cookie", clearConsentCookie());
@@ -681,25 +743,47 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
 
 async function postRevoke(req: BunRequest): Promise<Response> {
   const body = await parseFormBody(req);
-  if (!body.token || !body.client_id) {
-    return oauthErrorResponse(400, "invalid_request", "token and client_id are required");
+  if (!body.token) {
+    return oauthErrorResponse(400, "invalid_request", "token is required");
   }
-  const authRateLimited = oauthClientAuthRateLimitedResponse(req, body.client_id);
-  if (authRateLimited) return authRateLimited;
+  const credentials = oauthClientCredentials(req, body);
+  if (credentials instanceof Response) return credentials;
+  const auth = await authenticateOAuthClient(req, credentials.clientId, credentials.clientSecret);
+  if (auth instanceof Response) return auth;
 
-  const client = await findActiveOAuthClient(body.client_id);
-  if (!client) {
-    recordOAuthClientAuthFailure(req, body.client_id);
-    return oauthErrorResponse(401, "invalid_client", "client authentication failed");
-  }
-  const clientAuthOk = await verifyOAuthClientSecret(client, body.client_secret);
-  if (!clientAuthOk) {
-    recordOAuthClientAuthFailure(req, body.client_id);
-    return oauthErrorResponse(401, "invalid_client", "client authentication failed");
-  }
-
-  await revokeOAuthToken({ token: body.token, client });
+  await revokeOAuthToken({ token: body.token, client: auth.client });
   return new Response(null, { status: 200 });
+}
+
+async function postIntrospect(req: BunRequest): Promise<Response> {
+  const body = await parseFormBody(req);
+  if (!body.token) return oauthErrorResponse(400, "invalid_request", "token is required");
+
+  const credentials = oauthClientCredentials(req, body);
+  if (credentials instanceof Response) return credentials;
+  const auth = await authenticateOAuthClient(req, credentials.clientId, credentials.clientSecret);
+  if (auth instanceof Response) return auth;
+
+  const token = await findOAuthAccessToken(body.token);
+  const active = Boolean(
+    token &&
+      token.appId === auth.client.appId &&
+      !token.revokedAt &&
+      new Date(token.expiresAt).getTime() > Date.now(),
+  );
+  if (!active || !token) {
+    return jsonOAuthResponse(req, { active: false }, auth.client);
+  }
+
+  return jsonOAuthResponse(req, {
+    active: true,
+    client_id: auth.client.clientId,
+    token_type: "Bearer",
+    scope: token.scope,
+    exp: Math.floor(new Date(token.expiresAt).getTime() / 1000),
+    sub: token.appUserId ?? auth.client.clientId,
+    aud: token.appId,
+  }, auth.client);
 }
 
 async function getOpenIdConfiguration(req: BunRequest): Promise<Response> {
@@ -788,6 +872,9 @@ export const oauthWebRoutes = {
   },
   "/oauth/revoke": {
     POST: withDatabaseErrorHandling(postRevoke),
+  },
+  "/oauth/introspect": {
+    POST: withDatabaseErrorHandling(postIntrospect),
   },
   "/.well-known/openid-configuration": {
     GET: withDatabaseErrorHandling(getOpenIdConfiguration),

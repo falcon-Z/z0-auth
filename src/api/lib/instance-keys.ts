@@ -74,9 +74,12 @@ function base64UrlDecodeText(value: string): string {
 
 function configuredKeyId(envName: string, fallback: string): string {
   const configured = process.env[envName]?.trim();
-  if (!configured) return fallback;
-  if (configured.includes(".") || configured.includes(":")) {
-    throw new Error(`${envName} must not contain "." or ":".`);
+  if (!configured) {
+    if (isProduction()) throw new Error(`${envName} is required in production.`);
+    return fallback;
+  }
+  if (!/^[A-Za-z0-9_-]{3,64}$/.test(configured)) {
+    throw new Error(`${envName} must use 3–64 letters, numbers, underscores, or hyphens.`);
   }
   return configured;
 }
@@ -322,6 +325,11 @@ export async function initializeInstanceKeys(): Promise<void> {
     }
     return;
   }
+
+  const probe = crypto.getRandomValues(new Uint8Array(32));
+  const signature = await crypto.subtle.sign("Ed25519", token.keys.privateKey, probe);
+  const pairMatches = await crypto.subtle.verify("Ed25519", token.keys.publicKey, signature, probe);
+  if (!pairMatches) throw new Error("INSTANCE_TOKEN_PRIVATE_KEY and INSTANCE_TOKEN_PUBLIC_KEY do not match.");
 
   await persistIfNeeded(filePath, stored, data, token);
 

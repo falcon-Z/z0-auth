@@ -17,7 +17,8 @@ export type SmtpSendOptions = {
 type SmtpResult = { ok: true } | { ok: false; message: string };
 
 function formatAddress(address: string, name?: string | null): string {
-  if (name?.trim()) return `"${name.replace(/"/g, '\\"')}" <${address}>`;
+  const safeName = name?.replace(/[\r\n]+/g, " ").trim();
+  if (safeName) return `"${safeName.replace(/"/g, '\\"')}" <${address}>`;
   return address;
 }
 
@@ -41,6 +42,7 @@ class SmtpSession {
   constructor(socket: Socket | TLSSocket) {
     this.socket = socket;
     socket.setEncoding("utf8");
+    socket.setTimeout(10_000, () => socket.destroy(new Error("SMTP operation timed out")));
   }
 
   private async readResponse(): Promise<{ code: number; lines: string[] }> {
@@ -101,6 +103,7 @@ class SmtpSession {
         tlsSocket.once("error", reject);
         this.socket = tlsSocket;
         this.socket.setEncoding("utf8");
+        this.socket.setTimeout(10_000, () => this.socket.destroy(new Error("SMTP operation timed out")));
       });
 
       ehlo = await this.command(`EHLO ${options.host}`, [250]);

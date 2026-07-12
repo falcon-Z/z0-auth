@@ -49,7 +49,7 @@ run("deploy status", () => {
     expect(body.database.configured).toBe(false);
     expect(body.database.connected).toBe(false);
     expect(body.ready).toBe(false);
-    expect(body.database.error).toContain("not set");
+    expect(body.database.error).toBe("Database connection failed.");
   });
 
   test("reports incomplete configured bootstrap owner fields", async () => {

@@ -190,25 +190,24 @@ run("P7 security & observability", () => {
     );
     expect(first.status).toBe(200);
     const firstBody = (await first.json()) as {
-      events: { createdAt: string }[];
+      events: { id: string; createdAt: string }[];
       hasMore: boolean;
+      nextCursor: string | null;
     };
     expect(firstBody.events.length).toBe(2);
+    expect(firstBody.nextCursor).toBeTruthy();
 
     const second = await dispatchApi(
       buildRequest(
         "GET",
-        `/api/v1/audit-events?limit=2&before=${encodeURIComponent(firstBody.events[1]!.createdAt)}`,
+        `/api/v1/audit-events?limit=2&before=${encodeURIComponent(firstBody.nextCursor!)}`,
         { cookies: { [SESSION_COOKIE]: sessionCookie } },
       ),
     );
     expect(second.status).toBe(200);
-    const secondBody = (await second.json()) as { events: { createdAt: string }[] };
-    for (const event of secondBody.events) {
-      expect(new Date(event.createdAt).getTime()).toBeLessThan(
-        new Date(firstBody.events[1]!.createdAt).getTime(),
-      );
-    }
+    const secondBody = (await second.json()) as { events: { id: string; createdAt: string }[] };
+    const firstPageIds = new Set(firstBody.events.map((event) => event.id));
+    expect(secondBody.events.some((event) => firstPageIds.has(event.id))).toBe(false);
   });
 
   test("GET /api/v1/audit-events requires session", async () => {

@@ -12,14 +12,13 @@ describe("web html helpers", () => {
     expect(html).not.toContain("href=");
   });
 
-  test("renderPasswordChecklist consolidates character rules", () => {
+  test("renderPasswordChecklist shows unmapped server policy errors", () => {
     const html = renderPasswordChecklist({
       failedLabels: ["One lowercase letter", "One special character"],
     });
-    expect(html).toContain("character_mix");
-    expect(html).toContain("auth-password-rule--failed");
+    expect(html).toContain("auth-password-max-error");
     expect(html).toContain("auth-password-rule--met");
-    expect(html).toContain("auth-status-icon--error");
+    expect(html).toContain("auth-status-icon--warning");
     expect(html).toContain("auth-status-icon--success");
     expect(html).not.toContain("One lowercase letter");
     expect(html).not.toContain("At most 128");
@@ -48,9 +47,9 @@ describe("web html helpers", () => {
     expect(html).toContain("auth-field-error__text");
   });
 
-  test("password checklist has four display rules", () => {
+  test("password checklist has three display rules", () => {
     const html = renderPasswordChecklist();
-    expect(html.match(/data-rule-id="/g)?.length).toBe(4);
+    expect(html.match(/data-rule-id="/g)?.length).toBe(3);
     for (const rule of passwordChecklistRules) {
       expect(html).toContain(rule.label);
     }

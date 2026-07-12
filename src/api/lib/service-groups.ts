@@ -179,18 +179,30 @@ async function assertAppsNotInOtherGroup(
 }
 
 async function assignAppsToGroup(groupId: string, appIds: string[]): Promise<void> {
-  await getDb()`
-    DELETE FROM service_group_apps
-    WHERE group_id = ${groupId}
-  `;
-  if (appIds.length === 0) return;
-
-  for (const appId of appIds) {
-    await getDb()`
-      INSERT INTO service_group_apps (group_id, app_id)
-      VALUES (${groupId}, ${appId})
-    `;
-  }
+  await getDb().begin(async (tx) => {
+    if (appIds.length === 0) {
+      await tx`
+        DELETE FROM service_group_app_users sgau
+        USING service_group_members sgm
+        WHERE sgau.group_member_id = sgm.id AND sgm.group_id = ${groupId}
+      `;
+    } else {
+      await tx`
+        DELETE FROM service_group_app_users sgau
+        USING service_group_members sgm
+        WHERE sgau.group_member_id = sgm.id
+          AND sgm.group_id = ${groupId}
+          AND NOT (sgau.app_id IN ${tx(appIds)})
+      `;
+    }
+    await tx`DELETE FROM service_group_apps WHERE group_id = ${groupId}`;
+    for (const appId of appIds) {
+      await tx`
+        INSERT INTO service_group_apps (group_id, app_id)
+        VALUES (${groupId}, ${appId})
+      `;
+    }
+  });
 }
 
 export async function listServiceGroupsForApi(): Promise<ServiceGroupSummary[]> {

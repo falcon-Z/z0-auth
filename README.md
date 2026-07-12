@@ -15,29 +15,7 @@ The service runs as one Bun and TypeScript application backed by PostgreSQL. The
 
 ## Current alpha status
 
-Implemented and relevant to users:
-
-- One-time instance setup with an owner account and organization profile.
-- Console sign-in, logout, password reset, change password, profile, and session management.
-- Member invites, roles, platform scopes, and console access control.
-- Application registration with public and confidential client types.
-- Client credentials, secret rotation, redirect URI validation, and app scope registry.
-- Hosted app-user sign-in, registration, invitations, password reset, and per-app sessions.
-- OAuth authorization code flow, PKCE for public clients, refresh token rotation, revocation, OIDC discovery, JWKS, ID tokens, and userinfo.
-- Client credentials grant for machine-to-machine access.
-- SMTP settings with test email and environment override support.
-- External OAuth/OIDC providers, including built-in provider templates and custom providers.
-- Per-app provider enablement, hosted social sign-in buttons, account linking, and encrypted upstream provider token storage.
-- App groups for shared sign-in across related apps.
-- Audit log API and console activity view.
-- Health, liveness, readiness, setup status, and deployment status endpoints.
-
-Not yet shipped:
-
-- Published Docker images and Docker Compose files.
-- MFA and passkeys.
-- Enterprise workforce SAML/OIDC broker.
-- One-click cloud provisioning.
+The repository is under active alpha development. Publicly documented behavior is maintained in the product, API, deployment, and development documentation linked below.
 
 ## Repository layout
 
@@ -108,17 +86,20 @@ Production configuration:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string. Required for a usable instance. |
-| `PUBLIC_ORIGIN` | Public origin used for OAuth/OIDC issuer metadata, for example `https://auth.example.com`. Recommended for production. |
-| `INSTANCE_DATA_KEY` | Stable AES-256 key used to encrypt SMTP passwords, provider secrets, OIDC signing keys, and upstream provider tokens. Required for multi-replica deployments and recommended for every production deployment. |
+| `PUBLIC_ORIGIN` | Canonical HTTPS origin used for OAuth/OIDC issuer, callbacks, and emailed security links. Required in production. |
+| `DATABASE_POOL_MAX` | PostgreSQL pool limit per Bun process. Defaults to 10. |
+| `TRUST_PROXY_HOPS` | Number of trusted reverse proxies that append `X-Forwarded-For`. Defaults to 0, which ignores the header. |
+| `INSTANCE_DATA_KEY_ID` | Stable identifier stored with values encrypted by the active data key. Required in production. |
+| `INSTANCE_DATA_KEY` | Stable AES-256 key used to encrypt SMTP passwords, provider secrets, OIDC signing keys, and upstream provider tokens. Required in production. |
+| `INSTANCE_TOKEN_KEY_ID` | Stable identifier stored in signed internal tokens. Required in production. |
 | `INSTANCE_TOKEN_PRIVATE_KEY` | Ed25519 private key used for password-reset link signatures. Required with `INSTANCE_TOKEN_PUBLIC_KEY` when token keys are provided through the environment. |
 | `INSTANCE_TOKEN_PUBLIC_KEY` | Matching Ed25519 public key. Required with `INSTANCE_TOKEN_PRIVATE_KEY` when token keys are provided through the environment. |
 | `INSTALL_TOKEN` | Optional token required during first-time setup. Recommended for internet-facing deployments. |
 
-Generate instance keys once per environment:
+Generate instance keys once per environment and store the complete output in deployment secrets:
 
 ```bash
-bun src/scripts/generate-instance-data-key.ts
-bun src/scripts/generate-instance-token-keys.ts
+bun run generate-keys
 ```
 
 Apply migrations before accepting traffic:
@@ -131,7 +112,7 @@ Build and start:
 
 ```bash
 bun run build
-NODE_ENV=production bun src/server.ts
+bun start
 ```
 
 For platform-specific notes for Cloud Run, Railway, Render, AWS, and Kubernetes, see [docs/deployment.md](docs/deployment.md).
@@ -177,6 +158,8 @@ Relevant environment variables:
 - `SMTP_FROM_ADDRESS`
 - `SMTP_FROM_NAME`
 - `SMTP_ENABLED`
+
+If any SMTP setting is supplied through the environment, the environment is authoritative and partial configuration fails readiness rather than silently falling back to database settings. `SMTP_ENABLED=false` is the deliberate exception: it disables delivery without requiring any other SMTP setting. `SMTP_PASSWORD` is required only when `SMTP_USERNAME` is set, so trusted unauthenticated relays remain supported.
 
 The console includes an email settings screen and a test-email action. SMTP passwords stored through the console are encrypted with `INSTANCE_DATA_KEY`, so back up that key before relying on the instance for email recovery.
 
@@ -323,6 +306,8 @@ Relevant API specs:
 - [App groups](docs/api/references/service-groups.openapi.yaml)
 - [Sessions](docs/api/references/sessions.openapi.yaml)
 
+Customer resource servers validate opaque access tokens through `POST /oauth/introspect`, authenticating with the app's confidential client credentials. Confidential clients may use HTTP Basic authentication; public clients continue to use PKCE and do not receive secrets.
+
 ## Operational endpoints
 
 | Endpoint | Purpose |
@@ -343,7 +328,7 @@ Relevant API specs:
 | `bun run db:migrate` | Apply pending migrations without wiping data. |
 | `bun run db:reset` | Reset the local database and apply schema. Destructive. |
 | `bun run db:test:init` | Create the isolated test database. |
-| `bun test --preload ./tests/preload.ts --concurrency=1 tests/unit tests/integration tests/api` | Run unit, integration, and API tests. |
+| `bun test --preload ./tests/preload.ts --max-concurrency=1 --parallel=1 tests/unit tests/integration tests/api` | Run unit, integration, and API tests serially against the shared test database. |
 | `bun run test:e2e` | Run Playwright end-to-end tests. |
 
 ## Documentation map

@@ -21,6 +21,10 @@ describe("password policy", () => {
     expect(isPasswordPolicyMet("ValidPassphrase99!", { email: "a@b.co", name: "Admin" })).toBe(true);
   });
 
+  test("does not impose character composition rules", () => {
+    expect(isPasswordPolicyMet("correct horse battery staple", { email: "a@b.co" })).toBe(true);
+  });
+
   test("rejects password containing email local part", () => {
     const errors = validatePassword("adminuser-Valid99!XX", { email: "adminuser@example.com" });
     expect(errors.some((e) => e.code === "password_policy")).toBe(true);

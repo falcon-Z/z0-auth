@@ -4,11 +4,12 @@ info:
   version: 0.1.0
   description: |
     OAuth authorization code flow contract for app-user sign-in and token exchange.
-    This document defines the Phase P4M1 baseline:
+    This document defines the shipped authorization-server contract:
     - authorization code flow
     - PKCE required for public clients
     - opaque access tokens
-    - refresh token lifecycle deferred to P4M4
+    - rotated refresh tokens with family replay revocation
+    - RFC 7662 introspection for customer resource servers
 servers:
   - url: http://localhost:3000
     description: Local development
@@ -69,6 +70,12 @@ paths:
           schema:
             type: string
             enum: [S256]
+        - name: nonce
+          in: query
+          required: false
+          schema:
+            type: string
+            description: Included unchanged in the ID token when supplied.
       responses:
         "302":
           description: Redirect to hosted login, consent, or client redirect URI with code/state
@@ -116,7 +123,6 @@ paths:
               type: object
               required:
                 - grant_type
-                - client_id
               properties:
                 grant_type:
                   type: string
@@ -138,7 +144,7 @@ paths:
                   type: string
                 client_secret:
                   type: string
-                  description: Required for confidential clients.
+                  description: Confidential clients may instead use HTTP Basic authentication.
                 code_verifier:
                   type: string
                   description: Required for public clients on `authorization_code` and validated against stored PKCE challenge.
@@ -224,6 +230,47 @@ paths:
                   value:
                     error: "invalid_client"
                     error_description: "client authentication failed"
+  /oauth/introspect:
+    post:
+      security:
+        - clientBasic: []
+        - {}
+      tags: [OAuth]
+      summary: Inspect an opaque access token
+      description: Confidential resource servers authenticate with HTTP Basic or form credentials. Tokens from another app are always reported inactive.
+      operationId: postOAuthIntrospect
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+      responses:
+        "200":
+          description: Token activity and metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [active]
+                properties:
+                  active: { type: boolean }
+                  scope: { type: string }
+                  client_id: { type: string }
+                  token_type: { type: string }
+                  exp: { type: integer }
+                  sub: { type: string }
+                  aud: { type: string }
+        "401":
+          description: Client authentication failed
   /.well-known/openid-configuration:
     get:
       tags: [OAuth]
@@ -432,6 +479,9 @@ components:
         name:
           type: string
   securitySchemes:
+    clientBasic:
+      type: http
+      scheme: basic
     bearerAuth:
       type: http
       scheme: bearer

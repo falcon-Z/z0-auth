@@ -70,6 +70,7 @@ describe("instance-keys configuration", () => {
   test("production with only data key fails instead of generating token keys", async () => {
     process.env.NODE_ENV = "production";
     process.env.INSTANCE_DATA_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.INSTANCE_DATA_KEY_ID = "prod-data";
     delete process.env.INSTANCE_TOKEN_PRIVATE_KEY;
     delete process.env.INSTANCE_TOKEN_PUBLIC_KEY;
 
@@ -83,12 +84,36 @@ describe("instance-keys configuration", () => {
   test("production with partial token key env fails clearly", async () => {
     process.env.NODE_ENV = "production";
     process.env.INSTANCE_DATA_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.INSTANCE_DATA_KEY_ID = "prod-data";
     process.env.INSTANCE_TOKEN_PRIVATE_KEY = "not-a-real-private-key";
     delete process.env.INSTANCE_TOKEN_PUBLIC_KEY;
 
     await expect(initializeInstanceKeys()).rejects.toThrow(
       "Set both INSTANCE_TOKEN_PRIVATE_KEY and INSTANCE_TOKEN_PUBLIC_KEY",
     );
+  });
+
+  test("production requires stable key ids", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.INSTANCE_DATA_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const tokenKeys = await generateTokenKeyEnv();
+    process.env.INSTANCE_TOKEN_PRIVATE_KEY = tokenKeys.privateKey;
+    process.env.INSTANCE_TOKEN_PUBLIC_KEY = tokenKeys.publicKey;
+    delete process.env.INSTANCE_DATA_KEY_ID;
+    delete process.env.INSTANCE_TOKEN_KEY_ID;
+    await expect(initializeInstanceKeys()).rejects.toThrow("INSTANCE_DATA_KEY_ID is required");
+  });
+
+  test("production rejects a mismatched token signing pair", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.INSTANCE_DATA_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    process.env.INSTANCE_DATA_KEY_ID = "prod-data";
+    process.env.INSTANCE_TOKEN_KEY_ID = "prod-token";
+    const privatePair = await generateTokenKeyEnv();
+    const publicPair = await generateTokenKeyEnv();
+    process.env.INSTANCE_TOKEN_PRIVATE_KEY = privatePair.privateKey;
+    process.env.INSTANCE_TOKEN_PUBLIC_KEY = publicPair.publicKey;
+    await expect(initializeInstanceKeys()).rejects.toThrow("do not match");
   });
 
   test("production loads when data and token keys are in env", async () => {

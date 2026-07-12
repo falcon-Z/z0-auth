@@ -1,5 +1,3 @@
-process.env.Z0_DISABLE_RATE_LIMIT = "1";
-
 import { apiRouteMap } from "../../src/api/dispatch";
 import { dispatchApiRequest } from "../../src/api/dispatch";
 

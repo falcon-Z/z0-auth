@@ -38,12 +38,27 @@ export async function listAuditEvents(options: {
   before?: string;
   action?: string;
   resourceType?: string;
-}): Promise<{ events: AuditEventSummary[]; hasMore: boolean }> {
+}): Promise<{ events: AuditEventSummary[]; hasMore: boolean; nextCursor: string | null }> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
   const fetchLimit = limit + 1;
 
-  const beforeDate = options.before ? new Date(options.before) : null;
-  const beforeValid = beforeDate && !Number.isNaN(beforeDate.getTime()) ? beforeDate : null;
+  let beforeDate: Date | null = null;
+  let beforeId: string | null = null;
+  if (options.before) {
+    try {
+      const decoded = JSON.parse(Buffer.from(options.before, "base64url").toString("utf8")) as {
+        createdAt?: string;
+        id?: string;
+      };
+      const parsedDate = new Date(decoded.createdAt ?? "");
+      if (!Number.isNaN(parsedDate.getTime()) && decoded.id) {
+        beforeDate = parsedDate;
+        beforeId = decoded.id;
+      }
+    } catch {
+      // Invalid cursors deliberately yield the first page; input validation is handled by the API layer.
+    }
+  }
 
   const actionFilter = options.action?.trim() || null;
   const resourceTypeFilter = options.resourceType?.trim() || null;
@@ -61,7 +76,10 @@ export async function listAuditEvents(options: {
       e.created_at
     FROM audit_events e
     LEFT JOIN users u ON u.id = e.actor_user_id
-    WHERE (${beforeValid}::timestamptz IS NULL OR e.created_at < ${beforeValid})
+    WHERE (
+      ${beforeDate}::timestamptz IS NULL
+      OR (e.created_at, e.id) < (${beforeDate}, ${beforeId}::uuid)
+    )
       AND (${actionFilter}::text IS NULL OR e.action = ${actionFilter})
       AND (${resourceTypeFilter}::text IS NULL OR e.resource_type = ${resourceTypeFilter})
     ORDER BY e.created_at DESC, e.id DESC
@@ -70,5 +88,10 @@ export async function listAuditEvents(options: {
 
   const mapped = (rows as AuditRow[]).map(mapRow);
   const hasMore = mapped.length > limit;
-  return { events: mapped.slice(0, limit), hasMore };
+  const events = mapped.slice(0, limit);
+  const last = events.at(-1);
+  const nextCursor = hasMore && last
+    ? Buffer.from(JSON.stringify({ createdAt: last.createdAt, id: last.id })).toString("base64url")
+    : null;
+  return { events, hasMore, nextCursor };
 }

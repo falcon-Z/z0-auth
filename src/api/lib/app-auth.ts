@@ -14,8 +14,6 @@ import { checkRateLimit, clientIp } from "./rate-limit";
 import {
   appSessionCookieHeader,
   createAppSession,
-  readAppSessionToken,
-  revokeAppSessionByToken,
 } from "./app-session";
 import { ensureGroupMemberForAppUser } from "./group-sso";
 import { writeAuditEvent } from "./audit";
@@ -56,9 +54,6 @@ async function issueAppSession(
   appUserId: string,
   appId: string,
 ): Promise<{ setCookie: string; appUserId: string }> {
-  const existingToken = readAppSessionToken(req);
-  if (existingToken) await revokeAppSessionByToken(existingToken);
-
   const { token, expiresAt } = await createAppSession(appUserId, appId, req);
   return {
     setCookie: appSessionCookieHeader(token, expiresAt),
@@ -72,7 +67,7 @@ export async function runAppLogin(
   emailRaw: string,
   password: string,
 ): Promise<AppAuthResult> {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimit({
     key: `app-login:${appId}:${clientIp(req)}`,
     limit: 10,
     windowMs: 15 * 60 * 1000,
@@ -153,7 +148,7 @@ export async function runAppRegister(
   password: string,
   passwordConfirm: string,
 ): Promise<AppAuthResult> {
-  const rate = checkRateLimit({
+  const rate = await checkRateLimit({
     key: `app-register:${appId}:${clientIp(req)}`,
     limit: 10,
     windowMs: 15 * 60 * 1000,
@@ -203,13 +198,12 @@ export async function runAppRegister(
 
   try {
     const [inserted] = await getDb()`
-      INSERT INTO app_users (app_id, email, name, password_hash, email_verified_at)
-      VALUES (${appId}, ${email}, ${name}, ${passwordHash}, NOW())
+      INSERT INTO app_users (app_id, email, name, password_hash)
+      VALUES (${appId}, ${email}, ${name}, ${passwordHash})
       RETURNING id
     `;
     const appUserId = String((inserted as { id: string }).id);
     const session = await issueAppSession(req, appUserId, appId);
-    await ensureGroupMemberForAppUser(appUserId, appId, email);
 
     await writeAuditEvent({
       action: "auth.app_register_succeeded",
