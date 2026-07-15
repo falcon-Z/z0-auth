@@ -18,9 +18,10 @@ bun install
 Start Postgres (Docker Desktop with WSL integration enabled):
 
 ```bash
+export Z0_AUTH_DB_AUTH="$(openssl rand -hex 32)"
 docker start z0-auth-postgres 2>/dev/null || docker start z0auth-postgres 2>/dev/null || docker run -d --name z0-auth-postgres \
-  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=password -e POSTGRES_DB=z0auth \
-  -p 5432:5432 postgres:16
+  -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD="$Z0_AUTH_DB_AUTH" -e POSTGRES_DB=z0auth \
+  -p 127.0.0.1:5432:5432 postgres:16
 ```
 
 Apply schema:
@@ -49,6 +50,8 @@ bun dev
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000). If `DATABASE_URL` or instance keys are missing, the console shows a setup checklist instead of the dashboard — see [deployment.md](./deployment.md).
 
+The server checks environment values before it listens. A malformed value such as `PORT=3000x`, `TRUST_PROXY_HOPS=-1`, or `ALLOW_INCOMPLETE_SETUP=yes` stops startup with the setting name and a safe error. Use only `true` or `false` for boolean settings. Database connection and migration problems are different: the development server stays live, `/api/ready` returns 503, and the checklist shows what to fix.
+
 ## Tests and the dev database
 
 Integration tests use a separate Postgres database (`z0auth_test`). Bun loads `.env` then `.env.test` when you run `bun test` (`NODE_ENV=test`); **`.env.test` overrides `DATABASE_URL`** to point at the test database. They call `resetTestDatabase()` in `beforeAll`, which drops and migrates only that database.
@@ -66,7 +69,7 @@ For a clean dev slate, run `bun run db:reset` and complete `/auth/setup` again w
 
 ### Postgres: `too many clients already`
 
-Bun’s SQL client opens a connection pool per process. z0-auth defaults to 10 connections in every environment; set `DATABASE_POOL_MAX` when the database connection budget requires another bounded value. Tests are serialized where they share mutable database state, while browser tests retain enough connections for realistic concurrent requests. The global development pool survives hot reloads and closes during graceful shutdown.
+Bun’s SQL client opens a connection pool per process. z0-auth defaults to 10 connections in every environment. `DATABASE_POOL_MAX` must be a whole number from 1 to 100. Tests are serialized when they share database state. The development pool stays open during hot reloads and closes during normal shutdown.
 
 Common causes on a single Docker Postgres:
 

@@ -1,6 +1,8 @@
 import { connect as tlsConnect, type TLSSocket } from "node:tls";
 import { connect as netConnect, type Socket } from "node:net";
 
+import { loadConfig } from "./config";
+
 export type SmtpSendOptions = {
   host: string;
   port: number;
@@ -169,7 +171,7 @@ function connectSocket(host: string, port: number, encryption: SmtpSendOptions["
 }
 
 export async function sendSmtpMessage(options: SmtpSendOptions): Promise<SmtpResult> {
-  if (options.encryption === "none" && process.env.NODE_ENV === "production") {
+  if (options.encryption === "none" && loadConfig().nodeEnv === "production") {
     return { ok: false, message: "Unencrypted SMTP is not allowed in production." };
   }
 

@@ -1,4 +1,13 @@
 import type { SmtpEncryption } from "@z0/contracts/email-settings";
+import { validateEmail } from "@z0/contracts/validation";
+
+import {
+  ConfigError,
+  loadConfig,
+  parseEnvironmentBoolean,
+  parseEnvironmentInteger,
+  validateHostOrIp,
+} from "./config";
 
 export type SmtpEnvCredentials = {
   host: string;
@@ -12,7 +21,7 @@ export type SmtpEnvCredentials = {
 
 const SMTP_KEYS = [
   "SMTP_HOST", "SMTP_PORT", "SMTP_ENCRYPTION", "SMTP_USERNAME", "SMTP_PASSWORD",
-  "SMTP_FROM_ADDRESS", "SMTP_FROM_NAME",
+  "SMTP_FROM_ADDRESS", "SMTP_FROM_NAME", "SMTP_ENABLED",
 ] as const;
 
 function parseEncryption(raw: string | undefined): SmtpEncryption | null {
@@ -21,7 +30,7 @@ function parseEncryption(raw: string | undefined): SmtpEncryption | null {
 }
 
 export function isSmtpEnvDisabled(): boolean {
-  return ["false", "0", "no"].includes(process.env.SMTP_ENABLED?.trim().toLowerCase() ?? "");
+  return process.env.SMTP_ENABLED !== undefined && !parseEnvironmentBoolean("SMTP_ENABLED", true);
 }
 
 function hasAnySmtpEnvironment(): boolean {
@@ -39,20 +48,52 @@ export function getSmtpEnvCredentials(): SmtpEnvCredentials | null {
   const host = process.env.SMTP_HOST?.trim();
   const fromAddress = process.env.SMTP_FROM_ADDRESS?.trim();
   if (!host || !fromAddress) {
-    throw new Error("SMTP environment configuration requires SMTP_HOST and SMTP_FROM_ADDRESS");
+    throw new ConfigError(
+      ["SMTP_HOST", "SMTP_FROM_ADDRESS"],
+      "incomplete",
+      "SMTP environment settings require SMTP_HOST and SMTP_FROM_ADDRESS.",
+    );
+  }
+  validateHostOrIp("SMTP_HOST", host);
+  if (validateEmail(fromAddress).length > 0) {
+    throw new ConfigError(
+      ["SMTP_FROM_ADDRESS"],
+      "invalid",
+      "SMTP_FROM_ADDRESS must be a valid email address.",
+    );
   }
   const encryption = parseEncryption(process.env.SMTP_ENCRYPTION);
-  if (!encryption) throw new Error("SMTP_ENCRYPTION must be none, starttls, or tls");
-  if (encryption === "none" && process.env.NODE_ENV === "production") {
-    throw new Error("Unencrypted SMTP is not allowed in production");
+  if (!encryption) {
+    throw new ConfigError(
+      ["SMTP_ENCRYPTION"],
+      "invalid",
+      "SMTP_ENCRYPTION must be none, starttls, or tls.",
+    );
   }
-  const port = Number(process.env.SMTP_PORT ?? "587");
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error("SMTP_PORT must be an integer from 1 to 65535");
+  if (encryption === "none" && loadConfig().nodeEnv === "production") {
+    throw new ConfigError(
+      ["SMTP_ENCRYPTION"],
+      "unsafe",
+      "SMTP_ENCRYPTION cannot be none in production.",
+    );
   }
+  const port = parseEnvironmentInteger("SMTP_PORT", 587, { min: 1, max: 65_535 });
   const username = process.env.SMTP_USERNAME?.trim() || null;
   const password = process.env.SMTP_PASSWORD ?? null;
-  if (username && !password) throw new Error("SMTP_PASSWORD is required when SMTP_USERNAME is set");
+  if (username && username.length > 256) {
+    throw new ConfigError(
+      ["SMTP_USERNAME"],
+      "invalid",
+      "SMTP_USERNAME must be 256 characters or fewer.",
+    );
+  }
+  if (username && !password) {
+    throw new ConfigError(
+      ["SMTP_USERNAME", "SMTP_PASSWORD"],
+      "incomplete",
+      "SMTP_PASSWORD is required when SMTP_USERNAME is set.",
+    );
+  }
 
   return {
     host,
@@ -61,6 +102,16 @@ export function getSmtpEnvCredentials(): SmtpEnvCredentials | null {
     username,
     password,
     fromAddress,
-    fromName: process.env.SMTP_FROM_NAME?.trim() || null,
+    fromName: (() => {
+      const value = process.env.SMTP_FROM_NAME?.trim() || null;
+      if (value && value.length > 256) {
+        throw new ConfigError(
+          ["SMTP_FROM_NAME"],
+          "invalid",
+          "SMTP_FROM_NAME must be 256 characters or fewer.",
+        );
+      }
+      return value;
+    })(),
   };
 }

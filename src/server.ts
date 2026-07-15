@@ -1,10 +1,11 @@
 import { serve } from "bun";
 
 import { apiRouteMap, dispatchApiRequest } from "./api/dispatch";
-import { checkDatabaseHealth, closeDatabase } from "./api/lib/db";
-import { loadConfig } from "./api/lib/config";
+import { closeDatabase } from "./api/lib/db";
 import { initializeInstanceKeys } from "./api/lib/instance-keys";
 import { printStartupSummary } from "./api/lib/startup-log";
+import { evaluateReadiness } from "./api/lib/readiness";
+import { validateRuntimeConfiguration } from "./api/lib/runtime-config";
 import { runConfiguredBootstrap } from "./api/setup/bootstrap";
 import { applySecurityHeaders, secureRouteMap } from "./api/lib/security-headers";
 import { loadConsoleHandler } from "./api/lib/console-assets";
@@ -13,8 +14,24 @@ process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
 });
 
-await initializeInstanceKeys();
-const configuredBootstrap = await runConfiguredBootstrap();
+let runtimeConfiguration: ReturnType<typeof validateRuntimeConfiguration>;
+try {
+  runtimeConfiguration = validateRuntimeConfiguration();
+  await initializeInstanceKeys();
+} catch (error) {
+  const message = error instanceof Error ? error.message : "Unknown startup error.";
+  console.error(`Startup failed: ${message}`);
+  process.exit(1);
+}
+
+let configuredBootstrap: Awaited<ReturnType<typeof runConfiguredBootstrap>>;
+try {
+  configuredBootstrap = await runConfiguredBootstrap();
+} catch (error) {
+  const message = error instanceof Error ? error.message : "Unknown first-owner setup error.";
+  console.error(`Startup failed: ${message}`);
+  process.exit(1);
+}
 if (configuredBootstrap.status === "created") {
   console.info(
     JSON.stringify({
@@ -30,8 +47,8 @@ import { magicLinkWebRoutes } from "./web/auth/magic-link-routes";
 import { federationWebRoutes } from "./web/auth/federation-routes";
 import { appSessionsWebRoutes } from "./web/auth/app-sessions-routes";
 import { oauthWebRoutes } from "./web/oauth/routes";
-const config = loadConfig();
-const dbHealth = await checkDatabaseHealth();
+const config = runtimeConfiguration.config;
+const readiness = await evaluateReadiness();
 const consoleHandler = await loadConsoleHandler(import.meta.dir);
 
 const server = serve({
@@ -60,7 +77,7 @@ const server = serve({
       : false,
 });
 
-printStartupSummary(config, dbHealth);
+printStartupSummary(config, readiness);
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 

@@ -1,24 +1,19 @@
-import { checkDatabaseHealth, checkDatabaseSchema } from "../lib/db";
-import { areInstanceKeysReady } from "../lib/instance-keys";
-import { requestPublicOrigin } from "../lib/config";
-import { getSmtpEnvCredentials } from "../lib/smtp-env";
 import { json } from "../lib/http";
 import { loadConfig } from "../lib/config";
+import { evaluateReadiness } from "../lib/readiness";
 
 const startedAt = Date.now();
 
 export const healthApiRoutes = {
   "/api/health": {
     async GET() {
-      const db = await checkDatabaseHealth();
+      const readiness = await evaluateReadiness();
       const config = loadConfig();
       return json({
-        status: db.ok ? "healthy" : "degraded",
+        status: readiness.ready ? "healthy" : "degraded",
         service: config.appName,
         uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
-        checks: {
-          database: { configured: db.configured, connected: db.ok },
-        },
+        checks: readiness.checks,
       });
     },
   },
@@ -31,36 +26,19 @@ export const healthApiRoutes = {
 
   "/api/ready": {
     async GET() {
-      const db = await checkDatabaseHealth();
-      const schema = db.ok ? await checkDatabaseSchema() : { ready: false };
-      let configuration = true;
-      try {
-        requestPublicOrigin(new Request("http://localhost"));
-        getSmtpEnvCredentials();
-      } catch {
-        configuration = false;
-      }
-      const keys = areInstanceKeysReady();
-      if (!db.ok || !schema.ready || !keys || !configuration) {
+      const readiness = await evaluateReadiness();
+      if (!readiness.ready) {
         return json(
           {
             status: "not_ready",
-            checks: {
-              database: { configured: db.configured, connected: db.ok, schemaReady: schema.ready },
-              instanceKeys: keys,
-              configuration,
-            },
+            checks: readiness.checks,
           },
           { status: 503 },
         );
       }
       return json({
         status: "ready",
-        checks: {
-          database: { configured: true, connected: true, schemaReady: true },
-          instanceKeys: true,
-          configuration: true,
-        },
+        checks: readiness.checks,
       });
     },
   },

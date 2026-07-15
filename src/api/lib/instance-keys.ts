@@ -1,5 +1,7 @@
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import path from "node:path";
+
+import { loadConfig } from "./config";
 
 const KEYS_VERSION = 2;
 const DATA_ALGO = "AES-GCM";
@@ -37,9 +39,7 @@ let loaded: LoadedKeys | null = null;
 let sources: InstanceKeySources | null = null;
 
 function keysFilePath(): string {
-  const configured = process.env.INSTANCE_KEYS_PATH?.trim();
-  if (configured) return path.resolve(configured);
-  return path.resolve(process.cwd(), ".data/instance-keys.json");
+  return path.resolve(loadConfig().instanceKeysPath);
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -85,7 +85,7 @@ function configuredKeyId(envName: string, fallback: string): string {
 }
 
 function isProduction(): boolean {
-  return process.env.NODE_ENV === "production";
+  return loadConfig().nodeEnv === "production";
 }
 
 /** Parse a 32-byte AES key from hex (64 chars) or base64. */
@@ -150,7 +150,13 @@ async function importTokenPublicKey(b64: string): Promise<CryptoKey> {
 
 async function writeKeysFile(filePath: string, stored: StoredKeysFile): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await Bun.write(filePath, `${JSON.stringify(stored, null, 2)}\n`, { mode: 0o600 });
+  const previousUmask = process.umask(0o077);
+  try {
+    await Bun.write(filePath, `${JSON.stringify(stored, null, 2)}\n`, { mode: 0o600 });
+    await chmod(filePath, 0o600);
+  } finally {
+    process.umask(previousUmask);
+  }
 }
 
 async function readKeysFile(filePath: string): Promise<StoredKeysFile | null> {
@@ -300,7 +306,25 @@ async function persistIfNeeded(
 
 /** Load or create instance keys before handling secrets or signed tokens. */
 export async function initializeInstanceKeys(): Promise<void> {
-  if (loaded) return;
+  if (loaded) {
+    if (
+      isProduction() &&
+      (
+        sources?.dataKey !== "env" ||
+        sources.tokenKeys !== "env" ||
+        !process.env.INSTANCE_DATA_KEY?.trim() ||
+        !process.env.INSTANCE_DATA_KEY_ID?.trim() ||
+        !process.env.INSTANCE_TOKEN_KEY_ID?.trim() ||
+        !process.env.INSTANCE_TOKEN_PRIVATE_KEY?.trim() ||
+        !process.env.INSTANCE_TOKEN_PUBLIC_KEY?.trim()
+      )
+    ) {
+      throw new Error(
+        "Production instance keys are not configured. Set INSTANCE_DATA_KEY, INSTANCE_TOKEN_PRIVATE_KEY, and INSTANCE_TOKEN_PUBLIC_KEY.",
+      );
+    }
+    return;
+  }
 
   const filePath = keysFilePath();
   const stored = await readKeysFile(filePath);

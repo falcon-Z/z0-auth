@@ -1,24 +1,26 @@
 openapi: 3.1.0
 info:
-  title: z0-auth Health API
+  title: z0-auth Health and Deployment API
   version: 0.1.0
-  description: Operational health, liveness, and readiness endpoints.
+  description: Public health checks and safe setup information for operators.
 servers:
   - url: http://localhost:3000
     description: Local development
 tags:
   - name: Health
-    description: Service health and orchestration probes
+    description: Process and dependency health
+  - name: Deployment
+    description: Safe setup information shown before first setup
 paths:
   /api/health:
     get:
       tags: [Health]
-      summary: Composite health check
-      description: Returns service status and dependency checks (database).
+      summary: Show service health
+      description: Returns HTTP 200 with healthy or degraded status. Do not use this endpoint to route user traffic.
       operationId: getHealth
       responses:
         "200":
-          description: Health payload (may be degraded if database is down)
+          description: Current service health
           content:
             application/json:
               schema:
@@ -26,12 +28,12 @@ paths:
   /api/live:
     get:
       tags: [Health]
-      summary: Liveness probe
-      description: Indicates the process is running. Does not check dependencies.
+      summary: Check whether the process is live
+      description: Returns HTTP 200 when the HTTP process can answer. It does not check the database or other settings.
       operationId: getLive
       responses:
         "200":
-          description: Process is alive
+          description: The process is live
           content:
             application/json:
               schema:
@@ -39,37 +41,122 @@ paths:
   /api/ready:
     get:
       tags: [Health]
-      summary: Readiness probe
-      description: Indicates the service can accept traffic (database must be reachable).
+      summary: Check whether the server can handle traffic
+      description: Returns HTTP 200 only when the database, schema, keys, and server settings are ready.
       operationId: getReady
       responses:
         "200":
-          description: Ready to serve traffic
+          description: Ready to handle traffic
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReadyResponse"
         "503":
-          description: Not ready
+          description: Not ready to handle traffic
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReadyResponse"
+  /api/deploy/status:
+    get:
+      tags: [Deployment]
+      summary: Show safe setup status
+      description: Returns database, key, configuration, and first-owner state without returning secrets or internal errors.
+      operationId: getDeployStatus
+      responses:
+        "200":
+          description: Current deployment and first-setup state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeployStatusResponse"
 components:
   schemas:
-    DatabaseHealth:
+    DatabaseCheck:
       type: object
-      required: [ok, latencyMs]
+      required: [configured, connected, schemaReady]
       properties:
-        ok:
+        configured:
+          type: boolean
+        connected:
+          type: boolean
+        schemaReady:
           type: boolean
         latencyMs:
           type: integer
           minimum: 0
-        version:
+        code:
           type: string
+          enum: [database_missing, database_unavailable, schema_not_ready]
+        message:
+          type: string
+    DeployDatabaseCheck:
+      type: object
+      required: [configured, connected, schemaReady]
+      properties:
+        configured:
+          type: boolean
+        connected:
+          type: boolean
+        schemaReady:
+          type: boolean
+        latencyMs:
+          type: integer
+          minimum: 0
+        code:
+          type: string
+          enum: [database_missing, database_unavailable, schema_not_ready]
         error:
           type: string
+    InstanceKeysCheck:
+      type: object
+      required: [ready]
+      properties:
+        ready:
+          type: boolean
+        code:
+          type: string
+          enum: [instance_keys_missing]
+        message:
+          type: string
+    ConfigurationIssue:
+      type: object
+      required: [code, variables, message]
+      properties:
+        code:
+          type: string
+          enum: [config_missing, config_invalid, config_incomplete, config_unsafe]
+        variables:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+    ConfigurationCheck:
+      type: object
+      required: [ready, issues]
+      properties:
+        ready:
+          type: boolean
+        smtpMode:
+          type: string
+          enum: [console, disabled, environment]
+        publicOriginConfigured:
+          type: boolean
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigurationIssue"
+    ReadinessChecks:
+      type: object
+      required: [database, instanceKeys, configuration]
+      properties:
+        database:
+          $ref: "#/components/schemas/DatabaseCheck"
+        instanceKeys:
+          $ref: "#/components/schemas/InstanceKeysCheck"
+        configuration:
+          $ref: "#/components/schemas/ConfigurationCheck"
     HealthResponse:
       type: object
       required: [status, service, uptimeSeconds, checks]
@@ -83,10 +170,7 @@ components:
           type: integer
           minimum: 0
         checks:
-          type: object
-          properties:
-            database:
-              $ref: "#/components/schemas/DatabaseHealth"
+          $ref: "#/components/schemas/ReadinessChecks"
     LiveResponse:
       type: object
       required: [status]
@@ -102,7 +186,59 @@ components:
           type: string
           enum: [ready, not_ready]
         checks:
-          type: object
-          properties:
-            database:
-              $ref: "#/components/schemas/DatabaseHealth"
+          $ref: "#/components/schemas/ReadinessChecks"
+    InstanceKeyStatus:
+      type: object
+      required: [ready, dataKey, tokenKeys, unstableInProduction]
+      properties:
+        ready:
+          type: boolean
+        dataKey:
+          type: string
+          enum: [env, file, generated, missing]
+        tokenKeys:
+          type: string
+          enum: [env, file, generated, missing]
+        unstableInProduction:
+          type: boolean
+    BootstrapStatus:
+      type: object
+      required: [configured, ready, missing]
+      properties:
+        configured:
+          type: boolean
+        ready:
+          type: boolean
+        missing:
+          type: array
+          items:
+            type: string
+            enum: [organizationName, adminName, adminEmail, adminPassword]
+    PlatformSetupStatus:
+      type: object
+      nullable: true
+      required: [setupComplete, bootstrap]
+      properties:
+        setupComplete:
+          type: boolean
+        organizationName:
+          type: string
+        bootstrap:
+          $ref: "#/components/schemas/BootstrapStatus"
+    DeployStatusResponse:
+      type: object
+      required: [ready, nodeEnv, database, instanceKeys, configuration, platform]
+      properties:
+        ready:
+          type: boolean
+        nodeEnv:
+          type: string
+          enum: [development, test, production]
+        database:
+          $ref: "#/components/schemas/DeployDatabaseCheck"
+        instanceKeys:
+          $ref: "#/components/schemas/InstanceKeyStatus"
+        configuration:
+          $ref: "#/components/schemas/ConfigurationCheck"
+        platform:
+          $ref: "#/components/schemas/PlatformSetupStatus"

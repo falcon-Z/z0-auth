@@ -1,6 +1,7 @@
 import type { EmailDeliveryStatus } from "@z0/contracts/email-delivery";
 
 import { deliverEmail } from "./smtp-mail";
+import { loadConfig } from "./config";
 import { isSmtpReady } from "./smtp-settings";
 
 export type TransactionalEmailInput = {
@@ -29,7 +30,7 @@ export function memberInviteEmailText(options: {
   inviteUrl: string;
   expiresAt: string;
 }): { subject: string; text: string } {
-  const appName = process.env.APP_NAME ?? "z0-auth";
+  const appName = loadConfig().appName;
   const expiresLabel = new Date(options.expiresAt).toLocaleString();
   return {
     subject: `Join ${options.organizationName} on ${appName}`,

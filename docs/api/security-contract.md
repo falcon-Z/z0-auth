@@ -65,6 +65,8 @@ Until platform setup completes (unless `ALLOW_INCOMPLETE_SETUP=true`):
 - All other `/api/*` return **503** with top-level `code`: `SetupRequired`
 - HTML auth routes redirect to `/auth/setup` (see `docs/api/ui-flows.md`)
 
+The health and deployment-status routes are public because operators and container tools need them before setup. They return short reason codes and safe instructions only. They must not return database connection strings, raw database errors, SMTP passwords, bootstrap or install tokens, private keys, full setting values, or key-file paths.
+
 ---
 
 ## Install token (setup only)

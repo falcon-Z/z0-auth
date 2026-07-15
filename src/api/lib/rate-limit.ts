@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { loadConfig } from "./config";
 
 export type RateLimitConfig = {
   key: string;
@@ -10,7 +11,7 @@ let testGeneration = 0;
 let lastCleanupAt = 0;
 
 function bucketKey(key: string): string {
-  return process.env.NODE_ENV === "test" ? `test-${testGeneration}:${key}` : key;
+  return loadConfig().nodeEnv === "test" ? `test-${testGeneration}:${key}` : key;
 }
 
 async function increment(config: RateLimitConfig): Promise<{ count: number; expiresAt: Date }> {
@@ -65,8 +66,8 @@ export async function recordRateLimitHit(config: RateLimitConfig): Promise<void>
 }
 
 export function clientIp(req: Request): string {
-  const hops = Number.parseInt(process.env.TRUST_PROXY_HOPS ?? "0", 10);
-  if (!Number.isInteger(hops) || hops < 1) return "direct";
+  const hops = loadConfig().trustProxyHops;
+  if (hops < 1) return "direct";
   const forwarded = (req.headers.get("x-forwarded-for") ?? "")
     .split(",")
     .map((value) => value.trim())

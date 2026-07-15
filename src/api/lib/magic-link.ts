@@ -11,7 +11,7 @@ import { problem } from "./http";
 import { isSmtpReady } from "./smtp-settings";
 import { checkRateLimit, clientIp } from "./rate-limit";
 import { magicLinkEmailText, sendTransactionalEmail } from "./transactional-email";
-import { requestPublicOrigin } from "./config";
+import { loadConfig, requestPublicOrigin } from "./config";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000;
 const GENERIC_MESSAGE = "Check your email for a sign-in link.";
@@ -198,7 +198,7 @@ export async function sendMagicLinkForHostedAuth(
     clientId: options.clientId,
     returnTo: options.returnTo,
   });
-  const appName = options.appName ?? process.env.APP_NAME ?? "z0-auth";
+  const appName = options.appName ?? loadConfig().appName;
   const template = magicLinkEmailText({ appName, link, expiresMinutes: 15 });
   const delivery = await sendTransactionalEmail({ to: email, subject: template.subject, text: template.text });
 

@@ -1,4 +1,7 @@
 import tailwindPlugin from "bun-plugin-tailwind";
+import { mkdir } from "node:fs/promises";
+
+await mkdir("dist", { recursive: true });
 
 for await (const relativePath of new Bun.Glob("chunk-*").scan({ cwd: "dist", onlyFiles: true })) {
   await Bun.file(`dist/${relativePath}`).delete();

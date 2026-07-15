@@ -54,12 +54,15 @@ bun install
 Start PostgreSQL locally if you do not already have one:
 
 ```bash
+export Z0_AUTH_DB_AUTH="$(openssl rand -hex 32)"
 docker run -d --name z0-auth-postgres \
   -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_PASSWORD="$Z0_AUTH_DB_AUTH" \
   -e POSTGRES_DB=z0auth \
-  -p 5432:5432 postgres:16
+  -p 127.0.0.1:5432:5432 postgres:16
 ```
+
+Put the matching PostgreSQL connection string in your ignored `.env` file. Do not commit the password.
 
 Apply the schema:
 
@@ -77,9 +80,22 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). If the database, migrations
 
 For the full local development workflow, including the isolated test database, see [docs/development.md](docs/development.md).
 
+### Local Docker trial
+
+With Docker and Compose installed, start an isolated trial stack with PostgreSQL, automatic migrations, persistent database storage, and persistent development instance keys:
+
+```bash
+export Z0_AUTH_DB_AUTH="$(openssl rand -hex 32)"
+docker compose up --build -d --wait
+```
+
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000), complete owner setup, and stop the services with `docker compose down`. Named volumes are retained. Use `docker compose down --volumes` only when you intentionally want to delete the trial database and keys.
+
+The Compose stack requires `Z0_AUTH_DB_AUTH` and does not store a database credential in Git. Keep the variable set in the shell where you run later Compose commands. The stack is for loopback-only local evaluation and uses development-mode HTTP behavior; do not expose it to the internet or treat it as a production template. Set `Z0_AUTH_PORT` to change the host port.
+
 ## Production deployment
 
-z0-auth expects you to provide PostgreSQL and instance secrets. Published Docker images are not available yet, so production deployments currently build and run the Bun app from this repository.
+z0-auth expects you to provide PostgreSQL and instance secrets. Build the standalone application image from this repository with `docker build -t z0-auth .`. The image runs as a non-root user, applies pending migrations before accepting traffic, and reports readiness through `/api/ready`.
 
 Production configuration:
 
@@ -87,14 +103,16 @@ Production configuration:
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string. Required for a usable instance. |
 | `PUBLIC_ORIGIN` | Canonical HTTPS origin used for OAuth/OIDC issuer, callbacks, and emailed security links. Required in production. |
-| `DATABASE_POOL_MAX` | PostgreSQL pool limit per Bun process. Defaults to 10. |
-| `TRUST_PROXY_HOPS` | Number of trusted reverse proxies that append `X-Forwarded-For`. Defaults to 0, which ignores the header. |
+| `DATABASE_POOL_MAX` | PostgreSQL connections per Bun process, from 1 to 100. Defaults to 10. |
+| `TRUST_PROXY_HOPS` | Number of trusted reverse proxies that append `X-Forwarded-For`, from 0 to 32. Defaults to 0, which ignores the header. |
 | `INSTANCE_DATA_KEY_ID` | Stable identifier stored with values encrypted by the active data key. Required in production. |
 | `INSTANCE_DATA_KEY` | Stable AES-256 key used to encrypt SMTP passwords, provider secrets, OIDC signing keys, and upstream provider tokens. Required in production. |
 | `INSTANCE_TOKEN_KEY_ID` | Stable identifier stored in signed internal tokens. Required in production. |
 | `INSTANCE_TOKEN_PRIVATE_KEY` | Ed25519 private key used for password-reset link signatures. Required with `INSTANCE_TOKEN_PUBLIC_KEY` when token keys are provided through the environment. |
 | `INSTANCE_TOKEN_PUBLIC_KEY` | Matching Ed25519 public key. Required with `INSTANCE_TOKEN_PRIVATE_KEY` when token keys are provided through the environment. |
 | `INSTALL_TOKEN` | Optional token required during first-time setup. Recommended for internet-facing deployments. |
+
+z0-auth checks server settings before it starts listening. Invalid values stop startup and name the setting to fix without printing its value. Numeric settings must contain one complete whole number. Boolean settings use only `true` or `false`. See `.env.example` for every setting, default, and allowed range.
 
 Generate instance keys once per environment and store the complete output in deployment secrets:
 
@@ -114,6 +132,22 @@ Build and start:
 bun run build
 bun start
 ```
+
+Or run the image with production configuration supplied at runtime:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL \
+  -e PUBLIC_ORIGIN \
+  -e INSTANCE_DATA_KEY_ID \
+  -e INSTANCE_DATA_KEY \
+  -e INSTANCE_TOKEN_KEY_ID \
+  -e INSTANCE_TOKEN_PRIVATE_KEY \
+  -e INSTANCE_TOKEN_PUBLIC_KEY \
+  z0-auth
+```
+
+The image contains no `.env` file or generated key material. Supply secrets from your deployment platform; do not place them in the image build context or command history.
 
 For platform-specific notes for Cloud Run, Railway, Render, AWS, and Kubernetes, see [docs/deployment.md](docs/deployment.md).
 
@@ -159,7 +193,7 @@ Relevant environment variables:
 - `SMTP_FROM_NAME`
 - `SMTP_ENABLED`
 
-If any SMTP setting is supplied through the environment, the environment is authoritative and partial configuration fails readiness rather than silently falling back to database settings. `SMTP_ENABLED=false` is the deliberate exception: it disables delivery without requiring any other SMTP setting. `SMTP_PASSWORD` is required only when `SMTP_USERNAME` is set, so trusted unauthenticated relays remain supported.
+If any SMTP setting is supplied through the environment, z0-auth uses those settings instead of console settings. Partial or invalid SMTP settings stop startup. `SMTP_ENABLED=false` disables delivery without requiring other SMTP settings. `SMTP_ENABLED=true` requires `SMTP_HOST` and `SMTP_FROM_ADDRESS`. `SMTP_PASSWORD` is required only when `SMTP_USERNAME` is set, so trusted mail relays without authentication remain supported.
 
 The console includes an email settings screen and a test-email action. SMTP passwords stored through the console are encrypted with `INSTANCE_DATA_KEY`, so back up that key before relying on the instance for email recovery.
 
@@ -312,10 +346,10 @@ Customer resource servers validate opaque access tokens through `POST /oauth/int
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/health` | Composite service health, including database status. |
-| `GET /api/live` | Liveness probe. Does not check dependencies. |
-| `GET /api/ready` | Readiness probe. Requires dependencies needed to serve traffic. |
-| `GET /api/deploy/status` | Deployment checklist data for database, schema, and instance keys. |
+| `GET /api/health` | Always returns 200 with `healthy` or `degraded` and the same safe checks used by readiness. Use it to find problems, not to route traffic. |
+| `GET /api/live` | Returns 200 when the HTTP process can answer. It does not check the database or settings. |
+| `GET /api/ready` | Returns 200 only when the database, current schema, keys, and server settings are ready; otherwise returns 503. |
+| `GET /api/deploy/status` | Safe setup data for the database, schema, keys, server settings, and first owner. |
 | `GET /api/setup/status` | First-time setup status. |
 
 ## Commands

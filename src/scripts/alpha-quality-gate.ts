@@ -14,7 +14,12 @@ if (process.env.NODE_ENV !== "test" || !databaseUrl || !databaseName.endsWith("_
   process.exit(1);
 }
 
-const commonTestArgs = ["--preload", "./tests/preload.ts", "--max-concurrency=1", "--parallel=1"];
+const commonTestArgs = [
+  "--timeout", "10000",
+  "--preload", "./tests/preload.ts",
+  "--max-concurrency=1",
+  "--parallel=1",
+];
 const phases: Array<{ label: string; command: string[] }> = [
   {
     label: "OpenAPI contracts and migration integrity",

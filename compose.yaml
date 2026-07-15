@@ -1,0 +1,51 @@
+name: z0-auth
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: z0auth
+      POSTGRES_USER: z0auth
+      POSTGRES_PASSWORD: ${Z0_AUTH_DB_AUTH:?Set Z0_AUTH_DB_AUTH before starting Compose}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U z0auth -d z0auth"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  keys-init:
+    build:
+      context: .
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /var/lib/z0-auth && chown 1000:1000 /var/lib/z0-auth"]
+    volumes:
+      - instance-keys:/var/lib/z0-auth
+    restart: "no"
+
+  app:
+    build:
+      context: .
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://z0auth:${Z0_AUTH_DB_AUTH:?Set Z0_AUTH_DB_AUTH before starting Compose}@postgres:5432/z0auth
+      DATABASE_POOL_MAX: 10
+      BIND_ADDRESS: 0.0.0.0
+      PORT: 3000
+      INSTANCE_KEYS_PATH: /var/lib/z0-auth/instance-keys.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keys-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${Z0_AUTH_PORT:-3000}:3000"
+    volumes:
+      - instance-keys:/var/lib/z0-auth
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  instance-keys:

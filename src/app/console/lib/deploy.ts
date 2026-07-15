@@ -16,7 +16,11 @@ function isDeployStatusResponse(value: unknown): value is DeployStatusResponse {
   const keys = o.instanceKeys;
   if (!keys || typeof keys !== "object") return false;
   const k = keys as Record<string, unknown>;
-  return typeof k.ready === "boolean";
+  if (typeof k.ready !== "boolean") return false;
+  const configuration = o.configuration;
+  if (!configuration || typeof configuration !== "object") return false;
+  const c = configuration as Record<string, unknown>;
+  return typeof c.ready === "boolean" && Array.isArray(c.issues);
 }
 
 export async function loadDeployStatus(): Promise<DeployStatusResponse> {

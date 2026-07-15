@@ -1,5 +1,5 @@
 import type { DeployStatusResponse } from "@z0/contracts/deploy-status";
-import { CheckCircle2, Database, KeyRound, RefreshCw, UserRound, XCircle } from "lucide-react";
+import { CheckCircle2, Database, KeyRound, RefreshCw, Settings2, UserRound, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@z0/components/ui/alert";
@@ -17,9 +17,10 @@ type DeploySetupPageProps = {
   refreshing: boolean;
 };
 
-type SetupStep = "database" | "keys" | "owner";
+export type SetupStep = "configuration" | "database" | "keys" | "owner";
 
 function stepComplete(status: DeployStatusResponse, step: SetupStep): boolean {
+  if (step === "configuration") return status.configuration.ready;
   if (step === "database") {
     return status.database.configured && status.database.connected && status.database.schemaReady;
   }
@@ -27,6 +28,14 @@ function stepComplete(status: DeployStatusResponse, step: SetupStep): boolean {
     return Boolean(status.platform?.setupComplete || status.platform?.bootstrap.ready);
   }
   return status.instanceKeys.ready;
+}
+
+export function suggestedSetupStep(status: DeployStatusResponse): SetupStep {
+  if (!stepComplete(status, "configuration")) return "configuration";
+  if (!stepComplete(status, "database")) return "database";
+  if (!stepComplete(status, "keys")) return "keys";
+  if (status.platform?.bootstrap.configured && !stepComplete(status, "owner")) return "owner";
+  return "database";
 }
 
 function StepNavButton({
@@ -79,15 +88,11 @@ function StepNavButton({
 export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPageProps) {
   const dbComplete = stepComplete(status, "database");
   const keysComplete = stepComplete(status, "keys");
+  const configurationComplete = stepComplete(status, "configuration");
   const bootstrapConfigured = Boolean(status.platform?.bootstrap.configured);
   const ownerComplete = stepComplete(status, "owner");
 
-  const suggestedStep = useMemo((): SetupStep => {
-    if (!dbComplete) return "database";
-    if (!keysComplete) return "keys";
-    if (bootstrapConfigured && !ownerComplete) return "owner";
-    return "database";
-  }, [bootstrapConfigured, dbComplete, keysComplete, ownerComplete]);
+  const suggestedStep = useMemo(() => suggestedSetupStep(status), [status]);
 
   const [activeStep, setActiveStep] = useState<SetupStep>(suggestedStep);
 
@@ -122,6 +127,15 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
             Steps
           </p>
           <div className="flex flex-col gap-1">
+            {!configurationComplete ? (
+              <StepNavButton
+                active={activeStep === "configuration"}
+                complete={configurationComplete}
+                label="Server settings"
+                icon={Settings2}
+                onClick={() => setActiveStep("configuration")}
+              />
+            ) : null}
             <StepNavButton
               active={activeStep === "database"}
               complete={dbComplete}
@@ -157,7 +171,22 @@ export function DeploySetupPage({ status, onRefresh, refreshing }: DeploySetupPa
         <main className="min-w-0 flex-1">
         <Card className="gap-0 py-0 shadow-sm">
           <CardContent className="p-6 sm:p-8">
-          {activeStep === "database" ? (
+          {activeStep === "configuration" ? (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Server settings</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Fix these environment settings, restart z0-auth, then refresh this page.
+                </p>
+              </div>
+              {status.configuration.issues.map((issue) => (
+                <Alert key={`${issue.code}:${issue.variables.join(",")}`} variant="destructive">
+                  <AlertTitle>{issue.variables.length > 0 ? issue.variables.join(", ") : "Configuration error"}</AlertTitle>
+                  <AlertDescription>{issue.message}</AlertDescription>
+                </Alert>
+              ))}
+            </div>
+          ) : activeStep === "database" ? (
             <DatabaseSetupPanel status={status} />
           ) : activeStep === "keys" && !dbComplete ? (
             <div className="space-y-4">

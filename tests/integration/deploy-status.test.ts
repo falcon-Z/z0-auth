@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { resetDatabaseConnection } from "../../src/api/lib/db";
+import { getDb, resetDatabaseConnection } from "../../src/api/lib/db";
+import { CURRENT_SCHEMA_VERSION } from "../../src/api/lib/schema-version";
 import { hasTestDatabase } from "../helpers/db";
 import { buildRequest } from "../helpers/http";
 import { dispatchApi } from "./api-routes";
@@ -26,13 +27,18 @@ run("deploy status", () => {
       ready: boolean;
       database: { configured: boolean; connected: boolean; schemaReady: boolean };
       instanceKeys: { ready: boolean };
+      configuration: { ready: boolean; issues: unknown[] };
     };
     expect(body.database.configured).toBe(true);
     expect(typeof body.database.connected).toBe("boolean");
     expect(typeof body.database.schemaReady).toBe("boolean");
     expect(typeof body.instanceKeys.ready).toBe("boolean");
+    expect(body.configuration).toEqual(expect.objectContaining({ ready: true, issues: [] }));
     expect(body.ready).toBe(
-      body.database.connected && body.database.schemaReady && body.instanceKeys.ready,
+      body.database.connected &&
+        body.database.schemaReady &&
+        body.instanceKeys.ready &&
+        body.configuration.ready,
     );
   });
 
@@ -44,12 +50,13 @@ run("deploy status", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ready: boolean;
-      database: { configured: boolean; connected: boolean; error?: string };
+      database: { configured: boolean; connected: boolean; code?: string; error?: string };
     };
     expect(body.database.configured).toBe(false);
     expect(body.database.connected).toBe(false);
     expect(body.ready).toBe(false);
-    expect(body.database.error).toBe("Database connection failed.");
+    expect(body.database.code).toBe("database_missing");
+    expect(body.database.error).toBe("Set DATABASE_URL and restart the server.");
   });
 
   test("reports incomplete configured bootstrap owner fields", async () => {
@@ -73,5 +80,35 @@ run("deploy status", () => {
       "adminName",
       "adminPassword",
     ]);
+  });
+
+  test("reports a missing current migration without exposing database errors", async () => {
+    const db = getDb();
+    const [migration] = await db`
+      SELECT version, checksum FROM schema_migrations WHERE version = ${CURRENT_SCHEMA_VERSION}
+    `;
+    expect(migration).toBeDefined();
+    await db`DELETE FROM schema_migrations WHERE version = ${CURRENT_SCHEMA_VERSION}`;
+    try {
+      const res = await dispatchApi(buildRequest("GET", "/api/deploy/status"));
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        ready: boolean;
+        database: { schemaReady: boolean; code?: string; error?: string };
+      };
+      expect(body.ready).toBe(false);
+      expect(body.database).toMatchObject({
+        schemaReady: false,
+        code: "schema_not_ready",
+        error: "The database schema is not current. Run bun run db:migrate.",
+      });
+    } finally {
+      const row = migration as { version: string; checksum: string | null };
+      await db`
+        INSERT INTO schema_migrations (version, checksum)
+        VALUES (${row.version}, ${row.checksum})
+        ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum
+      `;
+    }
   });
 });

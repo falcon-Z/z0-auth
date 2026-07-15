@@ -39,4 +39,28 @@ describe("SMTP environment contract", () => {
     delete process.env.SMTP_PASSWORD;
     expect(getSmtpEnvCredentials()?.password).toBeNull();
   });
+
+  test("rejects unknown SMTP_ENABLED values", () => {
+    process.env.SMTP_ENABLED = "yes";
+    expect(() => getSmtpEnvCredentials()).toThrow("SMTP_ENABLED must be true or false");
+  });
+
+  test("explicit enablement requires host and sender", () => {
+    process.env.SMTP_ENABLED = "true";
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_FROM_ADDRESS;
+    expect(() => getSmtpEnvCredentials()).toThrow("SMTP_HOST and SMTP_FROM_ADDRESS");
+  });
+
+  test("rejects invalid numeric and sender values", () => {
+    process.env.SMTP_HOST = "smtp.example.com";
+    process.env.SMTP_FROM_ADDRESS = "not-an-email";
+    expect(() => getSmtpEnvCredentials()).toThrow("SMTP_FROM_ADDRESS");
+    process.env.SMTP_FROM_ADDRESS = "auth@example.com";
+    process.env.SMTP_PORT = "1e3";
+    expect(() => getSmtpEnvCredentials()).toThrow("SMTP_PORT");
+    delete process.env.SMTP_PORT;
+    process.env.SMTP_HOST = "smtp.example.com:587";
+    expect(() => getSmtpEnvCredentials()).toThrow("SMTP_HOST");
+  });
 });

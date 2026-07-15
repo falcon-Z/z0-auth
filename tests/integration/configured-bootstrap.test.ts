@@ -83,6 +83,23 @@ run("configured bootstrap", () => {
     process.env.Z0_BOOTSTRAP_ADMIN_PASSWORD = "weak";
     expect(await runConfiguredBootstrap()).toEqual({ status: "already-complete" });
   });
+
+  test("rejects invalid first-owner settings without printing the password", async () => {
+    const passwordMarker = ["do", "not", "print", "this"].join("-");
+    process.env.Z0_BOOTSTRAP_ORG_NAME = "Acme IAM";
+    process.env.Z0_BOOTSTRAP_ADMIN_NAME = "Owner User";
+    process.env.Z0_BOOTSTRAP_ADMIN_EMAIL = "not-an-email";
+    process.env.Z0_BOOTSTRAP_ADMIN_PASSWORD = passwordMarker;
+
+    let message = "";
+    try {
+      await runConfiguredBootstrap();
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("Z0_BOOTSTRAP_ADMIN_EMAIL");
+    expect(message).not.toContain(passwordMarker);
+  });
 });
 
 afterAll(async () => {

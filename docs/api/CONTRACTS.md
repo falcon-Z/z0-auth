@@ -100,7 +100,7 @@ Use underscore-prefixed fields for non-input failures:
 | File | Scope |
 |------|--------|
 | `common.openapi.yaml` | Shared schemas, responses, security schemes |
-| `health.openapi.yaml` | `/api/health`, `/api/live`, `/api/ready` |
+| `health.openapi.yaml` | `/api/health`, `/api/live`, `/api/ready`, `/api/deploy/status` |
 | `setup.openapi.yaml` | `/api/setup/*` |
 | `auth.openapi.yaml` | `/api/auth/*` |
 | `audit.openapi.yaml` | `/api/v1/audit-events` (P7M1) |

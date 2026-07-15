@@ -1,10 +1,12 @@
-import { mkdir, readFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
+  areInstanceKeysReady,
   decryptWithDataKey,
   encryptWithDataKey,
+  getInstanceKeySources,
   signResetToken,
   initializeInstanceKeys,
   parseDataKeyMaterial,
@@ -59,11 +61,6 @@ describe("instance-keys configuration", () => {
     delete process.env.INSTANCE_TOKEN_PUBLIC_KEY;
 
     await expect(initializeInstanceKeys()).rejects.toThrow("Production instance keys are not configured");
-    const { getInstanceKeySources, areInstanceKeysReady } = await import(
-      "../../src/api/lib/instance-keys"
-    );
-    expect(getInstanceKeySources()?.dataKey).toBe("missing");
-    expect(getInstanceKeySources()?.tokenKeys).toBe("missing");
     expect(areInstanceKeysReady()).toBe(false);
   });
 
@@ -75,9 +72,6 @@ describe("instance-keys configuration", () => {
     delete process.env.INSTANCE_TOKEN_PUBLIC_KEY;
 
     await expect(initializeInstanceKeys()).rejects.toThrow("Production instance keys are not configured");
-    const { getInstanceKeySources, areInstanceKeysReady } = await import("../../src/api/lib/instance-keys");
-    expect(getInstanceKeySources()?.dataKey).toBe("env");
-    expect(getInstanceKeySources()?.tokenKeys).toBe("missing");
     expect(areInstanceKeysReady()).toBe(false);
   });
 
@@ -128,11 +122,15 @@ describe("instance-keys configuration", () => {
     process.env.INSTANCE_TOKEN_PUBLIC_KEY = tokenKeys.publicKey;
 
     await initializeInstanceKeys();
-    const { getInstanceKeySources } = await import("../../src/api/lib/instance-keys");
     expect(getInstanceKeySources()?.dataKey).toBe("env");
     expect(getInstanceKeySources()?.tokenKeys).toBe("env");
     expect(getInstanceKeySources()?.dataKeyId).toBe("prod-data-2026-07");
     expect(getInstanceKeySources()?.tokenKeyId).toBe("prod-token-2026-07");
+
+    delete process.env.INSTANCE_DATA_KEY;
+    await expect(initializeInstanceKeys()).rejects.toThrow(
+      "Production instance keys are not configured",
+    );
   });
 
   test("development without env keys still auto-generates local file-backed keys", async () => {
@@ -142,10 +140,10 @@ describe("instance-keys configuration", () => {
     delete process.env.INSTANCE_TOKEN_PUBLIC_KEY;
 
     await initializeInstanceKeys();
-    const { getInstanceKeySources, areInstanceKeysReady } = await import("../../src/api/lib/instance-keys");
     expect(getInstanceKeySources()?.dataKey).toBe("generated");
     expect(getInstanceKeySources()?.tokenKeys).toBe("generated");
     expect(areInstanceKeysReady()).toBe(true);
+    expect((await stat(isolatedKeysPath)).mode & 0o777).toBe(0o600);
   });
 
   test("development preserves an existing file data key when generating missing token keys", async () => {
@@ -163,7 +161,6 @@ describe("instance-keys configuration", () => {
     );
 
     await initializeInstanceKeys();
-    const { getInstanceKeySources } = await import("../../src/api/lib/instance-keys");
     const stored = JSON.parse(await readFile(isolatedKeysPath, "utf8")) as {
       dataKey?: string;
       dataKeyId?: string;

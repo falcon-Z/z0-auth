@@ -1,6 +1,6 @@
 import type { SetupRequest } from "@z0/contracts/setup";
 
-import { bootstrapOwnerStatus, loadConfig } from "../lib/config";
+import { ConfigError, bootstrapOwnerStatus, loadConfig } from "../lib/config";
 import { checkDatabaseHealth } from "../lib/db";
 import { getInstanceSettings } from "../lib/instance";
 import { createBootstrapOwner } from "./service";
@@ -68,6 +68,25 @@ export async function runConfiguredBootstrap(): Promise<ConfiguredBootstrapResul
     return { status: "database-unavailable" };
   }
 
-  const detail = await result.response.text();
-  throw new Error(`Configured bootstrap failed: ${detail}`);
+  if (result.response.status === 400) {
+    const body = (await result.response.json()) as {
+      errors?: Array<{ field?: string; message?: string }>;
+    };
+    const variables = new Set<string>();
+    const messages: string[] = [];
+    for (const error of body.errors ?? []) {
+      if (error.field === "organizationName") variables.add("Z0_BOOTSTRAP_ORG_NAME");
+      else if (error.field === "name") variables.add("Z0_BOOTSTRAP_ADMIN_NAME");
+      else if (error.field === "email") variables.add("Z0_BOOTSTRAP_ADMIN_EMAIL");
+      else if (error.field === "password") variables.add("Z0_BOOTSTRAP_ADMIN_PASSWORD");
+      if (error.message) messages.push(error.message);
+    }
+    throw new ConfigError(
+      [...variables],
+      "invalid",
+      `Configured first-owner settings are invalid${variables.size > 0 ? ` (${[...variables].join(", ")})` : ""}${messages.length > 0 ? `: ${messages.join("; ")}` : ""}.`,
+    );
+  }
+
+  throw new Error("Configured first-owner setup failed. Check the database and startup settings.");
 }

@@ -7,6 +7,7 @@ import { ErrorCodes } from "@z0/contracts/errors";
 import { normalizeEmail, validateEmail } from "@z0/contracts/validation";
 
 import { decryptSecret, encryptSecret } from "./settings-crypto";
+import { loadConfig } from "./config";
 import { getDb } from "./db";
 import { problem } from "./http";
 import { getSmtpEnvCredentials, isSmtpEnvDisabled, isSmtpEnvManaged } from "./smtp-env";
@@ -156,7 +157,7 @@ export async function putEmailSettings(
   } else {
     errors.push(...validateEmail(fromAddress).map((e) => ({ ...e, field: "fromAddress" })));
   }
-  if (encryption === "none" && process.env.NODE_ENV === "production") {
+  if (encryption === "none" && loadConfig().nodeEnv === "production") {
     errors.push({
       field: "encryption",
       code: ErrorCodes.REQUIRED,

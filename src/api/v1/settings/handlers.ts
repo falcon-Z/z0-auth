@@ -7,6 +7,7 @@ import { json, problem } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 import { deliverEmail } from "../../lib/smtp-mail";
+import { loadConfig } from "../../lib/config";
 import {
   getEmailSettingsForApi,
   getSmtpCredentialsForSend,
@@ -74,7 +75,7 @@ export async function handleTestEmail(req: RoutedRequest): Promise<Response> {
     });
   }
 
-  const appName = process.env.APP_NAME ?? "z0-auth";
+  const appName = loadConfig().appName;
   const sent = await deliverEmail({
     to: recipient.email,
     subject: `${appName} test email`,

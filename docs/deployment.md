@@ -9,6 +9,7 @@ The management console shows a **setup checklist** until `DATABASE_URL` works, m
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL 16+ connection string |
+| `PUBLIC_ORIGIN` | Public HTTPS origin used for OAuth/OIDC and emailed links |
 | `INSTANCE_DATA_KEY_ID` | Stable identifier for the active data key, included with encrypted values |
 | `INSTANCE_DATA_KEY` | AES-256 key for encrypting SMTP password and other instance secrets; same on every pod |
 | `INSTANCE_TOKEN_KEY_ID` | Stable identifier for the active token signing key, included with signed reset tokens |
@@ -36,6 +37,45 @@ If any `Z0_BOOTSTRAP_*` value is set, all four are required before automatic set
 
 Other optional settings: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/auth/setup` form), `ALLOW_INCOMPLETE_SETUP` (bypass setup guard for maintenance), `PORT`, `BIND_ADDRESS`, `APP_NAME`. See `.env.example`.
 
+## Server setting rules
+
+z0-auth checks settings before it starts listening. It stops with a non-zero exit code when a value is malformed, incomplete, or unsafe for production. The error names the setting but never prints passwords, tokens, keys, or connection strings.
+
+| Setting | Rule and default |
+| --- | --- |
+| `NODE_ENV` | `development`, `test`, or `production`; default `development` |
+| `PORT` | Whole number from 1 to 65535; default 3000 |
+| `BIND_ADDRESS` | Hostname or IP address without a scheme, path, or port; default `127.0.0.1` outside production and `0.0.0.0` in production |
+| `APP_NAME` | 1 to 100 characters; default `z0-auth` |
+| `DATABASE_URL` | `postgres://` or `postgresql://` URL; the direct server may start without it but will not be ready |
+| `DATABASE_POOL_MAX` | Whole number from 1 to 100; default 10 |
+| `TRUST_PROXY_HOPS` | Whole number from 0 to 32; default 0, which ignores `X-Forwarded-For` |
+| `ALLOW_INCOMPLETE_SETUP` | Exactly `true` or `false`; default `false` |
+| `INSTALL_TOKEN` | Optional, but it cannot be empty when set |
+| `INSTANCE_KEYS_PATH` | Non-empty development/test file path; default `.data/instance-keys.json`; not a replacement for production keys |
+
+Environment changes require a restart. `.env.example` lists the key, first-owner, and SMTP groups as well.
+
+SMTP is optional. With no `SMTP_*` settings, operators may configure it later in the console. `SMTP_ENABLED=false` disables email. Any other supplied SMTP setting makes the environment the source of SMTP settings. `SMTP_ENABLED=true` or any partial SMTP group without both `SMTP_HOST` and `SMTP_FROM_ADDRESS` stops startup. `SMTP_PORT` must be from 1 to 65535, `SMTP_ENCRYPTION` must be `none`, `starttls`, or `tls`, and production does not allow `none`.
+
+## Startup and health behavior
+
+Direct startup and Docker startup handle database problems differently:
+
+- Direct `bun dev` or a built server checks settings and keys first. If PostgreSQL is missing, unreachable, or waiting for migrations, the HTTP process stays live. The setup checklist and health endpoints explain the problem, but `/api/ready` returns 503.
+- The Docker image runs `bun run db:migrate` before starting the HTTP server. A missing database, failed connection, or failed migration stops the container before the server starts.
+
+The public endpoints return only safe status information:
+
+| Endpoint | Meaning |
+| --- | --- |
+| `/api/live` | HTTP 200 means the process can answer. No dependency is checked. |
+| `/api/health` | HTTP 200 with `healthy` or `degraded`. Use it to find problems, not to route traffic. |
+| `/api/ready` | HTTP 200 means the server can handle traffic. HTTP 503 means the database, schema, keys, or server settings are not ready. |
+| `/api/deploy/status` | The same safe checks plus key source and first-owner setup state for the console checklist. |
+
+These responses do not include connection strings, database errors, secret values, private keys, or key-file paths. Startup logs show more help but follow the same rule.
+
 ## Fresh production sequence
 
 1. **Provision PostgreSQL** and set `DATABASE_URL` on the app service.
@@ -54,16 +94,55 @@ Other optional settings: `INSTALL_TOKEN` (protects `POST /api/setup` and the `/a
 
 For local development, use `bun run db:reset` instead of `db:migrate` when you want a clean database. See [development.md](./development.md).
 
-## Docker (planned images)
+## Docker image
 
-We plan to publish:
+Build the standalone application image from a clean checkout:
 
-1. **App only** — you run or attach Postgres separately (recommended for production).
-2. **App + Postgres** — single-node trials and local Docker Compose-style setups.
+```bash
+docker build -t z0-auth .
+```
 
-Until images are published, build from this repository and pass env vars at runtime. Never bake secrets into the image.
+The multi-stage image contains the built server/console and migration files, not the repository's `.env`, `.data`, tests, documentation, Git history, or development dependencies. It runs as the non-root `bun` user. On every start its entrypoint applies pending migrations under the existing PostgreSQL advisory lock, then starts the HTTP server. A database connection or migration failure exits the container before it accepts traffic.
 
-**Planned:** run pending migrations automatically on container start (before accepting traffic). Not implemented yet — operators must run `bun run db:migrate` manually today.
+For production, inject `DATABASE_URL`, `PUBLIC_ORIGIN`, and all instance-key variables at runtime. The image does not generate production keys and does not include a shell-expanded secret-file convention. Use your platform's secret-to-environment support:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e DATABASE_URL \
+  -e PUBLIC_ORIGIN \
+  -e INSTANCE_DATA_KEY_ID \
+  -e INSTANCE_DATA_KEY \
+  -e INSTANCE_TOKEN_KEY_ID \
+  -e INSTANCE_TOKEN_PRIVATE_KEY \
+  -e INSTANCE_TOKEN_PUBLIC_KEY \
+  z0-auth
+```
+
+The image health check calls `/api/ready`. Readiness requires a database connection, the current schema, usable instance keys, valid server settings, and valid SMTP environment settings when SMTP variables are supplied.
+
+## Local/trial Compose stack
+
+The repository Compose stack is a one-command local evaluation environment:
+
+```bash
+export Z0_AUTH_DB_AUTH="$(openssl rand -hex 32)"
+docker compose up --build -d --wait
+docker compose logs -f app
+```
+
+Open `http://127.0.0.1:3000`. Set `Z0_AUTH_PORT` if port 3000 is occupied, for example `Z0_AUTH_PORT=3010 docker compose up --build -d --wait`.
+
+Compose keeps PostgreSQL data and generated development instance keys in separate named volumes. Container recreation and `docker compose down` retain both. To intentionally erase the entire trial instance:
+
+```bash
+docker compose down --volumes
+```
+
+The stack binds only to loopback, does not publish PostgreSQL, and runs z0-auth in development mode so an HTTP localhost origin is valid. It requires `Z0_AUTH_DB_AUTH`; generate or choose that value outside Git and keep it available in the shell used for Compose commands. It is not a production deployment template: do not expose it to a network or copy its development-mode/key-generation behavior into production.
+
+Published registry images are not part of this module. Until release automation ships, operators build and tag the standalone image from the source revision they intend to deploy.
+
+Maintainers can run the isolated image/Compose verification with `bun run test:docker`. It uses temporary project-scoped volumes and removes them on exit.
 
 ## Hosting notes
 
@@ -101,9 +180,8 @@ See also `docs/api/security-contract.md` (instance keys section).
 
 ## Planned automation
 
-- **Auto-migrate on container start** — apply pending SQL migrations when the process boots (planned with Docker images).
 - **Terraform / one-click deploy** — provision Postgres and secrets in your cloud account and wire env vars automatically (optional path for teams that do not want manual secret setup).
-- **CI images** — versioned Docker tags for app-only and bundled Postgres.
+- **CI images** — publish versioned application-image tags with release provenance.
 
 ## Rotating keys
 

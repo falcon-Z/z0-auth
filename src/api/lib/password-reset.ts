@@ -17,7 +17,7 @@ import { hashPassword } from "./password";
 import { isSmtpReady } from "./smtp-settings";
 import { checkRateLimit, clientIp } from "./rate-limit";
 import { revokeAllUserSessions } from "./session";
-import { requestPublicOrigin } from "./config";
+import { loadConfig, requestPublicOrigin } from "./config";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 const GENERIC_MESSAGE = "If an account exists for that email, you will receive a reset link shortly.";
@@ -106,7 +106,7 @@ export async function requestPasswordReset(
     `;
 
     const link = resetUrlFromRequest(req, signedToken);
-    const appName = process.env.APP_NAME ?? "z0-auth";
+    const appName = loadConfig().appName;
     await deliverEmail({
       to: email,
       subject: `Reset your ${appName} password`,
