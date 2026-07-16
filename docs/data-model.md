@@ -98,6 +98,18 @@ MFA storage is realm-separated:
 
 App-user rows include `app_id` and composite foreign keys so a factor or challenge cannot cross an app boundary. `sessions` and `app_user_sessions` record primary authentication time, recent MFA time, and authentication method. Full sessions are inserted only after the MFA challenge is consumed when a factor is enabled.
 
+### Passkeys (`0039_passkeys`)
+
+Passkey storage is also realm-separated:
+
+| Console tables | App-user tables | Purpose |
+|---|---|---|
+| `user_passkey_handles` | `app_user_passkey_handles` | Stable opaque WebAuthn user handles; app rows include `app_id` |
+| `user_passkeys` | `app_user_passkeys` | Public credential key, algorithm, counter, label, transports, backup flags, and lifecycle timestamps |
+| `user_passkey_ceremonies` | `app_user_passkey_ceremonies` | Hashed, single-use registration, authentication, and step-up challenges |
+
+`passkey_credential_registry` enforces credential-ID uniqueness across both realms and keeps a tombstone after removal or account deletion. App-user tables use composite identity/app foreign keys. Passkey private keys and raw ceremony responses are never stored.
+
 ### `apps` (M03)
 
 | Column | Type | Notes |
@@ -367,7 +379,7 @@ Console API: `GET/POST /api/v1/service-groups`, `GET/PATCH/DELETE …/:groupId`,
 
 Append-only security log. `actor_user_id` references console `users` when the actor is an operator; app-user and system events use `payload` (e.g. `appUserId`, `appId`) without a FK.
 
-Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `mfa.*`, `app_user_session.revoked`, `app_user.*`, and `console_member.*`. Lifecycle events distinguish lock, unlock, disable, enable, reset request/completion, recoverable deletion, restore, verification, and permanent deletion. MFA events distinguish enrollment, enable/disable/reset, challenge results, recovery-code use/regeneration, remembered-browser changes/reuse, step-up, and local owner recovery without storing secret material.
+Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `mfa.*`, `passkey.*`, `app_user_session.revoked`, `app_user.*`, and `console_member.*`. Lifecycle events distinguish lock, unlock, disable, enable, reset request/completion, recoverable deletion, restore, verification, and permanent deletion. MFA and passkey events distinguish enrollment, enable/disable/reset, challenge results, recovery-code use/regeneration, remembered-browser changes/reuse, registration, authentication, management, counter anomalies, step-up, and local owner recovery without storing secret material.
 
 Console API: `GET /api/v1/audit-events` with optional `limit`, `before`, `action`, `resourceType`. Scope: `settings.audit:read`.
 
@@ -433,6 +445,7 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 | App user invites (public) | `GET /api/v1/app-invites/:token`, `POST accept/decline` |
 | Email settings (M08) | `GET/PUT /api/v1/settings/email`, `POST …/email/test` |
 | Password reset (M08) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` (when SMTP enabled) |
+| Passkeys | `/api/auth/passkeys` management plus registration and authentication option/verification endpoints |
 | App user hosted auth (M06) | `/auth/login`, `/auth/register` with `client_id`; `/auth/app-invite/:token` |
 | Federation (P5) | `GET/POST/PATCH/DELETE /api/v1/federation/providers`, app federation under `…/apps/:appId/federation`, upstream tokens under `…/users/:userId/federation/:providerId/token` |
 | Console session | `z0_session` — `isInstanceMember`, `organizationName` |

@@ -23,6 +23,15 @@ import {
 } from "../../../lib/account-api";
 import { useSession } from "../../../context/session-context";
 import type { MfaEnrollment, MfaStatus, RememberedBrowser } from "@z0/contracts/mfa";
+import type { PasskeySummary } from "@z0/contracts/passkeys";
+import {
+  getPasskeys,
+  registerPasskey,
+  removePasskey,
+  renamePasskey,
+  stepUpWithPasskey,
+} from "../../../lib/passkeys-api";
+import { stepUpMfa } from "../../../lib/account-api";
 
 function PasswordChecklist({ password }: { password: string }) {
   const { session } = useSession();
@@ -87,15 +96,97 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
   const [mfaBusy, setMfaBusy] = useState(false);
   const [mfaError, setMfaError] = useState<string | null>(null);
   const [rememberedBrowsers, setRememberedBrowsers] = useState<RememberedBrowser[]>([]);
+  const [passkeys, setPasskeys] = useState<PasskeySummary[]>([]);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([getMfaStatus(), listMfaRememberedBrowsers()])
-      .then(([status, browsers]) => {
+    void Promise.all([getMfaStatus(), listMfaRememberedBrowsers(), getPasskeys()])
+      .then(([status, browsers, passkeyList]) => {
         setMfaStatus(status);
         setRememberedBrowsers(browsers.browsers);
+        setPasskeys(passkeyList.passkeys);
       })
       .catch(() => setMfaError("Could not load MFA settings."));
   }, []);
+
+  async function obtainStrongStepUp() {
+    if (passkeys.length > 0) {
+      await stepUpWithPasskey();
+      return;
+    }
+    if (mfaStatus?.enabled) {
+      const code = window.prompt("Enter an authentication or recovery code to continue:");
+      if (!code?.trim()) throw new Error("Verification is required to change passkeys.");
+      await stepUpMfa(code);
+      return;
+    }
+    throw new Error("Sign in again before changing passkeys.");
+  }
+
+  async function addPasskey() {
+    setPasskeyBusy(true);
+    setPasskeyError(null);
+    try {
+      const passkey = await registerPasskey();
+      setPasskeys((current) => [passkey, ...current]);
+    } catch (error) {
+      if (error instanceof ApiError && error.problem.errors?.some((item) => item.code === "passkey_step_up_required")) {
+        try {
+          await obtainStrongStepUp();
+          const passkey = await registerPasskey();
+          setPasskeys((current) => [passkey, ...current]);
+          return;
+        } catch (retryError) {
+          setPasskeyError(retryError instanceof Error ? retryError.message : "Could not verify this change.");
+          return;
+        }
+      }
+      setPasskeyError(error instanceof Error ? error.message : "Could not add a passkey.");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
+
+  async function editPasskey(passkey: PasskeySummary) {
+    const label = window.prompt("Passkey name", passkey.label);
+    if (label === null) return;
+    setPasskeyBusy(true);
+    setPasskeyError(null);
+    try {
+      await renamePasskey(passkey.id, label);
+      setPasskeys((current) => current.map((item) => item.id === passkey.id ? { ...item, label: label.trim() } : item));
+    } catch (error) {
+      setPasskeyError(error instanceof Error ? error.message : "Could not rename the passkey.");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
+
+  async function deletePasskey(passkey: PasskeySummary) {
+    if (!window.confirm("Remove this passkey? Other sessions for this account will be signed out.")) return;
+    setPasskeyBusy(true);
+    setPasskeyError(null);
+    try {
+      await removePasskey(passkey.id);
+      setPasskeys((current) => current.filter((item) => item.id !== passkey.id));
+    } catch (error) {
+      if (error instanceof ApiError && error.problem.errors?.some((item) => item.code === "passkey_step_up_required")) {
+        try {
+          await obtainStrongStepUp();
+          await removePasskey(passkey.id);
+          setPasskeys((current) => current.filter((item) => item.id !== passkey.id));
+          return;
+        } catch (retryError) {
+          setPasskeyError(retryError instanceof Error ? retryError.message : "Could not verify this change.");
+          return;
+        }
+      }
+      setPasskeyError(error instanceof Error ? error.message : "Could not remove the passkey.");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
 
   async function refreshMfaStatus() {
     setMfaStatus(await getMfaStatus());
@@ -356,6 +447,38 @@ export function AccountSecurityPage({ embedded = false }: AccountSecurityPagePro
             {mfaBusy ? "Starting…" : "Set up authenticator"}
           </Button>
         )}
+      </section>
+
+      <section className="space-y-4 border-t pt-6" aria-labelledby="passkeys-heading">
+        <div>
+          <h2 id="passkeys-heading" className="text-lg font-semibold">Passkeys</h2>
+          <p className="text-sm text-muted-foreground">
+            Sign in with your device lock, fingerprint, face, or security key. z0-auth stores only the public credential.
+          </p>
+        </div>
+        {passkeyError ? <PageError message={passkeyError} /> : null}
+        {passkeys.length > 0 ? (
+          <div className="space-y-2">
+            {passkeys.map((passkey) => (
+              <div key={passkey.id} className="flex items-center justify-between gap-3 rounded border p-3 text-sm">
+                <div>
+                  <p className="font-medium">{passkey.label}</p>
+                  <p className="text-muted-foreground">
+                    {passkey.lastUsedAt ? `Last used ${new Date(passkey.lastUsedAt).toLocaleString()}` : `Added ${new Date(passkey.createdAt).toLocaleString()}`}
+                  </p>
+                  <p className="text-muted-foreground">{passkey.backupEligible ? "Synced or backed up" : "Device-bound or backup unknown"}</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={passkeyBusy} onClick={() => void editPasskey(passkey)}>Rename</Button>
+                  <Button type="button" variant="destructive" size="sm" disabled={passkeyBusy} onClick={() => void deletePasskey(passkey)}>Remove</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <p className="text-sm text-muted-foreground">No passkeys are registered.</p>}
+        <Button type="button" disabled={passkeyBusy || passkeys.length >= 10} onClick={() => void addPasskey()}>
+          {passkeyBusy ? "Working…" : "Add passkey"}
+        </Button>
       </section>
     </div>
   );

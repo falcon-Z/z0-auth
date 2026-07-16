@@ -168,16 +168,16 @@ export function MemberDetailPage() {
   async function handleResetMfa() {
     if (!userId || !member) return;
     const ok = await confirm({
-      title: "Reset MFA",
-      description: `Remove ${member.name}’s authenticator, recovery codes, remembered browsers, and active sessions?`,
-      confirmLabel: "Reset MFA",
+      title: "Reset MFA and passkeys",
+      description: `Remove ${member.name}’s authenticator, passkeys, recovery codes, remembered browsers, and active sessions?`,
+      confirmLabel: "Reset authentication",
       destructive: true,
     });
     if (!ok) return;
     setRemoving(true);
     try {
       await resetMemberMfa(userId);
-      setLifecycleNotice("MFA reset. The member must sign in and enroll again.");
+      setLifecycleNotice("MFA and passkeys reset. The member must sign in and enroll again.");
       await reload();
     } catch (error) {
       setLifecycleNotice(error instanceof ApiError ? error.message : "Could not reset MFA.");
@@ -275,10 +275,14 @@ export function MemberDetailPage() {
               <dt className="text-muted-foreground">Multi-factor authentication</dt>
               <dd>{member.mfaEnabled ? "Enabled" : "Not enabled"}</dd>
             </div>
+            <div>
+              <dt className="text-muted-foreground">Passkeys</dt>
+              <dd>{member.passkeyCount}</dd>
+            </div>
           </dl>
-          {member.mfaEnabled && canRemove && !isSelf && !member.isBootstrap ? (
+          {(member.mfaEnabled || member.passkeyCount > 0) && canRemove && !isSelf && !member.isBootstrap ? (
             <Button type="button" variant="destructive" size="sm" disabled={removing} onClick={() => void handleResetMfa()}>
-              Reset MFA
+              Reset MFA and passkeys
             </Button>
           ) : null}
         </CardContent>

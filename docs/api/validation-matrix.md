@@ -75,6 +75,20 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | State-changing management | Correct realm session and CSRF | `csrf_invalid` | 403 | Refresh and retry |
 | Operator reset | Permission, recent MFA, exact app boundary, not self/owner | `permission_denied` / `mfa_step_up_required` | 403 / 409 | Explain recovery path |
 
+## Passkeys (`/api/auth/passkeys*`)
+
+| Input | Rule | Code | HTTP | UI |
+|-------|------|------|------|-----|
+| Public origin | Exact configured HTTPS origin, or `http://localhost` in development | `passkey_origin_unavailable` | 503 | Operator guidance |
+| Registration session | Exact authenticated realm/app; recent primary proof; fresh strong proof when another strong method exists | `primary_reauthentication_required` / `passkey_step_up_required` | 403 | Reauthenticate or complete TOTP/passkey step-up |
+| Registration response | Single-use unexpired challenge; exact origin/RP ID; UP and UV; ES256 or RS256; unique credential | `passkey_verification_failed` / `passkey_state_conflict` | 400 / 409 | Retry setup or use another authenticator |
+| Credential count | Maximum ten active passkeys for the identity/app | `passkey_limit_reached` | 409 | Remove an unused passkey |
+| Authentication email | Valid email shape; response remains generic for unknown/no-passkey identities | `required` / `passkey_verification_failed` | 400 / 401 | Enter email or use another sign-in method |
+| Authentication response | Matching scoped credential and ceremony; valid signature; UP and UV; five attempts maximum | `passkey_verification_failed` / `rate_limited` | 401 / 429 | Sign in again or use fallback |
+| `label` | Trimmed, 1–80 characters | `passkey_name_invalid` | 400 | Inline |
+| Rename/remove | Credential belongs to current exact realm/app; removal has fresh strong proof | `passkey_not_found` / `passkey_step_up_required` | 404 / 403 | Reload or complete step-up |
+| State-changing request | Matching session and CSRF; public option/verification routes also enforce origin and request limits | `csrf_invalid` / `rate_limited` | 403 / 429 | Refresh or wait |
+
 ## Instance members (`/api/v1/members`)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

@@ -49,6 +49,16 @@ If only some bootstrap variables are set, automatic setup does not run and the d
 
 JSON console self-service uses `/api/auth/mfa`, `/enrollment`, `/enrollment/confirm`, `/recovery-codes`, `/challenge`, `/step-up`, and `/remembered-browsers`. Sensitive console actions return `mfa_step_up_required` when the current MFA assurance is older than 10 minutes; the console asks for a fresh code and retries the action once.
 
+## Passkeys
+
+1. A signed-in console member opens **Profile → Security**, or an app user opens `/auth/security?client_id=…`, and chooses **Add passkey**. The browser or device performs the WebAuthn prompt; z0-auth never receives the private key.
+2. The user can keep up to ten credentials, rename them, and remove them. Registering an additional passkey or removing one asks for fresh TOTP or passkey proof when the session is stale. Users should keep another verified sign-in or recovery method before removing their last passkey.
+3. On either hosted login page, the user enters an email and selects **Sign in with a passkey**. z0-auth scopes the browser prompt to the console realm or the exact `client_id` app. A successful assertion issues only that realm's normal session and resumes the safe/OAuth return path.
+4. A passkey assertion supplies fresh primary and MFA assurance. Sensitive console actions may open a passkey step-up prompt and retry once. TOTP remains available when enrolled.
+5. Unsupported browsers hide or disable passkey actions. Cancellation and missing credentials show a generic local error; users can return to password, magic link, federation, TOTP/recovery code, or an authorized reset where available.
+
+JSON management uses `GET /api/auth/passkeys` and POST endpoints for registration options/verification, authentication options/verification, rename, and removal. Every state-changing request uses CSRF protection and every ceremony response is `no-store`.
+
 ## Instance member invite
 
 1. Instance member creates invite in console → receives **invite URL** (copy or `mailto:`).

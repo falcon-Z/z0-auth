@@ -10,6 +10,8 @@ import { decryptWithDataKey, encryptWithDataKey } from "./instance-keys";
 import { loadConfig } from "./config";
 import { clientIp } from "./rate-limit";
 import { parseClientLabel } from "./client-hint";
+import { writeAuditEvent } from "./audit";
+import { hasConsolePasskeys, resetPasskeys } from "./passkeys";
 import { problem } from "./http";
 import { resolveSession } from "./session";
 import {
@@ -708,7 +710,9 @@ export function mfaClientLabel(req: BunRequest): string {
 }
 
 export async function requireRecentConsoleMfa(req: Request, userId: string): Promise<Response | null> {
-  if (!(await hasConsoleMfa(userId))) return null;
+  const totpEnabled = await hasConsoleMfa(userId);
+  const passkeyEnabled = await hasConsolePasskeys(userId);
+  if (!totpEnabled && !passkeyEnabled) return null;
   const session = await resolveSession(req);
   if (!session || session.userId !== userId) {
     return problem(401, "Unauthorized", "Authentication required");
@@ -720,8 +724,12 @@ export async function requireRecentConsoleMfa(req: Request, userId: string): Pro
       AND mfa_authenticated_at > NOW() - INTERVAL '10 minutes'
   `;
   if (row) return null;
-  return problem(403, "Forbidden", "Complete MFA again to continue.", {
-    errors: [{ field: "_mfa", code: ErrorCodes.MFA_STEP_UP_REQUIRED, message: "Verify with MFA to continue" }],
+  return problem(403, "Forbidden", "Verify again to continue.", {
+    errors: [{
+      field: "_mfa",
+      code: passkeyEnabled && !totpEnabled ? ErrorCodes.PASSKEY_STEP_UP_REQUIRED : ErrorCodes.MFA_STEP_UP_REQUIRED,
+      message: passkeyEnabled && !totpEnabled ? "Verify with a passkey to continue" : "Verify with MFA to continue",
+    }],
   });
 }
 
@@ -756,7 +764,8 @@ export async function resetConsoleMfaForAdmin(
     await tx`UPDATE user_mfa_challenges SET consumed_at = NOW() WHERE user_id = ${targetUserId} AND consumed_at IS NULL`;
     await tx`UPDATE user_mfa_remembered_browsers SET revoked_at = NOW() WHERE user_id = ${targetUserId} AND revoked_at IS NULL`;
     await tx`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${targetUserId} AND revoked_at IS NULL`;
-    await writeAuditEvent({ actorUserId, action: "mfa.operator_reset", resourceType: "console_member", resourceId: targetUserId, payload: { realm: "console" } }, tx);
+    const passkeyCount = await resetPasskeys(tx, { realm: "console", userId: targetUserId });
+    await writeAuditEvent({ actorUserId, action: "mfa.operator_reset", resourceType: "console_member", resourceId: targetUserId, payload: { realm: "console", passkeyCount } }, tx);
   });
   return { ok: true };
 }
@@ -777,7 +786,8 @@ export async function resetAppUserMfaForAdmin(
     await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND used_at IS NULL`;
     await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
     await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
-    await writeAuditEvent({ actorUserId, action: "mfa.operator_reset", resourceType: "app_user", resourceId: appUserId, payload: { realm: "app", appId } }, tx);
+    const passkeyCount = await resetPasskeys(tx, { realm: "app", appUserId, appId });
+    await writeAuditEvent({ actorUserId, action: "mfa.operator_reset", resourceType: "app_user", resourceId: appUserId, payload: { realm: "app", appId, passkeyCount } }, tx);
   });
   return { ok: true };
 }

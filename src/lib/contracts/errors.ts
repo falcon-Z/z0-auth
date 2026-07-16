@@ -122,6 +122,17 @@ export const ErrorCodes = {
   MFA_RECOVERY_CODES_EXHAUSTED: "mfa_recovery_codes_exhausted",
   /** The action requires MFA completed recently in the current session. */
   MFA_STEP_UP_REQUIRED: "mfa_step_up_required",
+  PASSKEY_NOT_SUPPORTED: "passkey_not_supported",
+  PASSKEY_ORIGIN_UNAVAILABLE: "passkey_origin_unavailable",
+  PRIMARY_REAUTHENTICATION_REQUIRED: "primary_reauthentication_required",
+  PASSKEY_REGISTRATION_EXPIRED: "passkey_registration_expired",
+  PASSKEY_AUTHENTICATION_EXPIRED: "passkey_authentication_expired",
+  PASSKEY_VERIFICATION_FAILED: "passkey_verification_failed",
+  PASSKEY_LIMIT_REACHED: "passkey_limit_reached",
+  PASSKEY_NAME_INVALID: "passkey_name_invalid",
+  PASSKEY_NOT_FOUND: "passkey_not_found",
+  PASSKEY_STEP_UP_REQUIRED: "passkey_step_up_required",
+  PASSKEY_STATE_CONFLICT: "passkey_state_conflict",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

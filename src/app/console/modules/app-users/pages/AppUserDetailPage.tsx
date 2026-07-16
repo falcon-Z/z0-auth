@@ -211,16 +211,16 @@ export function AppUserDetailPage() {
   async function handleResetMfa() {
     if (!appId || !userId || !user) return;
     const ok = await confirm({
-      title: "Reset MFA",
-      description: `Remove ${user.name}’s authenticator, recovery codes, remembered browsers, sessions, and tokens?`,
-      confirmLabel: "Reset MFA",
+      title: "Reset MFA and passkeys",
+      description: `Remove ${user.name}’s authenticator, passkeys, recovery codes, remembered browsers, sessions, and tokens?`,
+      confirmLabel: "Reset authentication",
       destructive: true,
     });
     if (!ok) return;
     setBusyStatus(true);
     try {
       await resetAppUserMfa(appId, userId);
-      setNotice("MFA reset. The user must sign in and enroll again.");
+      setNotice("MFA and passkeys reset. The user must sign in and enroll again.");
       await reload();
       await reloadSessions();
     } catch (error) {
@@ -308,11 +308,15 @@ export function AppUserDetailPage() {
           <dt className="text-muted-foreground">Multi-factor authentication</dt>
           <dd>{user.mfaEnabled ? "Enabled" : "Not enabled"}</dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Passkeys</dt>
+          <dd>{user.passkeyCount}</dd>
+        </div>
       </dl>
 
-      {user.mfaEnabled ? (
+      {user.mfaEnabled || user.passkeyCount > 0 ? (
         <Button type="button" variant="destructive" disabled={busyStatus} onClick={() => void handleResetMfa()}>
-          Reset MFA
+          Reset MFA and passkeys
         </Button>
       ) : null}
 

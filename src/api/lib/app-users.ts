@@ -180,6 +180,10 @@ export async function getAppUserDetailForApi(
   const [mfaRow] = await getDb()`
     SELECT 1 FROM app_user_totp_factors WHERE app_user_id = ${userId} AND confirmed_at IS NOT NULL
   `;
+  const [passkeyRow] = await getDb()`
+    SELECT COUNT(*)::int AS count FROM app_user_passkeys
+    WHERE app_user_id = ${userId} AND app_id = ${appId} AND removed_at IS NULL
+  `;
 
   return {
     ok: true,
@@ -188,6 +192,7 @@ export async function getAppUserDetailForApi(
       metadata: appUser.metadata,
       activeSessionCount,
       mfaEnabled: Boolean(mfaRow),
+      passkeyCount: Number((passkeyRow as { count: number }).count ?? 0),
     },
   };
 }

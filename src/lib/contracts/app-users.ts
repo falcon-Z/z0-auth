@@ -20,6 +20,7 @@ export type AppUserDetail = AppUserSummary & {
   metadata: Record<string, unknown> | null;
   activeSessionCount: number;
   mfaEnabled: boolean;
+  passkeyCount: number;
 };
 
 export type CreateAppUserRequest = {

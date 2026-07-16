@@ -15,7 +15,7 @@ The service runs as one Bun and TypeScript application backed by PostgreSQL. The
 
 ## Current alpha status
 
-The repository is under active alpha development. Console members and app users have separate active, disabled, temporarily locked, and recoverably deleted states. Operators can restore, reset, or permanently remove accounts without crossing identity realms. App-user email verification is available when SMTP is configured and is reported through OIDC; it does not block alpha sign-in or token issuance. Both identity realms support authenticator-app MFA, one-time recovery codes, remembered browsers, operator reset, and recent-MFA checks for sensitive console actions.
+The repository is under active alpha development. Console members and app users have separate active, disabled, temporarily locked, and recoverably deleted states. Operators can restore, reset, or permanently remove accounts without crossing identity realms. App-user email verification is available when SMTP is configured and is reported through OIDC; it does not block alpha sign-in or token issuance. Both identity realms support WebAuthn passkey sign-in and step-up, authenticator-app MFA, one-time recovery codes, remembered browsers, operator reset, and recent-MFA checks for sensitive console actions.
 
 ## Repository layout
 

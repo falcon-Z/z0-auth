@@ -441,6 +441,23 @@ export async function signResetToken(payload: SignedResetPayload): Promise<strin
   )}`;
 }
 
+/** Deterministic, domain-separated opaque bytes for public response padding. */
+export async function deriveOpaquePublicValue(purpose: string, value: string): Promise<string> {
+  const { tokenPrivateKey } = requireInstanceKeys();
+  const message = new TextEncoder().encode(`z0-auth:opaque:v1:${purpose}:${value}`);
+  const signature = await crypto.subtle.sign("Ed25519", tokenPrivateKey, message);
+  const first = new Uint8Array(await crypto.subtle.digest("SHA-512", signature));
+  const secondInput = new Uint8Array(first.length + 1);
+  secondInput.set(first);
+  secondInput[first.length] = 1;
+  const second = new Uint8Array(await crypto.subtle.digest("SHA-512", secondInput));
+  const material = new Uint8Array(first.length + second.length);
+  material.set(first);
+  material.set(second, first.length);
+  const outputLength = 16 + (material[0]! % 113);
+  return Buffer.from(material.subarray(0, outputLength)).toString("base64url");
+}
+
 /** Verify reset token signature and parse payload. */
 export async function verifyResetToken(
   token: string,

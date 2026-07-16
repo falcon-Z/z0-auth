@@ -16,6 +16,7 @@ import {
   revokeAppUserRememberedBrowser,
 } from "../../api/lib/mfa";
 import { checkRateLimit, clientIp } from "../../api/lib/rate-limit";
+import { listPasskeys } from "../../api/lib/passkeys";
 import type { MfaEnrollment } from "@z0/contracts/mfa";
 import { parseFormBody } from "../forms";
 import { escapeHtml, fieldErrorFor, formErrorsSummary, renderAuthField, renderAuthPage } from "../html";
@@ -56,6 +57,7 @@ async function renderPage(req: BunRequest, options: PageOptions = {}): Promise<R
   const rememberedBrowsers = status.enabled
     ? await listAppUserRememberedBrowsers(value.session.appUserId, value.realm.appId)
     : [];
+  const passkeys = await listPasskeys({ realm: "app", appUserId: value.session.appUserId, appId: value.realm.appId });
   const csrf = preparePageCsrf(req);
   const errors = options.errors ?? [];
   const hidden = `<input type="hidden" name="_csrf" value="${escapeHtml(csrf.token)}" />
@@ -107,6 +109,19 @@ async function renderPage(req: BunRequest, options: PageOptions = {}): Promise<R
       <p class="auth-footer"><a class="auth-link" href="/auth/sessions?client_id=${encodeURIComponent(value.realm.clientId)}">Manage sessions</a></p>
     </form>`;
   }
+  content += `<div class="auth-card">
+    <h2>Passkeys</h2>
+    <p class="auth-footer">Use your device lock, fingerprint, face, or security key to sign in without a password.</p>
+    <p data-passkey-error hidden></p>
+    ${passkeys.passkeys.length > 0 ? `<ul class="auth-session-list">${passkeys.passkeys.map((passkey) => `<li class="auth-session-item">
+      <div class="auth-session-main"><strong>${escapeHtml(passkey.label)}</strong><span class="auth-session-meta">${passkey.lastUsedAt ? `Last used ${escapeHtml(new Date(passkey.lastUsedAt).toLocaleString())}` : `Added ${escapeHtml(new Date(passkey.createdAt).toLocaleString())}`}</span><span class="auth-session-meta">${passkey.backupEligible ? "Synced or backed up" : "Device-bound or backup unknown"}</span></div>
+      <div class="auth-actions">
+        <button type="button" class="auth-link" data-passkey-rename data-passkey-id="${escapeHtml(passkey.id)}" data-passkey-label="${escapeHtml(passkey.label)}" data-client-id="${escapeHtml(value.realm.clientId)}">Rename</button>
+        <button type="button" class="auth-link" data-passkey-remove data-passkey-id="${escapeHtml(passkey.id)}" data-client-id="${escapeHtml(value.realm.clientId)}">Remove</button>
+      </div>
+    </li>`).join("")}</ul>` : `<p class="auth-footer">No passkeys are registered.</p>`}
+    <div class="auth-actions"><button type="button" class="auth-button auth-button-secondary" data-passkey-register data-client-id="${escapeHtml(value.realm.clientId)}" ${passkeys.canRegister ? "" : "disabled"}>Add passkey</button></div>
+  </div>`;
   const html = renderAuthPage({
     title: "Account security",
     description: "Manage multi-factor authentication for this application.",

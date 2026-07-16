@@ -42,7 +42,7 @@ export async function ensureCsrfCookie(): Promise<string> {
 
 async function parseProblem(res: Response): Promise<ProblemDetail | null> {
   const contentType = res.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) return null;
+  if (!contentType.includes("json")) return null;
   try {
     return (await res.json()) as ProblemDetail;
   } catch {
@@ -95,11 +95,23 @@ async function apiFetchInternal<T>(path: string, options: ApiFetchOptions, allow
   if (problem) {
     const stepUpRequired = problem.errors?.some((error) => error.code === "mfa_step_up_required");
     if (allowStepUp && stepUpRequired && path !== "/api/auth/mfa/step-up") {
+      const passkeys = await apiFetchInternal<{ passkeys: unknown[] }>("/api/auth/passkeys", { method: "GET" }, false).catch(() => ({ passkeys: [] }));
+      if (passkeys.passkeys.length > 0 && window.confirm("Use a passkey to verify this action? Choose Cancel to enter an authenticator or recovery code.")) {
+        const { stepUpWithPasskey } = await import("./passkeys-api");
+        await stepUpWithPasskey();
+        return apiFetchInternal<T>(path, options, false);
+      }
       const code = window.prompt("Enter an authentication or recovery code to continue:");
       if (code?.trim()) {
         await apiFetchInternal("/api/auth/mfa/step-up", { method: "POST", body: { code } }, false);
         return apiFetchInternal<T>(path, options, false);
       }
+    }
+    const passkeyStepUpRequired = problem.errors?.some((error) => error.code === "passkey_step_up_required");
+    if (allowStepUp && passkeyStepUpRequired && !path.includes("/api/auth/passkeys/")) {
+      const { stepUpWithPasskey } = await import("./passkeys-api");
+      await stepUpWithPasskey();
+      return apiFetchInternal<T>(path, options, false);
     }
     throw new ApiError(problem);
   }

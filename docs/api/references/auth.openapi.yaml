@@ -397,6 +397,171 @@ paths:
           description: Remembered browser revoked
         "404":
           $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/auth/passkeys:
+    get:
+      tags: [Auth]
+      summary: List passkeys for the current console or exact app session
+      operationId: getAuthPasskeys
+      parameters:
+        - name: client_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Safe owned passkey summaries; response is not cacheable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyList"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /api/auth/passkeys/registration/options:
+    post:
+      tags: [Auth]
+      summary: Start an authenticated passkey registration ceremony
+      operationId: postAuthPasskeyRegistrationOptions
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId:
+                  type: string
+      responses:
+        "200":
+          description: WebAuthn creation options and an HttpOnly ceremony cookie
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+  /api/auth/passkeys/registration/verify:
+    post:
+      tags: [Auth]
+      summary: Verify and store a passkey registration
+      operationId: postAuthPasskeyRegistrationVerify
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [response]
+              properties:
+                response:
+                  type: object
+                  additionalProperties: true
+                label:
+                  type: string
+                  maxLength: 80
+                clientId:
+                  type: string
+      responses:
+        "201":
+          description: Verified public credential stored
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+  /api/auth/passkeys/authentication/options:
+    post:
+      tags: [Auth]
+      summary: Start email-first passkey authentication or current-session step-up
+      operationId: postAuthPasskeyAuthenticationOptions
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                clientId:
+                  type: string
+                returnTo:
+                  type: string
+                stepUp:
+                  type: boolean
+      responses:
+        "200":
+          description: Fixed-shape WebAuthn request options and an HttpOnly ceremony cookie
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
+  /api/auth/passkeys/authentication/verify:
+    post:
+      tags: [Auth]
+      summary: Verify a passkey assertion and create a realm session or refresh step-up
+      operationId: postAuthPasskeyAuthenticationVerify
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [response]
+              properties:
+                response:
+                  type: object
+                  additionalProperties: true
+                clientId:
+                  type: string
+      responses:
+        "200":
+          description: Assertion consumed; session or current-session assurance updated
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
+  /api/auth/passkeys/rename:
+    post:
+      tags: [Auth]
+      summary: Rename one owned passkey
+      operationId: postAuthPasskeyRename
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      responses:
+        "200":
+          description: Passkey renamed
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/auth/passkeys/remove:
+    post:
+      tags: [Auth]
+      summary: Remove one owned passkey and revoke other sessions
+      operationId: postAuthPasskeyRemove
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      responses:
+        "200":
+          description: Passkey removed
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
 components:
   securitySchemes:
     CsrfHeader:
@@ -490,6 +655,39 @@ components:
         challengeExpiresAt:
           type: string
           format: date-time
+    PasskeySummary:
+      type: object
+      required: [id, label, createdAt, lastUsedAt, backupEligible, backedUp]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          maxLength: 80
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: [string, "null"]
+          format: date-time
+        backupEligible:
+          type: boolean
+        backedUp:
+          type: boolean
+    PasskeyList:
+      type: object
+      required: [passkeys, canRegister, maxPasskeys]
+      properties:
+        passkeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/PasskeySummary"
+        canRegister:
+          type: boolean
+        maxPasskeys:
+          type: integer
+          const: 10
     SessionResponse:
       type: object
       required: [authenticated]

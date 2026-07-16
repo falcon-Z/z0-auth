@@ -34,6 +34,7 @@ export async function revokeConsoleAccountAccess(
   await tx`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${userId} AND revoked_at IS NULL`;
   await tx`UPDATE user_mfa_challenges SET consumed_at = NOW() WHERE user_id = ${userId} AND consumed_at IS NULL`;
   await tx`UPDATE user_mfa_remembered_browsers SET revoked_at = NOW() WHERE user_id = ${userId} AND revoked_at IS NULL`;
+  await tx`UPDATE user_passkey_ceremonies SET consumed_at = NOW() WHERE user_id = ${userId} AND consumed_at IS NULL`;
   await tx`UPDATE password_reset_tokens SET used_at = NOW() WHERE user_id = ${userId} AND used_at IS NULL`;
   await tx`
     UPDATE magic_link_tokens SET used_at = NOW()
@@ -50,6 +51,7 @@ export async function revokeAppAccountAccess(
   await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
   await tx`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND consumed_at IS NULL`;
   await tx`UPDATE app_user_mfa_remembered_browsers SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
+  await tx`UPDATE app_user_passkey_ceremonies SET consumed_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND consumed_at IS NULL`;
   await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${appUserId} AND used_at IS NULL`;
   await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
   await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;

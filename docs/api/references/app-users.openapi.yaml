@@ -237,9 +237,9 @@ paths:
   /api/v1/apps/{appId}/users/{userId}/mfa-reset:
     post:
       tags: [AppUsers]
-      summary: Reset an app user's MFA enrollment
+      summary: Reset an app user's MFA enrollment and passkeys
       operationId: resetAppUserMfa
-      description: Removes the user's authenticator factor, recovery codes, remembered browsers, pending MFA challenges, and active sessions. Requires recent MFA verification by the operator.
+      description: Removes the user's authenticator factor, passkeys, recovery codes, remembered browsers, pending authentication challenges, and active sessions. Requires recent strong verification by the operator.
       security:
         - CsrfHeader: []
           CsrfCookie: []
@@ -252,7 +252,7 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        "200": { description: MFA enrollment reset }
+        "200": { description: MFA enrollment and passkeys reset }
         "401": { $ref: "common.openapi.yaml#/components/responses/Unauthorized" }
         "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
         "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
@@ -400,7 +400,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/AppUserSummary"
         - type: object
-          required: [metadata, activeSessionCount, mfaEnabled]
+          required: [metadata, activeSessionCount, mfaEnabled, passkeyCount]
           properties:
             metadata:
               type: object
@@ -410,6 +410,9 @@ components:
               type: integer
             mfaEnabled:
               type: boolean
+            passkeyCount:
+              type: integer
+              minimum: 0
     CreateAppUserRequest:
       type: object
       required: [email, name, password, passwordConfirm]

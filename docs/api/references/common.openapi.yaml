@@ -95,6 +95,17 @@ components:
         - last_active_credential
         - scope_taken
         - scope_not_found
+        - passkey_not_supported
+        - passkey_origin_unavailable
+        - primary_reauthentication_required
+        - passkey_registration_expired
+        - passkey_authentication_expired
+        - passkey_verification_failed
+        - passkey_limit_reached
+        - passkey_name_invalid
+        - passkey_not_found
+        - passkey_step_up_required
+        - passkey_state_conflict
     ProblemDetail:
       type: object
       required: [type, title, status, requestId]

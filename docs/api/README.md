@@ -18,7 +18,7 @@ Spec-driven contracts for the single-account IAM model. Product context: [../pro
 | [references/common.openapi.yaml](./references/common.openapi.yaml) | Shared errors and security components |
 | [references/health.openapi.yaml](./references/health.openapi.yaml) | Health checks and safe deployment status |
 | [references/setup.openapi.yaml](./references/setup.openapi.yaml) | Instance setup |
-| [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Login, session, password reset |
+| [references/auth.openapi.yaml](./references/auth.openapi.yaml) | Login, session, password reset, MFA, and passkeys |
 | [references/members & invites](./references/invites.openapi.yaml) | Instance members and invites (M01) |
 | [references/applications](./references/apps.openapi.yaml) | Applications, credentials (M03), scopes (M04) |
 | [references/settings](./references/settings.openapi.yaml) | SMTP and email settings (M08) |

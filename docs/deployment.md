@@ -9,7 +9,7 @@ The management console shows a **setup checklist** until `DATABASE_URL` works, m
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL 16+ connection string |
-| `PUBLIC_ORIGIN` | Public HTTPS origin used for OAuth/OIDC and emailed links |
+| `PUBLIC_ORIGIN` | Permanent public HTTPS origin used for OAuth/OIDC, emailed links, and the WebAuthn relying-party boundary |
 | `INSTANCE_DATA_KEY_ID` | Stable identifier for the active data key, included with encrypted values |
 | `INSTANCE_DATA_KEY` | AES-256 key for encrypting SMTP password and other instance secrets; same on every pod |
 | `INSTANCE_TOKEN_KEY_ID` | Stable identifier for the active token signing key, included with signed reset tokens |
@@ -56,6 +56,12 @@ z0-auth checks settings before it starts listening. It stops with a non-zero exi
 
 Environment changes require a restart. `.env.example` lists the key, first-owner, and SMTP groups as well.
 
+### Passkey origin and hostname
+
+Choose the production `PUBLIC_ORIGIN` before users register passkeys. z0-auth uses the exact origin for WebAuthn verification and uses its lowercase hostname as the relying-party ID. Terminate TLS at the application or a trusted reverse proxy and keep the public scheme and hostname stable. A request `Host`, forwarded header, redirect URI, or app setting cannot override this boundary.
+
+Changing the scheme, hostname, or port can make existing passkeys unusable. Restore the old origin long enough for users to sign in and register replacements, or use another configured sign-in/recovery method and reset their passkeys. Development supports `http://localhost` with any port; other HTTP origins are rejected. Keep `@simplewebauthn/server` current through reviewed dependency updates because it verifies security-sensitive WebAuthn structures.
+
 SMTP is optional. With no `SMTP_*` settings, operators may configure it later in the console. `SMTP_ENABLED=false` disables email. Any other supplied SMTP setting makes the environment the source of SMTP settings. `SMTP_ENABLED=true` or any partial SMTP group without both `SMTP_HOST` and `SMTP_FROM_ADDRESS` stops startup. `SMTP_PORT` must be from 1 to 65535, `SMTP_ENCRYPTION` must be `none`, `starttls`, or `tls`, and production does not allow `none`.
 
 ## Startup and health behavior
@@ -92,16 +98,18 @@ These responses do not include connection strings, database errors, secret value
 6. **Complete platform setup** if you are using the manual browser flow — organization name, your name, email, and password. If `INSTALL_TOKEN` is set, enter it on the setup form.
 7. **Sign in** at `/auth/login` with the owner account. Enable MFA under **Profile → Security** and save the recovery codes outside this server.
 
-### Owner MFA recovery
+### Owner strong-authentication recovery
 
-Use recovery codes first. If the owner loses both the authenticator and every recovery code, an operator with direct host and database access can remove only the owner's MFA material:
+Use a second passkey, password plus TOTP, or recovery codes first. If the owner loses every strong authenticator and recovery code, an operator with direct host and database access can remove the owner's TOTP and passkey material:
 
 ```bash
 bun run mfa:reset-owner --email owner@example.com \
   --confirm-email owner@example.com --revoke-all-sessions
 ```
 
-The command requires the normalized owner email twice, verifies that it belongs to the instance owner, records `mfa.local_owner_reset`, and revokes all owner sessions and remembered browsers. It does not reset the password or enable a disabled/deleted account. Protect host and database access as a recovery authority and test this procedure before relying on it.
+The command requires the normalized owner email twice, verifies that it belongs to the instance owner, records `mfa.local_owner_reset`, tombstones every owner passkey, and revokes all owner sessions and remembered browsers. It does not reset the password or enable a disabled/deleted account. Protect host and database access as a recovery authority and test this procedure before relying on it.
+
+An administrator reset on a member or app-user detail page also removes both TOTP and passkeys for an eligible non-owner target. A suspicious passkey counter event automatically revokes the affected credential and the identity's current sessions/tokens; review `passkey.suspicious_counter` in Activity, confirm the user through a separate channel, and have them register a replacement credential.
 
 For local development, use `bun run db:reset` instead of `db:migrate` when you want a clean database. See [development.md](./development.md).
 

@@ -666,6 +666,7 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
       , EXISTS (
         SELECT 1 FROM user_totp_factors f WHERE f.user_id = u.id AND f.confirmed_at IS NOT NULL
       ) AS mfa_enabled
+      , (SELECT COUNT(*)::int FROM user_passkeys p WHERE p.user_id = u.id AND p.removed_at IS NULL) AS passkey_count
     FROM instance_members m
     JOIN users u ON u.id = m.user_id
     ORDER BY u.name ASC
@@ -686,6 +687,7 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
       locked_until: Date | null;
       deleted_at: Date | null;
       mfa_enabled: boolean;
+      passkey_count: number;
     };
     const userId = String(r.id);
     const status = accountStatus(r);
@@ -698,6 +700,7 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
       status,
       emailVerified: Boolean(r.email_verified_at),
       mfaEnabled: Boolean(r.mfa_enabled),
+      passkeyCount: Number(r.passkey_count ?? 0),
       disabledAt: r.disabled_at ? new Date(r.disabled_at).toISOString() : null,
       lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : null,
       deletedAt: r.deleted_at ? new Date(r.deleted_at).toISOString() : null,

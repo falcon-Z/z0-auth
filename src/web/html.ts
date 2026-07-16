@@ -90,6 +90,7 @@ export function renderAuthPage(options: AuthPageOptions): string {
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/auth-forms.js" defer></script>
   <script src="/static/mfa-qr.js" defer></script>
+  <script src="/static/passkeys.js" defer></script>
 </head>
 <body class="auth-body"${bodyStyle}>
   <main id="auth-root" class="auth-main">

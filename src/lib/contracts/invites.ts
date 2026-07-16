@@ -57,6 +57,7 @@ export type InstanceMember = {
   status: "active" | "disabled" | "locked" | "deleted";
   emailVerified: boolean;
   mfaEnabled: boolean;
+  passkeyCount: number;
   disabledAt: string | null;
   lockedUntil: string | null;
   deletedAt: string | null;

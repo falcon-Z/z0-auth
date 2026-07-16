@@ -126,9 +126,9 @@ paths:
   /api/v1/members/{userId}/mfa-reset:
     post:
       tags: [Members]
-      summary: Reset a console member's MFA enrollment
+      summary: Reset a console member's MFA enrollment and passkeys
       operationId: resetMemberMfa
-      description: Removes the member's authenticator factor, recovery codes, remembered browsers, pending MFA challenges, and active sessions. Requires recent MFA verification by the operator.
+      description: Removes the member's authenticator factor, passkeys, recovery codes, remembered browsers, pending authentication challenges, and active sessions. Requires recent strong verification by the operator.
       security:
         - CsrfHeader: []
           CsrfCookie: []
@@ -140,7 +140,7 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
-        "200": { description: MFA enrollment reset }
+        "200": { description: MFA enrollment and passkeys reset }
         "401": { $ref: "common.openapi.yaml#/components/responses/Unauthorized" }
         "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
         "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
@@ -286,7 +286,7 @@ components:
   schemas:
     InstanceMember:
       type: object
-      required: [userId, email, name, joinedAt, isBootstrap, status, emailVerified, mfaEnabled, disabledAt, lockedUntil, deletedAt, roles]
+      required: [userId, email, name, joinedAt, isBootstrap, status, emailVerified, mfaEnabled, passkeyCount, disabledAt, lockedUntil, deletedAt, roles]
       properties:
         userId: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -298,6 +298,7 @@ components:
           enum: [active, disabled, locked, deleted]
         emailVerified: { type: boolean }
         mfaEnabled: { type: boolean }
+        passkeyCount: { type: integer, minimum: 0 }
         disabledAt: { type: string, format: date-time, nullable: true }
         lockedUntil: { type: string, format: date-time, nullable: true }
         deletedAt: { type: string, format: date-time, nullable: true }

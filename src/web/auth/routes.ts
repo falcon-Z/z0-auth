@@ -44,6 +44,7 @@ const STATIC_DIR = path.join(import.meta.dir, "../static");
 const AUTH_CSS = Bun.file(path.join(STATIC_DIR, "auth.css"));
 const AUTH_FORMS_JS = Bun.file(path.join(STATIC_DIR, "auth-forms.js"));
 const MFA_QR_JS = Bun.file(path.join(STATIC_DIR, "mfa-qr.js"));
+const PASSKEYS_JS = Bun.file(path.join(STATIC_DIR, "passkeys.js"));
 const HTMX_JS = Bun.file(path.join(import.meta.dir, "../../../node_modules/htmx.org/dist/htmx.min.js"));
 
 type FormFields = Record<string, string>;
@@ -367,7 +368,16 @@ export function renderLoginForm(
       </div>
     </div>`
       : "";
-  const body = `${bodyForms}${federationSection}`;
+  const passkeySection = `
+    <div class="auth-card">
+      <p class="auth-federation-label">Or use a passkey</p>
+      <p data-passkey-error hidden></p>
+      <button type="button" class="auth-button auth-button-secondary" data-passkey-login
+        ${app ? `data-client-id="${escapeHtml(app.clientId)}"` : ""}
+        ${returnTo ? `data-return-to="${escapeHtml(returnTo)}"` : ""}>Sign in with a passkey</button>
+      <p class="auth-footer">Enter your email above first so z0-auth can keep app accounts separate.</p>
+    </div>`;
+  const body = `${bodyForms}${passkeySection}${federationSection}`;
 
   return renderAuthPage({
     title: "Sign in",
@@ -1058,6 +1068,12 @@ async function serveMfaQrJs(): Promise<Response> {
   });
 }
 
+async function servePasskeysJs(): Promise<Response> {
+  return new Response(PASSKEYS_JS, {
+    headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 export const authWebRoutes = {
   "/auth/setup": {
     GET: getSetupPage,
@@ -1082,6 +1098,9 @@ export const authWebRoutes = {
   },
   "/static/mfa-qr.js": {
     GET: serveMfaQrJs,
+  },
+  "/static/passkeys.js": {
+    GET: servePasskeysJs,
   },
   "/static/htmx.min.js": {
     GET: () => new Response(HTMX_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8" } }),

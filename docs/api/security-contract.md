@@ -57,6 +57,20 @@ TOTP MFA is available independently to console members and app users. A console 
 
 MFA enrollment, challenge, recovery, and remembered-browser responses use `Cache-Control: no-store`. Seeds, provisioning URIs, submitted codes, recovery codes, and raw challenge/remembered tokens must never enter logs or audit payloads.
 
+## Passkeys
+
+WebAuthn passkeys are separate for console members and each app-local user. A credential registered to one realm or app is never offered or accepted in another.
+
+- `PUBLIC_ORIGIN` is the exact expected WebAuthn origin. Its lowercase hostname is the relying-party ID. Production requires HTTPS; development also permits `http://localhost` with any port. Request headers and app redirect URIs cannot change either value.
+- Registration requires user presence and user verification, requests no attestation, prefers a discoverable credential, and accepts ES256 or RS256. Authentication also requires user verification. A successful assertion is both primary authentication and fresh MFA, so it bypasses a TOTP prompt for that sign-in and satisfies the 10-minute sensitive-action check.
+- Public sign-in is email-first. The server returns ten realm/app-scoped credential descriptors padded with deterministic opaque decoys. Responses do not include labels, user handles, transports, owner IDs, or credential counts. Unknown identities receive the same response structure and generic verification failure.
+- Registration and assertion challenges are single-use, expire after five minutes, are stored hashed, and are bound to the realm, app where relevant, exact origin and RP ID, and client fingerprints. Five failed verification attempts consume a ceremony.
+- Users may keep up to ten passkeys, give each a 1–80 character label, rename it, and remove it. Adding another strong method or removing a passkey requires recent strong authentication. Removing or resetting credentials revokes the identity's active sessions and app tokens.
+- Credential IDs are globally tombstoned after removal so they cannot be moved between identities or realms. Public keys, algorithms, counters, and backup flags are stored; private keys never leave the authenticator. A valid assertion with a regressing non-zero counter revokes current authority and records a security event.
+- Operator MFA reset removes both TOTP and passkeys for an eligible target. The local sole-owner recovery command does the same. Password, magic-link, federation, TOTP, recovery-code, and second-passkey fallback remain independent recovery choices when configured.
+
+Passkey option and verification responses use `Cache-Control: no-store`. Credential IDs, handles, public keys, signatures, challenges, authenticator data, and raw device metadata must not enter logs or audit payloads.
+
 ---
 
 ## CSRF
