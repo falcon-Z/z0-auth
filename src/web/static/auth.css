@@ -378,3 +378,43 @@ body.auth-body {
   margin: 0;
   flex-shrink: 0;
 }
+
+.auth-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+}
+
+.auth-setup-key,
+.auth-recovery-codes {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+  color: var(--foreground);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.auth-mfa-qr {
+  display: inline-flex;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.auth-mfa-qr canvas {
+  display: block;
+  width: 14rem;
+  height: 14rem;
+  max-width: 100%;
+}

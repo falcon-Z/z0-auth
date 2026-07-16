@@ -3,6 +3,14 @@ import { mkdir } from "node:fs/promises";
 
 await mkdir("dist", { recursive: true });
 
+const authAssetResult = await Bun.build({
+  entrypoints: ["./src/web/static/mfa-qr-entry.ts"],
+  outdir: "src/web/static",
+  naming: "mfa-qr.js",
+  target: "browser",
+  minify: true,
+});
+
 for await (const relativePath of new Bun.Glob("chunk-*").scan({ cwd: "dist", onlyFiles: true })) {
   await Bun.file(`dist/${relativePath}`).delete();
 }
@@ -28,7 +36,7 @@ const serverResult = await Bun.build({
   plugins: [tailwindPlugin],
 });
 
-if (!consoleResult.success || !serverResult.success) {
-  for (const log of [...consoleResult.logs, ...serverResult.logs]) console.error(log);
+if (!authAssetResult.success || !consoleResult.success || !serverResult.success) {
+  for (const log of [...authAssetResult.logs, ...consoleResult.logs, ...serverResult.logs]) console.error(log);
   process.exit(1);
 }

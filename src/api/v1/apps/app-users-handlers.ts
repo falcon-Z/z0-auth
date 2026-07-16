@@ -22,6 +22,7 @@ import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 import { issueAppEmailVerification } from "../../lib/app-email-verification";
 import { issueAppUserAdminReset } from "../../lib/admin-reset";
+import { requireRecentConsoleMfa, resetAppUserMfaForAdmin } from "../../lib/mfa";
 
 function appIdFrom(req: RoutedRequest): string {
   return req.pathParams?.appId ?? "";
@@ -109,6 +110,10 @@ export async function handleAppUserLifecycle(req: RoutedRequest): Promise<Respon
   if (action !== "disable" && action !== "enable" && action !== "unlock" && action !== "delete" && action !== "restore" && action !== "permanently-delete") {
     return new Response("Not found", { status: 404 });
   }
+  if (action === "permanently-delete") {
+    const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+    if (stepUpError) return stepUpError;
+  }
   const body = await req.json().catch(() => ({})) as { confirmationEmail?: string };
   const result = await transitionAppUserForApi(appId, userIdFrom(req), auth.userId, action, body.confirmationEmail);
   if (!result.ok) return result.response;
@@ -133,7 +138,21 @@ export async function handleAppUserAdminReset(req: RoutedRequest): Promise<Respo
   const appId = appIdFrom(req);
   const auth = await requireScope(req, "apps.users:manage");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
   const result = await issueAppUserAdminReset(req, appId, userIdFrom(req), auth.userId);
+  if (!result.ok) return result.response;
+  return json({ ok: true });
+}
+
+export async function handleAppUserMfaReset(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+  const auth = await requireScope(req, "apps.users:manage");
+  if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
+  const result = await resetAppUserMfaForAdmin(userIdFrom(req), appIdFrom(req), auth.userId);
   if (!result.ok) return result.response;
   return json({ ok: true });
 }

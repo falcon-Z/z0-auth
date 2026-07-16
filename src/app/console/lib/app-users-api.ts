@@ -46,6 +46,10 @@ export async function sendAppUserPasswordReset(appId: string, userId: string): P
   await apiFetch(`/api/v1/apps/${appId}/users/${userId}/password-reset`, { method: "POST", body: {} });
 }
 
+export async function resetAppUserMfa(appId: string, userId: string): Promise<void> {
+  await apiFetch(`/api/v1/apps/${appId}/users/${userId}/mfa-reset`, { method: "POST", body: {} });
+}
+
 export async function createAppUser(
   appId: string,
   body: CreateAppUserRequest,

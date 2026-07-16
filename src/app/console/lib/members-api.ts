@@ -48,6 +48,10 @@ export async function sendMemberPasswordReset(userId: string): Promise<void> {
   await apiFetch(`/api/v1/members/${userId}/password-reset`, { method: "POST", body: {} });
 }
 
+export async function resetMemberMfa(userId: string): Promise<void> {
+  await apiFetch(`/api/v1/members/${userId}/mfa-reset`, { method: "POST", body: {} });
+}
+
 export function buildInviteMailto(invite: CreateInviteResponse): string {
   const subject = encodeURIComponent(`Invitation to join: ${invite.invitedName}`);
   const body = encodeURIComponent(

@@ -177,6 +177,9 @@ export async function getAppUserDetailForApi(
   if (!appUser) return { ok: false, response: await appUserNotFoundResponse() };
 
   const activeSessionCount = await countActiveAppUserSessions(userId);
+  const [mfaRow] = await getDb()`
+    SELECT 1 FROM app_user_totp_factors WHERE app_user_id = ${userId} AND confirmed_at IS NOT NULL
+  `;
 
   return {
     ok: true,
@@ -184,6 +187,7 @@ export async function getAppUserDetailForApi(
       ...mapAppUserRow(appUser),
       metadata: appUser.metadata,
       activeSessionCount,
+      mfaEnabled: Boolean(mfaRow),
     },
   };
 }

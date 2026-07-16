@@ -20,6 +20,12 @@ export type PreparedSession = {
   ipDisplay: string;
 };
 
+export type SessionAssurance = {
+  primaryAuthenticatedAt?: Date;
+  mfaAuthenticatedAt?: Date | null;
+  authenticationMethod?: string;
+};
+
 export async function prepareSession(req: Request): Promise<PreparedSession> {
   const token = randomToken(32);
   const tokenHash = await sha256Hex(token);
@@ -42,6 +48,7 @@ export async function insertSession(
   tx: SQL,
   userId: string,
   prepared: PreparedSession,
+  assurance: SessionAssurance = {},
 ): Promise<{ token: string; expiresAt: Date }> {
   await tx`
     INSERT INTO sessions (
@@ -51,7 +58,10 @@ export async function insertSession(
       ip_hash,
       user_agent_hash,
       client_label,
-      ip_display
+      ip_display,
+      primary_authenticated_at,
+      mfa_authenticated_at,
+      authentication_method
     )
     VALUES (
       ${userId},
@@ -60,7 +70,10 @@ export async function insertSession(
       ${prepared.ipHash},
       ${prepared.userAgentHash},
       ${prepared.clientLabel},
-      ${prepared.ipDisplay}
+      ${prepared.ipDisplay},
+      ${assurance.primaryAuthenticatedAt ?? new Date()},
+      ${assurance.mfaAuthenticatedAt ?? null},
+      ${assurance.authenticationMethod ?? "password"}
     )
   `;
 
@@ -70,9 +83,10 @@ export async function insertSession(
 export async function createSession(
   userId: string,
   req: Request,
+  assurance: SessionAssurance = {},
 ): Promise<{ token: string; expiresAt: Date }> {
   const prepared = await prepareSession(req);
-  return insertSession(getDb(), userId, prepared);
+  return insertSession(getDb(), userId, prepared, assurance);
 }
 
 export async function revokeSessionByToken(token: string): Promise<void> {

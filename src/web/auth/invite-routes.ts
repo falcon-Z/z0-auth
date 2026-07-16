@@ -260,7 +260,7 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
   const intent = form.intent ?? "accept";
 
   if (intent === "login") {
-    const result = await runLogin(req, form.email ?? "", form.password ?? "");
+    const result = await runLogin(req, form.email ?? "", form.password ?? "", inviteReturnPath(token));
     const preview = await loadPreview(req, token);
     if (preview instanceof Response) return preview;
     const { token: csrf, setCookie } = preparePageCsrf(req);
@@ -272,6 +272,11 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
         401,
         setCookie,
       );
+    }
+    if (result.mfaRequired) {
+      const headers = new Headers({ Location: "/auth/mfa" });
+      headers.set("Set-Cookie", result.setCookie);
+      return new Response(null, { status: 303, headers });
     }
     const headers = new Headers({ Location: inviteReturnPath(token) });
     headers.set("Set-Cookie", result.setCookie);
@@ -313,6 +318,12 @@ export async function postInvitePage(req: BunRequest): Promise<Response> {
         : renderNewUserAccept(csrf, preview, token, form, errors);
     const status = acceptResult.response.status === 401 ? 401 : 400;
     return authErrorResponse(html, req, status, setCookie);
+  }
+
+  if (acceptResult.mfaRequired && acceptResult.setCookie) {
+    const headers = new Headers({ Location: "/auth/mfa" });
+    headers.append("Set-Cookie", acceptResult.setCookie);
+    return new Response(null, { status: 303, headers });
   }
 
   const headers = new Headers({ Location: "/" });

@@ -7,6 +7,8 @@ import { federationWebRoutes } from "../../src/web/auth/federation-routes";
 import { inviteWebRoutes } from "../../src/web/auth/invite-routes";
 import { emailVerificationWebRoutes } from "../../src/web/auth/email-verification-routes";
 import { oauthWebRoutes } from "../../src/web/oauth/routes";
+import { mfaWebRoutes } from "../../src/web/auth/mfa-routes";
+import { appMfaWebRoutes } from "../../src/web/auth/app-mfa-routes";
 
 type MethodHandlers = {
   GET?: (req: BunRequest) => Response | Promise<Response>;
@@ -74,6 +76,8 @@ export async function dispatchWeb(req: Request): Promise<Response> {
     ...appSessionsWebRoutes,
     ...emailVerificationWebRoutes,
     ...oauthWebRoutes,
+    ...mfaWebRoutes,
+    ...appMfaWebRoutes,
   } as const;
   const handlers = (routes as Record<string, MethodHandlers>)[url.pathname];
   if (!handlers) return new Response("Not found", { status: 404 });

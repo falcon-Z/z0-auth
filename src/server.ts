@@ -47,6 +47,8 @@ import { magicLinkWebRoutes } from "./web/auth/magic-link-routes";
 import { federationWebRoutes } from "./web/auth/federation-routes";
 import { appSessionsWebRoutes } from "./web/auth/app-sessions-routes";
 import { emailVerificationWebRoutes } from "./web/auth/email-verification-routes";
+import { mfaWebRoutes } from "./web/auth/mfa-routes";
+import { appMfaWebRoutes } from "./web/auth/app-mfa-routes";
 import { oauthWebRoutes } from "./web/oauth/routes";
 const config = runtimeConfiguration.config;
 const readiness = await evaluateReadiness();
@@ -64,6 +66,8 @@ const server = serve({
     ...secureRouteMap(federationWebRoutes),
     ...secureRouteMap(appSessionsWebRoutes),
     ...secureRouteMap(emailVerificationWebRoutes),
+    ...secureRouteMap(mfaWebRoutes),
+    ...secureRouteMap(appMfaWebRoutes),
     ...secureRouteMap(oauthWebRoutes),
     ...secureRouteMap(apiRouteMap),
     "/api/*": async (request) => applySecurityHeaders(await dispatchApiRequest(request)),

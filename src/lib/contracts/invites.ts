@@ -56,6 +56,7 @@ export type InstanceMember = {
   isBootstrap: boolean;
   status: "active" | "disabled" | "locked" | "deleted";
   emailVerified: boolean;
+  mfaEnabled: boolean;
   disabledAt: string | null;
   lockedUntil: string | null;
   deletedAt: string | null;

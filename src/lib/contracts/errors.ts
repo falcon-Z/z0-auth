@@ -106,6 +106,22 @@ export const ErrorCodes = {
   ACCOUNT_STATE_CONFLICT: "account_state_conflict",
   /** Email verification token is unknown, used, or expired. */
   VERIFICATION_TOKEN_INVALID: "verification_token_invalid",
+  /** A primary sign-in succeeded and an MFA challenge must be completed. */
+  MFA_REQUIRED: "mfa_required",
+  /** The submitted TOTP or recovery code is invalid. */
+  MFA_CODE_INVALID: "mfa_code_invalid",
+  /** The pre-authentication MFA challenge is missing, expired, or consumed. */
+  MFA_CHALLENGE_EXPIRED: "mfa_challenge_expired",
+  /** The pending TOTP enrollment expired. */
+  MFA_ENROLLMENT_EXPIRED: "mfa_enrollment_expired",
+  /** MFA is already enabled for this identity. */
+  MFA_ALREADY_ENABLED: "mfa_already_enabled",
+  /** MFA is not enabled for this identity. */
+  MFA_NOT_ENABLED: "mfa_not_enabled",
+  /** No unused MFA recovery codes remain. */
+  MFA_RECOVERY_CODES_EXHAUSTED: "mfa_recovery_codes_exhausted",
+  /** The action requires MFA completed recently in the current session. */
+  MFA_STEP_UP_REQUIRED: "mfa_step_up_required",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

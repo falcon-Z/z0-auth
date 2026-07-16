@@ -60,6 +60,10 @@ function wantsCsrf(method: string, explicit?: boolean): boolean {
  * Throws {@link ApiError} when the response is not ok and the body matches problem+json.
  */
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  return apiFetchInternal<T>(path, options, true);
+}
+
+async function apiFetchInternal<T>(path: string, options: ApiFetchOptions, allowStepUp: boolean): Promise<T> {
   const method = (options.method ?? "GET").toUpperCase();
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
@@ -88,6 +92,16 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   const problem = await parseProblem(res);
-  if (problem) throw new ApiError(problem);
+  if (problem) {
+    const stepUpRequired = problem.errors?.some((error) => error.code === "mfa_step_up_required");
+    if (allowStepUp && stepUpRequired && path !== "/api/auth/mfa/step-up") {
+      const code = window.prompt("Enter an authentication or recovery code to continue:");
+      if (code?.trim()) {
+        await apiFetchInternal("/api/auth/mfa/step-up", { method: "POST", body: { code } }, false);
+        return apiFetchInternal<T>(path, options, false);
+      }
+    }
+    throw new ApiError(problem);
+  }
   throw new Error(`${method} ${path} failed (${res.status})`);
 }

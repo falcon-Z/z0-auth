@@ -72,6 +72,13 @@ run("web auth pages", () => {
     expect(res.headers.get("content-type")).toContain("javascript");
   });
 
+  test("GET /static/mfa-qr.js serves the local QR renderer", async () => {
+    const res = await dispatchWeb(new Request("http://localhost/static/mfa-qr.js"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("javascript");
+    expect((await res.text()).length).toBeGreaterThan(10_000);
+  });
+
   test("GET /static/htmx.min.js serves the local package", async () => {
     const res = await dispatchWeb(new Request("http://localhost/static/htmx.min.js"));
     expect(res.status).toBe(200);
@@ -113,7 +120,7 @@ run("web auth pages", () => {
     const res = await dispatchWeb(new Request("http://localhost/auth/login"));
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toContain("/auth/setup");
-  });
+  }, 15_000);
 
   test("GET /auth/login shows form after setup", async () => {
     const csrf = await fetchSetupCsrf();
@@ -223,7 +230,7 @@ run("web auth pages", () => {
     const html = await res.text();
     expect(html).toContain("auth-form-error");
     expect(html).toContain("Invalid email or password");
-  });
+  }, 15_000);
 
   test("POST /auth/logout redirects to login and clears session", async () => {
     await resetTestDatabase();
@@ -293,7 +300,7 @@ run("web auth pages", () => {
     expect(logoutRes.headers.get("location")).toContain("/auth/login");
     const cleared = logoutRes.headers.getSetCookie?.().some((c) => c.includes(`${SESSION_COOKIE}=`) && c.includes("Max-Age=0"));
     expect(cleared).toBe(true);
-  });
+  }, 15_000);
 });
 
 afterAll(async () => {

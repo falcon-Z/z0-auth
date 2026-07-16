@@ -101,6 +101,7 @@ async function getAppSessionsPage(req: BunRequest): Promise<Response> {
           : `<ul class="auth-session-list">${sessionItems}</ul>`
       }
       ${revokeOthers}
+      <p class="auth-footer"><a class="auth-link" href="/auth/security?client_id=${encodeURIComponent(realm.clientId)}">Account security</a></p>
       <p class="auth-footer"><a class="auth-link" href="${escapeHtml(returnTo)}">Back</a></p>
     </div>`;
 

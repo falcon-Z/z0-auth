@@ -7,6 +7,7 @@ import {
   handleRemoveMember,
   handleMemberLifecycle,
   handleMemberAdminReset,
+  handleMemberMfaReset,
   handleRevokeInvite,
 } from "./members/handlers";
 import {
@@ -24,6 +25,7 @@ import {
   handleAppUserLifecycle,
   handleAppUserVerification,
   handleAppUserAdminReset,
+  handleAppUserMfaReset,
   handleRevokeAppUserInvite,
 } from "./apps/app-users-handlers";
 import {
@@ -171,6 +173,7 @@ export const v1PatternRoutes: PathRoute[] = [
   },
   { pattern: "/api/v1/apps/:appId/users/:userId/verification", handlers: { POST: handleAppUserVerification } },
   { pattern: "/api/v1/apps/:appId/users/:userId/password-reset", handlers: { POST: handleAppUserAdminReset } },
+  { pattern: "/api/v1/apps/:appId/users/:userId/mfa-reset", handlers: { POST: handleAppUserMfaReset } },
   {
     pattern: "/api/v1/apps/:appId/users/:userId",
     handlers: { GET: handleGetAppUser, PATCH: handlePatchAppUser },
@@ -189,6 +192,7 @@ export const v1PatternRoutes: PathRoute[] = [
   { pattern: "/api/v1/members/invites/:inviteId", handlers: { DELETE: handleRevokeInvite } },
   { pattern: "/api/v1/members/:userId/lifecycle/:action", handlers: { POST: handleMemberLifecycle } },
   { pattern: "/api/v1/members/:userId/password-reset", handlers: { POST: handleMemberAdminReset } },
+  { pattern: "/api/v1/members/:userId/mfa-reset", handlers: { POST: handleMemberMfaReset } },
   { pattern: "/api/v1/members/:userId", handlers: { DELETE: handleRemoveMember } },
   { pattern: "/api/v1/invites/:token", handlers: { GET: handleInvitePreview } },
   { pattern: "/api/v1/invites/:token/accept", handlers: { POST: handleAcceptInvite } },

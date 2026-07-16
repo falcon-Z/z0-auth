@@ -22,6 +22,7 @@ import {
   patchIdentityProvider,
 } from "../../lib/federation-providers";
 import { listBuiltinSetupGuides } from "../../lib/federation-builtin";
+import { requireRecentConsoleMfa } from "../../lib/mfa";
 
 export async function handleListIdentityProviders(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "settings.federation:read");
@@ -56,6 +57,8 @@ export async function handleCreateProviderFromTemplate(req: RoutedRequest): Prom
 
   const auth = await requireScope(req, "settings.federation:update");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<CreateIdentityProviderFromTemplateRequest>(req);
   if (!parsed.ok) return parsed.response;
@@ -80,6 +83,8 @@ export async function handleCreateCustomProvider(req: RoutedRequest): Promise<Re
 
   const auth = await requireScope(req, "settings.federation:update");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<CreateCustomIdentityProviderRequest>(req);
   if (!parsed.ok) return parsed.response;
@@ -104,6 +109,8 @@ export async function handlePatchIdentityProvider(req: RoutedRequest): Promise<R
 
   const auth = await requireScope(req, "settings.federation:update");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<PatchIdentityProviderRequest>(req);
   if (!parsed.ok) return parsed.response;
@@ -127,6 +134,8 @@ export async function handleDeleteIdentityProvider(req: RoutedRequest): Promise<
 
   const auth = await requireScope(req, "settings.federation:update");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const error = await deleteIdentityProvider(req.pathParams?.providerId ?? "");
   if (error) return error;

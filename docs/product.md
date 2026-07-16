@@ -18,6 +18,7 @@ Self-hostable **Auth0 / Clerk** for your apps: you run the IAM instance; your ap
 - **Hosted app auth** — Branded sign-in/sign-up pages with email/password and social providers (Google, Apple, GitHub, Facebook) when enabled per app.
 - **Authorization server** — `/oauth/*` + token and OIDC endpoints (M09–M10): your app is the OAuth client; we are the identity provider.
 - **JSON API** — `/api/*` for the console and server-side integration.
+- **Multi-factor authentication** — authenticator-app TOTP, recovery codes, remembered browsers, sensitive-action rechecks, and controlled reset for console members and app users.
 
 ### End-user experience (target)
 

@@ -61,6 +61,20 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | CSRF | Valid token required | `csrf_invalid` | 403 | Refresh token |
 | Success | Revoke other sessions | — | 200 | Success state |
 
+## MFA (`/api/auth/mfa*` and hosted equivalents)
+
+| Input | Rule | Code | HTTP | UI |
+|-------|------|------|------|-----|
+| Enrollment | Authenticated exact realm; pending setup expires after 10 minutes | `mfa_already_enabled` / `mfa_enrollment_expired` | 409 | Restart setup |
+| TOTP `code` | Exactly six digits after removing spaces; current step ±1; time step not previously accepted | `mfa_code_invalid` | 401 | Inline generic error |
+| Recovery `code` | 128-bit Base32 display format; hash exists and is unused | `mfa_code_invalid` / `mfa_recovery_codes_exhausted` | 401 | Inline generic error |
+| Challenge cookie | Hashed, unconsumed, matching realm/app/client hashes, expires after 5 minutes | `mfa_challenge_expired` | 401 | Sign in again |
+| Challenge attempts | Five failures per challenge and shared identity/IP limits | `rate_limited` | 429 | Sign in again |
+| Remember browser | Explicit unchecked choice; 30 days; maximum five; rotate on use | — | 200 / 303 | Show in security page |
+| Sensitive console action | Current session has MFA within 10 minutes when actor enrolled | `mfa_step_up_required` | 403 | Prompt, verify, retry once |
+| State-changing management | Correct realm session and CSRF | `csrf_invalid` | 403 | Refresh and retry |
+| Operator reset | Permission, recent MFA, exact app boundary, not self/owner | `permission_denied` / `mfa_step_up_required` | 403 / 409 | Explain recovery path |
+
 ## Instance members (`/api/v1/members`)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

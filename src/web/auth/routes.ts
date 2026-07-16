@@ -43,6 +43,7 @@ import { renderMagicLinkOutcomePage } from "./login-ui";
 const STATIC_DIR = path.join(import.meta.dir, "../static");
 const AUTH_CSS = Bun.file(path.join(STATIC_DIR, "auth.css"));
 const AUTH_FORMS_JS = Bun.file(path.join(STATIC_DIR, "auth-forms.js"));
+const MFA_QR_JS = Bun.file(path.join(STATIC_DIR, "mfa-qr.js"));
 const HTMX_JS = Bun.file(path.join(import.meta.dir, "../../../node_modules/htmx.org/dist/htmx.min.js"));
 
 type FormFields = Record<string, string>;
@@ -853,8 +854,8 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
 
   const result =
     realm.mode === "app"
-      ? await runAppLogin(req, realm.appId, form.email ?? "", form.password ?? "")
-      : await runLogin(req, form.email ?? "", form.password ?? "");
+      ? await runAppLogin(req, realm.appId, form.email ?? "", form.password ?? "", form.return_to)
+      : await runLogin(req, form.email ?? "", form.password ?? "", form.return_to);
 
   if (!result.ok) {
     const errors = result.fieldErrors ?? (await problemFieldErrors(result.response));
@@ -871,9 +872,16 @@ async function postLoginPage(req: BunRequest): Promise<Response> {
     );
   }
 
+  if (result.mfaRequired) {
+    return htmlFormRedirect(req, "/auth/mfa", { setCookie: result.setCookie });
+  }
+
   const fallback = app || parseCookies(req).has("z0_oauth_return") ? "/oauth/resume" : "/";
   const location = safeReturnPath(form.return_to, fallback);
-  return htmlFormRedirect(req, location, { setCookie: result.setCookie });
+  return htmlFormRedirect(req, location, {
+    setCookie: result.setCookie,
+    setCookies: result.rememberedBrowserCookie ? [result.rememberedBrowserCookie] : undefined,
+  });
 }
 
 async function getRegisterPage(req: BunRequest): Promise<Response> {
@@ -1044,6 +1052,12 @@ async function serveAuthFormsJs(): Promise<Response> {
   });
 }
 
+async function serveMfaQrJs(): Promise<Response> {
+  return new Response(MFA_QR_JS, {
+    headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}
+
 export const authWebRoutes = {
   "/auth/setup": {
     GET: getSetupPage,
@@ -1065,6 +1079,9 @@ export const authWebRoutes = {
   },
   "/static/auth-forms.js": {
     GET: serveAuthFormsJs,
+  },
+  "/static/mfa-qr.js": {
+    GET: serveMfaQrJs,
   },
   "/static/htmx.min.js": {
     GET: () => new Response(HTMX_JS, { headers: { "Content-Type": "text/javascript; charset=utf-8" } }),

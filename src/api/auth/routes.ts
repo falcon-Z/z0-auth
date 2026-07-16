@@ -6,6 +6,17 @@ import {
   handleResetPassword,
   handleSession,
 } from "./handlers";
+import {
+  handleConfirmMfaEnrollment,
+  handleCompleteMfaChallenge,
+  handleDisableMfa,
+  handleGetMfaStatus,
+  handleRegenerateRecoveryCodes,
+  handleStartMfaEnrollment,
+  handleMfaStepUp,
+  handleListRememberedBrowsers,
+  handleRevokeRememberedBrowser,
+} from "./mfa-handlers";
 
 /**
  * Authentication API routes (JSON). Public auth UI is served separately under /login, etc.
@@ -33,5 +44,35 @@ export const authApiRoutes = {
 
   "/api/auth/change-password": {
     POST: handleChangePassword,
+  },
+
+  "/api/auth/mfa": {
+    GET: handleGetMfaStatus,
+    DELETE: handleDisableMfa,
+  },
+
+  "/api/auth/mfa/enrollment": {
+    POST: handleStartMfaEnrollment,
+  },
+
+  "/api/auth/mfa/enrollment/confirm": {
+    POST: handleConfirmMfaEnrollment,
+  },
+
+  "/api/auth/mfa/recovery-codes": {
+    POST: handleRegenerateRecoveryCodes,
+  },
+
+  "/api/auth/mfa/challenge": {
+    POST: handleCompleteMfaChallenge,
+  },
+
+  "/api/auth/mfa/step-up": {
+    POST: handleMfaStepUp,
+  },
+
+  "/api/auth/mfa/remembered-browsers": {
+    GET: handleListRememberedBrowsers,
+    DELETE: handleRevokeRememberedBrowser,
   },
 } as const;

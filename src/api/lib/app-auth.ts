@@ -25,9 +25,11 @@ import {
   recordAppPasswordFailure,
 } from "./account-lifecycle";
 import { issueAppEmailVerification } from "./app-email-verification";
+import { acceptAppUserRememberedBrowser, createAppUserMfaChallenge, hasAppUserMfa } from "./mfa";
 
 export type AppAuthResult =
-  | { ok: true; setCookie: string; appUserId: string }
+  | { ok: true; mfaRequired: false; setCookie: string; rememberedBrowserCookie?: string; appUserId: string }
+  | { ok: true; mfaRequired: true; setCookie: string; appUserId: string; challengeExpiresAt: Date }
   | { ok: false; response: Response; fieldErrors?: { field: string; message: string }[] };
 
 async function findAppUserForLogin(appId: string, email: string): Promise<{
@@ -83,6 +85,7 @@ export async function runAppLogin(
   appId: string,
   emailRaw: string,
   password: string,
+  returnPath?: string | null,
 ): Promise<AppAuthResult> {
   const rate = await checkRateLimit({
     key: `app-login:${appId}:${clientIp(req)}`,
@@ -146,10 +149,40 @@ export async function runAppLogin(
   }
 
   const preparedSession = await prepareAppSession(req);
+  let rememberedBrowserCookie: string | undefined;
+  if (await hasAppUserMfa(user.id, appId)) {
+    const remembered = await acceptAppUserRememberedBrowser(req, user.id, appId);
+    rememberedBrowserCookie = remembered.setCookie;
+    if (remembered.reuseDetected) {
+      await writeAuditEvent({ action: "mfa.remembered_browser_reuse_detected", resourceType: "app_user", resourceId: user.id, payload: { realm: "app", appId } });
+    }
+    if (!remembered.accepted) {
+      const stillAvailable = await finalizeAppPasswordSignIn(user.id, appId, async () => true);
+      if (!stillAvailable) {
+        return {
+          ok: false,
+          response: problem(401, "Unauthorized", invalidMessage, {
+            errors: [{ field: "_auth", code: ErrorCodes.INVALID_CREDENTIALS, message: invalidMessage }],
+          }),
+          fieldErrors: [{ field: "_auth", message: invalidMessage }],
+        };
+      }
+      const challenge = await createAppUserMfaChallenge(req, user.id, appId, "password", returnPath);
+      return {
+        ok: true,
+        mfaRequired: true,
+        setCookie: challenge.setCookie,
+        appUserId: user.id,
+        challengeExpiresAt: challenge.expiresAt,
+      };
+    }
+  }
   const session = await finalizeAppPasswordSignIn(
     user.id,
     appId,
-    (tx) => insertAppSession(tx, user.id, appId, preparedSession),
+    (tx) => insertAppSession(tx, user.id, appId, preparedSession, {
+      authenticationMethod: rememberedBrowserCookie ? "password+remembered_browser" : "password",
+    }),
   );
   if (!session) {
     await writeAuditEvent({
@@ -177,7 +210,9 @@ export async function runAppLogin(
 
   return {
     ok: true,
+    mfaRequired: false,
     setCookie: appSessionCookieHeader(session.token, session.expiresAt),
+    rememberedBrowserCookie,
     appUserId: user.id,
   };
 }
@@ -256,7 +291,7 @@ export async function runAppRegister(
 
     await issueAppEmailVerification(req, appUserId);
 
-    return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
+    return { ok: true, mfaRequired: false, setCookie: session.setCookie, appUserId: session.appUserId };
   } catch (error) {
     if (error instanceof Error && error.message.includes("unique")) {
       return {
@@ -281,11 +316,22 @@ export async function runAppInviteAcceptSignIn(
   req: BunRequest,
   appId: string,
   appUserId: string,
+  returnPath?: string | null,
 ): Promise<AppAuthResult> {
+  if (await hasAppUserMfa(appUserId, appId)) {
+    const challenge = await createAppUserMfaChallenge(req, appUserId, appId, "invitation", returnPath);
+    return {
+      ok: true,
+      mfaRequired: true,
+      setCookie: challenge.setCookie,
+      appUserId,
+      challengeExpiresAt: challenge.expiresAt,
+    };
+  }
   const session = await issueAppSession(req, appUserId, appId);
   const [row] = await getDb()`SELECT email FROM app_users WHERE id = ${appUserId} LIMIT 1`;
   if (row) {
     await ensureGroupMemberForAppUser(appUserId, appId, String((row as { email: string }).email));
   }
-  return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
+  return { ok: true, mfaRequired: false, setCookie: session.setCookie, appUserId: session.appUserId };
 }

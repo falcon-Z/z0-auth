@@ -36,6 +36,7 @@ import { resolveSession } from "./session";
 import { createSession, sessionCookieHeader, revokeAllUserSessions } from "./session";
 import { requestPublicOrigin } from "./config";
 import { accountStatus } from "./account-lifecycle";
+import { createConsoleMfaChallenge, hasConsoleMfa } from "./mfa";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -336,7 +337,7 @@ export async function acceptInstanceInvite(
   rawToken: string,
   body: AcceptInviteRequest,
 ): Promise<
-  | { ok: true; userId: string; setCookie?: string }
+  | { ok: true; userId: string; setCookie?: string; mfaRequired?: boolean }
   | { ok: false; response: Response }
 > {
   const invite = await findInviteByToken(rawToken);
@@ -497,7 +498,17 @@ export async function acceptInstanceInvite(
       await revokeAllUserSessions(result);
     }
 
-    const { token, expiresAt } = await createSession(result, req);
+    if (await hasConsoleMfa(result)) {
+      const challenge = await createConsoleMfaChallenge(req, result, "invitation", "/");
+      return {
+        ok: true,
+        userId: result,
+        setCookie: challenge.setCookie,
+        mfaRequired: true,
+      };
+    }
+
+    const { token, expiresAt } = await createSession(result, req, { authenticationMethod: "invitation" });
     return {
       ok: true,
       userId: result,
@@ -652,6 +663,9 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
       u.disabled_at,
       u.locked_until,
       u.deleted_at
+      , EXISTS (
+        SELECT 1 FROM user_totp_factors f WHERE f.user_id = u.id AND f.confirmed_at IS NOT NULL
+      ) AS mfa_enabled
     FROM instance_members m
     JOIN users u ON u.id = m.user_id
     ORDER BY u.name ASC
@@ -671,6 +685,7 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
       disabled_at: Date | null;
       locked_until: Date | null;
       deleted_at: Date | null;
+      mfa_enabled: boolean;
     };
     const userId = String(r.id);
     const status = accountStatus(r);
@@ -682,6 +697,7 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
       isBootstrap: Boolean(r.is_bootstrap),
       status,
       emailVerified: Boolean(r.email_verified_at),
+      mfaEnabled: Boolean(r.mfa_enabled),
       disabledAt: r.disabled_at ? new Date(r.disabled_at).toISOString() : null,
       lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : null,
       deletedAt: r.deleted_at ? new Date(r.deleted_at).toISOString() : null,

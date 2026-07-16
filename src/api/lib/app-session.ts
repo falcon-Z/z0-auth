@@ -28,6 +28,12 @@ export type PreparedAppSession = {
   ipDisplay: string;
 };
 
+export type AppSessionAssurance = {
+  primaryAuthenticatedAt?: Date;
+  mfaAuthenticatedAt?: Date | null;
+  authenticationMethod?: string;
+};
+
 export async function prepareAppSession(req: Request): Promise<PreparedAppSession> {
   const existingToken = parseCookies(req).get(APP_SESSION_COOKIE) ?? null;
   const generatedToken = randomToken(32);
@@ -51,6 +57,7 @@ export async function insertAppSession(
   appUserId: string,
   appId: string,
   prepared: PreparedAppSession,
+  assurance: AppSessionAssurance = {},
 ): Promise<{ token: string; expiresAt: Date }> {
   const [existingBrowser] = prepared.existingHash
     ? await tx`
@@ -94,9 +101,12 @@ export async function insertAppSession(
     INSERT INTO app_user_sessions (
       app_user_id, app_id, browser_session_id, token_hash, expires_at,
       ip_hash, user_agent_hash, client_label, ip_display
+      , primary_authenticated_at, mfa_authenticated_at, authentication_method
     ) VALUES (
       ${appUserId}, ${appId}, ${browserSessionId}, NULL, ${expiresAt},
-      ${prepared.ipHash}, ${prepared.userAgentHash}, ${prepared.clientLabel}, ${prepared.ipDisplay}
+      ${prepared.ipHash}, ${prepared.userAgentHash}, ${prepared.clientLabel}, ${prepared.ipDisplay},
+      ${assurance.primaryAuthenticatedAt ?? new Date()}, ${assurance.mfaAuthenticatedAt ?? null},
+      ${assurance.authenticationMethod ?? "password"}
     )
   `;
   return { token, expiresAt };
@@ -106,9 +116,10 @@ export async function createAppSession(
   appUserId: string,
   appId: string,
   req: Request,
+  assurance: AppSessionAssurance = {},
 ): Promise<{ token: string; expiresAt: Date }> {
   const prepared = await prepareAppSession(req);
-  return getDb().begin((tx) => insertAppSession(tx, appUserId, appId, prepared));
+  return getDb().begin((tx) => insertAppSession(tx, appUserId, appId, prepared, assurance));
 }
 
 export async function revokeAppSessionByToken(token: string): Promise<void> {

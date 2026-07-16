@@ -85,6 +85,19 @@ Accepting an invite inserts `instance_members` (no roles).
 
 `users` is the console identity realm. Lifecycle columns are `disabled_at`, `locked_until`, and `deleted_at`, with operator actor IDs for disable/delete and bounded failed-sign-in counters. APIs derive `active`, `disabled`, `locked`, or `deleted` from these timestamps. A recoverably deleted user keeps its `instance_members` row and reserved email. Permanent deletion cascades credentials, membership, roles, sessions, and reset tokens.
 
+### Multi-factor authentication
+
+MFA storage is realm-separated:
+
+| Console tables | App-user tables | Purpose |
+|---|---|---|
+| `user_totp_factors` | `app_user_totp_factors` | One encrypted TOTP seed per identity, confirmation time, and last accepted time step |
+| `user_mfa_recovery_codes` | `app_user_mfa_recovery_codes` | Hashed single-use recovery codes |
+| `user_mfa_challenges` | `app_user_mfa_challenges` | Hashed five-minute pre-authentication challenges and attempt counts |
+| `user_mfa_remembered_browsers` | `app_user_mfa_remembered_browsers` | Hashed rotating 30-day remembered tokens and safe device labels |
+
+App-user rows include `app_id` and composite foreign keys so a factor or challenge cannot cross an app boundary. `sessions` and `app_user_sessions` record primary authentication time, recent MFA time, and authentication method. Full sessions are inserted only after the MFA challenge is consumed when a factor is enabled.
+
 ### `apps` (M03)
 
 | Column | Type | Notes |
@@ -354,7 +367,7 @@ Console API: `GET/POST /api/v1/service-groups`, `GET/PATCH/DELETE …/:groupId`,
 
 Append-only security log. `actor_user_id` references console `users` when the actor is an operator; app-user and system events use `payload` (e.g. `appUserId`, `appId`) without a FK.
 
-Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `app_user_session.revoked`, `app_user.*`, and `console_member.*`. Lifecycle events distinguish lock, unlock, disable, enable, reset request/completion, recoverable deletion, restore, verification, and permanent deletion.
+Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `mfa.*`, `app_user_session.revoked`, `app_user.*`, and `console_member.*`. Lifecycle events distinguish lock, unlock, disable, enable, reset request/completion, recoverable deletion, restore, verification, and permanent deletion. MFA events distinguish enrollment, enable/disable/reset, challenge results, recovery-code use/regeneration, remembered-browser changes/reuse, step-up, and local owner recovery without storing secret material.
 
 Console API: `GET /api/v1/audit-events` with optional `limit`, `before`, `action`, `resourceType`. Scope: `settings.audit:read`.
 

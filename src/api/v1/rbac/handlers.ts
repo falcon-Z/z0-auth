@@ -20,6 +20,7 @@ import { transferInstanceOwnership } from "../../lib/ownership";
 import { listPlatformResources, requireScope } from "../../lib/platform-rbac";
 import { json, problem } from "../../lib/http";
 import type { RoutedRequest } from "../../lib/path-router";
+import { requireRecentConsoleMfa } from "../../lib/mfa";
 
 export async function handleListRbacResources(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "roles:read");
@@ -129,6 +130,8 @@ export async function handleTransferOwnership(req: RoutedRequest): Promise<Respo
 
   const auth = await requireScope(req, "ownership:transfer");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<TransferOwnershipRequest>(req);
   if (!parsed.ok) return parsed.response;

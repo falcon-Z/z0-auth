@@ -263,6 +263,8 @@ export async function completePasswordReset(
   if (!completed) return invalidResetTokenResponse();
 
   await revokeAllUserSessions(row.user_id);
+  await getDb()`UPDATE user_mfa_challenges SET consumed_at = NOW() WHERE user_id = ${row.user_id} AND consumed_at IS NULL`;
+  await getDb()`UPDATE user_mfa_remembered_browsers SET revoked_at = NOW() WHERE user_id = ${row.user_id} AND revoked_at IS NULL`;
   await writeAuditEvent({
     actorUserId: row.user_id,
     action: "password_reset.completed",

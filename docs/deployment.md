@@ -90,7 +90,18 @@ These responses do not include connection strings, database errors, secret value
    - Leave them unset and create the owner in `/auth/setup`.
 5. **Open the console root URL** — the checklist should turn green. If bootstrap configuration is complete, the first owner is created automatically; otherwise you are redirected to `/auth/setup`.
 6. **Complete platform setup** if you are using the manual browser flow — organization name, your name, email, and password. If `INSTALL_TOKEN` is set, enter it on the setup form.
-7. **Sign in** at `/auth/login` with the owner account.
+7. **Sign in** at `/auth/login` with the owner account. Enable MFA under **Profile → Security** and save the recovery codes outside this server.
+
+### Owner MFA recovery
+
+Use recovery codes first. If the owner loses both the authenticator and every recovery code, an operator with direct host and database access can remove only the owner's MFA material:
+
+```bash
+bun run mfa:reset-owner --email owner@example.com \
+  --confirm-email owner@example.com --revoke-all-sessions
+```
+
+The command requires the normalized owner email twice, verifies that it belongs to the instance owner, records `mfa.local_owner_reset`, and revokes all owner sessions and remembered browsers. It does not reset the password or enable a disabled/deleted account. Protect host and database access as a recovery authority and test this procedure before relying on it.
 
 For local development, use `bun run db:reset` instead of `db:migrate` when you want a clean database. See [development.md](./development.md).
 

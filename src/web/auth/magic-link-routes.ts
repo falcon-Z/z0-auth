@@ -23,6 +23,12 @@ import { preparePageCsrf, withSetCookie } from "../csrf-page";
 import { safeReturnPath } from "../safe-return-path";
 import { renderInvalidClientPage, renderLoginForm } from "./routes";
 import { renderMagicLinkOutcomePage } from "./login-ui";
+import {
+  createAppUserMfaChallenge,
+  createConsoleMfaChallenge,
+  hasAppUserMfa,
+  hasConsoleMfa,
+} from "../../api/lib/mfa";
 
 type AppLoginContext = Pick<AppAuthRealm, "clientId" | "appName">;
 
@@ -324,6 +330,16 @@ async function postMagicLinkAcceptPage(req: BunRequest): Promise<Response> {
   let setCookie: string;
   const returnTo = form.return_to;
   if (consumed.realm === "app" && consumed.appId) {
+    if (await hasAppUserMfa(consumed.userId, consumed.appId)) {
+      const challenge = await createAppUserMfaChallenge(
+        req,
+        consumed.userId,
+        consumed.appId,
+        "magic_link",
+        returnTo,
+      );
+      return htmlFormRedirect(req, "/auth/mfa", { setCookie: challenge.setCookie });
+    }
     const session = await createAppSession(consumed.userId, consumed.appId, req);
     const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${consumed.userId} LIMIT 1`;
     if (userRow) {
@@ -335,6 +351,11 @@ async function postMagicLinkAcceptPage(req: BunRequest): Promise<Response> {
     }
     setCookie = appSessionCookieHeader(session.token, session.expiresAt);
     return htmlFormRedirect(req, safeReturnPath(returnTo, "/oauth/resume"), { setCookie });
+  }
+
+  if (await hasConsoleMfa(consumed.userId)) {
+    const challenge = await createConsoleMfaChallenge(req, consumed.userId, "magic_link", returnTo);
+    return htmlFormRedirect(req, "/auth/mfa", { setCookie: challenge.setCookie });
   }
 
   const existingConsoleToken = parseCookies(req).get(SESSION_COOKIE);

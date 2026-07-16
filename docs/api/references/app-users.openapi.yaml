@@ -234,6 +234,28 @@ paths:
         "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
         "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
         "409": { $ref: "common.openapi.yaml#/components/responses/Conflict" }
+  /api/v1/apps/{appId}/users/{userId}/mfa-reset:
+    post:
+      tags: [AppUsers]
+      summary: Reset an app user's MFA enrollment
+      operationId: resetAppUserMfa
+      description: Removes the user's authenticator factor, recovery codes, remembered browsers, pending MFA challenges, and active sessions. Requires recent MFA verification by the operator.
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: MFA enrollment reset }
+        "401": { $ref: "common.openapi.yaml#/components/responses/Unauthorized" }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
   /api/v1/apps/{appId}/users/{userId}/sessions/{sessionId}:
     delete:
       tags: [AppUsers]
@@ -378,7 +400,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/AppUserSummary"
         - type: object
-          required: [metadata, activeSessionCount]
+          required: [metadata, activeSessionCount, mfaEnabled]
           properties:
             metadata:
               type: object
@@ -386,6 +408,8 @@ components:
               additionalProperties: true
             activeSessionCount:
               type: integer
+            mfaEnabled:
+              type: boolean
     CreateAppUserRequest:
       type: object
       required: [email, name, password, passwordConfirm]

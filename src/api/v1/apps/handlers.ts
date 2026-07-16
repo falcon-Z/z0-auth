@@ -16,6 +16,7 @@ import { validateCsrf } from "../../lib/csrf";
 import { json } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
+import { requireRecentConsoleMfa } from "../../lib/mfa";
 
 export async function handleListApps(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "apps:read");
@@ -100,6 +101,8 @@ export async function handleCreateCredential(req: RoutedRequest): Promise<Respon
   const appId = req.pathParams?.appId ?? "";
   const auth = await requireScope(req, "apps.credentials:create");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<CreateCredentialRequest>(req);
   if (!parsed.ok) return parsed.response;
@@ -126,6 +129,8 @@ export async function handleRevokeCredential(req: RoutedRequest): Promise<Respon
   const credentialId = req.pathParams?.credentialId ?? "";
   const auth = await requireScope(req, "apps.credentials:revoke");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const result = await revokeCredential(appId, credentialId);
   if (!result.ok) return result.response;
@@ -149,6 +154,8 @@ export async function handleRotateCredential(req: RoutedRequest): Promise<Respon
   const credentialId = req.pathParams?.credentialId ?? "";
   const auth = await requireScope(req, "apps.credentials:rotate");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const result = await rotateCredential(appId, credentialId);
   if (!result.ok) return result.response;

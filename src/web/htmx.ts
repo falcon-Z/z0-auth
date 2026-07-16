@@ -8,12 +8,13 @@ export function isHtmxRequest(req: Request): boolean {
 export function htmlFormRedirect(
   req: Request,
   location: string,
-  options?: { setCookie?: string },
+  options?: { setCookie?: string; setCookies?: string[] },
 ): Response {
   const path = location.startsWith("/") ? location : "/";
   const headers = new Headers();
 
   if (options?.setCookie) headers.append("Set-Cookie", options.setCookie);
+  for (const cookie of options?.setCookies ?? []) headers.append("Set-Cookie", cookie);
 
   if (isHtmxRequest(req)) {
     headers.set("HX-Redirect", path);

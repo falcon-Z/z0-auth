@@ -25,6 +25,7 @@ import {
   patchAppUser,
   sendAppUserPasswordReset,
   sendAppUserVerification,
+  resetAppUserMfa,
   transitionAppUser,
 } from "../../../lib/app-users-api";
 import { fetchApp } from "../../../lib/apps-api";
@@ -207,6 +208,28 @@ export function AppUserDetailPage() {
     }
   }
 
+  async function handleResetMfa() {
+    if (!appId || !userId || !user) return;
+    const ok = await confirm({
+      title: "Reset MFA",
+      description: `Remove ${user.name}’s authenticator, recovery codes, remembered browsers, sessions, and tokens?`,
+      confirmLabel: "Reset MFA",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusyStatus(true);
+    try {
+      await resetAppUserMfa(appId, userId);
+      setNotice("MFA reset. The user must sign in and enroll again.");
+      await reload();
+      await reloadSessions();
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : "Could not reset MFA.");
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
   async function handleRevokeSession(session: SessionSummary) {
     if (!appId || !userId) return;
     const ok = await confirm({
@@ -281,7 +304,17 @@ export function AppUserDetailPage() {
           <dt className="text-muted-foreground">Email verification</dt>
           <dd>{user.emailVerified ? "Verified" : "Not verified"}</dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Multi-factor authentication</dt>
+          <dd>{user.mfaEnabled ? "Enabled" : "Not enabled"}</dd>
+        </div>
       </dl>
+
+      {user.mfaEnabled ? (
+        <Button type="button" variant="destructive" disabled={busyStatus} onClick={() => void handleResetMfa()}>
+          Reset MFA
+        </Button>
+      ) : null}
 
       <form
         className="max-w-md space-y-4"

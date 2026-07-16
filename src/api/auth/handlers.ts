@@ -21,6 +21,7 @@ import {
 import { verifyResetToken } from "../lib/instance-keys";
 import { changePassword } from "../lib/users";
 import { runLogin } from "./service";
+import { requireRecentConsoleMfa } from "../lib/mfa";
 
 export async function handleLogin(req: BunRequest): Promise<Response> {
   const csrfError = validateCsrf(req);
@@ -32,9 +33,20 @@ export async function handleLogin(req: BunRequest): Promise<Response> {
   const result = await runLogin(req, parsed.body.email, parsed.body.password ?? "");
   if (!result.ok) return result.response;
 
+  if (result.mfaRequired) {
+    const headers = new Headers({ "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+    headers.set("Set-Cookie", result.setCookie);
+    return new Response(JSON.stringify({
+      authenticated: false,
+      mfaRequired: true,
+      challengeExpiresAt: result.challengeExpiresAt.toISOString(),
+    }), { status: 202, headers });
+  }
+
   const payload = await buildAuthenticatedSessionPayload(result.userId);
   const headers = new Headers({ "Content-Type": "application/json; charset=utf-8" });
   headers.set("Set-Cookie", result.setCookie);
+  if (result.rememberedBrowserCookie) headers.append("Set-Cookie", result.rememberedBrowserCookie);
 
   return new Response(JSON.stringify(payload), { status: 200, headers });
 }
@@ -93,6 +105,8 @@ export async function handleChangePassword(req: BunRequest): Promise<Response> {
 
   const auth = await requireSession(req);
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<ChangePasswordRequest>(req);
   if (!parsed.ok) return parsed.response;

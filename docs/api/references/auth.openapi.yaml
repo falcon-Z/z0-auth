@@ -60,6 +60,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthenticatedSession"
+        "202":
+          description: Primary credentials accepted; MFA challenge required before a session is issued
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaChallengeRequired"
         "400":
           $ref: "common.openapi.yaml#/components/responses/ValidationError"
         "401":
@@ -222,6 +232,171 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "503":
           $ref: "common.openapi.yaml#/components/responses/SetupRequired"
+  /api/auth/mfa:
+    get:
+      tags: [Auth]
+      summary: Current console member MFA status
+      operationId: getAuthMfa
+      responses:
+        "200":
+          description: Safe MFA status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaStatus"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+    delete:
+      tags: [Auth]
+      summary: Disable current console member MFA
+      operationId: deleteAuthMfa
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaProof"
+      responses:
+        "200":
+          description: MFA disabled; other sessions and remembered browsers revoked
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+  /api/auth/mfa/enrollment:
+    post:
+      tags: [Auth]
+      summary: Start console member TOTP enrollment
+      operationId: postAuthMfaEnrollment
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      responses:
+        "201":
+          description: Pending ten-minute enrollment; response is not cacheable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaEnrollment"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
+  /api/auth/mfa/enrollment/confirm:
+    post:
+      tags: [Auth]
+      summary: Confirm TOTP enrollment and return recovery codes once
+      operationId: postAuthMfaEnrollmentConfirm
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaProof"
+      responses:
+        "200":
+          description: MFA enabled; recovery codes shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaRecoveryCodes"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /api/auth/mfa/recovery-codes:
+    post:
+      tags: [Auth]
+      summary: Replace recovery codes
+      operationId: postAuthMfaRecoveryCodes
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaProof"
+      responses:
+        "200":
+          description: Previous recovery codes invalidated; new codes shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaRecoveryCodes"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /api/auth/mfa/challenge:
+    post:
+      tags: [Auth]
+      summary: Complete a pre-authentication MFA challenge
+      operationId: postAuthMfaChallenge
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/MfaProof"
+                - type: object
+                  properties:
+                    rememberBrowser:
+                      type: boolean
+                      default: false
+      responses:
+        "200":
+          description: Challenge consumed and full realm session issued
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
+  /api/auth/mfa/step-up:
+    post:
+      tags: [Auth]
+      summary: Refresh recent MFA assurance on the current console session
+      operationId: postAuthMfaStepUp
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaProof"
+      responses:
+        "200":
+          description: Current session has fresh MFA assurance for ten minutes
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+  /api/auth/mfa/remembered-browsers:
+    get:
+      tags: [Auth]
+      summary: List active remembered browsers
+      operationId: getAuthMfaRememberedBrowsers
+      responses:
+        "200":
+          description: Remembered browser summaries
+    delete:
+      tags: [Auth]
+      summary: Revoke one remembered browser
+      operationId: deleteAuthMfaRememberedBrowser
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+      responses:
+        "200":
+          description: Remembered browser revoked
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
 components:
   securitySchemes:
     CsrfHeader:
@@ -259,6 +434,62 @@ components:
           type: string
         passwordConfirm:
           type: string
+    MfaProof:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: Six-digit TOTP or single-use recovery code.
+    MfaStatus:
+      type: object
+      required: [enabled, pendingEnrollment, enabledAt, recoveryCodesRemaining]
+      properties:
+        enabled:
+          type: boolean
+        pendingEnrollment:
+          type: boolean
+        enabledAt:
+          type: [string, "null"]
+          format: date-time
+        recoveryCodesRemaining:
+          type: integer
+          minimum: 0
+    MfaEnrollment:
+      type: object
+      required: [secret, provisioningUri, expiresAt]
+      properties:
+        secret:
+          type: string
+          description: Base32 TOTP setup secret; returned only for the pending enrollment.
+        provisioningUri:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    MfaRecoveryCodes:
+      type: object
+      required: [recoveryCodes]
+      properties:
+        recoveryCodes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+    MfaChallengeRequired:
+      type: object
+      required: [authenticated, mfaRequired, challengeExpiresAt]
+      properties:
+        authenticated:
+          type: boolean
+          const: false
+        mfaRequired:
+          type: boolean
+          const: true
+        challengeExpiresAt:
+          type: string
+          format: date-time
     SessionResponse:
       type: object
       required: [authenticated]

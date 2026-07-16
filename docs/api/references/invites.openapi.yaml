@@ -123,6 +123,27 @@ paths:
         "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
         "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
         "409": { $ref: "common.openapi.yaml#/components/responses/Conflict" }
+  /api/v1/members/{userId}/mfa-reset:
+    post:
+      tags: [Members]
+      summary: Reset a console member's MFA enrollment
+      operationId: resetMemberMfa
+      description: Removes the member's authenticator factor, recovery codes, remembered browsers, pending MFA challenges, and active sessions. Requires recent MFA verification by the operator.
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: MFA enrollment reset }
+        "401": { $ref: "common.openapi.yaml#/components/responses/Unauthorized" }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
   /api/v1/members/invites:
     get:
       tags: [Members]
@@ -265,7 +286,7 @@ components:
   schemas:
     InstanceMember:
       type: object
-      required: [userId, email, name, joinedAt, isBootstrap, status, emailVerified, disabledAt, lockedUntil, deletedAt, roles]
+      required: [userId, email, name, joinedAt, isBootstrap, status, emailVerified, mfaEnabled, disabledAt, lockedUntil, deletedAt, roles]
       properties:
         userId: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -276,6 +297,7 @@ components:
           type: string
           enum: [active, disabled, locked, deleted]
         emailVerified: { type: boolean }
+        mfaEnabled: { type: boolean }
         disabledAt: { type: string, format: date-time, nullable: true }
         lockedUntil: { type: string, format: date-time, nullable: true }
         deletedAt: { type: string, format: date-time, nullable: true }

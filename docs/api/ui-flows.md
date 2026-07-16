@@ -38,6 +38,17 @@ If only some bootstrap variables are set, automatic setup does not run and the d
 | `GET /auth/login` | **302** `/` when already signed in |
 | Sign out | `POST /auth/logout` → **303** `/auth/login` |
 
+## Multi-factor authentication
+
+1. A signed-in console member uses **Profile → Security**, or an app user opens `/auth/security?client_id=…`.
+2. Setup shows a local authenticator deep link and manual Base32 key. The pending enrollment expires after 10 minutes.
+3. A valid six-digit code enables MFA and shows ten recovery codes exactly once.
+4. Later password, magic-link, federation, invitation, or service-group sign-in stops at `/auth/mfa` before a full session or OAuth result is issued.
+5. The user enters TOTP or a recovery code and may explicitly remember the browser for 30 days.
+6. Users can replace recovery codes, disable MFA, and revoke remembered browsers. Operators can reset eligible target MFA from member/app-user detail pages.
+
+JSON console self-service uses `/api/auth/mfa`, `/enrollment`, `/enrollment/confirm`, `/recovery-codes`, `/challenge`, `/step-up`, and `/remembered-browsers`. Sensitive console actions return `mfa_step_up_required` when the current MFA assurance is older than 10 minutes; the console asks for a fresh code and retries the action once.
+
 ## Instance member invite
 
 1. Instance member creates invite in console → receives **invite URL** (copy or `mailto:`).
@@ -80,6 +91,7 @@ Non-members with a valid session are denied console APIs (**403**).
 | `GET /auth/sessions?client_id=…` | App user must be signed in (`z0_app_session`); lists devices for that app only |
 | `POST /auth/sessions/revoke` | CSRF form; revokes one other session → **303** back to sessions page |
 | `POST /auth/sessions/revoke-others` | CSRF form; revokes all except current device → **303** |
+| `GET/POST /auth/security?client_id=…` | App user manages TOTP, recovery codes, and remembered browsers for that exact app identity |
 
 Console member self-service sessions remain at `/profile/sessions` (`GET/DELETE /api/v1/sessions`).
 

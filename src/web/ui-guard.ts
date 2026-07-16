@@ -48,6 +48,11 @@ export async function redirectForAuthPage(
       if ((page === "login" || page === "register") && !signedInToApp) {
         const sso = await tryGroupSsoSession(req, app.appId);
         if (sso.ok) {
+          if (sso.mfaRequired) {
+            const headers = new Headers({ Location: new URL("/auth/mfa", url).toString() });
+            appendSetCookie(headers, sso.setCookie);
+            return new Response(null, { status: 302, headers });
+          }
           const location = safeReturnPath(url.searchParams.get("return_to"), "/oauth/resume");
           const headers = new Headers({ Location: new URL(location, url).toString() });
           appendSetCookie(headers, sso.setCookie);

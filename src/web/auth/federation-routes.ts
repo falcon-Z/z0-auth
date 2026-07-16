@@ -30,6 +30,7 @@ import { redirectForAuthPage } from "../ui-guard";
 import { escapeHtml, renderAuthPage } from "../html";
 import { preparePageCsrf, withSetCookie } from "../csrf-page";
 import { safeReturnPath } from "../safe-return-path";
+import { createAppUserMfaChallenge, hasAppUserMfa } from "../../api/lib/mfa";
 
 const OAUTH_RETURN_COOKIE = "z0_oauth_return";
 
@@ -184,7 +185,23 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
       expiresIn: tokens.expires_in ?? null,
     });
 
-    const session = await createAppSession(linked.appUserId, stored.appId, req);
+    if (await hasAppUserMfa(linked.appUserId, stored.appId)) {
+      const challenge = await createAppUserMfaChallenge(
+        req,
+        linked.appUserId,
+        stored.appId,
+        "federation",
+        stored.returnTo,
+      );
+      const headers = new Headers({ Location: "/auth/mfa" });
+      headers.append("Set-Cookie", challenge.setCookie);
+      headers.append("Set-Cookie", clearFederationStateCookieHeader());
+      return new Response(null, { status: 302, headers });
+    }
+
+    const session = await createAppSession(linked.appUserId, stored.appId, req, {
+      authenticationMethod: "federation",
+    });
     const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${linked.appUserId} LIMIT 1`;
     if (userRow) {
       await ensureGroupMemberForAppUser(

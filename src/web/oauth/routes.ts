@@ -400,6 +400,11 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
   if (!resolved) {
     return loginRedirectForAuthorize(req, `${url.pathname}${url.search}`);
   }
+  if (!resolved.session) {
+    const headers = new Headers({ Location: "/auth/mfa" });
+    appendSetCookie(headers, resolved.setCookie);
+    return new Response(null, { status: 302, headers });
+  }
 
   const appSession = resolved.session;
 
@@ -444,6 +449,11 @@ async function getResume(req: BunRequest): Promise<Response> {
     const resolved = await resolveTargetAppSession(req, realm.appId);
     if (!resolved) {
       return loginRedirectForAuthorize(req, pending);
+    }
+    if (!resolved.session) {
+      const headers = new Headers({ Location: "/auth/mfa" });
+      appendSetCookie(headers, resolved.setCookie);
+      return new Response(null, { status: 302, headers });
     }
     const redirect = Response.redirect(new URL(pending, req.url), 302);
     appendSetCookie(redirect.headers, resolved.setCookie);
@@ -709,6 +719,11 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     if (consentState.codeChallengeMethod) params.set("code_challenge_method", consentState.codeChallengeMethod);
     if (consentState.oidcNonce) params.set("nonce", consentState.oidcNonce);
     return loginRedirectForAuthorize(req, `/oauth/authorize?${params.toString()}`);
+  }
+  if (!resolved.session) {
+    const headers = new Headers({ Location: "/auth/mfa" });
+    appendSetCookie(headers, resolved.setCookie);
+    return new Response(null, { status: 302, headers });
   }
   const appSession = resolved.session;
   if (appSession.appUserId !== consentState.appUserId) {

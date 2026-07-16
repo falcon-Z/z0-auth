@@ -11,6 +11,7 @@ import {
   resolveAppSessionForApp,
   type ActiveAppSession,
 } from "./app-session";
+import { createAppUserMfaChallenge, hasAppUserMfa } from "./mfa";
 import { finalizeAppPasswordSignIn } from "./account-lifecycle";
 import { getDb } from "./db";
 import { scopeIsSubset } from "./oauth-consent";
@@ -262,7 +263,8 @@ export async function groupSsoCoversScope(groupMemberId: string, requestedScope:
 }
 
 export type GroupSsoSessionResult =
-  | { ok: true; appUserId: string; appId: string; setCookie: string }
+  | { ok: true; mfaRequired: false; appUserId: string; appId: string; setCookie: string }
+  | { ok: true; mfaRequired: true; appUserId: string; appId: string; setCookie: string }
   | { ok: false };
 
 export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): Promise<GroupSsoSessionResult> {
@@ -293,6 +295,24 @@ export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): 
   });
   if (!provisioned.ok) return { ok: false };
 
+  if (await hasAppUserMfa(provisioned.appUserId, targetAppId)) {
+    const url = new URL(req.url);
+    const challenge = await createAppUserMfaChallenge(
+      req,
+      provisioned.appUserId,
+      targetAppId,
+      "service_group",
+      `${url.pathname}${url.search}`,
+    );
+    return {
+      ok: true,
+      mfaRequired: true,
+      appUserId: provisioned.appUserId,
+      appId: targetAppId,
+      setCookie: challenge.setCookie,
+    };
+  }
+
   const preparedSession = await prepareAppSession(req);
   const session = await finalizeAppPasswordSignIn(
     provisioned.appUserId,
@@ -302,6 +322,7 @@ export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): 
   if (!session) return { ok: false };
   return {
     ok: true,
+    mfaRequired: false,
     appUserId: provisioned.appUserId,
     appId: targetAppId,
     setCookie: appSessionCookieHeader(session.token, session.expiresAt),
@@ -310,6 +331,7 @@ export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): 
 
 export type ResolvedTargetAppSession =
   | { session: ActiveAppSession; setCookie?: string }
+  | { session: null; mfaRequired: true; setCookie: string }
   | null;
 
 export async function resolveTargetAppSession(
@@ -323,6 +345,7 @@ export async function resolveTargetAppSession(
 
   const sso = await tryGroupSsoSession(req, targetAppId);
   if (!sso.ok) return null;
+  if (sso.mfaRequired) return { session: null, mfaRequired: true, setCookie: sso.setCookie };
 
   return {
     session: {

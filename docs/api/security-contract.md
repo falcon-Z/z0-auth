@@ -41,6 +41,22 @@ Two session cookies — same lifetime and CSRF rules. **App context** (`client_i
 
 **Future APIs** that accept bearer tokens must document their own lifetime and revocation; browser console continues to use `z0_session` unless stated otherwise.
 
+## Multi-factor authentication
+
+TOTP MFA is available independently to console members and app users. A console factor belongs to one `users.id`; an app-user factor belongs to one app-scoped `app_users.id`. Matching email addresses never share a factor, recovery code, challenge, or remembered browser.
+
+- TOTP follows RFC 6238 with HMAC-SHA-1, six digits, a 30-second period, and a one-step clock-skew window. Seeds are encrypted with the instance data key.
+- Enrollment expires after 10 minutes and does not enable MFA until a current code is verified. Ten 128-bit recovery codes are shown once and stored only as SHA-256 hashes.
+- After any supported primary method succeeds, an MFA-enabled identity receives a five-minute `z0_mfa_challenge` cookie instead of a full realm session. Password, magic link, federation, invitations, and service-group reuse all use this gate.
+- A challenge is single-use, bound to realm, identity, app where relevant, IP/client hashes, and a safe return path. Five failed proofs consume it. A TOTP time step and each recovery code can be accepted only once.
+- `Remember this browser` is unchecked by default. Remembered tokens last 30 days, rotate after use, are stored hashed, and are limited to five per identity. App remembered cookies are isolated by app. Reuse of a rotated token revokes every remembered token for that identity/app.
+- Remembered browsers bypass the sign-in MFA prompt only. They do not set `mfa_authenticated_at` and cannot satisfy sensitive-action checks.
+- For a member with MFA enabled, named sensitive console mutations require `mfa_authenticated_at` in the current session within the last 10 minutes. Permission and CSRF checks still apply and MFA never grants a scope.
+- Password reset does not disable MFA. It revokes sessions, pending MFA challenges, and remembered browsers. Account disable/delete and operator MFA reset do the same.
+- Operator reset is available for eligible non-owner targets. Owners use the local typed-confirmation command documented in deployment guidance.
+
+MFA enrollment, challenge, recovery, and remembered-browser responses use `Cache-Control: no-store`. Seeds, provisioning URIs, submitted codes, recovery codes, and raw challenge/remembered tokens must never enter logs or audit payloads.
+
 ---
 
 ## CSRF
@@ -136,6 +152,7 @@ Operator-managed **`INSTANCE_DATA_KEY`** (AES-256-GCM) encrypts reversible secre
 | Federation provider client secret | `identity_providers.client_secret_ciphertext` | AES-256-GCM via data key |
 | OIDC signing private key | `oidc_signing_keys.private_key_ciphertext` | AES-256-GCM via data key |
 | Federated user refresh/access tokens | `app_user_provider_tokens.*_ciphertext` | AES-256-GCM via data key |
+| Console/app-user TOTP seeds | `*_totp_factors.secret_ciphertext` | AES-256-GCM via data key |
 
 **Federation token API:** App backends with the `federation:token` scope (via client credentials or user access token) may call `GET/POST …/federation/{providerId}/token` to read or refresh upstream provider tokens. Tokens are never returned to browsers; audit events `federation.token_accessed` and `federation.token_refreshed` are written on use.
 
@@ -146,6 +163,7 @@ One-way hashes (not encrypted — verification only, plaintext never stored):
 | OAuth client secret | `app_credentials.client_secret_hash` | Password-style hash |
 | OAuth / refresh tokens | `oauth_* .token_hash` | SHA-256 hash |
 | Session tokens | `sessions.token_hash`, `app_browser_sessions.token_hash` | SHA-256 hash |
+| MFA recovery/challenge/remembered tokens | `*_mfa_* .code_hash` / `.token_hash` | SHA-256 hash |
 | Console / app user passwords | `password_credentials`, `app_users.password_hash` | Password hash |
 
 Encrypted value format:

@@ -18,6 +18,7 @@ import {
 } from "../../lib/smtp-settings";
 import { ensureMagicLinkSignInWhenSmtpReady } from "../../lib/auth-settings";
 import { writeAuditEvent } from "../../lib/audit";
+import { requireRecentConsoleMfa } from "../../lib/mfa";
 
 export async function handleGetEmailSettings(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "settings.email:read");
@@ -32,6 +33,8 @@ export async function handlePutEmailSettings(req: RoutedRequest): Promise<Respon
 
   const auth = await requireScope(req, "settings.email:update");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
 
   const parsed = await parseJsonBody<PutEmailSettingsRequest>(req);
   if (!parsed.ok) return parsed.response;

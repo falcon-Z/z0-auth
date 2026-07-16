@@ -238,7 +238,7 @@ export async function postAppInvitePage(req: BunRequest): Promise<Response> {
       );
     }
 
-    const result = await runAppLogin(req, preview.appId, form.email ?? "", form.password ?? "");
+    const result = await runAppLogin(req, preview.appId, form.email ?? "", form.password ?? "", inviteReturnPath(token));
     const { token: csrf, setCookie } = preparePageCsrf(req);
     if (!result.ok) {
       const errors = result.fieldErrors ?? (await problemFieldErrors(result.response));
@@ -253,8 +253,15 @@ export async function postAppInvitePage(req: BunRequest): Promise<Response> {
       );
     }
 
+    if (result.mfaRequired) {
+      return htmlFormRedirect(req, "/auth/mfa", { setCookie: result.setCookie });
+    }
+
     const location = parseCookies(req).has("z0_oauth_return") ? "/oauth/resume" : inviteReturnPath(token);
-    return htmlFormRedirect(req, location, { setCookie: result.setCookie });
+    return htmlFormRedirect(req, location, {
+      setCookie: result.setCookie,
+      setCookies: result.rememberedBrowserCookie ? [result.rememberedBrowserCookie] : undefined,
+    });
   }
 
   const preview = await loadPreview(req, token);
@@ -290,7 +297,10 @@ export async function postAppInvitePage(req: BunRequest): Promise<Response> {
     return authErrorResponse(html, req, status, setCookie);
   }
 
-  const signIn = await runAppInviteAcceptSignIn(req, preview.appId, acceptResult.userId);
+  const signIn = await runAppInviteAcceptSignIn(req, preview.appId, acceptResult.userId, inviteReturnPath(token));
+  if (signIn.mfaRequired) {
+    return htmlFormRedirect(req, "/auth/mfa", { setCookie: signIn.setCookie });
+  }
   const location = parseCookies(req).has("z0_oauth_return") ? "/oauth/resume" : inviteReturnPath(token);
   return htmlFormRedirect(req, location, { setCookie: signIn.setCookie });
 }

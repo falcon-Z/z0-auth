@@ -21,15 +21,18 @@ import {
   finalizeConsolePasswordSignIn,
   recordConsolePasswordFailure,
 } from "../lib/account-lifecycle";
+import { acceptConsoleRememberedBrowser, createConsoleMfaChallenge, hasConsoleMfa } from "../lib/mfa";
 
 export type LoginResult =
-  | { ok: true; setCookie: string; userId: string }
+  | { ok: true; mfaRequired: false; setCookie: string; rememberedBrowserCookie?: string; userId: string }
+  | { ok: true; mfaRequired: true; setCookie: string; userId: string; challengeExpiresAt: Date }
   | { ok: false; response: Response; fieldErrors?: { field: string; message: string }[] };
 
 export async function runLogin(
   req: BunRequest,
   emailRaw: string,
   password: string,
+  returnPath?: string | null,
 ): Promise<LoginResult> {
   const rateConfig = {
     key: `login:${clientIp(req)}:${normalizeEmail(emailRaw)}`,
@@ -124,12 +127,43 @@ export async function runLogin(
   }
 
   const userId = String(user.id);
+  let rememberedBrowserCookie: string | undefined;
+  if (await hasConsoleMfa(userId)) {
+    const remembered = await acceptConsoleRememberedBrowser(req, userId);
+    rememberedBrowserCookie = remembered.setCookie;
+    if (remembered.reuseDetected) {
+      await writeAuditEvent({ actorUserId: userId, action: "mfa.remembered_browser_reuse_detected", resourceType: "console_member", resourceId: userId, payload: { realm: "console" } });
+    }
+    if (!remembered.accepted) {
+    const stillAvailable = await finalizeConsolePasswordSignIn(userId, async () => true);
+    if (!stillAvailable) {
+      await recordRateLimitHit(rateConfig);
+      return {
+        ok: false,
+        response: problem(401, "Unauthorized", invalidMessage, {
+          errors: [{ field: "_auth", code: ErrorCodes.INVALID_CREDENTIALS, message: invalidMessage }],
+        }),
+        fieldErrors: [{ field: "_auth", message: invalidMessage }],
+      };
+    }
+    const challenge = await createConsoleMfaChallenge(req, userId, "password", returnPath);
+    return {
+      ok: true,
+      mfaRequired: true,
+      setCookie: challenge.setCookie,
+      userId,
+      challengeExpiresAt: challenge.expiresAt,
+    };
+    }
+  }
   const preparedSession = await prepareSession(req);
   const existingToken = parseCookies(req).get(SESSION_COOKIE);
   if (existingToken) await revokeSessionByToken(existingToken);
   const session = await finalizeConsolePasswordSignIn(
     userId,
-    (tx) => insertSession(tx, userId, preparedSession),
+    (tx) => insertSession(tx, userId, preparedSession, {
+      authenticationMethod: rememberedBrowserCookie ? "password+remembered_browser" : "password",
+    }),
   );
   if (!session) {
     await recordRateLimitHit(rateConfig);
@@ -154,5 +188,5 @@ export async function runLogin(
     payload: { audience: "console" },
   });
 
-  return { ok: true, setCookie: sessionCookieHeader(session.token, session.expiresAt), userId };
+  return { ok: true, mfaRequired: false, setCookie: sessionCookieHeader(session.token, session.expiresAt), rememberedBrowserCookie, userId };
 }

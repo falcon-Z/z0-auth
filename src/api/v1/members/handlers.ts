@@ -15,6 +15,7 @@ import { transitionInstanceMember } from "../../lib/member-lifecycle";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 import { issueConsoleAdminReset } from "../../lib/admin-reset";
+import { requireRecentConsoleMfa, resetConsoleMfaForAdmin } from "../../lib/mfa";
 
 export async function handleListMembers(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "members:read");
@@ -89,6 +90,8 @@ export async function handleMemberLifecycle(req: RoutedRequest): Promise<Respons
   }
   const auth = await requireScope(req, "members:remove");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
   const body = await req.json().catch(() => ({})) as { confirmationEmail?: string };
   const result = await transitionInstanceMember(userId, auth.userId, action, body.confirmationEmail);
   if (!result.ok) return result.response;
@@ -101,7 +104,21 @@ export async function handleMemberAdminReset(req: RoutedRequest): Promise<Respon
   const userId = req.pathParams?.userId ?? "";
   const auth = await requireScope(req, "members:remove");
   if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
   const result = await issueConsoleAdminReset(req, userId, auth.userId);
+  if (!result.ok) return result.response;
+  return json({ ok: true });
+}
+
+export async function handleMemberMfaReset(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+  const auth = await requireScope(req, "members:remove");
+  if (!auth.ok) return auth.response;
+  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUpError) return stepUpError;
+  const result = await resetConsoleMfaForAdmin(req.pathParams?.userId ?? "", auth.userId);
   if (!result.ok) return result.response;
   return json({ ok: true });
 }

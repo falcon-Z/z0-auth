@@ -21,7 +21,7 @@ import { useMembersData } from "../../../hooks/use-members-data";
 import { usePermissions } from "../../../hooks/use-permissions";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { removeMember, sendMemberPasswordReset, transitionMember } from "../../../lib/members-api";
+import { removeMember, resetMemberMfa, sendMemberPasswordReset, transitionMember } from "../../../lib/members-api";
 import { fetchMemberRoles, fetchRoles, setMemberRoles, transferOwnership } from "../../../lib/rbac-api";
 
 export function MemberDetailPage() {
@@ -165,6 +165,27 @@ export function MemberDetailPage() {
     }
   }
 
+  async function handleResetMfa() {
+    if (!userId || !member) return;
+    const ok = await confirm({
+      title: "Reset MFA",
+      description: `Remove ${member.name}’s authenticator, recovery codes, remembered browsers, and active sessions?`,
+      confirmLabel: "Reset MFA",
+      destructive: true,
+    });
+    if (!ok) return;
+    setRemoving(true);
+    try {
+      await resetMemberMfa(userId);
+      setLifecycleNotice("MFA reset. The member must sign in and enroll again.");
+      await reload();
+    } catch (error) {
+      setLifecycleNotice(error instanceof ApiError ? error.message : "Could not reset MFA.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   async function handleSaveRoles() {
     if (!userId || selectedRoleIds.length === 0) {
       setRoleError("Choose at least one role.");
@@ -250,7 +271,16 @@ export function MemberDetailPage() {
               <dt className="text-muted-foreground">Email verification</dt>
               <dd>{member.emailVerified ? "Verified" : "Not verified"}</dd>
             </div>
+            <div>
+              <dt className="text-muted-foreground">Multi-factor authentication</dt>
+              <dd>{member.mfaEnabled ? "Enabled" : "Not enabled"}</dd>
+            </div>
           </dl>
+          {member.mfaEnabled && canRemove && !isSelf && !member.isBootstrap ? (
+            <Button type="button" variant="destructive" size="sm" disabled={removing} onClick={() => void handleResetMfa()}>
+              Reset MFA
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 
