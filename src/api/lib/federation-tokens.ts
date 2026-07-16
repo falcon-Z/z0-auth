@@ -92,7 +92,11 @@ async function resolveUserProvider(
   | { ok: false; response: Response }
 > {
   const [userRow] = await getDb()`
-    SELECT id FROM app_users WHERE id = ${userId} AND app_id = ${appId} AND status = 'active' LIMIT 1
+    SELECT id FROM app_users
+    WHERE id = ${userId} AND app_id = ${appId} AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
+      AND (locked_until IS NULL OR locked_until <= NOW())
+    LIMIT 1
   `;
   if (!userRow) {
     return {

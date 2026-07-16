@@ -67,6 +67,9 @@ Non-members with a valid session are denied console APIs (**403**).
 | Surface | Behavior |
 |---------|----------|
 | Console `GET /activity` | Table of recent audit events (sign-ins, config changes); **Load more** uses `before` cursor |
+| Console app-user/member detail | Status and verification badges; disable/enable, unlock, reset, delete, restore-as-disabled, and typed-confirmation permanent delete according to permission and owner/self rules |
+| Hosted `GET /auth/verify-email/:token` | Preview a single-use app-user verification link; POST confirmation marks the email verified |
+| Hosted `GET/POST /auth/verify-email` | Generic resend form; never reveals unknown, verified, disabled, or deleted account state |
 | `GET /api/v1/audit-events` | JSON list; requires `settings.audit:read` |
 
 ## App user sessions — P7M2

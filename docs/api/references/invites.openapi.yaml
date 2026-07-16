@@ -18,6 +18,12 @@ paths:
       operationId: listInstanceMembers
       security:
         - SessionCookie: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, disabled, locked, deleted]
       responses:
         "200":
           description: Active instance members
@@ -63,6 +69,60 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/NotFound"
         "409":
           description: Cannot remove last member
+  /api/v1/members/{userId}/lifecycle/{action}:
+    post:
+      tags: [Members]
+      summary: Change console-member lifecycle state
+      operationId: transitionInstanceMemberLifecycle
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [disable, enable, unlock, delete, restore, permanently-delete]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmationEmail: { type: string, format: email }
+      responses:
+        "200": { description: Account state changed }
+        "400": { $ref: "common.openapi.yaml#/components/responses/ValidationError" }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
+        "409": { $ref: "common.openapi.yaml#/components/responses/Conflict" }
+  /api/v1/members/{userId}/password-reset:
+    post:
+      tags: [Members]
+      summary: Send an administrator-initiated console password reset
+      operationId: sendMemberAdminPasswordReset
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Reset email sent }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
+        "409": { $ref: "common.openapi.yaml#/components/responses/Conflict" }
   /api/v1/members/invites:
     get:
       tags: [Members]
@@ -205,13 +265,29 @@ components:
   schemas:
     InstanceMember:
       type: object
-      required: [userId, email, name, joinedAt, isBootstrap]
+      required: [userId, email, name, joinedAt, isBootstrap, status, emailVerified, disabledAt, lockedUntil, deletedAt, roles]
       properties:
         userId: { type: string, format: uuid }
         email: { type: string, format: email }
         name: { type: string }
         joinedAt: { type: string, format: date-time }
         isBootstrap: { type: boolean }
+        status:
+          type: string
+          enum: [active, disabled, locked, deleted]
+        emailVerified: { type: boolean }
+        disabledAt: { type: string, format: date-time, nullable: true }
+        lockedUntil: { type: string, format: date-time, nullable: true }
+        deletedAt: { type: string, format: date-time, nullable: true }
+        roles:
+          type: array
+          items:
+            type: object
+            required: [id, key, name]
+            properties:
+              id: { type: string, format: uuid }
+              key: { type: string }
+              name: { type: string }
     CreateInviteRequest:
       type: object
       required: [email, invitedName]

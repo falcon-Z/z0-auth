@@ -71,6 +71,10 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `DELETE /api/v1/members/:userId` | `userId` | Member exists | `user_not_found` | 404 | Not found state |
 | `DELETE /api/v1/members/:userId` | — | Not last active member | `permission_denied` | 409 | Inline error on remove |
 | `DELETE /api/v1/members/:userId` | — | Not the instance owner (`is_bootstrap`) | `permission_denied` | 409 | Inline error on remove |
+| `GET /api/v1/members` | `status` | `active`, `disabled`, `locked`, or `deleted` | `required` | 400 | Keep current tab |
+| `POST …/lifecycle/:action` | CSRF / scope | `members:remove`; valid state; not self, owner, or last active member | `csrf_invalid` / `permission_denied` / `account_state_conflict` | 403 / 409 | Reload detail |
+| `POST …/lifecycle/permanently-delete` | `confirmationEmail` | Exact normalized email and already deleted | `required` / `account_state_conflict` | 400 / 409 | Typed confirmation |
+| `POST …/password-reset` | Account / SMTP | Active or locked; SMTP ready | `account_state_conflict` / `password_reset_unavailable` | 409 / 503 | Operator notice |
 | `GET /api/v1/members/invites` | Session | Instance member | — | 200 | Invites tab |
 | `POST /api/v1/members/invites` | `email` | Valid email | `required` / `invalid_email` | 400 | Inline on email |
 | `POST /api/v1/members/invites` | `invitedName` | Non-empty trimmed | `required` | 400 | Inline on name |
@@ -170,6 +174,11 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `GET …/users/:userId` | — | App user exists for app | `app_user_not_found` | 404 | Not found |
 | `PATCH …/users/:userId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
 | `PATCH …/users/:userId` | `membershipStatus` | `active` or `disabled` | `required` | 400 | Inline |
+| `GET …/users` | `status` | `active`, `disabled`, `locked`, or `deleted` | `required` | 400 | Keep current filter |
+| `POST …/lifecycle/:action` | CSRF / permission | `apps.users:manage`; valid transition | `csrf_invalid` / `permission_denied` / `account_state_conflict` | 403 / 409 | Reload detail |
+| `POST …/lifecycle/permanently-delete` | `confirmationEmail` | Exact normalized current email; account already deleted | `required` / `account_state_conflict` | 400 / 409 | Typed confirmation |
+| `POST …/verification` | Account | Active, unverified app user; SMTP optional | — | 200 | Generic requested notice |
+| `POST …/password-reset` | Account / SMTP | Active or locked; configured SMTP | `account_state_conflict` / `password_reset_unavailable` | 409 / 503 | Operator notice |
 | `GET …/users/invites` | — | Pending non-expired | — | 200 | Invites list |
 | `POST …/users/invites` | `email`, `invitedName` | Valid + not already on app | `app_user_exists` / `invite_invalid` | 409 | Inline |
 | `DELETE …/invites/:id` | CSRF | Pending invite for app | `invite_invalid` | 404 | Refresh list |

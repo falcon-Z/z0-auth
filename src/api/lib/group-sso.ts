@@ -5,11 +5,13 @@ import { normalizeEmail } from "@z0/contracts/validation";
 
 import {
   appSessionCookieHeader,
-  createAppSession,
+  insertAppSession,
+  prepareAppSession,
   resolveAppSession,
   resolveAppSessionForApp,
   type ActiveAppSession,
 } from "./app-session";
+import { finalizeAppPasswordSignIn } from "./account-lifecycle";
 import { getDb } from "./db";
 import { scopeIsSubset } from "./oauth-consent";
 import { parseScopeSet } from "./oauth";
@@ -70,6 +72,8 @@ export async function ensureGroupMemberForAppUser(
     WHERE id = ${appUserId}
       AND app_id = ${appId}
       AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
+      AND (locked_until IS NULL OR locked_until <= NOW())
       AND email_verified_at IS NOT NULL
     LIMIT 1
   `;
@@ -117,6 +121,8 @@ async function getAppUserProfile(
     FROM app_users
     WHERE id = ${appUserId}
       AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
+      AND (locked_until IS NULL OR locked_until <= NOW())
     LIMIT 1
   `;
   if (!row) return null;
@@ -124,15 +130,29 @@ async function getAppUserProfile(
   return { email: data.email, name: data.name, emailVerified: Boolean(data.email_verified_at) };
 }
 
-async function findLinkedAppUserId(groupMemberId: string, appId: string): Promise<string | null> {
+async function findLinkedAppUser(
+  groupMemberId: string,
+  appId: string,
+): Promise<{ appUserId: string; eligible: boolean } | null> {
   const [row] = await getDb()`
-    SELECT app_user_id
-    FROM service_group_app_users
-    WHERE group_member_id = ${groupMemberId}
-      AND app_id = ${appId}
+    SELECT sgau.app_user_id,
+      (
+        u.status = 'active'
+        AND u.disabled_at IS NULL
+        AND u.deleted_at IS NULL
+        AND (u.locked_until IS NULL OR u.locked_until <= NOW())
+      ) AS eligible
+    FROM service_group_app_users sgau
+    JOIN app_users u ON u.id = sgau.app_user_id AND u.app_id = sgau.app_id
+    WHERE sgau.group_member_id = ${groupMemberId}
+      AND sgau.app_id = ${appId}
     LIMIT 1
   `;
-  return row ? String((row as { app_user_id: string }).app_user_id) : null;
+  if (!row) return null;
+  return {
+    appUserId: String((row as { app_user_id: string }).app_user_id),
+    eligible: Boolean((row as { eligible: boolean }).eligible),
+  };
 }
 
 async function findAppUserByEmail(appId: string, email: string): Promise<string | null> {
@@ -142,6 +162,8 @@ async function findAppUserByEmail(appId: string, email: string): Promise<string 
     WHERE app_id = ${appId}
       AND lower(email) = ${email}
       AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
+      AND (locked_until IS NULL OR locked_until <= NOW())
     LIMIT 1
   `;
   return row ? String((row as { id: string }).id) : null;
@@ -152,8 +174,16 @@ export async function provisionSiblingAppUser(input: {
   groupMemberId: string;
   sourceAppUserId: string;
 }): Promise<{ ok: true; appUserId: string } | { ok: false; response: Response }> {
-  const existing = await findLinkedAppUserId(input.groupMemberId, input.targetAppId);
-  if (existing) return { ok: true, appUserId: existing };
+  const existing = await findLinkedAppUser(input.groupMemberId, input.targetAppId);
+  if (existing) {
+    if (!existing.eligible) {
+      return {
+        ok: false,
+        response: problem(401, "Unauthorized", "Target account is no longer available"),
+      };
+    }
+    return { ok: true, appUserId: existing.appUserId };
+  }
 
   const sourceProfile = await getAppUserProfile(input.sourceAppUserId);
   if (!sourceProfile) {
@@ -263,12 +293,18 @@ export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): 
   });
   if (!provisioned.ok) return { ok: false };
 
-  const { token, expiresAt } = await createAppSession(provisioned.appUserId, targetAppId, req);
+  const preparedSession = await prepareAppSession(req);
+  const session = await finalizeAppPasswordSignIn(
+    provisioned.appUserId,
+    targetAppId,
+    (tx) => insertAppSession(tx, provisioned.appUserId, targetAppId, preparedSession),
+  );
+  if (!session) return { ok: false };
   return {
     ok: true,
     appUserId: provisioned.appUserId,
     appId: targetAppId,
-    setCookie: appSessionCookieHeader(token, expiresAt),
+    setCookie: appSessionCookieHeader(session.token, session.expiresAt),
   };
 }
 

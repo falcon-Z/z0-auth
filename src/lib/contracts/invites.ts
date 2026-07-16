@@ -54,6 +54,11 @@ export type InstanceMember = {
   name: string;
   joinedAt: string;
   isBootstrap: boolean;
+  status: "active" | "disabled" | "locked" | "deleted";
+  emailVerified: boolean;
+  disabledAt: string | null;
+  lockedUntil: string | null;
+  deletedAt: string | null;
   roles: RoleSummary[];
 };
 
@@ -65,4 +70,3 @@ export type PendingInvite = {
   createdAt: string;
   roles: RoleSummary[];
 };
-

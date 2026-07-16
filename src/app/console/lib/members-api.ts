@@ -7,8 +7,9 @@ import type {
 
 import { apiFetch } from "./http-client";
 
-export async function fetchInstanceMembers(): Promise<InstanceMember[]> {
-  const { members } = await apiFetch<{ members: InstanceMember[] }>("/api/v1/members");
+export async function fetchInstanceMembers(status?: InstanceMember["status"]): Promise<InstanceMember[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const { members } = await apiFetch<{ members: InstanceMember[] }>(`/api/v1/members${query}`);
   return members;
 }
 
@@ -30,6 +31,21 @@ export async function revokeInstanceInvite(inviteId: string): Promise<void> {
 
 export async function removeMember(userId: string): Promise<void> {
   await apiFetch(`/api/v1/members/${userId}`, { method: "DELETE" });
+}
+
+export async function transitionMember(
+  userId: string,
+  action: "disable" | "enable" | "unlock" | "delete" | "restore" | "permanently-delete",
+  confirmationEmail?: string,
+): Promise<void> {
+  await apiFetch(`/api/v1/members/${userId}/lifecycle/${action}`, {
+    method: "POST",
+    body: confirmationEmail ? { confirmationEmail } : {},
+  });
+}
+
+export async function sendMemberPasswordReset(userId: string): Promise<void> {
+  await apiFetch(`/api/v1/members/${userId}/password-reset`, { method: "POST", body: {} });
 }
 
 export function buildInviteMailto(invite: CreateInviteResponse): string {

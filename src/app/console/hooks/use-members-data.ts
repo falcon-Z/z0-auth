@@ -29,9 +29,13 @@ export function useMembersData() {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const [members, invites] = await Promise.all([fetchInstanceMembers(), fetchPendingInvites()]);
+      const [currentMembers, deletedMembers, invites] = await Promise.all([
+        fetchInstanceMembers(),
+        fetchInstanceMembers("deleted"),
+        fetchPendingInvites(),
+      ]);
       setState({
-        members,
+        members: [...currentMembers, ...deletedMembers],
         invites,
         loading: false,
         error: null,

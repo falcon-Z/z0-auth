@@ -5,6 +5,7 @@ import { appSessionsWebRoutes } from "../../src/web/auth/app-sessions-routes";
 import { authWebRoutes } from "../../src/web/auth/routes";
 import { federationWebRoutes } from "../../src/web/auth/federation-routes";
 import { inviteWebRoutes } from "../../src/web/auth/invite-routes";
+import { emailVerificationWebRoutes } from "../../src/web/auth/email-verification-routes";
 import { oauthWebRoutes } from "../../src/web/oauth/routes";
 
 type MethodHandlers = {
@@ -56,9 +57,22 @@ export async function dispatchWeb(req: Request): Promise<Response> {
     return handler(bunReq);
   }
 
+  const verificationMatch = url.pathname.match(/^\/auth\/verify-email\/([^/]+)(\/accept)?$/);
+  if (verificationMatch) {
+    const routeKey = verificationMatch[2]
+      ? "/auth/verify-email/:token/accept"
+      : "/auth/verify-email/:token";
+    const handlers = emailVerificationWebRoutes[routeKey];
+    const method = req.method as keyof MethodHandlers;
+    const handler = handlers[method];
+    if (!handler) return new Response("Method not allowed", { status: 405 });
+    return handler(req as BunRequest);
+  }
+
   const routes = {
     ...authWebRoutes,
     ...appSessionsWebRoutes,
+    ...emailVerificationWebRoutes,
     ...oauthWebRoutes,
   } as const;
   const handlers = (routes as Record<string, MethodHandlers>)[url.pathname];

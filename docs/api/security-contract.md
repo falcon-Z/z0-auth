@@ -93,6 +93,19 @@ Operators may create the first owner from deployment configuration instead of th
 
 ---
 
+## Account lifecycle and recovery
+
+- Console identities (`users`) and app-local identities (`app_users`) have separate lifecycle state, credentials, sessions, recovery, and audit records.
+- Authentication requires no disable timestamp, no delete timestamp, and no unexpired temporary lock. Public password, magic-link, reset-request, and verification-request responses do not reveal which state caused rejection.
+- Ten consecutive password failures within 15 minutes lock that account for 15 minutes. Existing IP-based request limits still apply. A successful password reset, magic link, or trusted external-provider sign-in clears the password lock.
+- Disable, lock, and recoverable delete revoke active realm sessions. Disable and delete also invalidate pending authorization codes, access/refresh tokens, reset links, magic links, verification links, and stored upstream tokens where applicable.
+- Restore always returns an account as disabled. Enabling never revives old sessions or tokens.
+- Permanent deletion is separate, CSRF-protected, and requires the exact normalized email. It cannot target the acting console member, owner, or last active console member. App-user deletion never crosses its `app_id` boundary.
+- Administrator reset sends the existing single-use recovery flow. Operators cannot set, retrieve, or view a user's password or raw production reset link.
+- Self-registered app users can verify email through a hashed single-use 24-hour token when SMTP is ready. Verification is reflected in OIDC/userinfo but is not an alpha sign-in requirement.
+
+---
+
 ## Instance keys (startup)
 
 Two separate purposes — do not conflate them:

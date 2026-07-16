@@ -102,6 +102,10 @@ export const ErrorCodes = {
   FEDERATION_TOKEN_REFRESH_FAILED: "federation_token_refresh_failed",
   /** Application already belongs to another service group. */
   APP_ALREADY_GROUPED: "app_already_grouped",
+  /** Requested account lifecycle transition is not valid from the current state. */
+  ACCOUNT_STATE_CONFLICT: "account_state_conflict",
+  /** Email verification token is unknown, used, or expired. */
+  VERIFICATION_TOKEN_INVALID: "verification_token_invalid",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

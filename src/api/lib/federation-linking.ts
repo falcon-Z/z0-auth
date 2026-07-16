@@ -21,18 +21,20 @@ async function findIdentityBySubject(
   appId: string,
   providerId: string,
   subject: string,
-): Promise<{ id: string; app_user_id: string; app_id: string } | null> {
+): Promise<{ id: string; app_user_id: string; app_id: string; available: boolean } | null> {
   const [row] = await getDb()`
-    SELECT id, app_user_id, app_id
-    FROM app_user_identities
-    WHERE app_id = ${appId}
-      AND identity_provider_id = ${providerId}
-      AND provider_subject = ${subject}
+    SELECT i.id, i.app_user_id, i.app_id,
+      (u.disabled_at IS NULL AND u.deleted_at IS NULL) AS available
+    FROM app_user_identities i
+    JOIN app_users u ON u.id = i.app_user_id AND u.app_id = i.app_id
+    WHERE i.app_id = ${appId}
+      AND i.identity_provider_id = ${providerId}
+      AND i.provider_subject = ${subject}
     LIMIT 1
   `;
   if (!row) return null;
-  const r = row as { id: string; app_user_id: string; app_id: string };
-  return { id: String(r.id), app_user_id: String(r.app_user_id), app_id: String(r.app_id) };
+  const r = row as { id: string; app_user_id: string; app_id: string; available: boolean };
+  return { id: String(r.id), app_user_id: String(r.app_user_id), app_id: String(r.app_id), available: Boolean(r.available) };
 }
 
 async function findAppUserByEmail(
@@ -45,6 +47,7 @@ async function findAppUserByEmail(
     WHERE app_id = ${appId}
       AND lower(email) = ${email}
       AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
     LIMIT 1
   `;
   if (!row) return null;
@@ -84,6 +87,16 @@ export async function linkFederationIdentity(options: {
 
   const existing = await findIdentityBySubject(appId, providerId, profile.subject);
   if (existing) {
+    if (!existing.available) {
+      return { ok: false, response: problem(401, "Unauthorized", "Sign-in could not be completed", {
+        errors: [{ field: "_auth", code: ErrorCodes.FEDERATION_FAILED, message: "Sign-in could not be completed" }],
+      }) };
+    }
+    await getDb()`
+      UPDATE app_users SET locked_until = NULL, failed_sign_in_count = 0,
+        failed_sign_in_window_started_at = NULL, updated_at = NOW()
+      WHERE id = ${existing.app_user_id} AND app_id = ${appId}
+    `;
     await getDb()`
       UPDATE app_user_identities
       SET last_used_at = NOW(),
@@ -153,6 +166,12 @@ export async function linkFederationIdentity(options: {
           WHERE id = ${appUser.id} AND email_verified_at IS NULL
         `;
       }
+
+      await getDb()`
+        UPDATE app_users SET locked_until = NULL, failed_sign_in_count = 0,
+          failed_sign_in_window_started_at = NULL, updated_at = NOW()
+        WHERE id = ${appUser.id} AND app_id = ${appId}
+      `;
 
       await ensureGroupMemberForAppUser(appUser.id, appId, email);
       return { ok: true, appUserId: appUser.id, created: false };

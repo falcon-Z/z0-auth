@@ -14,27 +14,44 @@ import { checkRateLimit, clientIp } from "./rate-limit";
 import {
   appSessionCookieHeader,
   createAppSession,
+  insertAppSession,
+  prepareAppSession,
 } from "./app-session";
 import { ensureGroupMemberForAppUser } from "./group-sso";
 import { writeAuditEvent } from "./audit";
+import {
+  accountCanAuthenticate,
+  finalizeAppPasswordSignIn,
+  recordAppPasswordFailure,
+} from "./account-lifecycle";
+import { issueAppEmailVerification } from "./app-email-verification";
 
 export type AppAuthResult =
   | { ok: true; setCookie: string; appUserId: string }
   | { ok: false; response: Response; fieldErrors?: { field: string; message: string }[] };
 
-async function findAppUserForLogin(appId: string, email: string): Promise<{ id: string; password_hash: string | null; email: string } | null> {
+async function findAppUserForLogin(appId: string, email: string): Promise<{
+  id: string;
+  password_hash: string | null;
+  email: string;
+  disabled_at: Date | null;
+  locked_until: Date | null;
+  deleted_at: Date | null;
+} | null> {
   const [row] = await getDb()`
-    SELECT id, password_hash, email
+    SELECT id, password_hash, email, disabled_at, locked_until, deleted_at
     FROM app_users
     WHERE app_id = ${appId}
       AND lower(email) = ${email}
-      AND status = 'active'
   `;
   if (!row) return null;
   return {
     id: String((row as { id: string }).id),
     password_hash: (row as { password_hash: string | null }).password_hash,
     email: (row as { email: string }).email,
+    disabled_at: (row as { disabled_at: Date | null }).disabled_at,
+    locked_until: (row as { locked_until: Date | null }).locked_until,
+    deleted_at: (row as { deleted_at: Date | null }).deleted_at,
   };
 }
 
@@ -94,7 +111,7 @@ export async function runAppLogin(
   const invalidMessage = "Invalid email or password";
 
   const user = await findAppUserForLogin(appId, email);
-  if (!user || !user.password_hash) {
+  if (!user || !user.password_hash || !accountCanAuthenticate(user)) {
     await writeAuditEvent({
       action: "auth.app_login_failed",
       resourceType: "app",
@@ -112,6 +129,7 @@ export async function runAppLogin(
 
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
+    await recordAppPasswordFailure(user.id);
     await writeAuditEvent({
       action: "auth.app_login_failed",
       resourceType: "app",
@@ -127,7 +145,27 @@ export async function runAppLogin(
     };
   }
 
-  const session = await issueAppSession(req, user.id, appId);
+  const preparedSession = await prepareAppSession(req);
+  const session = await finalizeAppPasswordSignIn(
+    user.id,
+    appId,
+    (tx) => insertAppSession(tx, user.id, appId, preparedSession),
+  );
+  if (!session) {
+    await writeAuditEvent({
+      action: "auth.app_login_failed",
+      resourceType: "app",
+      resourceId: appId,
+      payload: { appUserId: user.id, reason: "unavailable_account" },
+    });
+    return {
+      ok: false,
+      response: problem(401, "Unauthorized", invalidMessage, {
+        errors: [{ field: "_auth", code: ErrorCodes.INVALID_CREDENTIALS, message: invalidMessage }],
+      }),
+      fieldErrors: [{ field: "_auth", message: invalidMessage }],
+    };
+  }
   await ensureGroupMemberForAppUser(user.id, appId, user.email);
 
   await writeAuditEvent({
@@ -137,7 +175,11 @@ export async function runAppLogin(
     payload: { appUserId: user.id },
   });
 
-  return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
+  return {
+    ok: true,
+    setCookie: appSessionCookieHeader(session.token, session.expiresAt),
+    appUserId: user.id,
+  };
 }
 
 export async function runAppRegister(
@@ -211,6 +253,8 @@ export async function runAppRegister(
       resourceId: appId,
       payload: { appUserId },
     });
+
+    await issueAppEmailVerification(req, appUserId);
 
     return { ok: true, setCookie: session.setCookie, appUserId: session.appUserId };
   } catch (error) {

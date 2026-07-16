@@ -1,1 +1,1 @@
-export const CURRENT_SCHEMA_VERSION = "0036_rate_limit_buckets";
+export const CURRENT_SCHEMA_VERSION = "0037_account_lifecycle";

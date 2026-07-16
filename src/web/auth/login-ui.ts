@@ -99,19 +99,8 @@ export function renderMagicLinkOutcomePage(
     passwordFallbackHref?: string;
   },
 ): string {
-  if (!outcome.sent && outcome.reason === "account_disabled") {
-    return renderMagicLinkDisabledAccountPage(csrfToken, magicLinkLoginHref(options.app, options.returnTo));
-  }
-
-  if (!outcome.sent && outcome.reason === "no_account") {
-    if (options.realm === "console") {
-      return renderMagicLinkInviteOnlyPage(csrfToken);
-    }
-    if (options.app) {
-      return renderMagicLinkRegisterPromptPage(csrfToken, options.email, options.app, options.returnTo);
-    }
-  }
-
+  // Unknown, disabled, deleted, and existing accounts use the same page so this public flow
+  // does not disclose account existence or lifecycle state.
   return renderMagicLinkSentPage(csrfToken, options.email, options.app, {
     passwordFallbackHref: options.passwordFallbackHref,
   });

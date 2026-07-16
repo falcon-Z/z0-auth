@@ -17,12 +17,16 @@ import { FormActions } from "../../../components/forms/FormActions";
 import { DangerZone } from "../../../components/forms/DangerZone";
 import { DestructiveButton } from "../../../components/forms/DestructiveButton";
 import type { SessionSummary } from "@z0/contracts/sessions";
-import { Badge } from "@z0/components/ui/badge";
-import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { fetchAppUser, patchAppUser } from "../../../lib/app-users-api";
+import {
+  fetchAppUser,
+  patchAppUser,
+  sendAppUserPasswordReset,
+  sendAppUserVerification,
+  transitionAppUser,
+} from "../../../lib/app-users-api";
 import { fetchApp } from "../../../lib/apps-api";
 import {
   fetchAppUserSessions,
@@ -116,7 +120,7 @@ export function AppUserDetailPage() {
 
   async function handleToggleStatus() {
     if (!appId || !userId || !user) return;
-    const disabling = user.membershipStatus === "active";
+    const disabling = user.status === "active" || user.status === "locked";
     const ok = await confirm({
       title: disabling ? "Disable user" : "Enable user",
       description: disabling
@@ -130,13 +134,74 @@ export function AppUserDetailPage() {
     setBusyStatus(true);
     setNotice(null);
     try {
-      const updated = await patchAppUser(appId, userId, {
-        membershipStatus: disabling ? "disabled" : "active",
-      });
-      setUser(updated);
+      const updated = await transitionAppUser(appId, userId, disabling ? "disable" : "enable");
+      if ("userId" in updated) setUser(updated);
       setNotice(disabling ? `${user.name} was disabled.` : `${user.name} was re-enabled.`);
     } catch (e) {
       setNotice(e instanceof ApiError ? e.message : "Could not update status.");
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
+  async function handleLifecycle(action: "unlock" | "delete" | "restore" | "permanently-delete") {
+    if (!appId || !userId || !user) return;
+    const labels = {
+      unlock: ["Unlock user", "Allow this user to try signing in again.", "Unlock"],
+      delete: ["Delete user", "Move this account to deleted state and revoke all access. It can still be restored.", "Delete"],
+      restore: ["Restore user", "Restore this account as disabled. Enable it separately when access should return.", "Restore"],
+      "permanently-delete": ["Permanently delete user", "Remove this account, credentials, grants, sessions, and linked sign-in data. This cannot be undone.", "Permanently delete"],
+    } as const;
+    const [title, description, confirmLabel] = labels[action];
+    const ok = await confirm({
+      title,
+      description,
+      confirmLabel,
+      destructive: action === "delete" || action === "permanently-delete",
+      confirmationText: action === "permanently-delete" ? user.email : undefined,
+    });
+    if (!ok) return;
+    setBusyStatus(true);
+    setNotice(null);
+    try {
+      await transitionAppUser(appId, userId, action, action === "permanently-delete" ? user.email : undefined);
+      if (action === "permanently-delete") {
+        window.location.href = `/apps/${appId}/users`;
+        return;
+      }
+      setNotice(action === "restore" ? "User restored as disabled." : action === "unlock" ? "User unlocked." : "User moved to deleted state.");
+      await reload();
+      await reloadSessions();
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "Could not update account.");
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
+  async function handleSendReset() {
+    if (!appId || !userId) return;
+    setBusyStatus(true);
+    try {
+      await sendAppUserPasswordReset(appId, userId);
+      setNotice("Password reset email sent. Existing sessions and tokens were revoked.");
+      await reload();
+      await reloadSessions();
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "Could not send password reset.");
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
+  async function handleSendVerification() {
+    if (!appId || !userId) return;
+    setBusyStatus(true);
+    try {
+      await sendAppUserVerification(appId, userId);
+      setNotice("Verification email requested.");
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "Could not send verification email.");
     } finally {
       setBusyStatus(false);
     }
@@ -192,8 +257,8 @@ export function AppUserDetailPage() {
       name={user.name}
       subtitle={user.email}
       badges={
-        <Badge variant={user.membershipStatus === "active" ? "secondary" : "outline"}>
-          {user.membershipStatus}
+        <Badge variant={user.status === "active" ? "secondary" : "outline"}>
+          {user.status}
         </Badge>
       }
     >
@@ -211,6 +276,10 @@ export function AppUserDetailPage() {
         <div>
           <dt className="text-muted-foreground">Active sessions</dt>
           <dd>{user.activeSessionCount}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Email verification</dt>
+          <dd>{user.emailVerified ? "Verified" : "Not verified"}</dd>
         </div>
       </dl>
 
@@ -286,22 +355,62 @@ export function AppUserDetailPage() {
         )}
       </section>
 
-      {user.membershipStatus === "active" ? (
+      <section className="mt-8 space-y-3 border-t pt-6">
+        <h2 className="text-sm font-medium">Account recovery</h2>
+        <div className="flex flex-wrap gap-2">
+          {!user.emailVerified && user.status === "active" ? (
+            <Button variant="outline" disabled={busyStatus} onClick={() => void handleSendVerification()}>
+              Send verification email
+            </Button>
+          ) : null}
+          {(user.status === "active" || user.status === "locked") ? (
+            <Button variant="outline" disabled={busyStatus} onClick={() => void handleSendReset()}>
+              Send password reset
+            </Button>
+          ) : null}
+          {user.status === "locked" ? (
+            <Button variant="outline" disabled={busyStatus} onClick={() => void handleLifecycle("unlock")}>
+              Unlock user
+            </Button>
+          ) : null}
+        </div>
+      </section>
+
+      {user.status === "active" || user.status === "locked" ? (
         <DangerZone
           title="Disable user"
-          description={`${user.name} will not be able to sign in to this application.`}
+          description={`${user.name} will not be able to sign in. Sessions, codes, and tokens will be revoked.`}
           action={
             <DestructiveButton disabled={busyStatus} onClick={() => void handleToggleStatus()}>
               Disable user
             </DestructiveButton>
           }
         />
-      ) : (
+      ) : user.status === "disabled" ? (
         <FormActions>
           <Button variant="outline" disabled={busyStatus} onClick={() => void handleToggleStatus()}>
             Enable user
           </Button>
         </FormActions>
+      ) : null}
+
+      {user.status !== "deleted" ? (
+        <DangerZone
+          title="Delete user"
+          description="Move this account to deleted state. It can be restored later, but access is revoked now."
+          action={<DestructiveButton disabled={busyStatus} onClick={() => void handleLifecycle("delete")}>Delete user</DestructiveButton>}
+        />
+      ) : (
+        <section className="space-y-4 border-t pt-6">
+          <div>
+            <h2 className="text-sm font-medium">Deleted account</h2>
+            <p className="text-sm text-muted-foreground">Restore as disabled, or permanently remove all account data.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={busyStatus} onClick={() => void handleLifecycle("restore")}>Restore as disabled</Button>
+            <DestructiveButton disabled={busyStatus} onClick={() => void handleLifecycle("permanently-delete")}>Permanently delete</DestructiveButton>
+          </div>
+        </section>
       )}
     </EntityDetailLayout>
   );

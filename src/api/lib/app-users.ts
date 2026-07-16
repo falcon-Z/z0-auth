@@ -24,12 +24,13 @@ import { findAppRow } from "./apps";
 import { sha256Hex, randomToken } from "./crypto";
 import { getDb } from "./db";
 import { problem } from "./http";
-import { countActiveAppUserSessions, revokeAllAppUserSessions } from "./app-session";
-import { revokeAllOAuthTokensForAppUser, revokePendingAuthorizationCodesForAppUser } from "./oauth";
+import { countActiveAppUserSessions } from "./app-session";
 import { hashPassword } from "./password";
 import { normalizeMetadata, validateAppUserMetadata } from "./app-user-metadata";
 import { appUserInviteEmailText, sendTransactionalEmail } from "./transactional-email";
 import { requestPublicOrigin } from "./config";
+import { accountStatus } from "./account-lifecycle";
+import { revokeAppAccountAccess } from "./account-lifecycle";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -40,6 +41,10 @@ type AppUserRow = {
   name: string;
   status: AppUserMembershipStatus;
   metadata: Record<string, unknown> | null;
+  email_verified_at: Date | null;
+  disabled_at: Date | null;
+  locked_until: Date | null;
+  deleted_at: Date | null;
   created_at: Date;
 };
 
@@ -58,12 +63,18 @@ type AppUserInviteRow = {
 };
 
 function mapAppUserRow(row: AppUserRow): AppUserSummary {
+  const status = accountStatus(row);
   return {
     userId: String(row.id),
     appId: String(row.app_id),
     email: row.email,
     name: row.name,
-    membershipStatus: row.status,
+    membershipStatus: status,
+    status,
+    emailVerified: Boolean(row.email_verified_at),
+    disabledAt: row.disabled_at ? new Date(row.disabled_at).toISOString() : null,
+    lockedUntil: row.locked_until ? new Date(row.locked_until).toISOString() : null,
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
     joinedAt: new Date(row.created_at).toISOString(),
   };
 }
@@ -74,6 +85,10 @@ function normalizeAppUserRow(row: AppUserRow): AppUserRow {
     id: String(row.id),
     app_id: String(row.app_id),
     metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    email_verified_at: row.email_verified_at ? new Date(row.email_verified_at) : null,
+    disabled_at: row.disabled_at ? new Date(row.disabled_at) : null,
+    locked_until: row.locked_until ? new Date(row.locked_until) : null,
+    deleted_at: row.deleted_at ? new Date(row.deleted_at) : null,
     created_at: new Date(row.created_at),
   };
 }
@@ -94,7 +109,8 @@ async function appUserNotFoundResponse(): Promise<Response> {
 
 async function findAppUser(appId: string, userId: string): Promise<AppUserRow | null> {
   const [row] = await getDb()`
-    SELECT id, app_id, email, name, status, metadata, created_at
+    SELECT id, app_id, email, name, status, metadata, email_verified_at,
+           disabled_at, locked_until, deleted_at, created_at
     FROM app_users
     WHERE app_id = ${appId}
       AND id = ${userId}
@@ -117,6 +133,7 @@ async function appUserExistsForEmail(appId: string, email: string): Promise<bool
 export async function listAppUsersForApi(
   appId: string,
   searchQuery?: string,
+  statusFilter?: AppUserMembershipStatus,
 ): Promise<{ ok: true; users: AppUserSummary[] } | { ok: false; response: Response }> {
   const app = await findAppRow(appId);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
@@ -126,14 +143,16 @@ export async function listAppUsersForApi(
 
   const rows = pattern
     ? await getDb()`
-        SELECT id, app_id, email, name, status, metadata, created_at
+        SELECT id, app_id, email, name, status, metadata, email_verified_at,
+               disabled_at, locked_until, deleted_at, created_at
         FROM app_users
         WHERE app_id = ${appId}
           AND (email ILIKE ${pattern} OR name ILIKE ${pattern})
         ORDER BY name ASC
       `
     : await getDb()`
-        SELECT id, app_id, email, name, status, metadata, created_at
+        SELECT id, app_id, email, name, status, metadata, email_verified_at,
+               disabled_at, locked_until, deleted_at, created_at
         FROM app_users
         WHERE app_id = ${appId}
         ORDER BY name ASC
@@ -141,7 +160,9 @@ export async function listAppUsersForApi(
 
   return {
     ok: true,
-    users: rows.map((row) => mapAppUserRow(normalizeAppUserRow(row as AppUserRow))),
+    users: rows
+      .map((row) => mapAppUserRow(normalizeAppUserRow(row as AppUserRow)))
+      .filter((user) => statusFilter ? user.status === statusFilter : user.status !== "deleted"),
   };
 }
 
@@ -297,37 +318,186 @@ export async function patchAppUserForApi(
     return { ok: false, response: problem(400, "Validation Error", "Invalid request", { errors }) };
   }
 
-  const metadata =
-    body.metadata === undefined ? appUser.metadata : normalizeMetadata(body.metadata);
-  const status = body.membershipStatus ?? appUser.status;
-  const name = body.name !== undefined ? body.name.trim() : appUser.name;
-  const disablingUser = appUser.status === "active" && status === "disabled";
+  const outcome = await getDb().begin(async (tx) => {
+    const [row] = await tx`
+      SELECT id, app_id, email, name, status, metadata, email_verified_at,
+             disabled_at, locked_until, deleted_at, created_at
+      FROM app_users
+      WHERE app_id = ${appId} AND id = ${userId}
+      FOR UPDATE
+    `;
+    if (!row) return "not_found" as const;
 
-  await getDb()`
-    UPDATE app_users
-    SET
-      name = ${name},
-      status = ${status},
-      metadata = ${metadata},
-      updated_at = NOW()
-    WHERE app_id = ${appId}
-      AND id = ${userId}
-  `;
+    const lockedUser = normalizeAppUserRow(row as AppUserRow);
+    const currentStatus = accountStatus(lockedUser);
+    if (currentStatus === "deleted") return "deleted" as const;
 
-  if (disablingUser) {
-    await revokeAllAppUserSessions(userId);
-    await revokePendingAuthorizationCodesForAppUser(userId);
-    await revokeAllOAuthTokensForAppUser(userId);
-  }
+    const metadata = body.metadata === undefined
+      ? lockedUser.metadata
+      : normalizeMetadata(body.metadata);
+    const status = body.membershipStatus ?? (currentStatus === "disabled" ? "disabled" : "active");
+    const name = body.name !== undefined ? body.name.trim() : lockedUser.name;
+    const disablingUser = currentStatus !== "disabled" && status === "disabled";
+    const enablingUser = currentStatus === "disabled" && status === "active";
 
-  await writeAuditEvent({
-    actorUserId,
-    action: status === "disabled" ? "app_user.disabled" : "app_user.updated",
-    resourceType: "app_user",
-    resourceId: userId,
-    payload: { appId, membershipStatus: status },
+    await tx`
+      UPDATE app_users
+      SET
+        name = ${name},
+        status = ${status},
+        disabled_at = CASE
+          WHEN ${disablingUser} THEN NOW()
+          WHEN ${enablingUser} THEN NULL
+          ELSE disabled_at
+        END,
+        disabled_by_user_id = CASE
+          WHEN ${disablingUser} THEN ${actorUserId}
+          WHEN ${enablingUser} THEN NULL
+          ELSE disabled_by_user_id
+        END,
+        locked_until = CASE WHEN ${enablingUser} THEN NULL ELSE locked_until END,
+        failed_sign_in_count = CASE WHEN ${enablingUser} THEN 0 ELSE failed_sign_in_count END,
+        failed_sign_in_window_started_at = CASE WHEN ${enablingUser} THEN NULL ELSE failed_sign_in_window_started_at END,
+        metadata = ${metadata},
+        updated_at = NOW()
+      WHERE app_id = ${appId}
+        AND id = ${userId}
+    `;
+
+    if (disablingUser) {
+      await revokeAppAccountAccess(tx, userId, appId, lockedUser.email);
+    }
+
+    await writeAuditEvent({
+      actorUserId,
+      action: disablingUser ? "app_user.disabled" : enablingUser ? "app_user.enabled" : "app_user.updated",
+      resourceType: "app_user",
+      resourceId: userId,
+      payload: { appId, membershipStatus: status },
+    }, tx);
+    return "updated" as const;
   });
 
+  if (outcome === "not_found") {
+    return { ok: false, response: await appUserNotFoundResponse() };
+  }
+  if (outcome === "deleted") {
+    return { ok: false, response: problem(409, "Conflict", "Restore this account before updating it.", {
+      errors: [{ field: "status", code: ErrorCodes.ACCOUNT_STATE_CONFLICT, message: "Account is deleted" }],
+    }) };
+  }
+
+  const detail = await getAppUserDetailForApi(appId, userId);
+  if (!detail.ok) return detail;
+  return { ok: true, user: detail.user };
+}
+
+export type AppUserLifecycleAction = "disable" | "enable" | "unlock" | "delete" | "restore" | "permanently-delete";
+
+export async function transitionAppUserForApi(
+  appId: string,
+  userId: string,
+  actorUserId: string,
+  action: AppUserLifecycleAction,
+  confirmationEmail?: string,
+): Promise<{ ok: true; user: AppUserDetail | null } | { ok: false; response: Response }> {
+  const app = await findAppRow(appId);
+  if (!app) return { ok: false, response: await appNotFoundResponse() };
+
+  const outcome = await getDb().begin(async (tx) => {
+    const [row] = await tx`
+      SELECT id, app_id, email, name, status, metadata, email_verified_at,
+             disabled_at, locked_until, deleted_at, created_at
+      FROM app_users
+      WHERE app_id = ${appId} AND id = ${userId}
+      FOR UPDATE
+    `;
+    if (!row) return { error: "not_found" as const };
+    const user = normalizeAppUserRow(row as AppUserRow);
+    const current = accountStatus(user);
+
+    if (action === "permanently-delete") {
+      if (current !== "deleted") return { error: "conflict" as const };
+      if (normalizeEmail(confirmationEmail ?? "") !== user.email) return { error: "confirmation" as const };
+      await writeAuditEvent({
+        actorUserId,
+        action: "app_user.permanently_deleted",
+        resourceType: "app_user",
+        resourceId: userId,
+        payload: { appId },
+      }, tx);
+      await tx`DELETE FROM magic_link_tokens WHERE realm = 'app' AND app_id = ${appId} AND lower(email) = ${user.email}`;
+      await tx`DELETE FROM app_users WHERE app_id = ${appId} AND id = ${userId}`;
+      await tx`
+        DELETE FROM service_group_members gm
+        WHERE NOT EXISTS (SELECT 1 FROM service_group_app_users gu WHERE gu.group_member_id = gm.id)
+      `;
+      await tx`
+        DELETE FROM app_browser_sessions b
+        WHERE NOT EXISTS (SELECT 1 FROM app_user_sessions s WHERE s.browser_session_id = b.id)
+      `;
+      return { error: null, deleted: true as const };
+    }
+
+    if (action === "disable") {
+      if (current !== "active" && current !== "locked") return { error: "conflict" as const };
+      await tx`
+        UPDATE app_users SET status = 'disabled', disabled_at = NOW(), disabled_by_user_id = ${actorUserId}, updated_at = NOW()
+        WHERE app_id = ${appId} AND id = ${userId}
+      `;
+      await revokeAppAccountAccess(tx, userId, appId, user.email);
+      await writeAuditEvent({ actorUserId, action: "app_user.disabled", resourceType: "app_user", resourceId: userId, payload: { appId } }, tx);
+    } else if (action === "enable") {
+      if (current !== "disabled" || user.deleted_at) return { error: "conflict" as const };
+      await tx`
+        UPDATE app_users SET status = 'active', disabled_at = NULL, disabled_by_user_id = NULL,
+          locked_until = NULL, failed_sign_in_count = 0, failed_sign_in_window_started_at = NULL, updated_at = NOW()
+        WHERE app_id = ${appId} AND id = ${userId}
+      `;
+      await writeAuditEvent({ actorUserId, action: "app_user.enabled", resourceType: "app_user", resourceId: userId, payload: { appId } }, tx);
+    } else if (action === "unlock") {
+      if (current !== "locked") return { error: "conflict" as const };
+      await tx`
+        UPDATE app_users SET locked_until = NULL, failed_sign_in_count = 0,
+          failed_sign_in_window_started_at = NULL, updated_at = NOW()
+        WHERE app_id = ${appId} AND id = ${userId}
+      `;
+      await writeAuditEvent({ actorUserId, action: "app_user.unlocked", resourceType: "app_user", resourceId: userId, payload: { appId } }, tx);
+    } else if (action === "delete") {
+      if (current === "deleted") return { error: "conflict" as const };
+      await tx`
+        UPDATE app_users SET status = 'disabled', deleted_at = NOW(), deleted_by_user_id = ${actorUserId},
+          disabled_at = COALESCE(disabled_at, NOW()), disabled_by_user_id = COALESCE(disabled_by_user_id, ${actorUserId}),
+          locked_until = NULL, failed_sign_in_count = 0, failed_sign_in_window_started_at = NULL, updated_at = NOW()
+        WHERE app_id = ${appId} AND id = ${userId}
+      `;
+      await revokeAppAccountAccess(tx, userId, appId, user.email);
+      await writeAuditEvent({ actorUserId, action: "app_user.deleted", resourceType: "app_user", resourceId: userId, payload: { appId } }, tx);
+    } else if (action === "restore") {
+      if (current !== "deleted") return { error: "conflict" as const };
+      await tx`
+        UPDATE app_users SET status = 'disabled', deleted_at = NULL, deleted_by_user_id = NULL,
+          disabled_at = NOW(), disabled_by_user_id = ${actorUserId}, locked_until = NULL,
+          failed_sign_in_count = 0, failed_sign_in_window_started_at = NULL, updated_at = NOW()
+        WHERE app_id = ${appId} AND id = ${userId}
+      `;
+      await writeAuditEvent({ actorUserId, action: "app_user.restored", resourceType: "app_user", resourceId: userId, payload: { appId, status: "disabled" } }, tx);
+    }
+    return { error: null, deleted: false as const };
+  });
+
+  if (outcome.error === "not_found") return { ok: false, response: await appUserNotFoundResponse() };
+  if (outcome.error === "confirmation") {
+    return { ok: false, response: problem(400, "Validation Error", "Confirmation email does not match.", {
+      errors: [{ field: "confirmationEmail", code: ErrorCodes.REQUIRED, message: "Type the account email exactly" }],
+    }) };
+  }
+  if (outcome.error === "conflict") {
+    return { ok: false, response: problem(409, "Conflict", "The account cannot make that state change.", {
+      errors: [{ field: "status", code: ErrorCodes.ACCOUNT_STATE_CONFLICT, message: "Account state changed; reload and try again" }],
+    }) };
+  }
+  if (outcome.deleted) return { ok: true, user: null };
   const detail = await getAppUserDetailForApi(appId, userId);
   if (!detail.ok) return detail;
   return { ok: true, user: detail.user };

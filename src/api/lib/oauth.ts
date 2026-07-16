@@ -235,6 +235,8 @@ export async function exchangeAuthorizationCode(input: {
         JOIN apps a ON a.id = c.app_id
         WHERE c.id = ${codeRow.id}
           AND u.status = 'active'
+          AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+          AND (u.locked_until IS NULL OR u.locked_until <= NOW())
           AND ac.status = 'active'
           AND a.status = 'active'
         FOR UPDATE
@@ -334,6 +336,8 @@ export async function previewAuthorizationCodeForExchange(input: {
     JOIN apps a ON a.id = c.app_id
     WHERE c.code_hash = ${codeHash}
       AND u.status = 'active'
+      AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+      AND (u.locked_until IS NULL OR u.locked_until <= NOW())
       AND ac.status = 'active'
       AND a.status = 'active'
     LIMIT 1
@@ -408,6 +412,8 @@ export async function exchangeRefreshToken(input: {
         JOIN app_credentials ac ON ac.id = r.app_credential_id
         WHERE r.token_hash = ${tokenHash}
           AND u.status = 'active'
+          AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+          AND (u.locked_until IS NULL OR u.locked_until <= NOW())
           AND a.status = 'active'
           AND ac.status = 'active'
         FOR UPDATE
@@ -622,9 +628,16 @@ export async function findOAuthAccessToken(token: string): Promise<OAuthAccessTo
     FROM oauth_access_tokens t
     JOIN apps a ON a.id = t.app_id
     JOIN app_credentials ac ON ac.id = t.app_credential_id
+    LEFT JOIN app_users u ON u.id = t.app_user_id AND u.app_id = t.app_id
     WHERE t.token_hash = ${tokenHash}
       AND a.status = 'active'
       AND ac.status = 'active'
+      AND (
+        t.app_user_id IS NULL OR (
+          u.status = 'active' AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+          AND (u.locked_until IS NULL OR u.locked_until <= NOW())
+        )
+      )
     LIMIT 1
   `;
   if (!row) return null;

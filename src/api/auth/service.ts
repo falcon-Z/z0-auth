@@ -10,11 +10,17 @@ import { verifyPassword } from "../lib/password";
 import { clientIp, isRateLimited, recordRateLimitHit } from "../lib/rate-limit";
 import { writeAuditEvent } from "../lib/audit";
 import {
-  createSession,
+  insertSession,
+  prepareSession,
   revokeSessionByToken,
   sessionCookieHeader,
   SESSION_COOKIE,
 } from "../lib/session";
+import {
+  accountCanAuthenticate,
+  finalizeConsolePasswordSignIn,
+  recordConsolePasswordFailure,
+} from "../lib/account-lifecycle";
 
 export type LoginResult =
   | { ok: true; setCookie: string; userId: string }
@@ -54,10 +60,10 @@ export async function runLogin(
   const invalidMessage = "Invalid email or password";
 
   const [row] = await getDb()`
-    SELECT u.id, pc.password_hash
+    SELECT u.id, pc.password_hash, u.disabled_at, u.locked_until, u.deleted_at
     FROM users u
     JOIN password_credentials pc ON pc.user_id = u.id
-    WHERE lower(u.email) = ${email} AND u.status = 'active'
+    WHERE lower(u.email) = ${email}
   `;
 
   if (!row) {
@@ -76,10 +82,32 @@ export async function runLogin(
     };
   }
 
-  const user = row as { id: string; password_hash: string };
+  const user = row as {
+    id: string;
+    password_hash: string;
+    disabled_at: Date | null;
+    locked_until: Date | null;
+    deleted_at: Date | null;
+  };
+  if (!accountCanAuthenticate(user)) {
+    await recordRateLimitHit(rateConfig);
+    await writeAuditEvent({
+      action: "auth.login_failed",
+      resourceType: "auth",
+      payload: { audience: "console", reason: "unavailable_account" },
+    });
+    return {
+      ok: false,
+      response: problem(401, "Unauthorized", invalidMessage, {
+        errors: [{ field: "_auth", code: ErrorCodes.INVALID_CREDENTIALS, message: invalidMessage }],
+      }),
+      fieldErrors: [{ field: "_auth", message: invalidMessage }],
+    };
+  }
   const valid = await verifyPassword(password, user.password_hash);
   if (!valid) {
     await recordRateLimitHit(rateConfig);
+    await recordConsolePasswordFailure(String(user.id));
     await writeAuditEvent({
       actorUserId: String(user.id),
       action: "auth.login_failed",
@@ -96,10 +124,28 @@ export async function runLogin(
   }
 
   const userId = String(user.id);
+  const preparedSession = await prepareSession(req);
   const existingToken = parseCookies(req).get(SESSION_COOKIE);
   if (existingToken) await revokeSessionByToken(existingToken);
-
-  const { token, expiresAt } = await createSession(userId, req);
+  const session = await finalizeConsolePasswordSignIn(
+    userId,
+    (tx) => insertSession(tx, userId, preparedSession),
+  );
+  if (!session) {
+    await recordRateLimitHit(rateConfig);
+    await writeAuditEvent({
+      action: "auth.login_failed",
+      resourceType: "auth",
+      payload: { audience: "console", reason: "unavailable_account" },
+    });
+    return {
+      ok: false,
+      response: problem(401, "Unauthorized", invalidMessage, {
+        errors: [{ field: "_auth", code: ErrorCodes.INVALID_CREDENTIALS, message: invalidMessage }],
+      }),
+      fieldErrors: [{ field: "_auth", message: invalidMessage }],
+    };
+  }
 
   await writeAuditEvent({
     actorUserId: userId,
@@ -108,5 +154,5 @@ export async function runLogin(
     payload: { audience: "console" },
   });
 
-  return { ok: true, setCookie: sessionCookieHeader(token, expiresAt), userId };
+  return { ok: true, setCookie: sessionCookieHeader(session.token, session.expiresAt), userId };
 }

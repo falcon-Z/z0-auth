@@ -8,7 +8,10 @@ import { buildAuthenticatedSessionPayload } from "./session-payload";
 
 export async function getUserById(userId: string): Promise<SessionUser | null> {
   const [row] = await getDb()`
-    SELECT id, email, name FROM users WHERE id = ${userId} AND status = 'active'
+    SELECT id, email, name FROM users
+    WHERE id = ${userId} AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
+      AND (locked_until IS NULL OR locked_until <= NOW())
   `;
   if (!row) return null;
   const r = row as { id: string; email: string; name: string };

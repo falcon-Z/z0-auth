@@ -1,4 +1,5 @@
 import type {
+  AccountLifecycleAction,
   AppUserDetail,
   AppUserSummary,
   CreateAppUserInviteRequest,
@@ -14,12 +15,35 @@ export async function fetchAppUser(appId: string, userId: string): Promise<AppUs
   return apiFetch<AppUserDetail>(`/api/v1/apps/${appId}/users/${userId}`);
 }
 
-export async function fetchAppUsers(appId: string, q?: string): Promise<AppUserSummary[]> {
-  const query = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+export async function fetchAppUsers(appId: string, q?: string, status?: AppUserSummary["status"]): Promise<AppUserSummary[]> {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set("q", q.trim());
+  if (status) params.set("status", status);
+  const query = params.size ? `?${params.toString()}` : "";
   const { users } = await apiFetch<{ users: AppUserSummary[] }>(
     `/api/v1/apps/${appId}/users${query}`,
   );
   return users;
+}
+
+export async function transitionAppUser(
+  appId: string,
+  userId: string,
+  action: AccountLifecycleAction,
+  confirmationEmail?: string,
+): Promise<AppUserDetail | { ok: true }> {
+  return apiFetch(`/api/v1/apps/${appId}/users/${userId}/lifecycle/${action}`, {
+    method: "POST",
+    body: confirmationEmail ? { confirmationEmail } : {},
+  });
+}
+
+export async function sendAppUserVerification(appId: string, userId: string): Promise<void> {
+  await apiFetch(`/api/v1/apps/${appId}/users/${userId}/verification`, { method: "POST", body: {} });
+}
+
+export async function sendAppUserPasswordReset(appId: string, userId: string): Promise<void> {
+  await apiFetch(`/api/v1/apps/${appId}/users/${userId}/password-reset`, { method: "POST", body: {} });
 }
 
 export async function createAppUser(

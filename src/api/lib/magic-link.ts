@@ -47,25 +47,25 @@ type MagicLinkUserLookup =
 
 async function lookupConsoleUserByEmail(email: string): Promise<MagicLinkUserLookup> {
   const [row] = await getDb()`
-    SELECT id, status FROM users WHERE lower(email) = ${email} LIMIT 1
+    SELECT id, disabled_at, deleted_at FROM users WHERE lower(email) = ${email} LIMIT 1
   `;
   if (!row) return { status: "missing" };
-  const r = row as { id: string; status: string };
-  if (r.status === "disabled") return { status: "disabled" };
+  const r = row as { id: string; disabled_at: Date | null; deleted_at: Date | null };
+  if (r.disabled_at || r.deleted_at) return { status: "disabled" };
   return { status: "active", userId: String(r.id) };
 }
 
 async function lookupAppUserByEmail(appId: string, email: string): Promise<MagicLinkUserLookup> {
   const [row] = await getDb()`
-    SELECT id, status
+    SELECT id, disabled_at, deleted_at
     FROM app_users
     WHERE app_id = ${appId}
       AND lower(email) = ${email}
     LIMIT 1
   `;
   if (!row) return { status: "missing" };
-  const r = row as { id: string; status: string };
-  if (r.status === "disabled") return { status: "disabled" };
+  const r = row as { id: string; disabled_at: Date | null; deleted_at: Date | null };
+  if (r.disabled_at || r.deleted_at) return { status: "disabled" };
   return { status: "active", userId: String(r.id) };
 }
 
@@ -328,6 +328,12 @@ export async function consumeMagicLinkToken(
 
   if (!userId) {
     return invalidMagicLinkResponse();
+  }
+
+  if (r.realm === "console") {
+    await getDb()`UPDATE users SET locked_until = NULL, failed_sign_in_count = 0, failed_sign_in_window_started_at = NULL, updated_at = NOW() WHERE id = ${userId}`;
+  } else {
+    await getDb()`UPDATE app_users SET locked_until = NULL, failed_sign_in_count = 0, failed_sign_in_window_started_at = NULL, updated_at = NOW() WHERE id = ${userId}`;
   }
 
   await writeAuditEvent({

@@ -13,6 +13,7 @@ import { EntityDetailLayout } from "../../../components/layout/EntityDetailLayou
 import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import { PageError } from "../../../components/feedback/PageError";
+import { ActionNotice } from "../../../components/feedback/ActionNotice";
 import { FormActions } from "../../../components/forms/FormActions";
 import { DangerZone } from "../../../components/forms/DangerZone";
 import { DestructiveButton } from "../../../components/forms/DestructiveButton";
@@ -20,7 +21,7 @@ import { useMembersData } from "../../../hooks/use-members-data";
 import { usePermissions } from "../../../hooks/use-permissions";
 import { ApiError } from "../../../lib/api";
 import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { removeMember } from "../../../lib/members-api";
+import { removeMember, sendMemberPasswordReset, transitionMember } from "../../../lib/members-api";
 import { fetchMemberRoles, fetchRoles, setMemberRoles, transferOwnership } from "../../../lib/rbac-api";
 
 export function MemberDetailPage() {
@@ -39,6 +40,7 @@ export function MemberDetailPage() {
   const [savingRoles, setSavingRoles] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [lifecycleNotice, setLifecycleNotice] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
 
@@ -111,6 +113,58 @@ export function MemberDetailPage() {
     }
   }
 
+  async function handleLifecycle(action: "disable" | "enable" | "unlock" | "delete" | "restore" | "permanently-delete") {
+    if (!userId || !member) return;
+    const labels = {
+      disable: "Disable member",
+      enable: "Enable member",
+      unlock: "Unlock member",
+      delete: "Delete member account",
+      restore: "Restore member as disabled",
+      "permanently-delete": "Permanently delete member",
+    } as const;
+    const ok = await confirm({
+      title: labels[action],
+      description: action === "permanently-delete"
+        ? "This permanently removes credentials, sessions, roles, and account data. It cannot be undone."
+        : action === "delete"
+          ? "This revokes console access and moves the account to recoverable deleted state."
+          : undefined,
+      confirmLabel: labels[action],
+      destructive: action === "disable" || action === "delete" || action === "permanently-delete",
+      confirmationText: action === "permanently-delete" ? member.email : undefined,
+    });
+    if (!ok) return;
+    setRemoving(true);
+    setLifecycleNotice(null);
+    try {
+      await transitionMember(userId, action, action === "permanently-delete" ? member.email : undefined);
+      if (action === "permanently-delete") {
+        navigate("/team", { replace: true });
+        return;
+      }
+      setLifecycleNotice(action === "restore" ? "Member restored as disabled." : `Account action completed: ${action}.`);
+      await reload();
+    } catch (e) {
+      setLifecycleNotice(e instanceof ApiError ? e.message : "Could not update member account.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  async function handleSendReset() {
+    if (!userId) return;
+    setRemoving(true);
+    try {
+      await sendMemberPasswordReset(userId);
+      setLifecycleNotice("Password reset email sent. Existing sessions were revoked.");
+    } catch (e) {
+      setLifecycleNotice(e instanceof ApiError ? e.message : "Could not send password reset.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   async function handleSaveRoles() {
     if (!userId || selectedRoleIds.length === 0) {
       setRoleError("Choose at least one role.");
@@ -171,6 +225,7 @@ export function MemberDetailPage() {
         <>
           {isSelf ? <Badge variant="outline">You</Badge> : null}
           {member.isBootstrap ? <Badge variant="secondary">Owner</Badge> : null}
+          <Badge variant={member.status === "active" ? "secondary" : "outline"}>{member.status}</Badge>
           {member.roles.map((role) => (
             <Badge key={role.id} variant="outline">
               {role.name}
@@ -179,6 +234,7 @@ export function MemberDetailPage() {
         </>
       }
     >
+      <ActionNotice message={lifecycleNotice} />
       <Card className="py-0 shadow-xs">
         <CardContent className="px-5 py-5">
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
@@ -189,6 +245,10 @@ export function MemberDetailPage() {
             <div>
               <dt className="text-muted-foreground">Joined</dt>
               <dd>{new Date(member.joinedAt).toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Email verification</dt>
+              <dd>{member.emailVerified ? "Verified" : "Not verified"}</dd>
             </div>
           </dl>
         </CardContent>
@@ -259,6 +319,53 @@ export function MemberDetailPage() {
             </Button>
           </CardContent>
         </Card>
+      ) : null}
+
+      {!isSelf && !member.isBootstrap && canRemove ? (
+        <section className="space-y-3 border-t pt-6">
+          <div>
+            <h2 className="text-sm font-medium">Account access and recovery</h2>
+            <p className="text-sm text-muted-foreground">Status changes revoke existing console sessions. Restored accounts remain disabled.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(member.status === "active" || member.status === "locked") ? (
+              <Button variant="outline" disabled={removing} onClick={() => void handleSendReset()}>Send password reset</Button>
+            ) : null}
+            {member.status === "locked" ? (
+              <Button variant="outline" disabled={removing} onClick={() => void handleLifecycle("unlock")}>Unlock</Button>
+            ) : null}
+            {member.status === "disabled" ? (
+              <Button variant="outline" disabled={removing} onClick={() => void handleLifecycle("enable")}>Enable</Button>
+            ) : null}
+            {member.status === "deleted" ? (
+              <Button variant="outline" disabled={removing} onClick={() => void handleLifecycle("restore")}>Restore as disabled</Button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {!isSelf && !member.isBootstrap && canRemove && (member.status === "active" || member.status === "locked") ? (
+        <DangerZone
+          title="Disable member"
+          description="Suspend console access and revoke all active console sessions."
+          action={<DestructiveButton disabled={removing} onClick={() => void handleLifecycle("disable")}>Disable member</DestructiveButton>}
+        />
+      ) : null}
+
+      {!isSelf && !member.isBootstrap && canRemove && member.status !== "deleted" ? (
+        <DangerZone
+          title="Delete member account"
+          description="Move the identity to recoverable deleted state and revoke access."
+          action={<DestructiveButton disabled={removing} onClick={() => void handleLifecycle("delete")}>Delete account</DestructiveButton>}
+        />
+      ) : null}
+
+      {!isSelf && !member.isBootstrap && canRemove && member.status === "deleted" ? (
+        <DangerZone
+          title="Permanently delete member"
+          description="Remove the identity, credentials, roles, and sessions. This cannot be undone."
+          action={<DestructiveButton disabled={removing} onClick={() => void handleLifecycle("permanently-delete")}>Permanently delete</DestructiveButton>}
+        />
       ) : null}
 
       {!isSelf && !member.isBootstrap && canRemove ? (

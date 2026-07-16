@@ -38,18 +38,18 @@ export function MembersListPage() {
 
   const { members, invites, loading, error, submitInvite, reload, revokeInvite } = useMembersData();
 
-  const [tab, setTab] = useState<"members" | "invites">(() =>
-    searchParams.get("tab") === "invites" ? "invites" : "members",
+  const [tab, setTab] = useState<"members" | "deleted" | "invites">(() =>
+    searchParams.get("tab") === "invites" ? "invites" : searchParams.get("tab") === "deleted" ? "deleted" : "members",
   );
 
   useEffect(() => {
-    setTab(searchParams.get("tab") === "invites" ? "invites" : "members");
+    setTab(searchParams.get("tab") === "invites" ? "invites" : searchParams.get("tab") === "deleted" ? "deleted" : "members");
   }, [searchParams]);
 
-  function setActiveTab(id: "members" | "invites") {
+  function setActiveTab(id: "members" | "deleted" | "invites") {
     setTab(id);
-    if (id === "invites") {
-      setSearchParams({ tab: "invites" }, { replace: true });
+    if (id !== "members") {
+      setSearchParams({ tab: id }, { replace: true });
     } else {
       setSearchParams({}, { replace: true });
     }
@@ -61,6 +61,7 @@ export function MembersListPage() {
 
   const tabs = [
     { id: "members", label: "Members" },
+    { id: "deleted", label: "Deleted" },
     { id: "invites", label: "Invites" },
   ];
 
@@ -123,7 +124,7 @@ export function MembersListPage() {
       <ResourceTabs
         tabs={tabs}
         activeId={tab}
-        onChange={(id) => setActiveTab(id as "members" | "invites")}
+        onChange={(id) => setActiveTab(id as "members" | "deleted" | "invites")}
         panels={{
           members: (
             <DataTable<InstanceMember>
@@ -157,7 +158,7 @@ export function MembersListPage() {
                   cell: (row) => new Date(row.joinedAt).toLocaleDateString(),
                 },
               ]}
-              rows={members}
+              rows={members.filter((member) => member.status !== "deleted")}
               rowKey={(row) => row.userId}
               onRowClick={(member) => navigate(`/team/${member.userId}`)}
               emptyMessage="No members yet"
@@ -178,6 +179,19 @@ export function MembersListPage() {
                   </DestructiveButton>
                 );
               }}
+            />
+          ),
+          deleted: (
+            <DataTable<InstanceMember>
+              columns={[
+                { id: "name", header: "Name", accessorFn: (row) => row.name, cell: (row) => <span className="font-medium">{row.name}</span> },
+                { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
+                { id: "deleted", header: "Deleted", accessorFn: (row) => row.deletedAt ?? "", cell: (row) => row.deletedAt ? new Date(row.deletedAt).toLocaleString() : "—" },
+              ]}
+              rows={members.filter((member) => member.status === "deleted")}
+              rowKey={(row) => row.userId}
+              onRowClick={(member) => navigate(`/team/${member.userId}`)}
+              emptyMessage="No deleted members"
             />
           ),
           invites: (

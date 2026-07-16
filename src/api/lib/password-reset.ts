@@ -30,7 +30,10 @@ function resetUrlFromRequest(req: Request, token: string): string {
 async function findUserIdByEmail(email: string): Promise<string | null> {
   const normalized = normalizeEmail(email);
   const [row] = await getDb()`
-    SELECT id FROM users WHERE lower(email) = ${normalized} AND status = 'active' LIMIT 1
+    SELECT id FROM users
+    WHERE lower(email) = ${normalized}
+      AND disabled_at IS NULL AND deleted_at IS NULL
+    LIMIT 1
   `;
   return row ? String((row as { id: string }).id) : null;
 }
@@ -199,13 +202,6 @@ export async function completePasswordReset(
     });
   }
 
-  const passwordErrors = validatePassword(body.password ?? "");
-  const confirmErrors = validatePasswordConfirm(body.password ?? "", body.passwordConfirm ?? "");
-  const errors = [...passwordErrors, ...confirmErrors];
-  if (errors.length) {
-    return problem(400, "Validation Error", "Password does not meet requirements.", { errors });
-  }
-
   const verified = await verifyResetToken(token);
   if (!verified.ok) {
     return invalidResetTokenResponse();
@@ -225,6 +221,19 @@ export async function completePasswordReset(
     return invalidResetTokenResponse();
   }
 
+  const [userRow] = await getDb()`
+    SELECT email, name FROM users
+    WHERE id = ${row.user_id} AND disabled_at IS NULL AND deleted_at IS NULL
+  `;
+  if (!userRow) return invalidResetTokenResponse();
+  const passwordErrors = validatePassword(body.password ?? "", {
+    email: String((userRow as { email: string }).email),
+    name: String((userRow as { name: string }).name),
+  });
+  const confirmErrors = validatePasswordConfirm(body.password ?? "", body.passwordConfirm ?? "");
+  const errors = [...passwordErrors, ...confirmErrors];
+  if (errors.length) return problem(400, "Validation Error", "Password does not meet requirements.", { errors });
+
   const passwordHash = await hashPassword(body.password);
 
   const completed = await getDb().begin(async (tx) => {
@@ -243,6 +252,11 @@ export async function completePasswordReset(
       UPDATE password_credentials
       SET password_hash = ${passwordHash}, updated_at = NOW()
       WHERE user_id = ${row.user_id}
+    `;
+    await tx`
+      UPDATE users SET locked_until = NULL, failed_sign_in_count = 0,
+        failed_sign_in_window_started_at = NULL, updated_at = NOW()
+      WHERE id = ${row.user_id} AND disabled_at IS NULL AND deleted_at IS NULL
     `;
     return true;
   });

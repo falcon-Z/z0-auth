@@ -23,6 +23,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/AppUserMembershipStatus"
       responses:
         "200":
           description: App users for this application
@@ -153,6 +157,83 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "404":
           $ref: "common.openapi.yaml#/components/responses/NotFound"
+  /api/v1/apps/{appId}/users/{userId}/lifecycle/{action}:
+    post:
+      tags: [AppUsers]
+      summary: Change app-user lifecycle state
+      operationId: transitionAppUserLifecycle
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [disable, enable, unlock, delete, restore, permanently-delete]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmationEmail: { type: string, format: email }
+      responses:
+        "200":
+          description: Updated account, or deletion confirmation
+        "400": { $ref: "common.openapi.yaml#/components/responses/ValidationError" }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
+        "409": { $ref: "common.openapi.yaml#/components/responses/Conflict" }
+  /api/v1/apps/{appId}/users/{userId}/verification:
+    post:
+      tags: [AppUsers]
+      summary: Send an app-user email verification
+      operationId: sendAppUserVerification
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Verification request accepted }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
+  /api/v1/apps/{appId}/users/{userId}/password-reset:
+    post:
+      tags: [AppUsers]
+      summary: Send an administrator-initiated password reset
+      operationId: sendAppUserAdminPasswordReset
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: Reset email sent }
+        "403": { $ref: "common.openapi.yaml#/components/responses/Forbidden" }
+        "404": { $ref: "common.openapi.yaml#/components/responses/NotFound" }
+        "409": { $ref: "common.openapi.yaml#/components/responses/Conflict" }
   /api/v1/apps/{appId}/users/{userId}/sessions/{sessionId}:
     delete:
       tags: [AppUsers]
@@ -265,10 +346,10 @@ components:
   schemas:
     AppUserMembershipStatus:
       type: string
-      enum: [active, disabled]
+      enum: [active, disabled, locked, deleted]
     AppUserSummary:
       type: object
-      required: [userId, appId, email, name, membershipStatus, joinedAt]
+      required: [userId, appId, email, name, membershipStatus, status, emailVerified, disabledAt, lockedUntil, deletedAt, joinedAt]
       properties:
         userId:
           type: string
@@ -284,6 +365,12 @@ components:
           type: string
         membershipStatus:
           $ref: "#/components/schemas/AppUserMembershipStatus"
+        status:
+          $ref: "#/components/schemas/AppUserMembershipStatus"
+        emailVerified: { type: boolean }
+        disabledAt: { type: string, format: date-time, nullable: true }
+        lockedUntil: { type: string, format: date-time, nullable: true }
+        deletedAt: { type: string, format: date-time, nullable: true }
         joinedAt:
           type: string
           format: date-time

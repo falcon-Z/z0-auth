@@ -29,6 +29,7 @@ export function AppUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
   const usersSearchLoaded = useRef<string | null>(null);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export function AppUsersPage() {
     setError(null);
     usersSearchLoaded.current = null;
 
-    void fetchAppUsers(appId, "")
+    void fetchAppUsers(appId, "", showDeleted ? "deleted" : undefined)
       .then((userList) => {
         if (cancelled) return;
         setUsers(userList);
@@ -63,7 +64,7 @@ export function AppUsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [appId, setNotice]);
+  }, [appId, setNotice, showDeleted]);
 
   useEffect(() => {
     if (loading) return;
@@ -72,7 +73,7 @@ export function AppUsersPage() {
     let cancelled = false;
     usersSearchLoaded.current = debouncedSearch;
 
-    void fetchAppUsers(appId, debouncedSearch)
+    void fetchAppUsers(appId, debouncedSearch, showDeleted ? "deleted" : undefined)
       .then((userList) => {
         if (!cancelled) {
           setUsers(userList);
@@ -88,19 +89,19 @@ export function AppUsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [appId, debouncedSearch, loading, setNotice]);
+  }, [appId, debouncedSearch, loading, setNotice, showDeleted]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      setUsers(await fetchAppUsers(appId, debouncedSearch));
+      setUsers(await fetchAppUsers(appId, debouncedSearch, showDeleted ? "deleted" : undefined));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load app users.");
     } finally {
       setLoading(false);
     }
-  }, [appId, debouncedSearch]);
+  }, [appId, debouncedSearch, showDeleted]);
 
   usePageBreadcrumbs(
     [
@@ -156,6 +157,9 @@ export function AppUsersPage() {
   return (
     <div className="space-y-4">
       <TabActions>
+        <Button variant="outline" onClick={() => setShowDeleted((value) => !value)}>
+          {showDeleted ? "Show current users" : "Show deleted users"}
+        </Button>
         <Button variant="outline" asChild>
           <Link to={`/apps/${appId}/users/invites`}>Invites</Link>
         </Button>
@@ -198,7 +202,7 @@ export function AppUsersPage() {
           </div>
         }
         rowActions={(row) =>
-          row.membershipStatus === "active" ? (
+          row.status === "active" ? (
             <DestructiveButton
               type="button"
               size="sm"
@@ -207,7 +211,7 @@ export function AppUsersPage() {
             >
               Disable
             </DestructiveButton>
-          ) : (
+          ) : row.status === "disabled" ? (
             <Button
               type="button"
               variant="ghost"
@@ -217,7 +221,7 @@ export function AppUsersPage() {
             >
               Enable
             </Button>
-          )
+          ) : null
         }
       />
 

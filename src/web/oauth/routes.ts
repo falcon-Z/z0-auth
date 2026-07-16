@@ -549,6 +549,8 @@ async function postToken(req: BunRequest): Promise<Response> {
         FROM app_users
         WHERE id = ${preview.preview.appUserId}
           AND status = 'active'
+          AND disabled_at IS NULL AND deleted_at IS NULL
+          AND (locked_until IS NULL OR locked_until <= NOW())
         LIMIT 1
       `;
       if (!appUserRow) {
@@ -836,6 +838,8 @@ async function getUserinfo(req: BunRequest): Promise<Response> {
     FROM app_users
     WHERE id = ${accessToken.appUserId}
       AND status = 'active'
+      AND disabled_at IS NULL AND deleted_at IS NULL
+      AND (locked_until IS NULL OR locked_until <= NOW())
     LIMIT 1
   `;
   if (!appUserRow) {

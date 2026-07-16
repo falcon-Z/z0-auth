@@ -83,6 +83,8 @@ Accepting an invite inserts `instance_members` (no roles).
 | `password_credentials` | Password hashes |
 | `sessions` | Session tokens |
 
+`users` is the console identity realm. Lifecycle columns are `disabled_at`, `locked_until`, and `deleted_at`, with operator actor IDs for disable/delete and bounded failed-sign-in counters. APIs derive `active`, `disabled`, `locked`, or `deleted` from these timestamps. A recoverably deleted user keeps its `instance_members` row and reserved email. Permanent deletion cascades credentials, membership, roles, sessions, and reset tokens.
+
 ### `apps` (M03)
 
 | Column | Type | Notes |
@@ -171,6 +173,11 @@ Console members only — see `app_password_reset_tokens` for app users.
 | `status` | TEXT | `active`, `disabled` |
 | `metadata` | JSONB | Optional (max 4 KB in API) |
 | `email_verified_at` | TIMESTAMPTZ | Optional |
+| `disabled_at` | TIMESTAMPTZ | Operator suspension; blocks sign-in and token use |
+| `locked_until` | TIMESTAMPTZ | Temporary password-failure lock |
+| `failed_sign_in_count`, `failed_sign_in_window_started_at` | INTEGER, TIMESTAMPTZ | Bounded account-lock state |
+| `deleted_at` | TIMESTAMPTZ | Recoverable deleted state; email remains reserved |
+| `disabled_by_user_id`, `deleted_by_user_id` | UUID → `users` | Console actor, nullable |
 | `created_at`, `updated_at` | TIMESTAMPTZ | |
 
 Unique `(app_id, lower(email))`. No FK to `users`.
@@ -193,6 +200,12 @@ Unique `(app_id, lower(email))`. No FK to `users`.
 Accept creates a row in `app_users` only. Unique pending invite per `(app_id, email)`.
 
 Self-registration (M06) also creates `app_users` directly when `client_id` resolves to the app — same uniqueness rules as console-created users.
+
+### `app_email_verification_tokens`
+
+Stores SHA-256 hashes of single-use, 24-hour app-user verification tokens. Each row is constrained to the matching `(app_user_id, app_id)` realm. Issuing a new token invalidates the previous active token. Raw tokens appear only in the email link.
+
+Account status and email verification are independent. Self-registration starts unverified; operator creation, accepted invitations, and trusted verified federation can mark the email verified. Alpha sign-in and token issuance remain available while unverified, but OIDC/userinfo return `email_verified: false` and service-group sign-in reuse remains blocked.
 
 ### `app_browser_sessions` and `app_user_sessions`
 
@@ -341,7 +354,7 @@ Console API: `GET/POST /api/v1/service-groups`, `GET/PATCH/DELETE …/:groupId`,
 
 Append-only security log. `actor_user_id` references console `users` when the actor is an operator; app-user and system events use `payload` (e.g. `appUserId`, `appId`) without a FK.
 
-Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `app_user_session.revoked`, `app_user.*`.
+Representative `action` values: `auth.login_succeeded`, `auth.app_login_succeeded`, `auth.app_register_succeeded`, `auth.app_federation_login_succeeded`, `app.created`, `app.updated`, `credential.*`, `scope.*`, `member.*`, `invite.*`, `role.*`, `smtp.*`, `federation.*`, `service_group.*`, `session.*`, `app_user_session.revoked`, `app_user.*`, and `console_member.*`. Lifecycle events distinguish lock, unlock, disable, enable, reset request/completion, recoverable deletion, restore, verification, and permanent deletion.
 
 Console API: `GET /api/v1/audit-events` with optional `limit`, `before`, `action`, `resourceType`. Scope: `settings.audit:read`.
 

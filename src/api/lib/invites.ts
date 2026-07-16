@@ -35,6 +35,7 @@ import { memberInviteEmailText, sendTransactionalEmail } from "./transactional-e
 import { resolveSession } from "./session";
 import { createSession, sessionCookieHeader, revokeAllUserSessions } from "./session";
 import { requestPublicOrigin } from "./config";
+import { accountStatus } from "./account-lifecycle";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -639,14 +640,18 @@ async function inviteRolesByInviteIds(inviteIds: string[]): Promise<Map<string, 
   return map;
 }
 
-export async function listInstanceMembersForApi(): Promise<InstanceMember[]> {
+export async function listInstanceMembersForApi(statusFilter?: InstanceMember["status"]): Promise<InstanceMember[]> {
   const rows = await getDb()`
     SELECT
       u.id,
       u.email,
       u.name,
       m.joined_at,
-      m.is_bootstrap
+      m.is_bootstrap,
+      u.email_verified_at,
+      u.disabled_at,
+      u.locked_until,
+      u.deleted_at
     FROM instance_members m
     JOIN users u ON u.id = m.user_id
     ORDER BY u.name ASC
@@ -656,17 +661,33 @@ export async function listInstanceMembersForApi(): Promise<InstanceMember[]> {
   const rolesByUserId = await memberRolesByUserIds(userIds);
 
   return rows.map((row) => {
-    const r = row as { id: string; email: string; name: string; joined_at: Date; is_bootstrap: boolean };
+    const r = row as {
+      id: string;
+      email: string;
+      name: string;
+      joined_at: Date;
+      is_bootstrap: boolean;
+      email_verified_at: Date | null;
+      disabled_at: Date | null;
+      locked_until: Date | null;
+      deleted_at: Date | null;
+    };
     const userId = String(r.id);
+    const status = accountStatus(r);
     return {
       userId,
       email: r.email,
       name: r.name,
       joinedAt: new Date(r.joined_at).toISOString(),
       isBootstrap: Boolean(r.is_bootstrap),
+      status,
+      emailVerified: Boolean(r.email_verified_at),
+      disabledAt: r.disabled_at ? new Date(r.disabled_at).toISOString() : null,
+      lockedUntil: r.locked_until ? new Date(r.locked_until).toISOString() : null,
+      deletedAt: r.deleted_at ? new Date(r.deleted_at).toISOString() : null,
       roles: rolesByUserId.get(userId) ?? [],
     };
-  });
+  }).filter((member) => statusFilter ? member.status === statusFilter : member.status !== "deleted");
 }
 
 export async function listPendingInstanceInvites(): Promise<PendingInvite[]> {
