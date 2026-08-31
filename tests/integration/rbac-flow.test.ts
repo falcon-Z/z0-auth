@@ -12,6 +12,7 @@ const run = hasTestDatabase() ? describe : describe.skip;
 
 const ownerPassword = makeStrongPassword();
 const viewerPassword = makeStrongPassword();
+const roleManagerPassword = makeStrongPassword();
 
 function sessionCookieFromResponse(res: Response): string | undefined {
   const cookies = res.headers.getSetCookie?.() ?? [];
@@ -140,5 +141,63 @@ run("platform RBAC (P1)", () => {
       }),
     );
     expect(listRes.status).toBe(200);
+  });
+
+  test("an Operator cannot grant a scope they do not hold", async () => {
+    const owner = await login("owner@example.com", ownerPassword);
+    const roleResponse = await dispatchApi(
+      buildRequest("POST", "/api/v1/rbac/roles", {
+        csrfToken: owner.csrf,
+        cookies: { [SESSION_COOKIE]: owner.cookie! },
+        body: {
+          name: "Role Manager",
+          scopeKeys: ["roles:manage"],
+        },
+      }),
+    );
+    expect(roleResponse.status).toBe(201);
+    const roleId = String(((await roleResponse.json()) as { role: { id: string } }).role.id);
+
+    const inviteResponse = await dispatchApi(
+      buildRequest("POST", "/api/v1/members/invites", {
+        csrfToken: owner.csrf,
+        cookies: { [SESSION_COOKIE]: owner.cookie! },
+        body: {
+          email: "role-manager@example.com",
+          invitedName: "Role Manager",
+          roleIds: [roleId],
+        },
+      }),
+    );
+    expect(inviteResponse.status).toBe(201);
+    const invite = (await inviteResponse.json()) as { inviteUrl: string };
+
+    const acceptCsrf = await fetchCsrfToken(dispatchApi);
+    const inviteToken = new URL(invite.inviteUrl).pathname.split("/").pop() ?? "";
+    const acceptResponse = await dispatchApi(
+      buildRequest("POST", `/api/v1/invites/${inviteToken}/accept`, {
+        csrfToken: acceptCsrf,
+        body: {
+          name: "Role Manager",
+          password: roleManagerPassword,
+          passwordConfirm: roleManagerPassword,
+        },
+      }),
+    );
+    expect(acceptResponse.status).toBe(200);
+
+    const roleManager = await login("role-manager@example.com", roleManagerPassword);
+    const excessiveGrant = await dispatchApi(
+      buildRequest("POST", "/api/v1/rbac/roles", {
+        csrfToken: roleManager.csrf,
+        cookies: { [SESSION_COOKIE]: roleManager.cookie! },
+        body: {
+          name: "Escalated Role",
+          scopeKeys: ["apps:create"],
+        },
+      }),
+    );
+
+    expect(excessiveGrant.status).toBe(403);
   });
 });

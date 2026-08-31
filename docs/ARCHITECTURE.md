@@ -10,10 +10,31 @@ Single Bun deployment: IAM for customer apps (OAuth/OIDC, hosted `/auth`, operat
 | `src/api/` | JSON API route maps under `/api/*` (`health`, `setup`, `auth`, `v1`). |
 | `src/web/auth/` | Server-rendered auth pages under `/auth/*` with HTMX enhancement. |
 | `src/web/oauth/` | Browser-facing OAuth authorization flow routes (`/oauth/*`). |
+| `src/capabilities/` | Transport-free, task-oriented capability interfaces introduced beside the current implementation. |
 | `src/lib/contracts/` | Shared validation/types imported by server and tests. |
 | `src/app/console/` | React + shadcn management console SPA entry and modules. |
 | `tests/` | Integration and unit tests. |
 | `docs/api/` | API contracts, validation matrix, OpenAPI (`references/*.openapi.yaml`). |
+
+## Capability seams
+
+Capability modules express security decisions in domain terms and accept their
+stateful dependencies rather than importing HTTP or presentation adapters. The
+current route and persistence implementation remains in `src/api/`, `src/web/`,
+and `src/app/`. Production requests do not yet pass through the new capability
+interfaces; they are the tested seams for later behavior-preserving extraction.
+
+| Capability module | Task-oriented interface | Existing behavior evidence |
+|---|---|---|
+| End User Access | Authenticate, recover, and revoke an Application Identity within its owning Application | `tests/integration/app-users-flow.test.ts`, `tests/integration/account-lifecycle-flow.test.ts`, `tests/integration/smtp-email-flow.test.ts` |
+| Operator Access | Authorize an Operator task and prevent grants beyond held scopes | `tests/integration/rbac-flow.test.ts` |
+| Authorization Server | Accept only an exact registered redirect URI | `tests/integration/oauth-flow.test.ts`, `tests/integration/oauth-refresh-flow.test.ts` |
+| Service Groups | Authorize shared sign-in only for Applications and Application Identities joined by the same Service Group and Link Set | `tests/integration/group-sso-flow.test.ts` |
+
+Unit tests named `*-capability.test.ts` exercise these interfaces without
+importing transport, presentation, or PostgreSQL adapters. Integration tests
+continue to characterize the supported behavior through the existing public
+HTTP and protocol seams.
 
 ## Routing (`Bun.serve`)
 

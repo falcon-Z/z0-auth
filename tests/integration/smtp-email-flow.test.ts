@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { ErrorCodes } from "@z0/contracts/errors";
+import { CSRF_COOKIE } from "@z0/contracts/http";
+import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
 import { closeDatabase } from "../../src/api/lib/db";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
@@ -15,16 +17,25 @@ import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { makeStrongPassword } from "../helpers/password";
 import { dispatchApi } from "./api-routes";
+import { dispatchWeb } from "./web-dispatch";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 
 const ownerPassword = makeStrongPassword();
 
 function sessionCookieFromResponse(res: Response): string | undefined {
+  return cookieFromResponse(res, SESSION_COOKIE);
+}
+
+function cookieFromResponse(res: Response, name: string): string | undefined {
   const cookies = res.headers.getSetCookie?.() ?? [];
-  const raw = cookies.find((c) => c.startsWith(`${SESSION_COOKIE}=`));
-  const match = raw?.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
+  const raw = cookies.find((c) => c.startsWith(`${name}=`));
+  const match = raw?.match(new RegExp(`${name}=([^;]+)`));
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
+
+function csrfFromHtml(html: string): string {
+  return html.match(/name="_csrf" value="([^"]+)"/)?.[1] ?? "";
 }
 
 async function completeSetup() {
@@ -149,6 +160,32 @@ run("M08 SMTP and password reset", () => {
     );
     expect(appUserRes.status).toBe(201);
 
+    const appLoginPage = await dispatchWeb(
+      new Request(`http://localhost/auth/login?client_id=${encodeURIComponent(app.credential.clientId)}`),
+    );
+    const appLoginCsrf = csrfFromHtml(await appLoginPage.text());
+    const appLoginCsrfCookie = cookieFromResponse(appLoginPage, CSRF_COOKIE) ?? appLoginCsrf;
+    const appLogin = await dispatchWeb(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(appLoginCsrfCookie)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: appLoginCsrf,
+          client_id: app.credential.clientId,
+          email: "reset-user@example.com",
+          password: initialAppPassword,
+        }).toString(),
+      }),
+    );
+    expect(appLogin.status).toBe(303);
+    const preRecoverySession = cookieFromResponse(appLogin, APP_SESSION_COOKIE);
+    expect(preRecoverySession).toBeTruthy();
+
     resetCapturedEmailsForTests();
     const appForgotCsrf = await fetchCsrfToken(dispatchApi);
     const appForgotRes = await dispatchApi(
@@ -179,6 +216,19 @@ run("M08 SMTP and password reset", () => {
       appResetRequest(secondAppPassword),
     ]);
     expect(appResetResults.map((response) => response.status).sort()).toEqual([200, 400]);
+
+    const sessionsAfterRecovery = await dispatchWeb(
+      new Request(
+        `http://localhost/auth/sessions?client_id=${encodeURIComponent(app.credential.clientId)}`,
+        {
+          headers: {
+            cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(preRecoverySession!)}`,
+          },
+        },
+      ),
+    );
+    expect(sessionsAfterRecovery.status).toBe(302);
+    expect(sessionsAfterRecovery.headers.get("location")).toContain("/auth/login");
 
     resetCapturedEmailsForTests();
 

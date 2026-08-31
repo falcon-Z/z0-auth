@@ -380,15 +380,21 @@ run("OAuth authorization code flow", () => {
     expect(body.code).toBe("invalid_client");
   });
 
-  test("invalid redirect_uri is rejected", async () => {
-    const res = await dispatchWeb(
-      new Request(
-        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(confidentialClientId)}&redirect_uri=${encodeURIComponent("http://evil.example/callback")}`,
-      ),
-    );
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe("invalid_redirect_uri");
+  test("redirect_uri requires an exact registered match", async () => {
+    for (const redirectUri of [
+      "http://evil.example/callback",
+      `${REDIRECT}/`,
+      `${REDIRECT}?next=/admin`,
+    ]) {
+      const res = await dispatchWeb(
+        new Request(
+          `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(confidentialClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+        ),
+      );
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { code?: string };
+      expect(body.code).toBe("invalid_redirect_uri");
+    }
   });
 
   test("unregistered scope is rejected", async () => {

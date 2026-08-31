@@ -66,6 +66,7 @@ run("M05 app users (Option B)", () => {
   let appId = "";
   let appBId = "";
   let userId = "";
+  let applicationBIdentityId = "";
   let inviteToken = "";
 
   beforeAll(async () => {
@@ -144,8 +145,20 @@ run("M05 app users (Option B)", () => {
     );
     expect(res.status).toBe(201);
     const body = (await res.json()) as { userId: string; appId: string };
+    applicationBIdentityId = body.userId;
     expect(body.appId).toBe(appBId);
     expect(body.userId).not.toBe(userId);
+  });
+
+  test("an Application cannot address another Application's Application Identity", async () => {
+    const { cookie } = await login();
+    const crossApplicationRead = await dispatchApi(
+      buildRequest("GET", `/api/v1/apps/${appId}/users/${applicationBIdentityId}`, {
+        cookies: { [SESSION_COOKIE]: cookie },
+      }),
+    );
+
+    expect(crossApplicationRead.status).toBe(404);
   });
 
   test("disable app user membership", async () => {
