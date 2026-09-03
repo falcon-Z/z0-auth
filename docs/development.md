@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) 1.3+
+- [Bun](https://bun.sh) 1.3.14
 - Docker (for PostgreSQL), or any Postgres 16 instance matching `DATABASE_URL`
 
 ## First-time setup
@@ -138,6 +138,7 @@ When shipping a screen: add the page under `src/app/console/modules/<name>/`, re
 |---------|---------|
 | `bun dev` | Dev server with hot reload |
 | `bun test` | Unit + integration tests serialized against the isolated test DB |
+| `bun run runtime:qualify` | Verify the executing Bun, type definitions, lockfile, and OCI declarations use the supported version |
 | `bun run db:test:init` | Create `z0auth_test` on existing Postgres |
 | `bun run db:reset` | Drop schema, migrate (fresh platform) |
 | `bun run quality:alpha` | Run the complete alpha contract, smoke, regression, and production-build gate |
@@ -158,3 +159,26 @@ The browser-backed console journey remains a separate environment check because 
 ```bash
 bun run test:e2e
 ```
+
+## Bun runtime upgrades
+
+Z0 Auth deliberately uses Bun's native HTTP, PostgreSQL, password, filesystem,
+build, and process facilities. Bun is the only supported application runtime;
+the project does not maintain a parallel Node implementation.
+
+Treat a Bun update as a qualified platform change rather than an automatic
+dependency refresh:
+
+1. Set the same exact version in `package.json` (`packageManager` and
+   `@types/bun`) and both `Dockerfile` stages, then refresh `bun.lock`.
+2. Run `bun install --frozen-lockfile` and `bun run runtime:qualify` using that
+   version.
+3. Run `bun run quality:alpha` to cover stored password compatibility,
+   PostgreSQL behavior, key files, HTTP readiness and shutdown, and the
+   production build.
+4. Run `bun run test:docker` before publishing an OCI candidate. Architecture
+   and artifact qualification belong to the release-candidate workflow.
+
+Do not merge the update when an existing password hash cannot be verified or a
+required qualification phase fails. Repair or defer the runtime update instead
+of weakening the affected contract.

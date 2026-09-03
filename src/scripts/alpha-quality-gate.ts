@@ -22,6 +22,10 @@ const commonTestArgs = [
 ];
 const phases: Array<{ label: string; command: string[] }> = [
   {
+    label: "Pinned Bun runtime qualification",
+    command: ["bun", "test", ...commonTestArgs, "tests/unit/bun-runtime-qualification.test.ts"],
+  },
+  {
     label: "OpenAPI contracts and migration integrity",
     command: ["bun", "test", ...commonTestArgs, "tests/unit/openapi-contracts.test.ts", "tests/integration/migration-integrity.test.ts"],
   },

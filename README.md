@@ -40,7 +40,7 @@ examples/
 
 Prerequisites:
 
-- Bun 1.3 or newer.
+- Bun 1.3.14.
 - PostgreSQL 16 or newer. Docker is fine for local development.
 
 Install dependencies and create local environment files:
