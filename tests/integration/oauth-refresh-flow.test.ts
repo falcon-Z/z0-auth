@@ -5,7 +5,6 @@ import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
 import { closeDatabase, getDb } from "../../src/api/lib/db";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
-import { resetConsumedConsentNoncesForTests } from "../../src/web/oauth/routes";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { makeStrongPassword } from "../helpers/password";
@@ -178,7 +177,6 @@ run("OAuth refresh token lifecycle", () => {
   beforeAll(async () => {
     await resetTestDatabase();
     resetRateLimitsForTests();
-    resetConsumedConsentNoncesForTests();
     await completeSetup();
     const { csrf, cookie } = await ownerLogin();
 

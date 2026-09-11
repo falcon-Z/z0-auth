@@ -254,6 +254,10 @@ Cookie `z0_app_session` (HttpOnly, SameSite=Lax). OAuth resolves the grant for t
 
 OAuth token material is never stored in plaintext. Persist only hashed references (same model as session tokens).
 
+### `oauth_consent_challenges`
+
+Stores the reviewed authorization request as a ten-minute, purpose-bound Security Challenge. The browser receives the raw nonce; PostgreSQL stores only its SHA-256 digest. The row binds the challenge to one Application Identity, Application, client credential, redirect URI, scope, OAuth state, PKCE values, and OIDC nonce. Approval or denial atomically marks it consumed; approval writes the durable consent grant, authorization code, and Audit Record in the same transaction. Expired, mismatched, and replayed completions are rejected consistently and recorded for audit.
+
 ### `oauth_authorization_codes` (P4M1)
 
 | Column | Type | Notes |

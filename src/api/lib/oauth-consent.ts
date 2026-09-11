@@ -1,3 +1,5 @@
+import type { SQL } from "bun";
+
 import { getAppSignInSettingsForApi } from "./auth-settings";
 import { getDb } from "./db";
 import { parseScopeSet } from "./oauth";
@@ -36,8 +38,10 @@ export type OAuthUserConsent = {
 export async function getOAuthUserConsent(
   appUserId: string,
   appId: string,
+  tx?: SQL,
 ): Promise<OAuthUserConsent | null> {
-  const [row] = await getDb()`
+  const db = tx ?? getDb();
+  const [row] = await db`
     SELECT app_user_id, app_id, scope, granted_at, updated_at
     FROM oauth_user_consents
     WHERE app_user_id = ${appUserId}
@@ -65,16 +69,24 @@ export async function upsertOAuthUserConsent(input: {
   appUserId: string;
   appId: string;
   requestedScope: string;
-}): Promise<void> {
-  const existing = await getOAuthUserConsent(input.appUserId, input.appId);
-  const scope = mergeScopeStrings(existing?.scope ?? "", input.requestedScope);
-
-  await getDb()`
+}, tx?: SQL): Promise<void> {
+  const db = tx ?? getDb();
+  await db`
     INSERT INTO oauth_user_consents (app_user_id, app_id, scope, granted_at, updated_at)
-    VALUES (${input.appUserId}, ${input.appId}, ${scope}, NOW(), NOW())
+    VALUES (${input.appUserId}, ${input.appId}, ${normalizeScopeString(input.requestedScope)}, NOW(), NOW())
     ON CONFLICT (app_user_id, app_id)
     DO UPDATE SET
-      scope = EXCLUDED.scope,
+      scope = COALESCE((
+        SELECT string_agg(scope_name, ' ' ORDER BY scope_name)
+        FROM (
+          SELECT DISTINCT scope_name
+          FROM unnest(regexp_split_to_array(
+            trim(oauth_user_consents.scope || ' ' || EXCLUDED.scope),
+            '\\s+'
+          )) AS scopes(scope_name)
+          WHERE scope_name <> ''
+        ) merged_scopes
+      ), ''),
       updated_at = NOW()
   `;
 }

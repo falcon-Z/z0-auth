@@ -1,6 +1,8 @@
 import type { BunRequest } from "bun";
+import { ErrorCodes } from "@z0/contracts/errors";
 import { safeDecodeURIComponent } from "@z0/contracts/validation";
 
+import { createAuthorizationServer } from "../../capabilities/authorization-server";
 import { clientIdFromAuthorizePath, resolveAuthRealm } from "../../api/lib/auth-realm";
 import { randomToken } from "../../api/lib/crypto";
 import { withDatabaseErrorHandling } from "../../api/lib/database-errors";
@@ -24,9 +26,10 @@ import {
 import {
   getOAuthConsentPageContext,
   getOAuthUserConsent,
+  normalizeScopeString,
   scopeIsSubset,
-  upsertOAuthUserConsent,
 } from "../../api/lib/oauth-consent";
+import { createPostgresOAuthConsentChallengeAuthority } from "../../api/lib/oauth-consent-challenges";
 import {
   exchangeAuthorizationCode,
   exchangeRefreshToken,
@@ -49,36 +52,10 @@ import { escapeHtml, renderAuthPage } from "../html";
 
 const OAUTH_RETURN_COOKIE = "z0_oauth_return";
 const OAUTH_CONSENT_COOKIE = "z0_oauth_consent";
-const CONSENT_NONCE_TTL_MS = 10 * 60 * 1000;
-
-const consumedConsentNonces = new Map<string, number>();
-
-/** Clear consumed consent nonces between tests. */
-export function resetConsumedConsentNoncesForTests(): void {
-  consumedConsentNonces.clear();
-}
-
-function tryConsumeConsentNonce(nonce: string): boolean {
-  const now = Date.now();
-  for (const [key, expiresAt] of consumedConsentNonces) {
-    if (expiresAt <= now) consumedConsentNonces.delete(key);
-  }
-  if (consumedConsentNonces.has(nonce)) return false;
-  consumedConsentNonces.set(nonce, now + CONSENT_NONCE_TTL_MS);
-  return true;
-}
-
-type ConsentState = {
-  nonce: string;
-  appUserId: string;
-  clientId: string;
-  redirectUri: string;
-  scope: string;
-  state: string | null;
-  codeChallenge: string | null;
-  codeChallengeMethod: string | null;
-  oidcNonce: string | null;
-};
+const authorizationServer = createAuthorizationServer({
+  consentChallenges: createPostgresOAuthConsentChallengeAuthority(),
+  generateNonce: () => randomToken(32),
+});
 
 function setReturnCookie(value: string): string {
   const secure = loadConfig().nodeEnv === "production";
@@ -118,21 +95,6 @@ function clearConsentCookie(): string {
   const parts = [`${OAUTH_CONSENT_COOKIE}=`, "Path=/", "HttpOnly", "SameSite=Lax", "Max-Age=0"];
   if (secure) parts.push("Secure");
   return parts.join("; ");
-}
-
-function encodeConsentState(state: ConsentState): string {
-  return JSON.stringify(state);
-}
-
-function decodeConsentState(raw: string | null): ConsentState | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as ConsentState;
-    if (!parsed.nonce || !parsed.appUserId || !parsed.clientId || !parsed.redirectUri) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
 }
 
 function getCookie(req: Request, key: string): string | null {
@@ -295,10 +257,11 @@ async function renderConsentPage(req: BunRequest, params: {
   oidcNonce: string | null;
 }): Promise<Response> {
   const csrf = preparePageCsrf(req);
-  const consentNonce = randomToken(16);
-  const consentState: ConsentState = {
-    nonce: consentNonce,
+  const context = await getOAuthConsentPageContext(params.appId, params.scope);
+  const challenge = await authorizationServer.beginConsent({
+    responseType: "code",
     appUserId: params.appUserId,
+    appId: params.appId,
     clientId: params.clientId,
     redirectUri: params.redirectUri,
     scope: params.scope,
@@ -306,8 +269,7 @@ async function renderConsentPage(req: BunRequest, params: {
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
     oidcNonce: params.oidcNonce,
-  };
-  const context = await getOAuthConsentPageContext(params.appId, params.scope);
+  });
   const body = `<form method="post" action="/oauth/authorize" class="auth-card">
       <h2>Authorize ${escapeHtml(context.appName)}</h2>
       ${renderScopeList(context.scopes)}
@@ -320,7 +282,7 @@ async function renderConsentPage(req: BunRequest, params: {
       <input type="hidden" name="code_challenge" value="${escapeHtml(params.codeChallenge ?? "")}" />
       <input type="hidden" name="code_challenge_method" value="${escapeHtml(params.codeChallengeMethod ?? "")}" />
       <input type="hidden" name="nonce" value="${escapeHtml(params.oidcNonce ?? "")}" />
-      <input type="hidden" name="consent_nonce" value="${escapeHtml(consentNonce)}" />
+      <input type="hidden" name="consent_nonce" value="${escapeHtml(challenge.nonce)}" />
       <div class="auth-actions">
         <button type="submit" name="consent" value="deny" class="auth-button auth-button--secondary">Cancel</button>
         <button type="submit" name="consent" value="approve" class="auth-button">Allow and continue</button>
@@ -340,7 +302,7 @@ async function renderConsentPage(req: BunRequest, params: {
     csrf.setCookie,
   );
   const headers = new Headers(response.headers);
-  headers.append("Set-Cookie", setConsentCookie(encodeConsentState(consentState)));
+  headers.append("Set-Cookie", setConsentCookie(challenge.nonce));
   return new Response(response.body, { status: response.status, headers });
 }
 
@@ -658,66 +620,28 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
   const body = await parseFormBody(req);
   const csrfError = validateFormCsrf(req, body._csrf);
   if (csrfError) return csrfError;
-  if (body.response_type !== "code" || !body.client_id || !body.redirect_uri) {
-    return problem(400, "Bad Request", "Invalid authorize request");
-  }
-  const consentState = decodeConsentState(getCookie(req, OAUTH_CONSENT_COOKIE));
-  if (!consentState || !body.consent_nonce || consentState.nonce !== body.consent_nonce) {
+  const consentNonce = getCookie(req, OAUTH_CONSENT_COOKIE);
+  if (!consentNonce || !body.consent_nonce) {
     return problem(400, "Bad Request", "Consent confirmation is required");
   }
-  if (
-    consentState.clientId !== body.client_id ||
-    consentState.redirectUri !== body.redirect_uri ||
-    consentState.scope !== (body.scope ?? "") ||
-    (consentState.state ?? "") !== (body.state ?? "") ||
-    (consentState.codeChallenge ?? "") !== (body.code_challenge ?? "") ||
-    (consentState.codeChallengeMethod ?? "") !== (body.code_challenge_method ?? "")
-    || (consentState.oidcNonce ?? "") !== (body.nonce ?? "")
-  ) {
-    return problem(400, "Bad Request", "Consent approval does not match the reviewed authorize request");
+
+  const context = await authorizationServer.findConsentContext(consentNonce);
+  if (!context) {
+    return problem(400, "Bad Request", "Consent confirmation is invalid", { code: ErrorCodes.CONSENT_INVALID });
   }
 
-  const client = await findActiveOAuthClient(body.client_id);
-  if (!client) return problem(400, "Bad Request", "Unknown client_id");
-  if (!isAllowedRedirectUri(client, body.redirect_uri)) {
-    return problem(400, "Bad Request", "redirect_uri must exactly match a registered URI");
-  }
-
-  if (body.consent !== "approve") {
-    if (!tryConsumeConsentNonce(consentState.nonce)) {
-      return problem(400, "Bad Request", "Consent confirmation has already been used");
-    }
-    const denied = new URL(body.redirect_uri);
-    denied.searchParams.set("error", "access_denied");
-    if (body.state) denied.searchParams.set("state", body.state);
-    const headers = new Headers({ Location: denied.toString() });
-    headers.append("Set-Cookie", clearConsentCookie());
-    return new Response(null, { status: 302, headers });
-  }
-
-  const normalizedScopeResult = await validateRequestedScopes(client.appId, consentState.scope);
-  if (!normalizedScopeResult.ok) {
-    return problem(400, "Bad Request", "Requested scope is not allowed for this app");
-  }
-  if (
-    client.clientType === "public" &&
-    (!consentState.codeChallenge || consentState.codeChallengeMethod !== "S256")
-  ) {
-    return problem(400, "Bad Request", "Public clients require PKCE (S256)");
-  }
-
-  const resolved = await resolveTargetAppSession(req, client.appId);
+  const resolved = await resolveTargetAppSession(req, context.appId);
   if (!resolved) {
     const params = new URLSearchParams({
-      response_type: "code",
-      client_id: body.client_id,
-      redirect_uri: body.redirect_uri,
+      response_type: body.response_type ?? "",
+      client_id: body.client_id ?? "",
+      redirect_uri: body.redirect_uri ?? "",
     });
-    if (consentState.state) params.set("state", consentState.state);
-    if (normalizedScopeResult.normalizedScope) params.set("scope", normalizedScopeResult.normalizedScope);
-    if (consentState.codeChallenge) params.set("code_challenge", consentState.codeChallenge);
-    if (consentState.codeChallengeMethod) params.set("code_challenge_method", consentState.codeChallengeMethod);
-    if (consentState.oidcNonce) params.set("nonce", consentState.oidcNonce);
+    if (body.state) params.set("state", body.state);
+    if (body.scope) params.set("scope", body.scope);
+    if (body.code_challenge) params.set("code_challenge", body.code_challenge);
+    if (body.code_challenge_method) params.set("code_challenge_method", body.code_challenge_method);
+    if (body.nonce) params.set("nonce", body.nonce);
     return loginRedirectForAuthorize(req, `/oauth/authorize?${params.toString()}`);
   }
   if (!resolved.session) {
@@ -726,36 +650,47 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     return new Response(null, { status: 302, headers });
   }
   const appSession = resolved.session;
-  if (appSession.appUserId !== consentState.appUserId) {
-    return problem(400, "Bad Request", "Consent approval is no longer valid for this session");
-  }
-
-  if (!tryConsumeConsentNonce(consentState.nonce)) {
-    return problem(400, "Bad Request", "Consent confirmation has already been used");
-  }
-
-  await upsertOAuthUserConsent({
+  const completion = await authorizationServer.completeConsent({
+    nonce: consentNonce,
+    confirmationNonce: body.consent_nonce,
+    responseType: body.response_type ?? "",
+    appId: context.appId,
     appUserId: appSession.appUserId,
-    appId: client.appId,
-    requestedScope: normalizedScopeResult.normalizedScope,
+    clientId: body.client_id ?? "",
+    redirectUri: body.redirect_uri ?? "",
+    scope: normalizeScopeString(body.scope ?? ""),
+    state: body.state || null,
+    codeChallenge: body.code_challenge || null,
+    codeChallengeMethod: body.code_challenge_method || null,
+    oidcNonce: body.nonce || null,
+    decision: body.consent ?? "",
   });
 
-  const authorizeUrl = new URL("http://localhost/oauth/authorize");
-  authorizeUrl.searchParams.set("response_type", "code");
-  authorizeUrl.searchParams.set("client_id", body.client_id);
-  authorizeUrl.searchParams.set("redirect_uri", body.redirect_uri);
-  authorizeUrl.searchParams.set("scope", normalizedScopeResult.normalizedScope);
-  if (consentState.codeChallenge) authorizeUrl.searchParams.set("code_challenge", consentState.codeChallenge);
-  if (consentState.codeChallengeMethod) {
-    authorizeUrl.searchParams.set("code_challenge_method", consentState.codeChallengeMethod);
+  if (completion.outcome === "missing") {
+    return problem(400, "Bad Request", "Consent confirmation is invalid", { code: ErrorCodes.CONSENT_INVALID });
   }
-  if (consentState.state) authorizeUrl.searchParams.set("state", consentState.state);
-  if (consentState.oidcNonce) authorizeUrl.searchParams.set("nonce", consentState.oidcNonce);
-  const response = await redirectWithCode(authorizeUrl, client.appId, appSession.appUserId);
-  const headers = new Headers(response.headers);
+  if (completion.outcome === "expired") {
+    return problem(400, "Bad Request", "Consent confirmation has expired", { code: ErrorCodes.CONSENT_EXPIRED });
+  }
+  if (completion.outcome === "mismatched") {
+    return problem(400, "Bad Request", "Consent approval does not match the reviewed authorize request", { code: ErrorCodes.CONSENT_MISMATCH });
+  }
+  if (completion.outcome === "replayed") {
+    return problem(400, "Bad Request", "Consent confirmation has already been used", { code: ErrorCodes.CONSENT_REPLAYED });
+  }
+
+  const redirect = new URL(completion.redirectUri);
+  if (completion.outcome === "approved") {
+    redirect.searchParams.set("code", completion.code);
+  } else {
+    redirect.searchParams.set("error", "access_denied");
+  }
+  if (completion.state) redirect.searchParams.set("state", completion.state);
+  const headers = new Headers({ Location: redirect.toString() });
+  headers.append("Set-Cookie", clearReturnCookie());
   headers.append("Set-Cookie", clearConsentCookie());
   appendSetCookie(headers, resolved.setCookie);
-  return new Response(response.body, { status: response.status, headers });
+  return new Response(null, { status: 302, headers });
 }
 
 async function postRevoke(req: BunRequest): Promise<Response> {

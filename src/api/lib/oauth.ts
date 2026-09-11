@@ -1,3 +1,5 @@
+import type { SQL } from "bun";
+
 import { randomToken, sha256Hex } from "./crypto";
 import { getDb } from "./db";
 import { verifyPassword } from "./password";
@@ -148,12 +150,13 @@ export async function issueAuthorizationCode(input: {
   codeChallenge: string | null;
   codeChallengeMethod: string | null;
   nonce: string | null;
-}): Promise<string> {
+}, tx?: SQL): Promise<string> {
   const code = `z0_ac_${randomToken(16)}`;
   const codeHash = await sha256Hex(code);
   const expiresAt = new Date(Date.now() + AUTH_CODE_TTL_MS);
 
-  await getDb()`
+  const db = tx ?? getDb();
+  await db`
     INSERT INTO oauth_authorization_codes (
       code_hash,
       app_id,

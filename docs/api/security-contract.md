@@ -281,6 +281,8 @@ These rules are required for the OAuth authorization server baseline.
 
 - One-time use; short TTL (target: 10 minutes)
 - Bound to `client_id`, `redirect_uri`, PKCE challenge, and issuing user session
+- Consent confirmation is a PostgreSQL-authoritative, ten-minute Security Challenge bound to the complete reviewed request and Application Identity.
+- Approval and denial are atomically single-use across Application Replicas. Replay, expiry, and request mismatch return stable consent error codes and create Audit Records.
 
 ### Refresh tokens
 

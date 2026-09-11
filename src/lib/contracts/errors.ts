@@ -46,6 +46,14 @@ export const ErrorCodes = {
   INVALID_CLIENT: "invalid_client",
   /** OAuth: client not permitted for this grant or redirect. */
   UNAUTHORIZED_CLIENT: "unauthorized_client",
+  /** OAuth consent challenge is unknown. */
+  CONSENT_INVALID: "consent_invalid",
+  /** OAuth consent challenge exceeded its ten-minute lifetime. */
+  CONSENT_EXPIRED: "consent_expired",
+  /** OAuth consent completion differs from the reviewed request or subject. */
+  CONSENT_MISMATCH: "consent_mismatch",
+  /** OAuth consent challenge was already completed. */
+  CONSENT_REPLAYED: "consent_replayed",
   /** Caller lacks permission for this action. */
   PERMISSION_DENIED: "permission_denied",
   /** Invite token unknown or not pending. */

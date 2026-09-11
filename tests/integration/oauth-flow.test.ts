@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
+import { createAuthorizationServer } from "../../src/capabilities/authorization-server";
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
-import { closeDatabase } from "../../src/api/lib/db";
+import { sha256Hex } from "../../src/api/lib/crypto";
+import { closeDatabase, getDb } from "../../src/api/lib/db";
+import { createPostgresOAuthConsentChallengeAuthority } from "../../src/api/lib/oauth-consent-challenges";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
-import { resetConsumedConsentNoncesForTests } from "../../src/web/oauth/routes";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { makeStrongPassword } from "../helpers/password";
@@ -191,6 +193,59 @@ async function approveConsent(input: {
   return code!;
 }
 
+async function prepareConsentSubmission(input: {
+  clientId: string;
+  redirectUri: string;
+  appSession: string;
+  scope: string;
+  state: string;
+}) {
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: input.clientId,
+    redirect_uri: input.redirectUri,
+    scope: input.scope,
+    state: input.state,
+  });
+  const consentPageRes = await dispatchWeb(
+    new Request(`http://localhost/oauth/authorize?${params.toString()}`, {
+      headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(input.appSession)}` },
+    }),
+  );
+  expect(consentPageRes.status).toBe(200);
+  const consentHtml = await consentPageRes.text();
+  const csrf = extractCsrfFromHtml(consentHtml)!;
+  const nonce = consentHtml.match(/name="consent_nonce" value="([^"]+)"/)?.[1] ?? "";
+  const challengeCookie = extractCookieValue(consentPageRes, "z0_oauth_consent")!;
+  const csrfCookie = extractCsrfFromSetCookie(consentPageRes) ?? csrf;
+
+  return {
+    nonce,
+    submit(overrides: Record<string, string> = {}) {
+      return dispatchWeb(new Request("http://localhost/oauth/authorize", {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: "http://localhost",
+          host: "localhost",
+          cookie: `${CSRF_COOKIE}=${encodeURIComponent(csrfCookie)}; z0_oauth_consent=${encodeURIComponent(challengeCookie)}; ${APP_SESSION_COOKIE}=${encodeURIComponent(input.appSession)}`,
+        },
+        body: new URLSearchParams({
+          _csrf: csrf,
+          response_type: "code",
+          client_id: input.clientId,
+          redirect_uri: input.redirectUri,
+          scope: input.scope,
+          state: input.state,
+          consent_nonce: nonce,
+          consent: "approve",
+          ...overrides,
+        }).toString(),
+      }));
+    },
+  };
+}
+
 async function exchangeToken(body: Record<string, string>): Promise<Response> {
   return dispatchWeb(
     new Request("http://localhost/oauth/token", {
@@ -205,6 +260,7 @@ run("OAuth authorization code flow", () => {
   let confidentialClientId = "";
   let confidentialSecret = "";
   let confidentialAppId = "";
+  let confidentialAppUserId = "";
   let publicClientId = "";
   let publicAppId = "";
   let appUserEmail = "oauth-user@example.com";
@@ -212,7 +268,6 @@ run("OAuth authorization code flow", () => {
   beforeAll(async () => {
     await resetTestDatabase();
     resetRateLimitsForTests();
-    resetConsumedConsentNoncesForTests();
     await completeSetup();
     const { csrf, cookie } = await ownerLogin();
 
@@ -243,7 +298,7 @@ run("OAuth authorization code flow", () => {
     publicClientId = publicApp.credential.clientId;
     publicAppId = publicApp.app.id;
 
-    await dispatchApi(
+    const confidentialUserResponse = await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${confidentialAppId}/users`, {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
@@ -255,12 +310,21 @@ run("OAuth authorization code flow", () => {
         },
       }),
     );
+    confidentialAppUserId = String((await confidentialUserResponse.json() as { userId: string }).userId);
 
     await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${confidentialAppId}/scopes`, {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
         body: { name: "read:orders", description: "Read orders" },
+      }),
+    );
+
+    await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${confidentialAppId}/scopes`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: { name: "write:orders", description: "Write orders" },
       }),
     );
 
@@ -459,6 +523,203 @@ run("OAuth authorization code flow", () => {
     expect(location.searchParams.get("state")).toBe("deny-state");
   });
 
+  test("a consent confirmation produces only one successful protocol response", async () => {
+    const appSession = await loginAppUser(confidentialClientId, appUserEmail, appUserPassword);
+    const submission = await prepareConsentSubmission({
+      clientId: confidentialClientId,
+      redirectUri: REDIRECT,
+      appSession,
+      scope: "openid profile email write:orders",
+      state: "durable-consent-state",
+    });
+
+    const first = await submission.submit();
+    expect(first.status).toBe(302);
+    expect(new URL(first.headers.get("location") ?? "").searchParams.get("code")).toBeTruthy();
+
+    const replay = await submission.submit();
+    expect(replay.status).toBe(400);
+    expect(await replay.json()).toMatchObject({ code: "consent_replayed" });
+
+    const { cookie: ownerSession } = await ownerLogin();
+    const audit = await dispatchApi(
+      buildRequest("GET", "/api/v1/audit-events?action=oauth.consent_rejected", {
+        cookies: { [SESSION_COOKIE]: ownerSession },
+      }),
+    );
+    expect(audit.status).toBe(200);
+    const auditBody = (await audit.json()) as { events: Array<{ payload: Record<string, unknown> }> };
+    expect(auditBody.events.some((event) => event.payload.reason === "replayed")).toBe(true);
+  });
+
+  test("expired and mismatched consent return stable protocol errors", async () => {
+    const appSession = await loginAppUser(confidentialClientId, appUserEmail, appUserPassword);
+    const mismatch = await prepareConsentSubmission({
+      clientId: confidentialClientId,
+      redirectUri: REDIRECT,
+      appSession,
+      scope: "openid profile email read:orders",
+      state: "reviewed-state",
+    });
+    const mismatchResponse = await mismatch.submit({ state: "tampered-state" });
+    expect(mismatchResponse.status).toBe(400);
+    expect(await mismatchResponse.json()).toMatchObject({ code: "consent_mismatch" });
+
+    const expired = await prepareConsentSubmission({
+      clientId: confidentialClientId,
+      redirectUri: REDIRECT,
+      appSession,
+      scope: "openid profile email read:orders",
+      state: "expiring-state",
+    });
+    const nonceHash = await sha256Hex(expired.nonce);
+    await getDb()`
+      UPDATE oauth_consent_challenges
+      SET expires_at = clock_timestamp() - INTERVAL '1 second'
+      WHERE nonce_hash = ${nonceHash}
+    `;
+    const expiredResponse = await expired.submit();
+    expect(expiredResponse.status).toBe(400);
+    expect(await expiredResponse.json()).toMatchObject({ code: "consent_expired" });
+
+    const { cookie: ownerSession } = await ownerLogin();
+    const audit = await dispatchApi(
+      buildRequest("GET", "/api/v1/audit-events?action=oauth.consent_rejected", {
+        cookies: { [SESSION_COOKIE]: ownerSession },
+      }),
+    );
+    const auditBody = (await audit.json()) as { events: Array<{ payload: Record<string, unknown> }> };
+    const reasons = auditBody.events.map((event) => event.payload.reason);
+    expect(reasons).toContain("mismatched");
+    expect(reasons).toContain("expired");
+  });
+
+  test("two Application Replicas produce exactly one successful consent outcome", async () => {
+    const authority = createPostgresOAuthConsentChallengeAuthority();
+    const firstReplica = createAuthorizationServer({
+      consentChallenges: authority,
+      generateNonce: () => "cross-replica-consent",
+    });
+    const secondReplica = createAuthorizationServer({ consentChallenges: authority });
+    const input = {
+      responseType: "code" as const,
+      appId: confidentialAppId,
+      appUserId: confidentialAppUserId,
+      clientId: confidentialClientId,
+      redirectUri: REDIRECT,
+      scope: "openid profile email",
+      state: "replica-state",
+      codeChallenge: null,
+      codeChallengeMethod: null,
+      oidcNonce: "replica-oidc-nonce",
+    };
+    const challenge = await firstReplica.beginConsent(input);
+
+    const outcomes = await Promise.all([
+      firstReplica.completeConsent({
+        ...input,
+        nonce: challenge.nonce,
+        confirmationNonce: challenge.nonce,
+        decision: "approve",
+      }),
+      secondReplica.completeConsent({
+        ...input,
+        nonce: challenge.nonce,
+        confirmationNonce: challenge.nonce,
+        decision: "approve",
+      }),
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.outcome).sort()).toEqual(["approved", "replayed"]);
+    expect(outcomes.filter((outcome) => outcome.outcome === "approved")).toHaveLength(1);
+  });
+
+  test("expired and mismatched consent challenges have stable outcomes", async () => {
+    const authority = createPostgresOAuthConsentChallengeAuthority();
+    const expiredServer = createAuthorizationServer({ consentChallenges: authority });
+    const mismatchServer = createAuthorizationServer({
+      consentChallenges: authority,
+      generateNonce: () => "mismatched-consent",
+    });
+    const input = {
+      responseType: "code" as const,
+      appId: confidentialAppId,
+      appUserId: confidentialAppUserId,
+      clientId: confidentialClientId,
+      redirectUri: REDIRECT,
+      scope: "openid profile email",
+      state: "bound-state",
+      codeChallenge: null,
+      codeChallengeMethod: null,
+      oidcNonce: null,
+    };
+
+    const expired = { nonce: "expired-consent" };
+    await authority.create({
+      ...input,
+      nonce: expired.nonce,
+      purpose: "oauth_consent",
+      lifetimeSeconds: -1,
+    });
+    expect(await expiredServer.completeConsent({
+      ...input,
+      nonce: expired.nonce,
+      confirmationNonce: expired.nonce,
+      decision: "approve",
+    })).toEqual({ outcome: "expired" });
+    expect(await expiredServer.completeConsent({
+      ...input,
+      nonce: expired.nonce,
+      confirmationNonce: expired.nonce,
+      decision: "approve",
+    })).toEqual({ outcome: "replayed" });
+
+    const mismatched = await mismatchServer.beginConsent(input);
+    expect(await mismatchServer.completeConsent({
+      ...input,
+      state: "tampered-state",
+      nonce: mismatched.nonce,
+      confirmationNonce: mismatched.nonce,
+      decision: "approve",
+    })).toEqual({ outcome: "mismatched" });
+    expect(await mismatchServer.completeConsent({
+      ...input,
+      nonce: mismatched.nonce,
+      confirmationNonce: mismatched.nonce,
+      decision: "approve",
+    })).toEqual({ outcome: "replayed" });
+
+    const invalidated = await mismatchServer.beginConsent({
+      ...input,
+      state: "authority-change",
+    });
+    await getDb()`UPDATE apps SET status = 'disabled', disabled_at = NOW() WHERE id = ${confidentialAppId}`;
+    try {
+      expect(await mismatchServer.completeConsent({
+        ...input,
+        state: "authority-change",
+        nonce: invalidated.nonce,
+        confirmationNonce: invalidated.nonce,
+        decision: "approve",
+      })).toEqual({ outcome: "mismatched" });
+    } finally {
+      await getDb()`UPDATE apps SET status = 'active', disabled_at = NULL WHERE id = ${confidentialAppId}`;
+    }
+
+    const { cookie: ownerSession } = await ownerLogin();
+    const audit = await dispatchApi(
+      buildRequest("GET", "/api/v1/audit-events?action=oauth.consent_rejected", {
+        cookies: { [SESSION_COOKIE]: ownerSession },
+      }),
+    );
+    expect(audit.status).toBe(200);
+    const auditBody = (await audit.json()) as { events: Array<{ payload: Record<string, unknown> }> };
+    const reasons = auditBody.events.map((event) => event.payload.reason);
+    expect(reasons).toContain("expired");
+    expect(reasons).toContain("mismatched");
+    expect(reasons).toContain("replayed");
+  });
+
   test("reused authorization code is rejected", async () => {
     const appSession = await loginAppUser(confidentialClientId, appUserEmail, appUserPassword);
     const code = await approveConsent({
@@ -635,7 +896,6 @@ run("OIDC discovery and tokens", () => {
   beforeAll(async () => {
     await resetTestDatabase();
     resetRateLimitsForTests();
-    resetConsumedConsentNoncesForTests();
     await completeSetup();
     const { csrf, cookie } = await ownerLogin();
 
