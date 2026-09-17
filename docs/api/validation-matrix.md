@@ -321,6 +321,17 @@ Append-only: no create/update/delete API. Events written by handlers (auth, memb
 | `POST …/token/refresh` | Upstream | Refresh grant succeeds | `federation_token_refresh_failed` | 502 | Retry |
 | Hosted `/auth/federation/*` | Linking | Verified email auto-link; conflicts blocked | `federation_email_conflict` | 409 HTML | Error card |
 
+## Operator sessions
+
+| Endpoint / state | Rule | Error / evidence | Result |
+|------------------|------|------------------|--------|
+| Any authenticated Operator API | PostgreSQL `idle_expires_at` and `expires_at` must both be future | `session.expired` Audit Record with `idle_timeout` or `absolute_timeout` | Unauthenticated |
+| Any authenticated Operator API | Operator account must remain active, enabled, undeleted, and unlocked | `session.revoked_account_state` Audit Record | Unauthenticated |
+| Sensitive Operator mutation | Current session must hold recent multi-factor or phishing-resistant assurance when a factor is enrolled | Stable step-up error plus `reauthentication.path` | 403 |
+| `POST /api/auth/reauthenticate` | Current password, CSRF, active session, and rate limit | `primary_reauthentication_required` guidance points here | 200 / 401 / 429 |
+| `POST /api/auth/reauthenticate` | `password` is required | `required` | 400 |
+| `GET /api/v1/sessions` | Active sessions include assurance, authentication timestamps, inactivity deadline, and absolute deadline | — | 200 |
+
 ## App user sessions — console admin (P7M2)
 
 | Endpoint | Input | Rule | Code | HTTP | UI |

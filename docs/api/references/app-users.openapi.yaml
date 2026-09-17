@@ -150,7 +150,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "sessions.openapi.yaml#/components/schemas/ListSessionsResponse"
+                $ref: "sessions.openapi.yaml#/components/schemas/ListAppSessionsResponse"
         "401":
           $ref: "common.openapi.yaml#/components/responses/Unauthorized"
         "403":

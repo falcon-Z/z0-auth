@@ -113,6 +113,20 @@ async function apiFetchInternal<T>(path: string, options: ApiFetchOptions, allow
       await stepUpWithPasskey();
       return apiFetchInternal<T>(path, options, false);
     }
+    const primaryReauthenticationRequired = problem.errors?.some(
+      (error) => error.code === "primary_reauthentication_required",
+    );
+    if (allowStepUp && primaryReauthenticationRequired && path !== "/api/auth/reauthenticate") {
+      const password = window.prompt("Enter your current password to continue:");
+      if (password) {
+        await apiFetchInternal(
+          "/api/auth/reauthenticate",
+          { method: "POST", body: { password } },
+          false,
+        );
+        return apiFetchInternal<T>(path, options, false);
+      }
+    }
     throw new ApiError(problem);
   }
   throw new Error(`${method} ${path} failed (${res.status})`);

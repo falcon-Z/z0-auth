@@ -18,6 +18,10 @@ export type AppConfig = {
   allowIncompleteSetup: boolean;
   /** Number of trusted reverse proxies that append X-Forwarded-For. */
   trustProxyHops: number;
+  /** Inactivity window fixed when an Operator session is issued. */
+  operatorSessionIdleMinutes: number;
+  /** Absolute lifetime fixed when an Operator session is issued. */
+  operatorSessionAbsoluteHours: number;
   /** Development/test key file. Production still requires environment-backed keys. */
   instanceKeysPath: string;
   /** Canonical public origin for issuer, callbacks, and security links. Required HTTPS in production. */
@@ -242,6 +246,16 @@ export function loadConfig(): AppConfig {
         })(),
     allowIncompleteSetup: parseEnvironmentBoolean("ALLOW_INCOMPLETE_SETUP", false),
     trustProxyHops: parseEnvironmentInteger("TRUST_PROXY_HOPS", 0, { min: 0, max: 32 }),
+    operatorSessionIdleMinutes: parseEnvironmentInteger(
+      "OPERATOR_SESSION_IDLE_MINUTES",
+      30,
+      { min: 5, max: 720 },
+    ),
+    operatorSessionAbsoluteHours: parseEnvironmentInteger(
+      "OPERATOR_SESSION_ABSOLUTE_HOURS",
+      12,
+      { min: 1, max: 168 },
+    ),
     instanceKeysPath: process.env.INSTANCE_KEYS_PATH === undefined
       ? ".data/instance-keys.json"
       : (() => {

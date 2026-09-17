@@ -9,6 +9,10 @@ export type ChangePasswordRequest = {
   passwordConfirm: string;
 };
 
+export type ReauthenticateRequest = {
+  password: string;
+};
+
 export type SessionUser = {
   id: string;
   email: string;

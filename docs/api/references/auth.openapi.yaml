@@ -232,6 +232,43 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/Forbidden"
         "503":
           $ref: "common.openapi.yaml#/components/responses/SetupRequired"
+  /api/auth/reauthenticate:
+    post:
+      tags: [Auth]
+      summary: Refresh primary authentication for the current Operator session
+      operationId: postAuthReauthenticate
+      security:
+        - SessionCookie: []
+          CsrfHeader: []
+          CsrfCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReauthenticateRequest"
+      responses:
+        "200":
+          description: Primary authentication freshness renewed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "429":
+          $ref: "common.openapi.yaml#/components/responses/TooManyRequests"
   /api/auth/mfa:
     get:
       tags: [Auth]
@@ -564,11 +601,19 @@ paths:
           $ref: "common.openapi.yaml#/components/responses/NotFound"
 components:
   securitySchemes:
+    SessionCookie:
+      $ref: "common.openapi.yaml#/components/securitySchemes/SessionCookie"
     CsrfHeader:
       $ref: "common.openapi.yaml#/components/securitySchemes/CsrfHeader"
     CsrfCookie:
       $ref: "common.openapi.yaml#/components/securitySchemes/CsrfCookie"
   schemas:
+    ReauthenticateRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
     LoginRequest:
       type: object
       required: [email, password]

@@ -2,6 +2,7 @@ import type { BunRequest, SQL } from "bun";
 
 import type { MfaEnrollment, MfaStatus } from "@z0/contracts/mfa";
 import type { RememberedBrowser } from "@z0/contracts/mfa";
+import { authorizeSensitiveOperatorTask } from "../../capabilities/operator-access";
 import { ErrorCodes } from "@z0/contracts/errors";
 import { parseCookies } from "./csrf";
 import { sha256Hex, randomToken } from "./crypto";
@@ -712,30 +713,74 @@ export function mfaClientLabel(req: BunRequest): string {
 export async function requireRecentConsoleMfa(req: Request, userId: string): Promise<Response | null> {
   const totpEnabled = await hasConsoleMfa(userId);
   const passkeyEnabled = await hasConsolePasskeys(userId);
-  if (!totpEnabled && !passkeyEnabled) return null;
   const session = await resolveSession(req);
   if (!session || session.userId !== userId) {
     return problem(401, "Unauthorized", "Authentication required");
   }
-  const [row] = await getDb()`
-    SELECT 1 FROM sessions
-    WHERE id = ${session.sessionId} AND user_id = ${userId}
-      AND revoked_at IS NULL
-      AND mfa_authenticated_at > NOW() - INTERVAL '10 minutes'
-  `;
-  if (row) return null;
+  const factorEnabled = totpEnabled || passkeyEnabled;
+  const requiredAssuranceLevel = factorEnabled ? "multi_factor" : "primary";
+  const decision = authorizeSensitiveOperatorTask({
+    assuranceLevel: session.assuranceLevel,
+    authenticatedAt: factorEnabled
+      ? session.mfaAuthenticatedAt ?? session.primaryAuthenticatedAt
+      : session.primaryAuthenticatedAt,
+    requiredAssuranceLevel,
+    maximumAgeMs: 10 * 60 * 1000,
+    now: session.resolvedAt,
+  });
+  if (decision.allowed) return null;
+  await writeAuditEvent({
+    actorUserId: userId,
+    action: "session.assurance_denied",
+    resourceType: "session",
+    resourceId: session.sessionId,
+    payload: {
+      reason: decision.reason,
+      currentAssurance: session.assuranceLevel,
+      requiredAssurance: requiredAssuranceLevel,
+    },
+  });
+  const stepUp = passkeyEnabled && !totpEnabled
+    ? {
+        code: ErrorCodes.PASSKEY_STEP_UP_REQUIRED,
+        method: "passkey" as const,
+        path: "/api/auth/passkeys/authentication/options",
+        field: "_mfa",
+        message: "Verify with a passkey to continue",
+      }
+    : factorEnabled
+      ? {
+          code: ErrorCodes.MFA_STEP_UP_REQUIRED,
+          method: "mfa" as const,
+          path: "/api/auth/mfa/step-up",
+          field: "_mfa",
+          message: "Verify with MFA to continue",
+        }
+      : {
+          code: ErrorCodes.PRIMARY_REAUTHENTICATION_REQUIRED,
+          method: "password" as const,
+          path: "/api/auth/reauthenticate",
+          field: "password",
+          message: "Enter your current password to continue",
+        };
   return problem(403, "Forbidden", "Verify again to continue.", {
+    requiredAssurance: requiredAssuranceLevel,
+    reauthentication: {
+      method: stepUp.method,
+      path: stepUp.path,
+    },
     errors: [{
-      field: "_mfa",
-      code: passkeyEnabled && !totpEnabled ? ErrorCodes.PASSKEY_STEP_UP_REQUIRED : ErrorCodes.MFA_STEP_UP_REQUIRED,
-      message: passkeyEnabled && !totpEnabled ? "Verify with a passkey to continue" : "Verify with MFA to continue",
+      field: stepUp.field,
+      code: stepUp.code,
+      message: stepUp.message,
     }],
   });
 }
 
 export async function markConsoleSessionMfaAuthenticated(userId: string, sessionId: string): Promise<boolean> {
   const rows = await getDb()`
-    UPDATE sessions SET mfa_authenticated_at = NOW()
+    UPDATE sessions
+    SET mfa_authenticated_at = NOW(), assurance_level = 'multi_factor'
     WHERE id = ${sessionId} AND user_id = ${userId} AND revoked_at IS NULL AND expires_at > NOW()
     RETURNING id
   `;

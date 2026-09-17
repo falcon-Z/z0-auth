@@ -105,6 +105,8 @@ Production configuration:
 | `PUBLIC_ORIGIN` | Canonical HTTPS origin used for OAuth/OIDC issuer, callbacks, and emailed security links. Required in production. |
 | `DATABASE_POOL_MAX` | PostgreSQL connections per Bun process, from 1 to 100. Defaults to 10. |
 | `TRUST_PROXY_HOPS` | Number of trusted reverse proxies that append `X-Forwarded-For`, from 0 to 32. Defaults to 0, which ignores the header. |
+| `OPERATOR_SESSION_IDLE_MINUTES` | Operator inactivity timeout, from 5 to 720 minutes. Defaults to 30. |
+| `OPERATOR_SESSION_ABSOLUTE_HOURS` | Maximum Operator session lifetime, from 1 to 168 hours. Defaults to 12. |
 | `INSTANCE_DATA_KEY_ID` | Stable identifier stored with values encrypted by the active data key. Required in production. |
 | `INSTANCE_DATA_KEY` | Stable AES-256 key used to encrypt SMTP passwords, provider secrets, OIDC signing keys, and upstream provider tokens. Required in production. |
 | `INSTANCE_TOKEN_KEY_ID` | Stable identifier stored in signed internal tokens. Required in production. |

@@ -7,8 +7,17 @@ export type SessionSummary = {
   isCurrent: boolean;
 };
 
+export type OperatorSessionSummary = SessionSummary & {
+  primaryAuthenticatedAt: string;
+  mfaAuthenticatedAt: string | null;
+  authenticationMethod: string;
+  assuranceLevel: "primary" | "multi_factor" | "phishing_resistant";
+  idleExpiresAt: string;
+  absoluteExpiresAt: string;
+};
+
 export type ListSessionsResponse = {
-  sessions: SessionSummary[];
+  sessions: OperatorSessionSummary[];
 };
 
 export type RevokeSessionResponse = {

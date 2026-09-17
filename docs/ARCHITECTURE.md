@@ -69,7 +69,7 @@ Normative detail: [docs/api/security-contract.md](api/security-contract.md).
 
 - **Setup:** one-time setup via `POST /api/setup` (JSON) or `POST /auth/setup` (form).
 - **CSRF:** cookie `z0_csrf` + header `X-CSRF-Token` (API) or hidden `_csrf` field (HTML forms).
-- **Sessions:** HttpOnly cookie `z0_session` (14-day absolute lifetime).
+- **Operator sessions:** HttpOnly cookie `z0_session`; PostgreSQL enforces a configurable inactivity deadline (30 minutes by default), a configurable absolute deadline (12 hours by default), and explicit Assurance Levels consistently across Application Replicas.
 - **Guarding setup state:** APIs are wrapped with `applySetupGuard` so protected routes return `503 SetupRequired` before setup completes.
 - **Errors:** JSON problem responses with `requestId` — see [docs/api/CONTRACTS.md](api/CONTRACTS.md).
 

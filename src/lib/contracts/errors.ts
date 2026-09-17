@@ -14,6 +14,11 @@ export type ProblemDetail = {
   code?: string;
   retryAfter?: number;
   allowed?: string[];
+  requiredAssurance?: "primary" | "multi_factor" | "phishing_resistant";
+  reauthentication?: {
+    method: "password" | "mfa" | "passkey";
+    path: string;
+  };
 };
 
 /** Machine-readable codes returned in `errors[].code` or top-level `code`. */

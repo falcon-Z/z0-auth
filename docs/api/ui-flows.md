@@ -47,7 +47,7 @@ If only some bootstrap variables are set, automatic setup does not run and the d
 5. The user enters TOTP or a recovery code and may explicitly remember the browser for 30 days.
 6. Users can replace recovery codes, disable MFA, and revoke remembered browsers. Operators can reset eligible target MFA from member/app-user detail pages.
 
-JSON console self-service uses `/api/auth/mfa`, `/enrollment`, `/enrollment/confirm`, `/recovery-codes`, `/challenge`, `/step-up`, and `/remembered-browsers`. Sensitive console actions return `mfa_step_up_required` when the current MFA assurance is older than 10 minutes; the console asks for a fresh code and retries the action once.
+JSON console self-service uses `/api/auth/reauthenticate`, `/api/auth/mfa`, `/enrollment`, `/enrollment/confirm`, `/recovery-codes`, `/challenge`, `/step-up`, and `/remembered-browsers`. Sensitive console actions return `primary_reauthentication_required` for a stale primary-only session or an MFA/passkey step-up code when a factor is enrolled; the console obtains fresh proof and retries the action once.
 
 ## Passkeys
 

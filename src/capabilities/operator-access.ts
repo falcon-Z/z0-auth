@@ -20,6 +20,41 @@ export type ScopeGrantAuthorization =
     missingScopes: string[];
   };
 
+export type OperatorAssuranceLevel =
+  | "primary"
+  | "multi_factor"
+  | "phishing_resistant";
+
+export type AuthorizeSensitiveOperatorTask = {
+  assuranceLevel: OperatorAssuranceLevel;
+  authenticatedAt: Date;
+  requiredAssuranceLevel: OperatorAssuranceLevel;
+  maximumAgeMs: number;
+  now: Date;
+};
+
+export type SensitiveTaskAuthorization =
+  | { allowed: true }
+  | { allowed: false; reason: "insufficient_assurance" | "stale_authentication" };
+
+const assuranceRank: Record<OperatorAssuranceLevel, number> = {
+  primary: 1,
+  multi_factor: 2,
+  phishing_resistant: 3,
+};
+
+export function authorizeSensitiveOperatorTask(
+  input: AuthorizeSensitiveOperatorTask,
+): SensitiveTaskAuthorization {
+  if (assuranceRank[input.assuranceLevel] < assuranceRank[input.requiredAssuranceLevel]) {
+    return { allowed: false, reason: "insufficient_assurance" };
+  }
+  const ageMs = input.now.getTime() - input.authenticatedAt.getTime();
+  return ageMs >= 0 && ageMs <= input.maximumAgeMs
+    ? { allowed: true }
+    : { allowed: false, reason: "stale_authentication" };
+}
+
 export interface OperatorAccess {
   authorizeOperatorTask(
     input: AuthorizeOperatorTask,
@@ -27,6 +62,9 @@ export interface OperatorAccess {
   authorizeScopeGrant(
     input: AuthorizeScopeGrant,
   ): Promise<ScopeGrantAuthorization>;
+  authorizeSensitiveTask(
+    input: AuthorizeSensitiveOperatorTask,
+  ): SensitiveTaskAuthorization;
 }
 
 export type OperatorAccessDependencies = {
@@ -58,6 +96,10 @@ export function createOperatorAccess(
           reason: "grant_exceeds_authority",
           missingScopes,
         };
+    },
+
+    authorizeSensitiveTask(input) {
+      return authorizeSensitiveOperatorTask(input);
     },
   };
 }

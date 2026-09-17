@@ -1,4 +1,4 @@
-import type { SessionSummary } from "@z0/contracts/sessions";
+import type { OperatorSessionSummary } from "@z0/contracts/sessions";
 
 import { writeAuditEvent } from "./audit";
 import { getDb } from "./db";
@@ -18,15 +18,27 @@ type SessionRow = {
   ip_display: string | null;
   last_seen_at: Date;
   created_at: Date;
+  primary_authenticated_at: Date;
+  mfa_authenticated_at: Date | null;
+  authentication_method: string;
+  assurance_level: OperatorSessionSummary["assuranceLevel"];
+  idle_expires_at: Date;
+  expires_at: Date;
 };
 
-function toSummary(row: SessionRow, currentSessionId: string): SessionSummary {
+function toSummary(row: SessionRow, currentSessionId: string): OperatorSessionSummary {
   return {
     id: String(row.id),
     clientLabel: row.client_label,
     ipDisplay: row.ip_display,
     lastSeenAt: row.last_seen_at.toISOString(),
     createdAt: row.created_at.toISOString(),
+    primaryAuthenticatedAt: row.primary_authenticated_at.toISOString(),
+    mfaAuthenticatedAt: row.mfa_authenticated_at?.toISOString() ?? null,
+    authenticationMethod: row.authentication_method,
+    assuranceLevel: row.assurance_level,
+    idleExpiresAt: row.idle_expires_at.toISOString(),
+    absoluteExpiresAt: row.expires_at.toISOString(),
     isCurrent: String(row.id) === currentSessionId,
   };
 }
@@ -34,13 +46,16 @@ function toSummary(row: SessionRow, currentSessionId: string): SessionSummary {
 export async function listActiveSessionsForUser(
   userId: string,
   currentSessionId: string,
-): Promise<SessionSummary[]> {
+): Promise<OperatorSessionSummary[]> {
   const rows = await getDb()`
-    SELECT id, client_label, ip_display, last_seen_at, created_at
+    SELECT id, client_label, ip_display, last_seen_at, created_at,
+           primary_authenticated_at, mfa_authenticated_at, authentication_method,
+           assurance_level, idle_expires_at, expires_at
     FROM sessions
     WHERE user_id = ${userId}
       AND revoked_at IS NULL
       AND expires_at > NOW()
+      AND idle_expires_at > NOW()
     ORDER BY last_seen_at DESC
   `;
 

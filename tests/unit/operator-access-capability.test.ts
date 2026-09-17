@@ -32,4 +32,59 @@ describe("Operator Access capability", () => {
       missingScopes: ["members:invite"],
     });
   });
+
+  test("sensitive tasks require the declared fresh Assurance Level", async () => {
+    const capability = createOperatorAccess({
+      getOperatorScopeKeys: async () => [],
+    });
+    const now = new Date("2026-09-17T12:00:00.000Z");
+
+    expect(capability.authorizeSensitiveTask({
+      assuranceLevel: "primary",
+      authenticatedAt: new Date("2026-09-17T11:59:00.000Z"),
+      requiredAssuranceLevel: "multi_factor",
+      maximumAgeMs: 10 * 60 * 1000,
+      now,
+    })).toEqual({ allowed: false, reason: "insufficient_assurance" });
+
+    expect(capability.authorizeSensitiveTask({
+      assuranceLevel: "primary",
+      authenticatedAt: new Date("2026-09-17T11:59:00.000Z"),
+      requiredAssuranceLevel: "primary",
+      maximumAgeMs: 10 * 60 * 1000,
+      now,
+    })).toEqual({ allowed: true });
+
+    expect(capability.authorizeSensitiveTask({
+      assuranceLevel: "primary",
+      authenticatedAt: new Date("2026-09-17T11:49:59.999Z"),
+      requiredAssuranceLevel: "primary",
+      maximumAgeMs: 10 * 60 * 1000,
+      now,
+    })).toEqual({ allowed: false, reason: "stale_authentication" });
+
+    expect(capability.authorizeSensitiveTask({
+      assuranceLevel: "multi_factor",
+      authenticatedAt: new Date("2026-09-17T11:49:59.999Z"),
+      requiredAssuranceLevel: "multi_factor",
+      maximumAgeMs: 10 * 60 * 1000,
+      now,
+    })).toEqual({ allowed: false, reason: "stale_authentication" });
+
+    expect(capability.authorizeSensitiveTask({
+      assuranceLevel: "multi_factor",
+      authenticatedAt: new Date("2026-09-17T11:59:00.000Z"),
+      requiredAssuranceLevel: "phishing_resistant",
+      maximumAgeMs: 10 * 60 * 1000,
+      now,
+    })).toEqual({ allowed: false, reason: "insufficient_assurance" });
+
+    expect(capability.authorizeSensitiveTask({
+      assuranceLevel: "phishing_resistant",
+      authenticatedAt: new Date("2026-09-17T11:59:00.000Z"),
+      requiredAssuranceLevel: "multi_factor",
+      maximumAgeMs: 10 * 60 * 1000,
+      now,
+    })).toEqual({ allowed: true });
+  });
 });

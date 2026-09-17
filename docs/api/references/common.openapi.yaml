@@ -144,6 +144,20 @@ components:
           items:
             type: string
           description: Allowed HTTP methods (405 responses).
+        requiredAssurance:
+          type: string
+          enum: [primary, multi_factor, phishing_resistant]
+          description: Minimum Assurance Level required for a denied sensitive operation.
+        reauthentication:
+          type: object
+          required: [method, path]
+          properties:
+            method:
+              type: string
+              enum: [password, mfa, passkey]
+            path:
+              type: string
+          description: Stable guidance for establishing the required fresh assurance.
     SetupRequiredProblem:
       allOf:
         - $ref: "#/components/schemas/ProblemDetail"

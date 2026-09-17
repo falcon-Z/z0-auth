@@ -96,7 +96,32 @@ components:
           format: date-time
         isCurrent:
           type: boolean
-    ListSessionsResponse:
+    OperatorSessionSummary:
+      allOf:
+        - $ref: "#/components/schemas/SessionSummary"
+        - type: object
+          required: [primaryAuthenticatedAt, mfaAuthenticatedAt, authenticationMethod, assuranceLevel, idleExpiresAt, absoluteExpiresAt]
+          properties:
+            primaryAuthenticatedAt:
+              type: string
+              format: date-time
+            mfaAuthenticatedAt:
+              type: string
+              format: date-time
+              nullable: true
+            authenticationMethod:
+              type: string
+            assuranceLevel:
+              type: string
+              enum: [primary, multi_factor, phishing_resistant]
+            idleExpiresAt:
+              type: string
+              format: date-time
+              description: Sliding inactivity deadline, capped by absoluteExpiresAt.
+            absoluteExpiresAt:
+              type: string
+              format: date-time
+    ListAppSessionsResponse:
       type: object
       required: [sessions]
       properties:
@@ -104,6 +129,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SessionSummary"
+    ListSessionsResponse:
+      type: object
+      required: [sessions]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperatorSessionSummary"
     RevokeSessionResponse:
       type: object
       required: [ok, revokedCurrent]

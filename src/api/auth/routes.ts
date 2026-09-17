@@ -4,6 +4,7 @@ import {
   handleLogout,
   handleForgotPassword,
   handleResetPassword,
+  handleReauthenticate,
   handleSession,
 } from "./handlers";
 import {
@@ -53,6 +54,10 @@ export const authApiRoutes = {
 
   "/api/auth/change-password": {
     POST: handleChangePassword,
+  },
+
+  "/api/auth/reauthenticate": {
+    POST: handleReauthenticate,
   },
 
   "/api/auth/mfa": {

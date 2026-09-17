@@ -1,12 +1,13 @@
 import type { BunRequest } from "bun";
 
-import type { ChangePasswordRequest, LoginRequest } from "@z0/contracts/auth";
+import type { ChangePasswordRequest, LoginRequest, ReauthenticateRequest } from "@z0/contracts/auth";
+import { ErrorCodes } from "@z0/contracts/errors";
 import type { ForgotPasswordRequest, ResetPasswordRequest } from "@z0/contracts/email-settings";
-import { parseJsonBody } from "@z0/contracts/validation";
+import { parseJsonBody, validateRequiredString } from "@z0/contracts/validation";
 
 import { buildSessionResponse, requireSession } from "../lib/auth";
 import { validateCsrf, parseCookies } from "../lib/csrf";
-import { json } from "../lib/http";
+import { json, problem } from "../lib/http";
 import { buildAuthenticatedSessionPayload } from "../lib/session-payload";
 import {
   clearSessionCookieHeader,
@@ -22,6 +23,10 @@ import { verifyResetToken } from "../lib/instance-keys";
 import { changePassword } from "../lib/users";
 import { runLogin } from "./service";
 import { requireRecentConsoleMfa } from "../lib/mfa";
+import { getDb } from "../lib/db";
+import { verifyPassword } from "../lib/password";
+import { checkRateLimit, clientIp } from "../lib/rate-limit";
+import { writeAuditEvent } from "../lib/audit";
 
 export async function handleLogin(req: BunRequest): Promise<Response> {
   const csrfError = validateCsrf(req);
@@ -114,4 +119,73 @@ export async function handleChangePassword(req: BunRequest): Promise<Response> {
   const result = await changePassword(req, auth.userId, auth.sessionId, parsed.body);
   if (!result.ok) return result.response;
   return json({ ok: true });
+}
+
+export async function handleReauthenticate(req: BunRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+
+  const auth = await requireSession(req);
+  if (!auth.ok) return auth.response;
+  const parsed = await parseJsonBody<ReauthenticateRequest>(req);
+  if (!parsed.ok) return parsed.response;
+  const passwordErrors = validateRequiredString(parsed.body.password, "password", "Password");
+  if (passwordErrors.length > 0) {
+    return problem(400, "Validation Error", "Invalid request", { errors: passwordErrors });
+  }
+
+  const rate = await checkRateLimit({
+    key: `operator-reauthenticate:${auth.userId}:${clientIp(req)}`,
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rate.allowed) {
+    return problem(429, "Too Many Requests", "Too many reauthentication attempts.", {
+      errors: [{ field: "_rate", code: ErrorCodes.RATE_LIMITED, message: "Try again later" }],
+    });
+  }
+
+  const [credential] = await getDb()`
+    SELECT password_hash FROM password_credentials WHERE user_id = ${auth.userId}
+  `;
+  const valid = credential && await verifyPassword(
+    parsed.body.password,
+    String((credential as { password_hash: string }).password_hash),
+  );
+  if (!valid) {
+    await writeAuditEvent({
+      actorUserId: auth.userId,
+      action: "session.reauthentication_failed",
+      resourceType: "session",
+      resourceId: auth.sessionId,
+    });
+    return problem(401, "Unauthorized", "The current password is invalid.", {
+      errors: [{
+        field: "password",
+        code: ErrorCodes.INVALID_CREDENTIALS,
+        message: "Enter your current password",
+      }],
+    });
+  }
+
+  const updated = await getDb().begin(async (tx) => {
+    const rows = await tx`
+      UPDATE sessions
+      SET primary_authenticated_at = NOW()
+      WHERE id = ${auth.sessionId} AND user_id = ${auth.userId}
+        AND revoked_at IS NULL AND idle_expires_at > NOW() AND expires_at > NOW()
+      RETURNING id
+    `;
+    if (!rows[0]) return false;
+    await writeAuditEvent({
+      actorUserId: auth.userId,
+      action: "session.reauthentication_succeeded",
+      resourceType: "session",
+      resourceId: auth.sessionId,
+    }, tx);
+    return true;
+  });
+  return updated
+    ? json({ ok: true })
+    : problem(401, "Unauthorized", "Authentication required");
 }

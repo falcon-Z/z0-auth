@@ -8,7 +8,7 @@ Normative rules for sessions, CSRF, cookies, and OAuth. All new API and UI work 
 
 ## Sessions
 
-Two session cookies — same lifetime and CSRF rules. **App context** (`client_id`) selects app-user vs console sign-in (Auth0/Clerk-style hosted pages).
+Two session cookies with separate lifetime policies and the same CSRF rules. **App context** (`client_id`) selects Application End User vs Operator sign-in.
 
 ### Console (`z0_session`)
 
@@ -17,8 +17,8 @@ Two session cookies — same lifetime and CSRF rules. **App context** (`client_i
 | Cookie name | `z0_session` |
 | Storage | HttpOnly cookie; token stored hashed in `sessions` table (`user_id` → `users`) |
 | Issuance | After successful **console** login — no `client_id` / app context on the request. Setup creates the bootstrap account but does **not** sign you in; use `/auth/login` next. |
-| Absolute lifetime | **14 days** from creation (`expires_at` in DB and cookie `Max-Age`) |
-| Idle timeout | **Not enforced yet** — `last_seen_at` is updated on each valid request; future: configurable idle window (document target: 30 minutes idle, 14 days absolute) |
+| Idle lifetime | **30 minutes** by default (`idle_expires_at` in DB); configurable from 5 minutes to 12 hours and refreshed from PostgreSQL-authoritative activity |
+| Absolute lifetime | **12 hours** by default from creation (`expires_at` in DB and cookie `Max-Age`); configurable from 1 hour to 7 days |
 | Revocation | Logout sets `revoked_at`; invalid/expired tokens return unauthenticated session |
 | Production cookie | `Secure` flag when `NODE_ENV=production` |
 | SameSite | `Lax` |
@@ -30,7 +30,7 @@ Two session cookies — same lifetime and CSRF rules. **App context** (`client_i
 | Cookie name | `z0_app_session` |
 | Storage | HttpOnly cookie; token stored hashed in `app_browser_sessions`; per-app grants live in `app_user_sessions` with composite app-user realm enforcement |
 | Issuance | After successful **app** login, self-registration, or invite accept — request must carry app context (`client_id` on authorize/login/register, or invite token → `app_id`) |
-| Absolute lifetime | **14 days** (same as console) |
+| Absolute lifetime | **14 days** |
 | Revocation | Hosted logout revokes the browser broker and its app grants; it never clears the separate `z0_session` console cookie |
 | OAuth | `/oauth/authorize` and `/oauth/resume` use **app** session when returning from hosted auth |
 | Cross-app | One browser credential may contain isolated grants for several apps. OAuth resolves only the requested app grant; service-group SSO may deliberately provision a sibling grant. |
@@ -51,7 +51,7 @@ TOTP MFA is available independently to console members and app users. A console 
 - A challenge is single-use, bound to realm, identity, app where relevant, IP/client hashes, and a safe return path. Five failed proofs consume it. A TOTP time step and each recovery code can be accepted only once.
 - `Remember this browser` is unchecked by default. Remembered tokens last 30 days, rotate after use, are stored hashed, and are limited to five per identity. App remembered cookies are isolated by app. Reuse of a rotated token revokes every remembered token for that identity/app.
 - Remembered browsers bypass the sign-in MFA prompt only. They do not set `mfa_authenticated_at` and cannot satisfy sensitive-action checks.
-- For a member with MFA enabled, named sensitive console mutations require `mfa_authenticated_at` in the current session within the last 10 minutes. Permission and CSRF checks still apply and MFA never grants a scope.
+- Named sensitive console mutations require authentication within the last 10 minutes. Operators without an enrolled factor re-enter their current password; Operators with a factor establish multi-factor or phishing-resistant assurance. Permission and CSRF checks still apply and stronger assurance never grants a scope.
 - Password reset does not disable MFA. It revokes sessions, pending MFA challenges, and remembered browsers. Account disable/delete and operator MFA reset do the same.
 - Operator reset is available for eligible non-owner targets. Owners use the local typed-confirmation command documented in deployment guidance.
 

@@ -23,6 +23,8 @@ describe("printStartupSummary", () => {
           appName: "z0-auth",
           allowIncompleteSetup: false,
           trustProxyHops: 0,
+          operatorSessionIdleMinutes: 30,
+          operatorSessionAbsoluteHours: 12,
           instanceKeysPath: ".data/test-instance-keys.json",
           bootstrapOwner: {},
         },

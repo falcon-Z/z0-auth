@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { SessionSummary } from "@z0/contracts/sessions";
+import type { OperatorSessionSummary } from "@z0/contracts/sessions";
 import { Badge } from "@z0/components/ui/badge";
 import { Button } from "@z0/components/ui/button";
 import { DataTable } from "../../../components/crud/DataTable";
@@ -22,6 +22,12 @@ function formatWhen(iso: string): string {
   });
 }
 
+function assuranceLabel(level: OperatorSessionSummary["assuranceLevel"]): string {
+  if (level === "phishing_resistant") return "Phishing-resistant";
+  if (level === "multi_factor") return "Multi-factor";
+  return "Primary";
+}
+
 type SessionsPageProps = {
   embedded?: boolean;
 };
@@ -29,7 +35,7 @@ type SessionsPageProps = {
 export function SessionsPage({ embedded = false }: SessionsPageProps) {
   const confirm = useConfirm();
   const { signOut } = useSession();
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessions, setSessions] = useState<OperatorSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -55,7 +61,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
     void reload();
   }, [reload]);
 
-  async function handleRevoke(row: SessionSummary) {
+  async function handleRevoke(row: OperatorSessionSummary) {
     const label = row.isCurrent ? "this device" : row.clientLabel;
     const ok = await confirm({
       title: row.isCurrent ? "Sign out" : "Revoke session",
@@ -163,7 +169,7 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
 
       {actionError ? <PageError message={actionError} /> : null}
 
-      <DataTable<SessionSummary>
+      <DataTable<OperatorSessionSummary>
         columns={[
           {
             id: "device",
@@ -187,6 +193,19 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
             cell: (row) => row.ipDisplay ?? "Unknown",
           },
           {
+            id: "assurance",
+            header: "Assurance",
+            accessorFn: (row) => row.assuranceLevel,
+            cell: (row) => (
+              <div className="flex flex-col gap-1">
+                <span>{assuranceLabel(row.assuranceLevel)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {row.authenticationMethod.replaceAll("_", " ")}
+                </span>
+              </div>
+            ),
+          },
+          {
             id: "lastSeen",
             header: "Last active",
             accessorFn: (row) => new Date(row.lastSeenAt).getTime(),
@@ -197,6 +216,19 @@ export function SessionsPage({ embedded = false }: SessionsPageProps) {
             header: "Signed in",
             accessorFn: (row) => new Date(row.createdAt).getTime(),
             cell: (row) => formatWhen(row.createdAt),
+          },
+          {
+            id: "expires",
+            header: "Expires",
+            accessorFn: (row) => new Date(row.idleExpiresAt).getTime(),
+            cell: (row) => (
+              <div className="flex flex-col gap-1">
+                <span>{formatWhen(row.idleExpiresAt)} if inactive</span>
+                <span className="text-xs text-muted-foreground">
+                  {formatWhen(row.absoluteExpiresAt)} latest
+                </span>
+              </div>
+            ),
           },
         ]}
         rows={sessions}

@@ -43,6 +43,8 @@ describe("server environment settings", () => {
     delete process.env.TRUST_PROXY_HOPS;
     delete process.env.ALLOW_INCOMPLETE_SETUP;
     delete process.env.INSTANCE_KEYS_PATH;
+    delete process.env.OPERATOR_SESSION_IDLE_MINUTES;
+    delete process.env.OPERATOR_SESSION_ABSOLUTE_HOURS;
     process.env.NODE_ENV = "development";
 
     const config = loadConfig();
@@ -52,6 +54,8 @@ describe("server environment settings", () => {
     expect(config.trustProxyHops).toBe(0);
     expect(config.allowIncompleteSetup).toBe(false);
     expect(config.instanceKeysPath).toBe(".data/instance-keys.json");
+    expect(config.operatorSessionIdleMinutes).toBe(30);
+    expect(config.operatorSessionAbsoluteHours).toBe(12);
   });
 
   test.each([
@@ -65,6 +69,10 @@ describe("server environment settings", () => {
     ["ALLOW_INCOMPLETE_SETUP", "yes"],
     ["INSTANCE_KEYS_PATH", ""],
     ["INSTALL_TOKEN", ""],
+    ["OPERATOR_SESSION_IDLE_MINUTES", "4"],
+    ["OPERATOR_SESSION_IDLE_MINUTES", "721"],
+    ["OPERATOR_SESSION_ABSOLUTE_HOURS", "0"],
+    ["OPERATOR_SESSION_ABSOLUTE_HOURS", "169"],
   ])("rejects invalid %s=%s", (name, value) => {
     process.env[name] = value;
     expect(() => loadConfig()).toThrow(ConfigError);
@@ -75,10 +83,14 @@ describe("server environment settings", () => {
     process.env.PORT = "65535";
     process.env.DATABASE_POOL_MAX = "100";
     process.env.TRUST_PROXY_HOPS = "32";
+    process.env.OPERATOR_SESSION_IDLE_MINUTES = "720";
+    process.env.OPERATOR_SESSION_ABSOLUTE_HOURS = "168";
     const config = loadConfig();
     expect(config.port).toBe(65_535);
     expect(config.databasePoolMax).toBe(100);
     expect(config.trustProxyHops).toBe(32);
+    expect(config.operatorSessionIdleMinutes).toBe(720);
+    expect(config.operatorSessionAbsoluteHours).toBe(168);
   });
 
   test("rejects a bind address with a port or scheme", () => {

@@ -85,6 +85,8 @@ Accepting an invite inserts `instance_members` (no roles).
 
 `users` is the console identity realm. Lifecycle columns are `disabled_at`, `locked_until`, and `deleted_at`, with operator actor IDs for disable/delete and bounded failed-sign-in counters. APIs derive `active`, `disabled`, `locked`, or `deleted` from these timestamps. A recoverably deleted user keeps its `instance_members` row and reserved email. Permanent deletion cascades credentials, membership, roles, sessions, and reset tokens.
 
+`sessions` stores a hashed Operator credential together with its configured inactivity window, sliding inactivity deadline, absolute deadline, primary and multi-factor authentication times, authentication method, and explicit `primary`, `multi_factor`, or `phishing_resistant` Assurance Level. PostgreSQL serializes activity, expiry, and revocation decisions so concurrent Application Replicas cannot extend or reuse an expired session inconsistently.
+
 ### Multi-factor authentication
 
 MFA storage is realm-separated:
@@ -243,7 +245,7 @@ Account status and email verification are independent. Self-registration starts 
 | `app_id` | UUID → `apps` | Denormalized for enforcement; must match `app_users.app_id` |
 | `browser_session_id` | UUID → `app_browser_sessions` | Browser broker containing this app grant |
 | `token_hash` | TEXT nullable | Legacy migrated token reference; new grants store the hash on the browser session |
-| `expires_at` | TIMESTAMPTZ | 14-day absolute lifetime (same as console) |
+| `expires_at` | TIMESTAMPTZ | 14-day absolute lifetime for Application End User browser sessions |
 | `created_at`, `last_seen_at` | TIMESTAMPTZ | |
 | `revoked_at` | TIMESTAMPTZ | Logout / security revoke |
 | `ip_hash`, `user_agent_hash`, `client_label`, `ip_display` | TEXT | Same display pattern as `sessions` |

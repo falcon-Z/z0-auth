@@ -699,7 +699,7 @@ export async function finishPasskeyAuthentication(
     }
     if (ceremony.purpose === "step_up") {
       if (ceremony.realm === "console") {
-        await tx`UPDATE sessions SET mfa_authenticated_at = NOW(), authentication_method = 'passkey' WHERE id = ${currentSession!.sessionId} AND user_id = ${ceremony.identityId!} AND revoked_at IS NULL`;
+        await tx`UPDATE sessions SET mfa_authenticated_at = NOW(), authentication_method = 'passkey', assurance_level = 'phishing_resistant' WHERE id = ${currentSession!.sessionId} AND user_id = ${ceremony.identityId!} AND revoked_at IS NULL`;
       } else {
         await tx`UPDATE app_user_sessions SET mfa_authenticated_at = NOW(), authentication_method = 'passkey' WHERE id = ${currentSession!.sessionId} AND app_user_id = ${ceremony.identityId!} AND app_id = ${ceremony.appId!} AND revoked_at IS NULL`;
       }

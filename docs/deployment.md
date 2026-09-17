@@ -51,6 +51,8 @@ z0-auth checks settings before it starts listening. It stops with a non-zero exi
 | `DATABASE_POOL_MAX` | Whole number from 1 to 100; default 10 |
 | `TRUST_PROXY_HOPS` | Whole number from 0 to 32; default 0, which ignores `X-Forwarded-For` |
 | `ALLOW_INCOMPLETE_SETUP` | Exactly `true` or `false`; default `false` |
+| `OPERATOR_SESSION_IDLE_MINUTES` | Whole number from 5 to 720; default 30 |
+| `OPERATOR_SESSION_ABSOLUTE_HOURS` | Whole number from 1 to 168; default 12 |
 | `INSTALL_TOKEN` | Optional, but it cannot be empty when set |
 | `INSTANCE_KEYS_PATH` | Non-empty development/test file path; default `.data/instance-keys.json`; not a replacement for production keys |
 
