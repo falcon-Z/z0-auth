@@ -113,8 +113,22 @@ paths:
         Exchanges grants for OAuth tokens.
         Supported `grant_type` values: `authorization_code`, `refresh_token`, `client_credentials`.
         Access tokens are opaque. Authorization code exchange returns a refresh token (30-day TTL, rotated on use).
+        Refresh clients may send an `Idempotency-Key` so an identical retry within 10 seconds receives
+        the original rotation outcome. Reuse with a different key revokes the token family.
         Browser clients require CORS `Origin` to match a registered redirect URI origin.
       operationId: postOAuthToken
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: |
+            A 16–128 character visible-ASCII key for narrowly bounded refresh-token retry idempotency.
+            It is ignored for grant types other than `refresh_token`.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 128
+            pattern: "^[\\x21-\\x7E]+$"
       requestBody:
         required: true
         content:

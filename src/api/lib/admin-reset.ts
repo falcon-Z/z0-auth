@@ -5,6 +5,7 @@ import { requestPublicOrigin } from "./config";
 import { getDb } from "./db";
 import { problem } from "./http";
 import { signResetToken } from "./instance-keys";
+import { revokeAllOAuthTokensForAppUser } from "./oauth";
 import { isSmtpReady } from "./smtp-settings";
 import { deliverEmail } from "./smtp-mail";
 
@@ -78,8 +79,7 @@ export async function issueAppUserAdminReset(req: Request, appId: string, appUse
     await tx`INSERT INTO app_password_reset_tokens (app_user_id, app_id, token_hash, expires_at) VALUES (${appUserId}, ${appId}, ${jti}, ${new Date(exp * 1000)})`;
     await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
     await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${appUserId} AND used_at IS NULL`;
-    await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
-    await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
+    await revokeAllOAuthTokensForAppUser(appUserId, tx);
     await writeAuditEvent({ actorUserId, action: "app_user.password_reset_requested", resourceType: "app_user", resourceId: appUserId, payload: { appId } }, tx);
     return { error: null, user };
   });

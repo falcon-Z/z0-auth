@@ -257,6 +257,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST /oauth/token` | `code_verifier` | Required and valid for public clients on code exchange | `invalid_grant` | 400 | Integration logs / API client |
 | `POST /oauth/token` | Code exchange success | Returns opaque access token + refresh token | — | 200 | Integration logs / API client |
 | `POST /oauth/token` | `refresh_token` grant | Rotates refresh; reuse of old refresh revokes family | `invalid_grant` | 400 | Integration logs / API client |
+| `POST /oauth/token` | `Idempotency-Key` | 16–128 visible ASCII characters; matching retry returns the original outcome for 10 seconds | `invalid_request` / `invalid_grant` | 400 | Integration logs / API client |
 | `POST /oauth/token` | `client_credentials` | Confidential only; optional scope subset | `unauthorized_client` / `invalid_scope` | 400 | Integration logs / API client |
 | `GET /oauth/authorize` | `state` | Required for public clients | `invalid_request` | 400 | OAuth error page |
 | `POST /oauth/token` | CORS | `Origin` must match redirect URI origin | — | 403 preflight | Browser integration |

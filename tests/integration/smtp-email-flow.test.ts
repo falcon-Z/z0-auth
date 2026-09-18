@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { ErrorCodes } from "@z0/contracts/errors";
-import { CSRF_COOKIE } from "@z0/contracts/http";
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
 import { closeDatabase } from "../../src/api/lib/db";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
@@ -15,6 +14,7 @@ import {
 } from "../../src/api/lib/smtp-mail";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
+import { approveOAuthConsent, loginApplicationIdentity } from "../helpers/oauth";
 import { makeStrongPassword } from "../helpers/password";
 import { dispatchApi } from "./api-routes";
 import { dispatchWeb } from "./web-dispatch";
@@ -32,10 +32,6 @@ function cookieFromResponse(res: Response, name: string): string | undefined {
   const raw = cookies.find((c) => c.startsWith(`${name}=`));
   const match = raw?.match(new RegExp(`${name}=([^;]+)`));
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
-}
-
-function csrfFromHtml(html: string): string {
-  return html.match(/name="_csrf" value="([^"]+)"/)?.[1] ?? "";
 }
 
 async function completeSetup() {
@@ -63,6 +59,34 @@ async function login() {
     }),
   );
   return { csrf, cookie: sessionCookieFromResponse(res)! };
+}
+
+async function issueOAuthTokens(input: {
+  clientId: string;
+  clientSecret: string;
+  appSession: string;
+}): Promise<{ accessToken: string; refreshToken: string }> {
+  const code = await approveOAuthConsent(dispatchWeb, {
+    clientId: input.clientId,
+    redirectUri: "http://localhost:3000/reset-callback",
+    appSession: input.appSession,
+    scope: "openid",
+    state: "recovery-test",
+  });
+  const token = await dispatchWeb(new Request("http://localhost/oauth/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: "http://localhost:3000/reset-callback",
+      client_id: input.clientId,
+      client_secret: input.clientSecret,
+    }),
+  }));
+  expect(token.status).toBe(200);
+  const body = (await token.json()) as { access_token: string; refresh_token: string };
+  return { accessToken: body.access_token, refreshToken: body.refresh_token };
 }
 
 run("M08 SMTP and password reset", () => {
@@ -144,6 +168,7 @@ run("M08 SMTP and password reset", () => {
     const app = (await appRes.json()) as {
       app: { id: string };
       credential: { clientId: string };
+      clientSecret: string;
     };
     const initialAppPassword = makeStrongPassword();
     const appUserRes = await dispatchApi(
@@ -159,32 +184,59 @@ run("M08 SMTP and password reset", () => {
       }),
     );
     expect(appUserRes.status).toBe(201);
-
-    const appLoginPage = await dispatchWeb(
-      new Request(`http://localhost/auth/login?client_id=${encodeURIComponent(app.credential.clientId)}`),
-    );
-    const appLoginCsrf = csrfFromHtml(await appLoginPage.text());
-    const appLoginCsrfCookie = cookieFromResponse(appLoginPage, CSRF_COOKIE) ?? appLoginCsrf;
-    const appLogin = await dispatchWeb(
-      new Request("http://localhost/auth/login", {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          origin: "http://localhost",
-          host: "localhost",
-          cookie: `${CSRF_COOKIE}=${encodeURIComponent(appLoginCsrfCookie)}`,
+    const unaffectedAppPassword = makeStrongPassword();
+    const unaffectedUserRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${app.app.id}/users`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: cookie },
+        body: {
+          email: "unaffected-reset-user@example.com",
+          name: "Unaffected User",
+          password: unaffectedAppPassword,
+          passwordConfirm: unaffectedAppPassword,
         },
-        body: new URLSearchParams({
-          _csrf: appLoginCsrf,
-          client_id: app.credential.clientId,
-          email: "reset-user@example.com",
-          password: initialAppPassword,
-        }).toString(),
       }),
     );
-    expect(appLogin.status).toBe(303);
-    const preRecoverySession = cookieFromResponse(appLogin, APP_SESSION_COOKIE);
-    expect(preRecoverySession).toBeTruthy();
+    expect(unaffectedUserRes.status).toBe(201);
+
+    const preRecoverySession = await loginApplicationIdentity(dispatchWeb, {
+      clientId: app.credential.clientId,
+      email: "reset-user@example.com",
+      password: initialAppPassword,
+    });
+    const preRecoveryTokens = await issueOAuthTokens({
+      clientId: app.credential.clientId,
+      clientSecret: app.clientSecret,
+      appSession: preRecoverySession,
+    });
+    const unaffectedSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId: app.credential.clientId,
+      email: "unaffected-reset-user@example.com",
+      password: unaffectedAppPassword,
+    });
+    const unaffectedTokens = await issueOAuthTokens({
+      clientId: app.credential.clientId,
+      clientSecret: app.clientSecret,
+      appSession: unaffectedSession,
+    });
+    const rotatedBeforeRecovery = await dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "idempotency-key": "recovery-refresh-rotation",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: preRecoveryTokens.refreshToken,
+        client_id: app.credential.clientId,
+        client_secret: app.clientSecret,
+      }),
+    }));
+    expect(rotatedBeforeRecovery.status).toBe(200);
+    const rotatedTokens = (await rotatedBeforeRecovery.json()) as {
+      access_token: string;
+      refresh_token: string;
+    };
 
     resetCapturedEmailsForTests();
     const appForgotCsrf = await fetchCsrfToken(dispatchApi);
@@ -211,11 +263,27 @@ run("M08 SMTP and password reset", () => {
         },
       }),
     );
-    const appResetResults = await Promise.all([
+    const racingRefreshRequest = dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: rotatedTokens.refresh_token,
+        client_id: app.credential.clientId,
+        client_secret: app.clientSecret,
+      }),
+    }));
+    const [firstAppReset, secondAppReset, racingRefresh] = await Promise.all([
       appResetRequest(firstAppPassword),
       appResetRequest(secondAppPassword),
+      racingRefreshRequest,
     ]);
+    const appResetResults = [firstAppReset, secondAppReset];
     expect(appResetResults.map((response) => response.status).sort()).toEqual([200, 400]);
+    expect([200, 400]).toContain(racingRefresh.status);
+    const racingTokens = racingRefresh.status === 200
+      ? await racingRefresh.json() as { access_token: string; refresh_token: string }
+      : null;
 
     const sessionsAfterRecovery = await dispatchWeb(
       new Request(
@@ -229,6 +297,66 @@ run("M08 SMTP and password reset", () => {
     );
     expect(sessionsAfterRecovery.status).toBe(302);
     expect(sessionsAfterRecovery.headers.get("location")).toContain("/auth/login");
+
+    const refreshAfterRecovery = await dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "idempotency-key": "recovery-refresh-rotation",
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: preRecoveryTokens.refreshToken,
+        client_id: app.credential.clientId,
+        client_secret: app.clientSecret,
+      }),
+    }));
+    expect(refreshAfterRecovery.status).toBe(400);
+    const replacementAfterRecovery = await dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: rotatedTokens.refresh_token,
+        client_id: app.credential.clientId,
+        client_secret: app.clientSecret,
+      }),
+    }));
+    expect(replacementAfterRecovery.status).toBe(400);
+    for (const accessToken of [preRecoveryTokens.accessToken, rotatedTokens.access_token]) {
+      const accessAfterRecovery = await dispatchWeb(new Request("http://localhost/oauth/userinfo", {
+        headers: { authorization: `Bearer ${accessToken}` },
+      }));
+      expect(accessAfterRecovery.status).toBe(401);
+    }
+    if (racingTokens) {
+      const racingRefreshAfterRecovery = await dispatchWeb(new Request("http://localhost/oauth/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: racingTokens.refresh_token,
+          client_id: app.credential.clientId,
+          client_secret: app.clientSecret,
+        }),
+      }));
+      expect(racingRefreshAfterRecovery.status).toBe(400);
+      const racingAccessAfterRecovery = await dispatchWeb(new Request("http://localhost/oauth/userinfo", {
+        headers: { authorization: `Bearer ${racingTokens.access_token}` },
+      }));
+      expect(racingAccessAfterRecovery.status).toBe(401);
+    }
+    const unaffectedRefresh = await dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: unaffectedTokens.refreshToken,
+        client_id: app.credential.clientId,
+        client_secret: app.clientSecret,
+      }),
+    }));
+    expect(unaffectedRefresh.status).toBe(200);
 
     resetCapturedEmailsForTests();
 

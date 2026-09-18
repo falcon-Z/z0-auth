@@ -310,6 +310,7 @@ export async function completeAppPasswordReset(
       if (!updated) {
         throw new Error("app_user_inactive");
       }
+      await revokeAllOAuthTokensForAppUser(row.app_user_id, tx);
       return true;
     });
     if (!completed) return invalidResetTokenResponse();
@@ -324,7 +325,6 @@ export async function completeAppPasswordReset(
   await getDb()`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE app_user_id = ${row.app_user_id} AND app_id = ${row.app_id} AND consumed_at IS NULL`;
   await getDb()`UPDATE app_user_mfa_remembered_browsers SET revoked_at = NOW() WHERE app_user_id = ${row.app_user_id} AND app_id = ${row.app_id} AND revoked_at IS NULL`;
   await revokePendingAuthorizationCodesForAppUser(row.app_user_id);
-  await revokeAllOAuthTokensForAppUser(row.app_user_id);
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,

@@ -288,8 +288,10 @@ These rules are required for the OAuth authorization server baseline.
 
 - Issued on authorization code exchange; 30-day absolute TTL
 - Rotation on each `refresh_token` grant — old refresh invalidated, new pair issued
-- Reuse of a rotated refresh token revokes the entire token family
-- Revoking a refresh token revokes all refresh tokens in the same family
+- An identical retry carrying the same 16–128 character `Idempotency-Key` may receive the encrypted original outcome for 10 seconds
+- Reuse without that matching key or after the retry window revokes the entire family, including access tokens issued from it, and records a high-severity Security Event
+- Revoking a refresh token revokes all refresh and access tokens in the same family and destroys any cached retry outcome
+- The migration establishing access-token lineage revokes pre-lineage OAuth bearer tokens once because they cannot be safely assigned to a family after issuance
 
 ### CORS (browser clients)
 

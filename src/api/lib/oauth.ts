@@ -1,12 +1,15 @@
 import type { SQL } from "bun";
 
+import { writeRefreshTokenReuseAuditRecord } from "./audit";
 import { randomToken, sha256Hex } from "./crypto";
 import { getDb } from "./db";
 import { verifyPassword } from "./password";
+import { decryptSecret, encryptSecret } from "./settings-crypto";
 
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000;
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const REFRESH_RETRY_TTL_MS = 10 * 1000;
 
 export type OAuthTokenSuccess = {
   accessToken: string;
@@ -65,6 +68,17 @@ type RefreshTokenRow = {
   replaced_by_token_id: string | null;
   revoked_at: Date | null;
   expires_at: Date;
+  retry_key_hash: string | null;
+  retry_response_ciphertext: string | null;
+  retry_expires_at: Date | null;
+  compromised_at: Date | null;
+};
+
+type RefreshRotationOutcome = {
+  accessToken: string;
+  refreshToken: string;
+  scope: string;
+  appUserId: string;
 };
 
 export async function findActiveOAuthClient(clientId: string): Promise<OAuthClient | null> {
@@ -263,6 +277,7 @@ export async function exchangeAuthorizationCode(input: {
           app_user_id,
           app_credential_id,
           scope,
+          refresh_family_id,
           expires_at
         )
         VALUES (
@@ -271,6 +286,7 @@ export async function exchangeAuthorizationCode(input: {
           ${codeRow.app_user_id},
           ${codeRow.app_credential_id},
           ${codeRow.scope},
+          ${familyId},
           ${expiresAt}
         )
       `;
@@ -376,20 +392,48 @@ export async function previewAuthorizationCodeForExchange(input: {
   };
 }
 
-async function revokeRefreshTokenFamily(tx: ReturnType<typeof getDb>, familyId: string): Promise<void> {
+async function revokeRefreshTokenFamily(
+  tx: ReturnType<typeof getDb>,
+  familyId: string,
+  compromised = false,
+): Promise<void> {
+  await tx`SELECT pg_advisory_xact_lock(hashtextextended(${familyId}::text, 0))`;
   await tx`
     UPDATE oauth_refresh_tokens
-    SET revoked_at = NOW()
+    SET revoked_at = COALESCE(revoked_at, NOW()),
+        retry_key_hash = NULL,
+        retry_response_ciphertext = NULL,
+        retry_expires_at = NULL,
+        compromised_at = CASE
+          WHEN ${compromised} THEN COALESCE(compromised_at, NOW())
+          ELSE compromised_at
+        END
     WHERE family_id = ${familyId}
+  `;
+  await tx`
+    UPDATE oauth_access_tokens
+    SET revoked_at = NOW()
+    WHERE refresh_family_id = ${familyId}
       AND revoked_at IS NULL
   `;
 }
 
-export async function exchangeRefreshToken(input: {
+export type RefreshTokenExchangeInput = {
   refreshToken: string;
   client: OAuthClient;
-}): Promise<{ ok: true } & OAuthTokenSuccess | { ok: false; error: "invalid_grant" }> {
+  retryKey?: string;
+};
+
+export type RefreshTokenExchangeResult =
+  | ({ ok: true } & OAuthTokenSuccess)
+  | { ok: false; error: "invalid_grant" };
+
+async function exchangeRefreshTokenWithDatabase(
+  database: SQL,
+  input: RefreshTokenExchangeInput,
+): Promise<RefreshTokenExchangeResult> {
   const tokenHash = await sha256Hex(input.refreshToken);
+  const retryKeyHash = input.retryKey ? await sha256Hex(input.retryKey) : null;
   const accessToken = `z0_at_${randomToken(24)}`;
   const accessHash = await sha256Hex(accessToken);
   const accessExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
@@ -397,7 +441,18 @@ export async function exchangeRefreshToken(input: {
   const newRefreshHash = await sha256Hex(newRefreshToken);
   const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
-  const result = await getDb().begin(async (tx) => {
+  const result = await database.begin(async (tx) => {
+      const [familyRow] = await tx`
+        SELECT family_id
+        FROM oauth_refresh_tokens
+        WHERE token_hash = ${tokenHash}
+          AND app_credential_id = ${input.client.credentialId}
+        LIMIT 1
+      `;
+      if (!familyRow) return { ok: false as const };
+      const familyId = String((familyRow as { family_id: string }).family_id);
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${familyId}::text, 0))`;
+
       const [row] = await tx`
         SELECT
           r.id,
@@ -408,7 +463,11 @@ export async function exchangeRefreshToken(input: {
           r.family_id,
           r.replaced_by_token_id,
           r.revoked_at,
-          r.expires_at
+          r.expires_at,
+          r.retry_key_hash,
+          r.retry_response_ciphertext,
+          r.retry_expires_at,
+          r.compromised_at
         FROM oauth_refresh_tokens r
         JOIN app_users u ON u.id = r.app_user_id
         JOIN apps a ON a.id = r.app_id
@@ -419,7 +478,7 @@ export async function exchangeRefreshToken(input: {
           AND (u.locked_until IS NULL OR u.locked_until <= NOW())
           AND a.status = 'active'
           AND ac.status = 'active'
-        FOR UPDATE
+        FOR UPDATE OF r
       `;
       if (!row) return { ok: false as const };
       const refresh = row as RefreshTokenRow;
@@ -428,10 +487,32 @@ export async function exchangeRefreshToken(input: {
         return { ok: false as const };
       }
 
-      if (refresh.replaced_by_token_id || refresh.revoked_at) {
-        await revokeRefreshTokenFamily(tx, refresh.family_id);
+      if (refresh.replaced_by_token_id && refresh.revoked_at) {
+        if (refresh.compromised_at) return { ok: false as const };
+        const retryIsValid = Boolean(
+          retryKeyHash
+          && refresh.retry_key_hash === retryKeyHash
+          && refresh.retry_response_ciphertext
+          && refresh.retry_expires_at
+          && new Date(refresh.retry_expires_at).getTime() > Date.now(),
+        );
+        if (retryIsValid) {
+          const outcome = JSON.parse(
+            await decryptSecret(refresh.retry_response_ciphertext!),
+          ) as RefreshRotationOutcome;
+          return { ok: true as const, outcome };
+        }
+
+        await revokeRefreshTokenFamily(tx, refresh.family_id, true);
+        await writeRefreshTokenReuseAuditRecord({
+          familyId: refresh.family_id,
+          appId: String(refresh.app_id),
+          appUserId: String(refresh.app_user_id),
+        }, tx);
         return { ok: false as const };
       }
+
+      if (refresh.revoked_at) return { ok: false as const };
 
       if (new Date(refresh.expires_at).getTime() <= Date.now()) {
         return { ok: false as const };
@@ -487,6 +568,7 @@ export async function exchangeRefreshToken(input: {
           app_user_id,
           app_credential_id,
           scope,
+          refresh_family_id,
           expires_at
         )
         VALUES (
@@ -495,14 +577,35 @@ export async function exchangeRefreshToken(input: {
           ${refresh.app_user_id},
           ${refresh.app_credential_id},
           ${refresh.scope},
+          ${refresh.family_id},
           ${accessExpiresAt}
         )
       `;
 
-      return {
-        ok: true as const,
+      const outcome: RefreshRotationOutcome = {
+        accessToken,
+        refreshToken: newRefreshToken,
         scope: refresh.scope ?? "",
         appUserId: String(refresh.app_user_id),
+      };
+      const retryResponseCiphertext = input.retryKey
+        ? await encryptSecret(JSON.stringify(outcome))
+        : null;
+      const retryExpiresAt = input.retryKey
+        ? new Date(Date.now() + REFRESH_RETRY_TTL_MS)
+        : null;
+
+      await tx`
+        UPDATE oauth_refresh_tokens
+        SET retry_key_hash = ${retryKeyHash},
+            retry_response_ciphertext = ${retryResponseCiphertext},
+            retry_expires_at = ${retryExpiresAt}
+        WHERE id = ${refresh.id}
+      `;
+
+      return {
+        ok: true as const,
+        outcome,
       };
   });
 
@@ -512,13 +615,25 @@ export async function exchangeRefreshToken(input: {
 
   return {
     ok: true,
-    accessToken,
+    accessToken: result.outcome.accessToken,
     tokenType: "Bearer",
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-    scope: result.scope,
-    refreshToken: newRefreshToken,
-    appUserId: result.appUserId,
+    scope: result.outcome.scope,
+    refreshToken: result.outcome.refreshToken,
+    appUserId: result.outcome.appUserId,
   };
+}
+
+export function createRefreshTokenExchange(
+  database: SQL,
+): (input: RefreshTokenExchangeInput) => Promise<RefreshTokenExchangeResult> {
+  return (input) => exchangeRefreshTokenWithDatabase(database, input);
+}
+
+export async function exchangeRefreshToken(
+  input: RefreshTokenExchangeInput,
+): Promise<RefreshTokenExchangeResult> {
+  return exchangeRefreshTokenWithDatabase(getDb(), input);
 }
 
 export async function issueClientCredentialsToken(input: {
@@ -591,20 +706,46 @@ export async function revokeOAuthToken(input: { token: string; client: OAuthClie
   });
 }
 
-export async function revokeAllOAuthTokensForAppUser(appUserId: string): Promise<void> {
-  await getDb().begin(async (tx) => {
-    await tx`
-      UPDATE oauth_access_tokens
-      SET revoked_at = NOW()
-      WHERE app_user_id = ${appUserId}
-        AND revoked_at IS NULL
-    `;
-    await tx`
-      UPDATE oauth_refresh_tokens
-      SET revoked_at = NOW()
-      WHERE app_user_id = ${appUserId}
-        AND revoked_at IS NULL
-    `;
+async function revokeAllOAuthTokensForAppUserInTransaction(
+  tx: SQL,
+  appUserId: string,
+): Promise<void> {
+  const familyRows = await tx`
+    SELECT DISTINCT family_id
+    FROM oauth_refresh_tokens
+    WHERE app_user_id = ${appUserId}
+    ORDER BY family_id
+  `;
+  for (const row of familyRows) {
+    const familyId = String((row as { family_id: string }).family_id);
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${familyId}::text, 0))`;
+  }
+  await tx`
+    UPDATE oauth_access_tokens
+    SET revoked_at = NOW()
+    WHERE app_user_id = ${appUserId}
+      AND revoked_at IS NULL
+  `;
+  await tx`
+    UPDATE oauth_refresh_tokens
+    SET revoked_at = COALESCE(revoked_at, NOW()),
+        retry_key_hash = NULL,
+        retry_response_ciphertext = NULL,
+        retry_expires_at = NULL
+    WHERE app_user_id = ${appUserId}
+  `;
+}
+
+export async function revokeAllOAuthTokensForAppUser(
+  appUserId: string,
+  tx?: SQL,
+): Promise<void> {
+  if (tx) {
+    await revokeAllOAuthTokensForAppUserInTransaction(tx, appUserId);
+    return;
+  }
+  await getDb().begin(async (transaction) => {
+    await revokeAllOAuthTokensForAppUserInTransaction(transaction, appUserId);
   });
 }
 

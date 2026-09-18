@@ -1,12 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { CSRF_COOKIE } from "@z0/contracts/http";
-import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
+import { sha256Hex } from "../../src/api/lib/crypto";
+import { createPgSql } from "../../src/api/lib/create-pg-sql";
 import { closeDatabase, getDb } from "../../src/api/lib/db";
+import {
+  createRefreshTokenExchange,
+  findActiveOAuthClient,
+} from "../../src/api/lib/oauth";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
+import { approveOAuthConsent, loginApplicationIdentity } from "../helpers/oauth";
 import { makeStrongPassword } from "../helpers/password";
 import { dispatchApi } from "./api-routes";
 import { dispatchWeb } from "./web-dispatch";
@@ -17,29 +22,10 @@ const ownerPassword = makeStrongPassword();
 const appUserPassword = makeStrongPassword();
 const REDIRECT = "http://localhost:3000/oauth/callback";
 
-function extractCsrfFromHtml(html: string): string | undefined {
-  const match = html.match(/name="_csrf" value="([^"]+)"/);
-  return match?.[1];
-}
-
-function extractCsrfFromSetCookie(res: Response): string | undefined {
-  const cookies = res.headers.getSetCookie?.() ?? [];
-  const raw = cookies.find((c) => c.startsWith(`${CSRF_COOKIE}=`));
-  const match = raw?.match(new RegExp(`${CSRF_COOKIE}=([^;]+)`));
-  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
-}
-
 function sessionCookieFromResponse(res: Response): string | undefined {
   const cookies = res.headers.getSetCookie?.() ?? [];
   const raw = cookies.find((c) => c.startsWith(`${SESSION_COOKIE}=`));
   const match = raw?.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
-  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
-}
-
-function appSessionFromResponse(res: Response): string | undefined {
-  const cookies = res.headers.getSetCookie?.() ?? [];
-  const raw = cookies.find((c) => c.startsWith(`${APP_SESSION_COOKIE}=`));
-  const match = raw?.match(new RegExp(`${APP_SESSION_COOKIE}=([^;]+)`));
   return match?.[1] ? decodeURIComponent(match[1]) : undefined;
 }
 
@@ -70,99 +56,28 @@ async function ownerLogin() {
   return { csrf, cookie: sessionCookieFromResponse(res)! };
 }
 
-async function loginAppUser(clientId: string, email: string, password: string): Promise<string> {
-  const loginPage = await dispatchWeb(
-    new Request(`http://localhost/auth/login?client_id=${encodeURIComponent(clientId)}`),
-  );
-  const loginHtml = await loginPage.text();
-  const loginCsrf = extractCsrfFromHtml(loginHtml)!;
-  const cookie = extractCsrfFromSetCookie(loginPage) ?? loginCsrf;
-
-  const loginRes = await dispatchWeb(
-    new Request("http://localhost/auth/login", {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        origin: "http://localhost",
-        host: "localhost",
-        cookie: `${CSRF_COOKIE}=${encodeURIComponent(cookie)}`,
-      },
-      body: new URLSearchParams({
-        _csrf: loginCsrf,
-        client_id: clientId,
-        email,
-        password,
-      }).toString(),
-    }),
-  );
-  return appSessionFromResponse(loginRes)!;
-}
-
 async function approveConsent(input: {
   clientId: string;
   redirectUri: string;
   appSession: string;
   scope?: string;
 }): Promise<string> {
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: input.clientId,
-    redirect_uri: input.redirectUri,
+  return approveOAuthConsent(dispatchWeb, {
+    clientId: input.clientId,
+    redirectUri: input.redirectUri,
+    appSession: input.appSession,
     scope: input.scope ?? "openid profile email",
     state: "refresh-test-state",
   });
-
-  const consentPageRes = await dispatchWeb(
-    new Request(`http://localhost/oauth/authorize?${params.toString()}`, {
-      headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(input.appSession)}` },
-    }),
-  );
-  if (consentPageRes.status === 302) {
-    const code = new URL(consentPageRes.headers.get("location") ?? "").searchParams.get("code");
-    expect(code).toBeTruthy();
-    return code!;
-  }
-
-  const consentHtml = await consentPageRes.text();
-  const consentCsrf = extractCsrfFromHtml(consentHtml)!;
-  const consentNonce = consentHtml.match(/name="consent_nonce" value="([^"]+)"/)?.[1] ?? "";
-  const consentCookieState =
-    consentPageRes.headers
-      .getSetCookie?.()
-      .find((c) => c.startsWith("z0_oauth_consent="))
-      ?.match(/z0_oauth_consent=([^;]+)/)?.[1] ?? "";
-  const consentCookie = extractCsrfFromSetCookie(consentPageRes) ?? consentCsrf;
-
-  const authRes = await dispatchWeb(
-    new Request("http://localhost/oauth/authorize", {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        origin: "http://localhost",
-        host: "localhost",
-        cookie: `${CSRF_COOKIE}=${encodeURIComponent(consentCookie)}; z0_oauth_consent=${decodeURIComponent(consentCookieState)}; ${APP_SESSION_COOKIE}=${encodeURIComponent(input.appSession)}`,
-      },
-      body: new URLSearchParams({
-        _csrf: consentCsrf,
-        response_type: "code",
-        client_id: input.clientId,
-        redirect_uri: input.redirectUri,
-        scope: input.scope ?? "openid profile email",
-        state: "refresh-test-state",
-        consent_nonce: consentNonce,
-        consent: "approve",
-      }).toString(),
-    }),
-  );
-  const location = authRes.headers.get("location") ?? "";
-  return new URL(location).searchParams.get("code")!;
 }
 
-async function exchangeToken(body: Record<string, string>): Promise<Response> {
+async function exchangeToken(body: Record<string, string>, idempotencyKey?: string): Promise<Response> {
+  const headers = new Headers({ "content-type": "application/x-www-form-urlencoded" });
+  if (idempotencyKey) headers.set("idempotency-key", idempotencyKey);
   return dispatchWeb(
     new Request("http://localhost/oauth/token", {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+      headers,
       body: new URLSearchParams(body).toString(),
     }),
   );
@@ -172,6 +87,7 @@ run("OAuth refresh token lifecycle", () => {
   let clientId = "";
   let clientSecret = "";
   let appId = "";
+  let ownerCookie = "";
   let appUserEmail = "refresh-user@example.com";
 
   beforeAll(async () => {
@@ -179,6 +95,7 @@ run("OAuth refresh token lifecycle", () => {
     resetRateLimitsForTests();
     await completeSetup();
     const { csrf, cookie } = await ownerLogin();
+    ownerCookie = cookie;
 
     const appRes = await dispatchApi(
       buildRequest("POST", "/api/v1/apps", {
@@ -215,7 +132,11 @@ run("OAuth refresh token lifecycle", () => {
   });
 
   test("code exchange returns refresh_token", async () => {
-    const appSession = await loginAppUser(clientId, appUserEmail, appUserPassword);
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
     const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
     const tokenRes = await exchangeToken({
       grant_type: "authorization_code",
@@ -231,7 +152,11 @@ run("OAuth refresh token lifecycle", () => {
   });
 
   test("refresh_token grant rotates tokens", async () => {
-    const appSession = await loginAppUser(clientId, appUserEmail, appUserPassword);
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
     const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
     const first = await exchangeToken({
       grant_type: "authorization_code",
@@ -274,8 +199,127 @@ run("OAuth refresh token lifecycle", () => {
     expect(secondRefreshBody.error).toBe("invalid_grant");
   });
 
+  test("two Application Replicas return one outcome for an identical narrow retry", async () => {
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
+    const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
+    const tokenRes = await exchangeToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const token = (await tokenRes.json()) as { refresh_token: string };
+    const refreshRequest = {
+      grant_type: "refresh_token",
+      refresh_token: token.refresh_token,
+      client_id: clientId,
+      client_secret: clientSecret,
+    };
+
+    const client = await findActiveOAuthClient(clientId);
+    expect(client).not.toBeNull();
+    const firstReplicaDatabase = createPgSql(process.env.DATABASE_URL!);
+    const secondReplicaDatabase = createPgSql(process.env.DATABASE_URL!);
+    try {
+      const firstReplica = createRefreshTokenExchange(firstReplicaDatabase);
+      const secondReplica = createRefreshTokenExchange(secondReplicaDatabase);
+      const [first, retry] = await Promise.all([
+        firstReplica({
+          refreshToken: refreshRequest.refresh_token,
+          client: client!,
+          retryKey: "retry-refresh-rotation-0001",
+        }),
+        secondReplica({
+          refreshToken: refreshRequest.refresh_token,
+          client: client!,
+          retryKey: "retry-refresh-rotation-0001",
+        }),
+      ]);
+
+      expect(first.ok).toBe(true);
+      expect(retry.ok).toBe(true);
+      expect(retry).toEqual(first);
+    } finally {
+      await Promise.all([firstReplicaDatabase.close(), secondReplicaDatabase.close()]);
+    }
+  });
+
+  test("competing reuse revokes the complete family and records high-severity evidence", async () => {
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
+    const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
+    const tokenRes = await exchangeToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const original = (await tokenRes.json()) as { refresh_token: string; access_token: string };
+    const refreshRequest = {
+      grant_type: "refresh_token",
+      refresh_token: original.refresh_token,
+      client_id: clientId,
+      client_secret: clientSecret,
+    };
+    const rotated = await exchangeToken(refreshRequest, "legitimate-refresh-rotation");
+    const replacement = (await rotated.json()) as { refresh_token: string; access_token: string };
+
+    const competingReuse = await exchangeToken(refreshRequest, "competing-refresh-rotation");
+    expect(competingReuse.status).toBe(400);
+    const repeatedCompetingReuse = await exchangeToken(refreshRequest, "another-competing-rotation");
+    expect(repeatedCompetingReuse.status).toBe(400);
+
+    const replacementUse = await exchangeToken({
+      ...refreshRequest,
+      refresh_token: replacement.refresh_token,
+    });
+    expect(replacementUse.status).toBe(400);
+
+    for (const accessToken of [original.access_token, replacement.access_token]) {
+      const userinfo = await dispatchWeb(new Request("http://localhost/oauth/userinfo", {
+        headers: { authorization: `Bearer ${accessToken}` },
+      }));
+      expect(userinfo.status).toBe(401);
+    }
+
+    const auditRes = await dispatchApi(buildRequest(
+      "GET",
+      "/api/v1/audit-events?action=oauth.refresh_token_reuse_detected",
+      { cookies: { [SESSION_COOKIE]: ownerCookie } },
+    ));
+    expect(auditRes.status).toBe(200);
+    const audit = (await auditRes.json()) as {
+      events: Array<{ resourceType: string; resourceId: string; payload: Record<string, unknown> }>;
+    };
+    expect(audit.events[0]).toMatchObject({
+      resourceType: "oauth_refresh_token_family",
+      payload: {
+        schemaVersion: 1,
+        severity: "high",
+        outcome: "family_revoked",
+        appId,
+      },
+    });
+    expect(audit.events[0]?.payload.securityEventId).toBeString();
+    const compromisedFamilyId = audit.events[0]?.resourceId;
+    expect(audit.events.filter((event) => event.resourceId === compromisedFamilyId)).toHaveLength(1);
+  });
+
   test("revoking refresh token rejects further refresh", async () => {
-    const appSession = await loginAppUser(clientId, appUserEmail, appUserPassword);
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
     const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
     const tokenRes = await exchangeToken({
       grant_type: "authorization_code",
@@ -308,8 +352,92 @@ run("OAuth refresh token lifecycle", () => {
     expect(refreshRes.status).toBe(400);
   });
 
+  test("revoking a rotated family also invalidates its retry outcome", async () => {
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
+    const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
+    const tokenRes = await exchangeToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const original = (await tokenRes.json()) as { refresh_token: string };
+    const refreshRequest = {
+      grant_type: "refresh_token",
+      refresh_token: original.refresh_token,
+      client_id: clientId,
+      client_secret: clientSecret,
+    };
+    const rotated = await exchangeToken(refreshRequest, "revoked-refresh-rotation");
+    const replacement = (await rotated.json()) as { refresh_token: string };
+
+    const revokeRes = await dispatchWeb(
+      new Request("http://localhost/oauth/revoke", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token: replacement.refresh_token,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }).toString(),
+      }),
+    );
+    expect(revokeRes.status).toBe(200);
+
+    const retry = await exchangeToken(refreshRequest, "revoked-refresh-rotation");
+    expect(retry.status).toBe(400);
+  });
+
+  test("a matching retry outside the narrow window revokes the family", async () => {
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
+    const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
+    const tokenRes = await exchangeToken({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+    const original = (await tokenRes.json()) as { refresh_token: string };
+    const refreshRequest = {
+      grant_type: "refresh_token",
+      refresh_token: original.refresh_token,
+      client_id: clientId,
+      client_secret: clientSecret,
+    };
+    const rotated = await exchangeToken(refreshRequest, "expired-refresh-rotation");
+    const replacement = (await rotated.json()) as { refresh_token: string };
+    const originalHash = await sha256Hex(original.refresh_token);
+    await getDb()`
+      UPDATE oauth_refresh_tokens
+      SET retry_expires_at = NOW() - INTERVAL '1 second'
+      WHERE token_hash = ${originalHash}
+    `;
+
+    const lateRetry = await exchangeToken(refreshRequest, "expired-refresh-rotation");
+    expect(lateRetry.status).toBe(400);
+    const replacementUse = await exchangeToken({
+      ...refreshRequest,
+      refresh_token: replacement.refresh_token,
+    });
+    expect(replacementUse.status).toBe(400);
+  });
+
   test("deleted scopes cannot be renewed by a refresh token", async () => {
-    const appSession = await loginAppUser(clientId, appUserEmail, appUserPassword);
+    const appSession = await loginApplicationIdentity(dispatchWeb, {
+      clientId,
+      email: appUserEmail,
+      password: appUserPassword,
+    });
     const code = await approveConsent({ clientId, redirectUri: REDIRECT, appSession });
     const tokenRes = await exchangeToken({
       grant_type: "authorization_code",

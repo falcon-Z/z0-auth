@@ -584,7 +584,21 @@ async function postToken(req: BunRequest): Promise<Response> {
     if (!body.refresh_token) {
       return oauthErrorResponseWithCors(req, client, 400, "invalid_request", "refresh_token is required");
     }
-    const refreshed = await exchangeRefreshToken({ refreshToken: body.refresh_token, client });
+    const retryKey = req.headers.get("idempotency-key")?.trim() || undefined;
+    if (retryKey && (retryKey.length < 16 || retryKey.length > 128 || !/^[\x21-\x7E]+$/.test(retryKey))) {
+      return oauthErrorResponseWithCors(
+        req,
+        client,
+        400,
+        "invalid_request",
+        "idempotency-key must contain 16 to 128 visible ASCII characters",
+      );
+    }
+    const refreshed = await exchangeRefreshToken({
+      refreshToken: body.refresh_token,
+      client,
+      retryKey,
+    });
     if (!refreshed.ok) {
       return oauthErrorResponseWithCors(req, client, 400, "invalid_grant", "refresh token is invalid or expired");
     }
