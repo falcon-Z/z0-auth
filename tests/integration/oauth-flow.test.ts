@@ -637,9 +637,10 @@ run("OAuth authorization code flow", () => {
   test("expired and mismatched consent challenges have stable outcomes", async () => {
     const authority = createPostgresOAuthConsentChallengeAuthority();
     const expiredServer = createAuthorizationServer({ consentChallenges: authority });
+    let mismatchNonceSequence = 0;
     const mismatchServer = createAuthorizationServer({
       consentChallenges: authority,
-      generateNonce: () => "mismatched-consent",
+      generateNonce: () => `mismatched-consent-${mismatchNonceSequence++}`,
     });
     const input = {
       responseType: "code" as const,
