@@ -372,7 +372,8 @@ Customer resource servers validate opaque access tokens through `POST /oauth/int
 ## Documentation map
 
 - [Product overview](docs/product.md)
-- [Architecture](docs/ARCHITECTURE.md)
+- [Alpha architecture specification](docs/alpha-architecture.md) — approved target architecture for Alpha implementation.
+- [Architecture](docs/ARCHITECTURE.md) — current repository architecture until reconciliation is complete.
 - [Deployment](docs/deployment.md)
 - [Local development](docs/development.md)
 - [Data model](docs/data-model.md)
