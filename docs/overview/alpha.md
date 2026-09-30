@@ -1,12 +1,10 @@
-# Z0Auth Alpha Roadmap
+# Alpha roadmap
 
-> **Roadmap for the Alpha release**
->
-> The Alpha release aims to make Z0Auth a coherent, self-hosted OAuth 2.0 and OpenID Connect authentication and identity server for applications, APIs, and workloads. This roadmap summarizes the planned public scope and release bar.
+This roadmap defines the planned scope and acceptance bar for Z0Auth's first Alpha release. It describes the release target, not the feature set of every development build.
 
-## Alpha goal
+## Release goal
 
-The Alpha release is complete when a self-hosting operator can deploy and bootstrap Z0Auth, register applications and resources, authenticate human users and workloads, use isolated or explicitly shared SSO identities, issue and validate standards-based tokens, administer and recover the system, and pass the security, protocol, failure, migration, accessibility, and end-to-end acceptance criteria described below.
+The release is complete when a self-hosting operator can deploy and bootstrap Z0Auth, register applications and resources, authenticate human users and workloads, use isolated or explicitly shared SSO identities, issue and validate standards-based tokens, administer and recover the system, and pass the security, protocol, failure, migration, accessibility, and end-to-end acceptance criteria described below.
 
 Z0Auth is designed around a few core boundaries:
 
@@ -20,7 +18,7 @@ Z0Auth is designed around a few core boundaries:
 
 ## 1. Application, client, and resource foundation
 
-For the Alpha release, Z0Auth will provide the management model needed to connect real applications and APIs.
+Z0Auth will provide the management model needed to connect real applications and APIs.
 
 Planned Alpha capabilities include:
 
@@ -37,13 +35,13 @@ Planned Alpha capabilities include:
 - Client and application disable, recovery, deletion, and purge lifecycle.
 - Safe handling of compromised credentials and destructive changes.
 
-For the Alpha release, Z0Auth will not treat public browser clients as confidential clients or issue client secrets merely to simulate confidentiality.
+Z0Auth will not treat public browser clients as confidential clients or issue client secrets merely to simulate confidentiality.
 
 ## 2. Identity boundaries and shared SSO
 
 Applications are isolated by default. Sharing identity is always deliberate.
 
-For the Alpha release, Z0Auth will support:
+Z0Auth will support:
 
 - Independent account domains for applications.
 - Explicitly created SSO groups that provide a shared account domain to member applications.
@@ -53,11 +51,11 @@ For the Alpha release, Z0Auth will support:
 - Application-owned metadata namespaced to an application subject without turning it into shared SSO profile data.
 - Durable identity lifecycle events for deletion, restoration, purge, and related lifecycle transitions.
 
-For Alpha, account-domain placement becomes effectively fixed once identities exist. Migrating populated applications into, out of, or between SSO groups is deferred until a later release.
+For this release, account-domain placement becomes effectively fixed once identities exist. Migrating populated applications into, out of, or between SSO groups is deferred until a later release.
 
 ## 3. Account lifecycle
 
-For the Alpha release, Z0Auth will support configurable account creation and lifecycle policies.
+Z0Auth will support configurable account creation and lifecycle policies.
 
 Account creation may be configured for:
 
@@ -72,7 +70,7 @@ Suspension and deletion will revoke renewable authentication state while preserv
 
 ## 4. Human authentication and recovery
 
-For the Alpha release, Z0Auth will support multiple first-party and federated authentication methods:
+Z0Auth will support multiple first-party and federated authentication methods:
 
 - Username/email and password.
 - Email verification.
@@ -88,7 +86,7 @@ For the Alpha release, Z0Auth will support multiple first-party and federated au
 
 Authentication policy belongs to the account domain. Applications request an authentication assurance outcome rather than controlling the mechanics of the authenticator ceremony.
 
-For the Alpha release, Z0Auth will support baseline authentication and a stronger MFA/additional-verification outcome. User-verified passkeys may satisfy the stronger outcome directly, while TOTP can provide the additional factor. When stronger assurance is required but no eligible factor is enrolled, Z0Auth will support protected just-in-time enrollment and then resume the original transaction.
+Z0Auth will support baseline authentication and a stronger MFA/additional-verification outcome. User-verified passkeys may satisfy the stronger outcome directly, while TOTP can provide the additional factor. When stronger assurance is required but no eligible factor is enrolled, Z0Auth will support protected just-in-time enrollment and then resume the original transaction.
 
 Passwords will use a modern policy: a 15-character built-in minimum, support for long passwords and Unicode, no arbitrary composition rules, compromised/common-password checks, and Argon2id hashing.
 
@@ -96,7 +94,7 @@ Email verification, magic links, password-reset credentials, recovery codes, and
 
 ## 5. Sessions and SSO
 
-For the Alpha release, Z0Auth will provide server-managed browser sessions for authentication and shared SSO behavior.
+Z0Auth will provide server-managed browser sessions for authentication and shared SSO behavior.
 
 The session model will support:
 
@@ -111,7 +109,7 @@ Merely running applications in the same Z0Auth instance will not cause them to s
 
 ## 6. OAuth 2.0 and OpenID Connect
 
-For the Alpha release, Z0Auth will focus on a deliberately constrained standards surface that can be implemented and tested well.
+Z0Auth will focus on a deliberately constrained standards surface that can be implemented and tested well.
 
 Supported interactive flow:
 
@@ -133,11 +131,11 @@ Protocol safety will include:
 - Registered resources and resource selection.
 - No silent security downgrade when a requested feature or algorithm is unsupported.
 
-For the Alpha release, Z0Auth will not support the Implicit Grant or Resource Owner Password Credentials flow.
+Z0Auth will not support the Implicit Grant or Resource Owner Password Credentials flow.
 
 ## 7. Tokens, claims, and grants
 
-For the Alpha release, Z0Auth will use short-lived, self-contained JWT bearer access tokens designed for local verification by resource servers.
+Z0Auth will use short-lived, self-contained JWT bearer access tokens designed for local verification by resource servers.
 
 Access-token behavior will include:
 
@@ -151,19 +149,19 @@ Refresh capability, where enabled, will use opaque rotating refresh tokens with 
 
 OpenID Connect will provide ID Tokens and UserInfo. Applications define the meaning of application permissions; Z0Auth issues the agreed scopes and claims but does not replace the application's own authorization layer.
 
-RS256 is the Alpha signing algorithm for Z0Auth-issued JWT access tokens and ID Tokens. Z0Auth will publish public verification material through JWKS and support safe signing-key rotation.
+RS256 is the signing algorithm for this release for Z0Auth-issued JWT access tokens and ID Tokens. Z0Auth will publish public verification material through JWKS and support safe signing-key rotation.
 
 ## 8. Workload authentication
 
-Machine and workload principals are first-class Alpha use cases.
+Machine and workload principals are first-class use cases for this release.
 
-For the Alpha release, Z0Auth will support explicitly registered confidential clients using Client Credentials to obtain short-lived authority for registered resources.
+Z0Auth will support explicitly registered confidential clients using Client Credentials to obtain short-lived authority for registered resources.
 
 Interactive human clients and workload clients should remain separate rather than mixing materially different principal roles into one client.
 
 ## 9. Administration and operator control
 
-For the Alpha release, Z0Auth will include an administrative surface for operating the instance.
+Z0Auth will include an administrative surface for operating the instance.
 
 The operator model will include:
 
@@ -181,9 +179,9 @@ Ordinary administrators cannot grant themselves Platform Owner authority or supe
 
 ## 10. Security, keys, audit, and privacy
 
-Security is part of the Alpha release bar rather than a later hardening phase.
+Security is part of the release bar rather than a later hardening phase.
 
-For the Alpha release, Z0Auth will include:
+Z0Auth will include:
 
 - Rate limiting and abuse protections for authentication, recovery, bootstrap, client authentication, and privileged operations.
 - Enumeration-resistant public responses where appropriate.
@@ -203,7 +201,7 @@ Infrastructure encryption, host security, database security, and deployment-secr
 
 ## 11. Reliability, consistency, and recovery
 
-For the Alpha release, Z0Auth must fail safely.
+Z0Auth must fail safely.
 
 The system will:
 
@@ -220,7 +218,7 @@ The system will:
 
 ## 12. Deployment and operations
 
-For the Alpha release, Z0Auth will target a clear, supportable deployment model:
+Z0Auth will target a clear, supportable deployment model:
 
 - Bun as the server-side runtime.
 - PostgreSQL as the production database target.
@@ -242,7 +240,7 @@ Multiple application replicas may be supported when they share the required auth
 
 Z0Auth-hosted authentication remains inside the Z0Auth security boundary rather than being delegated to the administrative React application.
 
-For the Alpha release, Z0Auth authentication and administrative interfaces must support:
+Z0Auth authentication and administrative interfaces must support:
 
 - Keyboard-only use.
 - Assistive technologies and correct semantic structure.
@@ -258,11 +256,11 @@ For the Alpha release, Z0Auth authentication and administrative interfaces must 
 
 Security-sensitive hosted pages will avoid arbitrary third-party analytics, ads, remote fonts, and similar embedded resources.
 
-For the Alpha release, Z0Auth will be localization-ready, but broad multilingual coverage is not a release requirement.
+Z0Auth will be localization-ready, but broad multilingual coverage is not a release requirement.
 
-## 14. Alpha acceptance bar
+## 14. Acceptance bar
 
-The Alpha release is not considered complete merely because individual endpoints exist. Z0Auth must behave coherently end to end.
+The release is not considered complete merely because individual endpoints exist. Z0Auth must behave coherently end to end.
 
 The acceptance suite will cover:
 
@@ -285,11 +283,11 @@ The acceptance suite will cover:
 
 End-to-end Alpha scenarios include first deployment and bootstrap, registration/login, recovery, magic link, MFA/passkeys, external IdP login/linking, SSO grouping, OAuth/OIDC authorization, refresh/replay handling, workload authentication, administration/RBAC, client-secret rotation, signing-key rotation, account deletion, and representative failure cases.
 
-**The passing acceptance suite is the practical definition of a coherent Alpha release.**
+**The passing acceptance suite is the practical release bar.**
 
 ## Explicitly outside Alpha
 
-The following are intentionally deferred and are not blockers for the Alpha release:
+The following are intentionally deferred and are not blockers for this release:
 
 - Cross-instance federation or trust.
 - Migration of populated applications into, out of, or between SSO groups.
@@ -333,31 +331,10 @@ The following areas remain valid future directions without implying a particular
 - KMS/HSM/secret-manager integrations.
 - Advanced signing-key automation, anomaly detection, alerting, disaster recovery, reliability targets, multi-region operation, theming, and localization.
 
-## Alpha compatibility policy
+## Related documentation
 
-During the Alpha release, Z0Auth favors correctness and security over premature compatibility guarantees.
-
-Breaking configuration, schema, API, or behavioral changes may occur during Alpha when necessary. Breaking changes will be documented, and a migration path should be provided when preserving existing state is reasonably possible. The Alpha release does not provide long-term semantic-versioning stability.
-
-## Operator responsibilities
-
-A self-hosting operator remains responsible for:
-
-- Deployment infrastructure and host/runtime security.
-- Database, volume, and infrastructure-level encryption.
-- Host clock synchronization.
-- HTTPS and trusted reverse-proxy configuration.
-- Deployment-secret protection.
-- Backups that include required data, keys, and configuration.
-- Selecting secure policy values where Z0Auth intentionally permits operator flexibility.
-- Monitoring logs, metrics, and runbooks.
-- Ensuring resource servers validate issuer, audience, signatures, expiry, and claims correctly.
-
-Applications remain responsible for application membership, application-specific authorization, application data, data retention, and downstream handling of Z0Auth lifecycle events.
-
-
-## Related design documents
-
-- [Alpha architecture specification](../design/alpha-architecture.md)
-- [Domain model and glossary](../design/domain-model.md)
-- [Threat model](../design/threat-model.md)
+- [Support and limitations](support-and-limitations.md) explains the adoption and responsibility boundaries.
+- [Compatibility during Alpha](compatibility.md) defines what integrations can rely on at this stage.
+- [Alpha architecture specification](../design/alpha-architecture.md) describes the target implementation architecture.
+- [Domain model and glossary](../design/domain-model.md) defines the system concepts and terminology.
+- [Threat model](../design/threat-model.md) defines the security boundaries, threats, and required controls.
