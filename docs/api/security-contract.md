@@ -2,7 +2,7 @@
 
 Normative rules for sessions, CSRF, cookies, and OAuth. All new API and UI work must comply before shipping.
 
-**Related:** `docs/api/references/common.openapi.yaml`, `docs/ARCHITECTURE.md`, `src/api/lib/session.ts`, `src/api/lib/csrf.ts`.
+**Related:** `docs/api/references/common.openapi.yaml`, `docs/architecture/current.md`, `src/api/lib/session.ts`, `src/api/lib/csrf.ts`.
 
 ---
 
