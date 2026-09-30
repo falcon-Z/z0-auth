@@ -18,7 +18,9 @@ Z0Auth uses six reader-facing documentation types.
 
 Overview pages represent the project to someone encountering it for the first time. They should answer, in this order where practical: what the project is, why someone would use it, what useful capabilities it provides, what they can build or accomplish with it, and where to go next.
 
-An overview may summarize features because feature discovery is part of evaluating a project. Describe those features in terms a prospective user recognizes. Do not use the page to preserve requirement facts, internal invariants, domain relationships, protocol edge cases, architecture decisions, or implementation constraints merely because they are important elsewhere.
+An overview may summarize features because feature discovery is part of evaluating a project. Group related features into capability families instead of enumerating every supported method, state, protocol detail, or edge case. The overview is not a completeness proof. Detailed support belongs in the roadmap, guides, and reference pages.
+
+Describe capabilities in terms a prospective user recognizes. Do not use the page to preserve requirement facts, internal invariants, domain relationships, protocol edge cases, architecture decisions, or implementation constraints merely because they are important elsewhere.
 
 The overview must stand on its own. A reader should understand the project without first reading the requirements, roadmap, domain model, or architecture.
 
