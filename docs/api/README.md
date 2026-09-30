@@ -1,6 +1,6 @@
 # z0-auth API documentation
 
-Spec-driven contracts for the single-account IAM model. Product context: [../product.md](../product.md).
+Spec-driven contracts for the single-account IAM model. Product context: [../product.md](../product/overview.md).
 
 ## Start here
 
@@ -36,4 +36,4 @@ TypeScript mirrors: `src/lib/contracts/`.
 3. State-changing request → CSRF per [security-contract.md](./security-contract.md).  
 4. Return errors via `problem()` only.
 
-See also [ARCHITECTURE.md](../ARCHITECTURE.md) for routing and repo layout.
+See also [ARCHITECTURE.md](../architecture/current.md) for routing and repo layout.
