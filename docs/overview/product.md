@@ -1,57 +1,103 @@
-# Product overview
+# Z0Auth
 
-Z0Auth is a self-hosted authentication server for applications and APIs. It provides the sign-in system, OAuth 2.0 and OpenID Connect endpoints, token issuance, account recovery, and the administrative tools needed to run those services yourself.
+Z0Auth is an open-source, self-hosted authentication and identity server for applications, APIs, and backend services.
 
-It is intended for teams that want one authentication service they can deploy with their applications instead of building login, MFA, password recovery, OAuth flows, signing keys, and related security controls separately in every product.
+It gives an application the pieces that are difficult to build well and expensive to maintain separately: sign-in, account recovery, multi-factor authentication, social and enterprise login, OAuth 2.0 and OpenID Connect, token issuance, single sign-on, and the administration needed to operate them.
 
-Z0Auth is currently being built toward its Alpha release. This overview describes the product we are building. The [Alpha roadmap](alpha.md) contains the detailed release scope.
+Instead of putting authentication logic into every application, you run Z0Auth once and connect your applications to it using standard protocols.
 
-## What using Z0Auth looks like
+Z0Auth is under active development toward its first Alpha release.
 
-A typical application does not handle passwords or authentication ceremonies itself.
+## Why Z0Auth?
 
-The application sends the user to Z0Auth to sign in. Z0Auth handles the configured authentication methods and returns the user to the application through OAuth or OpenID Connect. The application receives the identity or access information it needs and continues to own its own product data and permission rules.
+Authentication starts small and rarely stays small.
 
-For APIs, Z0Auth issues access tokens that the API can verify before accepting a request.
+A login form quickly becomes password storage, email verification, forgotten-password flows, MFA, passkeys, session management, external identity providers, OAuth clients, signing keys, token validation, audit history, and recovery procedures. Each new application creates the same problem again.
 
-For background services and other machine-to-machine integrations, applications can register workload clients and request access without pretending that a human user is involved.
+Z0Auth provides that infrastructure as one service you can run and control yourself.
 
-## Authentication in one place
+It is intended for developers and teams that want:
 
-A Z0Auth installation can provide the common authentication flows an application would otherwise need to build and maintain itself.
+- a self-hosted alternative to managed authentication services;
+- one authentication system for several applications and APIs;
+- standard OAuth 2.0 and OpenID Connect integration instead of application-specific authentication code;
+- modern authentication methods without implementing each one independently;
+- control over deployment, data, keys, and authentication policy;
+- an authentication service that can also handle machine-to-machine access.
 
-The Alpha plan includes passwords, email verification and recovery, magic links, passkeys, TOTP MFA, recovery codes, and sign-in through Google, Microsoft, GitHub, or another OpenID Connect provider.
+## What Z0Auth provides
 
-Applications use the same hosted authentication service while remaining separate products. When several related applications should share sign-in, they can be configured to do so deliberately instead of each application maintaining another copy of the user's credentials.
+### Hosted authentication
 
-## Designed for application developers
+Applications can send users to Z0Auth to sign in instead of building and securing their own authentication pages.
 
-Applications register with Z0Auth and use standard OAuth 2.0 and OpenID Connect flows.
+Z0Auth handles the authentication flow and returns the user to the application through OAuth 2.0 or OpenID Connect.
 
-A web application, browser application, backend service, and API can have different protocol configuration without becoming different products in Z0Auth. Applications can register the APIs they call, control which access they may request, and rotate credentials without changing the user's account.
+### Passwords, passkeys, and MFA
 
-The Alpha release focuses on Authorization Code with PKCE for interactive sign-in and Client Credentials for machine-to-machine access.
+Z0Auth supports the authentication methods expected from a modern application, including passwords, passkeys, TOTP multi-factor authentication, recovery codes, email verification, password recovery, and passwordless email sign-in.
 
-## Designed to be operated by you
+Applications can rely on the same authentication service as their sign-in requirements grow instead of replacing their original login system later.
 
-Z0Auth is self-hosted. The service runs with PostgreSQL and is configured and administered by the team operating it.
+### External identity providers
 
-The operator controls the deployment, keys, external identity providers, authentication policy, applications, clients, and other instance configuration. Z0Auth provides the application-level security behavior; the operator remains responsible for the infrastructure it runs on.
+Users can sign in with providers such as Google, Microsoft, and GitHub, or through another OpenID Connect provider.
 
-The Alpha deployment model is deliberately small. It does not require a separate cache, message broker, or collection of authentication microservices.
+Applications integrate with Z0Auth rather than implementing a separate login integration for every upstream identity provider.
 
-## What Z0Auth does not replace
+### OAuth 2.0 and OpenID Connect
 
-Z0Auth answers who or what has authenticated and issues the protocol credentials applications and APIs use.
+Z0Auth acts as the authorization and identity server for applications.
 
-It does not become the application's business-authorization system. An application still decides whether a user belongs to the product, which records they may access, which business actions they may perform, and how its own data is stored.
+It provides the protocol endpoints applications need for user sign-in, identity information, access tokens, refresh tokens, and public signing keys. APIs can validate issued access tokens before serving protected requests.
 
-This keeps authentication reusable without forcing unrelated applications to share their internal permission model.
+### Single sign-on
 
-## Where to go next
+Related applications can share sign-in when that is useful.
 
-Read the [Alpha roadmap](alpha.md) to see what is planned for the first release.
+A user can authenticate once and move between applications that have been configured to share sign-in, while unrelated applications can remain separate.
 
-The Getting Started documentation will provide the shortest path from a new Z0Auth installation to a working application integration as the corresponding Alpha implementation is completed.
+### Application and API management
 
-For contributors or readers who need the underlying model, see the [domain model](../design/domain-model.md), [Alpha architecture](../design/alpha-architecture.md), and [threat model](../design/threat-model.md).
+Operators can register applications, OAuth clients, APIs, redirect URLs, browser origins, scopes, and credentials from one administrative system.
+
+This allows a product to have different web, browser, API, or backend components without maintaining separate authentication systems for each one.
+
+### Machine-to-machine authentication
+
+Backend services can authenticate without inventing a user account for a machine.
+
+Z0Auth supports client credentials for service-to-service access and issues tokens that APIs can validate using the same identity infrastructure used by interactive applications.
+
+### Administration and security operations
+
+Z0Auth includes the operational parts of running an authentication service, including operator access, credential management, session management, audit records, signing keys, recovery controls, and security-sensitive configuration.
+
+Because Z0Auth is self-hosted, the team operating it controls where it runs and how its database, secrets, network, backups, and surrounding infrastructure are managed.
+
+## What can you use it for?
+
+Z0Auth can provide authentication for:
+
+- a web application that needs hosted sign-in and account recovery;
+- a browser application with a separate API;
+- several related products that should share sign-in;
+- an API that accepts OAuth access tokens;
+- backend services that need machine-to-machine credentials;
+- a self-hosted product that should not depend on a third-party authentication service.
+
+Applications still own their product data and business permissions. Z0Auth handles identity and authentication; it does not try to become the business logic of every application connected to it.
+
+## Alpha status
+
+Z0Auth is being built toward its first Alpha release. The product direction is defined, but implementation and documentation are still being reconciled to that release.
+
+The [Alpha roadmap](alpha.md) describes what the first release will support and what is intentionally deferred.
+
+## Start here
+
+If you are evaluating the project, read the [Alpha roadmap](alpha.md) next.
+
+If you want to run or integrate Z0Auth, the Getting Started guides will provide the shortest path from a fresh installation to a working application as the Alpha implementation becomes available.
+
+If you are contributing to Z0Auth, the [documentation index](../README.md) links to the architecture, domain model, threat model, and contributor material.
