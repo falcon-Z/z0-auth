@@ -11,7 +11,7 @@ Z0Auth documentation is organized around what a reader is trying to do. The acti
 - [Alpha architecture](design/alpha-architecture.md) defines the target implementation architecture.
 - [Domain model and glossary](design/domain-model.md) defines the product concepts and terminology.
 - [Threat model](design/threat-model.md) defines trust boundaries, threats, required controls, and accepted Alpha residual risks.
-- [Documentation guide](contributing/documentation.md) defines how repository documentation is organized and written.
+- [Documentation guide](contributing/documentation.md) defines how repository documentation is organized and written.\n- [Quickstart](getting-started/quickstart.md) runs a local Z0Auth instance and completes first-instance setup.
 
 ## Reader documentation
 
