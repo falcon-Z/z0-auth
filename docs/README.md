@@ -4,6 +4,7 @@ Z0Auth documentation is organized around what a reader is trying to do. The acti
 
 ## Available now
 
+- [Product overview](overview/product.md) explains the Alpha product model and responsibility boundaries.
 - [Alpha roadmap](overview/alpha.md) describes the public Alpha scope, exclusions, and release bar.
 - [Alpha architecture](design/alpha-architecture.md) defines the target implementation architecture.
 - [Domain model and glossary](design/domain-model.md) defines the product concepts and terminology.
