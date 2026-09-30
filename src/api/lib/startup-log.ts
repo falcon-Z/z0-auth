@@ -26,7 +26,7 @@ export function printStartupSummary(config: AppConfig, readiness: ReadinessResul
   ];
 
   if (!db.configured) {
-    lines.push("  Database     not configured   set DATABASE_URL (see console or docs/operations/deployment.md)");
+    lines.push("  Database     not configured   set DATABASE_URL (see console or docs/README.md)");
   } else if (db.connected && config.databaseUrl) {
     const target = formatDatabaseTarget(config.databaseUrl);
     lines.push(`  Database     connected   ${target} (${db.latencyMs}ms)`);

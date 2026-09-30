@@ -150,7 +150,7 @@ export const ErrorCodes = {
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-/** Builds the JSON body for RFC 7807-style API errors (see `docs/api/references/common.openapi.yaml`). */
+/** Builds the JSON body for RFC 7807-style API errors. */
 export function createProblemDetail(
   status: number,
   title: string,

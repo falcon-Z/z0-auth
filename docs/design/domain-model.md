@@ -526,5 +526,5 @@ The following should not be accidentally promoted into Alpha core concepts:
 - adaptive-risk/device-trust classifications.
 They may become explicit concepts in later releases when corresponding requirements exist.
 # 15. Source and authority
-This domain model is derived from the stable Alpha requirements baseline. See the public [Alpha roadmap](../roadmap/alpha.md) for the release-level scope.
+This domain model is derived from the stable Alpha requirements baseline. See the public [Alpha roadmap](../overview/alpha.md) for the release-level scope.
 Where this document appears to conflict with the stable requirements, the requirements document wins and this artifact must be corrected. Historical simulation notes remain decision rationale, not an alternate domain model.

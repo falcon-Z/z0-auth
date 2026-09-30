@@ -569,6 +569,6 @@ At minimum, tests must cover:
 - accessibility of security-critical flows without weakening protections.
 # 13. Source and authority
 This model is derived from:
-- The stable Alpha requirements baseline. See the public [Alpha roadmap](../roadmap/alpha.md) for the release-level scope.
-- [Z0Auth Domain Model and Glossary](../architecture/domain-model.md) — stable Alpha domain model.
+- The stable Alpha requirements baseline. See the public [Alpha roadmap](../overview/alpha.md) for the release-level scope.
+- [Z0Auth Domain Model and Glossary](./domain-model.md) — stable Alpha domain model.
 If this threat model conflicts with either source, the stable requirements take precedence, followed by the domain model where it only clarifies terminology. The threat model must then be corrected rather than changing the source artifacts implicitly.

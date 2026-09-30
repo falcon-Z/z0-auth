@@ -358,8 +358,6 @@ Applications remain responsible for application membership, application-specific
 
 ## Related design documents
 
-- [Alpha architecture specification](../architecture/alpha.md)
-- [Domain model and glossary](../architecture/domain-model.md)
-- [Threat model](../security/threat-model.md)
-- [Current repository architecture](../architecture/current.md)
-- [Current data model](../architecture/data-model.md)
+- [Alpha architecture specification](../design/alpha-architecture.md)
+- [Domain model and glossary](../design/domain-model.md)
+- [Threat model](../design/threat-model.md)

@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-describe("ui contract documentation", () => {
+describe("archived UI contract documentation", () => {
   test("ui-flows.md documents required redirects", () => {
-    const docPath = path.join(import.meta.dir, "../../docs/api/ui-flows.md");
+    const docPath = path.join(import.meta.dir, "../../docs/archive/pre-alpha-docs/api/ui-flows.md");
     const content = readFileSync(docPath, "utf8");
     expect(content).toContain("/auth/setup");
     expect(content).toContain("/auth/login");

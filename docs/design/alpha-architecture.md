@@ -202,7 +202,7 @@ tests/
   concurrency/
   failure/
   e2e/
-docs/architecture/alpha.md
+docs/design/alpha-architecture.md
 ```
 This is a target ownership map, not a requirement to rename conforming code mechanically. Repository reconciliation should map current files to these responsibilities and change structure only where boundaries are materially unclear or unsafe.
 # 9. PostgreSQL persistence architecture
@@ -1399,7 +1399,7 @@ An accepted ADR may refine this specification but must not silently contradict t
 # 39. GitHub documentation publication
 This specification is authored and approved as the project architecture source, then mirrored into the repository as public implementation documentation.
 Target repository path:
-**docs/architecture/alpha.md**
+**docs/design/alpha-architecture.md**
 The repository copy should:
 - contain the same normative architecture content;
 - omit private planning history;

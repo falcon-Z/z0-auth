@@ -1,49 +1,38 @@
 # Z0Auth documentation
 
-This directory is organized by the kind of question a reader is trying to answer. The Alpha roadmap and design documents describe the intended Alpha target; current architecture and data-model documents describe the repository as implemented today while reconciliation continues.
+Z0Auth documentation is organized around what a reader is trying to do. The active documentation set is being rebuilt for the Alpha product model.
 
-## Product and release scope
+## Available now
 
-- [Product overview](product/overview.md) — product orientation and user-facing model.
-- [Z0 Alpha roadmap](roadmap/alpha.md) — public Alpha scope, exclusions, and acceptance bar.
+- [Alpha roadmap](overview/alpha.md) describes the public Alpha scope, exclusions, and release bar.
+- [Alpha architecture](design/alpha-architecture.md) defines the target implementation architecture.
+- [Domain model and glossary](design/domain-model.md) defines the product concepts and terminology.
+- [Threat model](design/threat-model.md) defines trust boundaries, threats, required controls, and accepted Alpha residual risks.
+- [Documentation guide](contributing/documentation.md) defines how repository documentation is organized and written.
 
-## Architecture and domain design
+## Reader documentation
 
-- [Alpha architecture specification](architecture/alpha.md) — target Alpha architecture and implementation constraints.
-- [Domain model and glossary](architecture/domain-model.md) — canonical Alpha concepts, boundaries, relationships, and terminology.
-- [Current repository architecture](architecture/current.md) — current implementation architecture.
-- [Current data model](architecture/data-model.md) — current persistence/data-model reference.
+The public documentation will use six areas.
 
-## Security
+1. **Overview** explains what Z0Auth is, what Alpha supports, and its limits.
+2. **Getting started** takes a reader from a fresh instance to a working application integration.
+3. **Guides** cover specific integration, authentication, and administration tasks.
+4. **Concepts** explain Z0Auth-specific models and behavior.
+5. **Operations** covers deployment, configuration, maintenance, recovery, and incident runbooks.
+6. **Reference** records exact protocol, configuration, state, event, error, and API contracts.
 
-- [Threat model](security/threat-model.md) — actors, assets, trust boundaries, threats, controls, and accepted Alpha residual risks.
-- [API security contract](api/security-contract.md) — concrete session, CSRF, cookie, OAuth, and API security rules.
+Pages are added to these areas as the corresponding Alpha behavior is implemented and verified.
 
-## API and integration
+## Engineering documentation
 
-- [API documentation](api/README.md) — entry point for API contracts and integration references.
-- [API contracts](api/CONTRACTS.md)
-- [Validation matrix](api/validation-matrix.md)
-- [UI flow contract](api/ui-flows.md)
-- [OpenAPI references](api/references/)
+The `design/` directory contains the approved Alpha design baseline. Contributor material lives under `contributing/`.
 
-## Operations
+These documents are not substitutes for user guides. They exist for implementation, review, and maintenance work.
 
-- [Deployment](operations/deployment.md) — deployment, production configuration, backup, recovery, and platform notes.
+## Archived documentation
 
-## Contributing
+[Pre-Alpha documentation](archive/pre-alpha-docs/README.md) is retained for historical reference while the Alpha documentation is rebuilt. It describes an older product and implementation model and must not be treated as the current contract.
 
-- [Local development](contributing/development.md) — development setup, test database, build, and local workflow.
-- [Documentation style guide](contributing/documentation-guidelines.md) — documentation structure, voice, accuracy, and security-sensitive writing rules.
+## Documentation state
 
-## Document authority
-
-For Alpha planning and implementation, use the documents according to their purpose:
-
-1. The stable Alpha requirements baseline defines required product behavior.
-2. The domain model defines the shared meaning of core concepts.
-3. The threat model defines security threats and required control boundaries.
-4. The Alpha architecture specification makes those requirements concrete for implementation.
-5. Current architecture, current data model, API contracts, and shipped-behavior guides describe the repository as it exists and must be reconciled toward the Alpha target where they differ.
-
-The [Alpha roadmap](roadmap/alpha.md) is the public-facing release summary. It is intentionally consolidated rather than a line-by-line reproduction of the internal requirements baseline.
+The Alpha roadmap and design documents describe the approved target. A guide, operational procedure, or reference page may describe a feature as available only when the repository implementation and tests support that behavior.
