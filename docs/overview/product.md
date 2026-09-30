@@ -35,14 +35,14 @@ The applications can use the same authentication system without all having to be
 
 ## Alpha status
 
-Z0Auth is under active development. The product direction for Alpha is defined, while implementation and documentation are still being brought into line with that release.
+Z0Auth is currently being built toward its first Alpha release.
 
-See the [Alpha roadmap](alpha.md) for the planned Alpha scope and current boundaries.
+See the [Alpha roadmap](alpha.md) for the capabilities, boundaries, and release criteria planned for Alpha.
 
 ## Next steps
 
 If you are evaluating Z0Auth, start with the [Alpha roadmap](alpha.md).
 
-If you want to run or integrate it, the Getting Started guides will provide the shortest path from a fresh installation to a working application as the Alpha implementation becomes available.
+If you want to run or integrate Z0Auth, use the Getting Started guides for the shortest path from installation to a working application.
 
 If you want to contribute, use the [documentation index](../README.md) to find the architecture, domain model, threat model, and contributor material.
