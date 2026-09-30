@@ -1,41 +1,69 @@
 # Z0Auth documentation
 
-Z0Auth documentation is organized around what a reader is trying to do. The active documentation set is being rebuilt for the Alpha product model.
+Z0Auth is an open-source, self-hosted authentication and identity server for applications, APIs, and backend services.
 
-## Available now
+It gives an application a central authentication system instead of requiring every product to build and maintain its own login, session, credential, recovery, token, and identity infrastructure. Applications integrate with Z0Auth through OAuth 2.0 and OpenID Connect, while the deployment and its data remain under the operator's control.
 
-- [Product overview](overview/product.md) explains what Z0Auth is and why a team might use it.
-- [Alpha support and limitations](overview/support-and-limitations.md) helps evaluate whether the Alpha release fits a use case.
-- [Alpha compatibility](overview/compatibility.md) explains what may change during Alpha and what adopters can safely depend on.
-- [Alpha roadmap](overview/alpha.md) describes the public Alpha scope, exclusions, and release bar.
-- [Alpha architecture](design/alpha-architecture.md) defines the target implementation architecture.
-- [Domain model and glossary](design/domain-model.md) defines the product concepts and terminology.
-- [Threat model](design/threat-model.md) defines trust boundaries, threats, required controls, and accepted Alpha residual risks.
-- [Documentation guide](contributing/documentation.md) defines how repository documentation is organized and written.\n- [Quickstart](getting-started/quickstart.md) runs a local Z0Auth instance and completes first-instance setup.
+Z0Auth handles authentication and the security state around identity. Applications still own their business data, application membership, and decisions about what an authenticated user is allowed to do.
 
-## Reader documentation
+## What you can use Z0Auth for
 
-The public documentation will use six areas.
+Z0Auth is intended for systems that need one or more of the following:
 
-1. **Overview** explains what Z0Auth is, what Alpha supports, and its limits.
-2. **Getting started** takes a reader from a fresh instance to a working application integration.
-3. **Guides** cover specific integration, authentication, and administration tasks.
-4. **Concepts** explain Z0Auth-specific models and behavior.
-5. **Operations** covers deployment, configuration, maintenance, recovery, and incident runbooks.
-6. **Reference** records exact protocol, configuration, state, event, error, and API contracts.
+- authentication for web applications and APIs;
+- OAuth 2.0 and OpenID Connect integration;
+- shared sign-in across related applications;
+- access tokens for protected APIs;
+- machine-to-machine authentication for backend services;
+- centrally managed credentials, sessions, recovery, and authentication security;
+- a self-hosted alternative to outsourcing the authentication system to a managed identity provider.
 
-Pages are added to these areas as the corresponding Alpha behavior is implemented and verified.
+A single Z0Auth deployment can serve multiple applications without forcing them to share users or application data. Applications are isolated by default, and related applications can deliberately share authentication when that is part of their product model.
 
-## Engineering documentation
+## Project status
 
-The `design/` directory contains the approved Alpha design baseline. Contributor material lives under `contributing/`.
+Z0Auth is currently being built toward its first **Alpha release**.
 
-These documents are not substitutes for user guides. They exist for implementation, review, and maintenance work.
+Alpha is the current release target for Z0Auth, not a separate product. The target scope is defined, but development builds may not yet provide every capability planned for that release. Interfaces and configuration may also change while the project is in Alpha.
 
-## Archived documentation
+If you are considering Z0Auth for a project, read the [support and limitations](overview/support-and-limitations.md) and the [Alpha roadmap](overview/alpha.md). The [Alpha compatibility policy](overview/compatibility.md) explains what integrations can and cannot safely depend on at this stage.
 
-[Pre-Alpha documentation](archive/pre-alpha-docs/README.md) is retained for historical reference while the Alpha documentation is rebuilt. It describes an older product and implementation model and must not be treated as the current contract.
+## Start with the path that matches what you need
 
-## Documentation state
+### Understand Z0Auth
 
-The Alpha roadmap and design documents describe the approved target. A guide, operational procedure, or reference page may describe a feature as available only when the repository implementation and tests support that behavior.
+Read the [product overview](overview/product.md) for a concise explanation of the problem Z0Auth solves, its main capabilities, and where it fits in an application architecture.
+
+Then use:
+
+- [Support and limitations](overview/support-and-limitations.md) to understand the current product boundaries.
+- [Alpha roadmap](overview/alpha.md) to see the scope and release bar for the first Alpha release.
+- [Alpha compatibility](overview/compatibility.md) to understand stability and breaking-change expectations.
+
+### Run Z0Auth locally
+
+Use the [Quickstart](getting-started/quickstart.md) to start Z0Auth with PostgreSQL using Docker, complete first-instance setup, and sign in to the administration interface.
+
+The quickstart is intended for local evaluation and development rather than production deployment.
+
+### Understand the system design
+
+If you are contributing to Z0Auth or need to understand its internal model, start with:
+
+- [Domain model and glossary](design/domain-model.md) for the concepts and terminology used throughout the project.
+- [Alpha architecture](design/alpha-architecture.md) for the target system structure and implementation boundaries.
+- [Threat model](design/threat-model.md) for the security boundaries, threats, controls, and accepted Alpha risks.
+
+These documents describe the design of Z0Auth. They are useful when implementing, reviewing, or changing the system, but application integrations should rely on the documented product and protocol interfaces rather than internal implementation details.
+
+### Contribute to the documentation
+
+The [documentation guide](contributing/documentation.md) explains how Z0Auth documentation is structured and how new pages should be written.
+
+## The main boundary to keep in mind
+
+Z0Auth answers **who authenticated, how they authenticated, and what protocol authority was issued**.
+
+Your application answers **what that identity is allowed to do inside the application**.
+
+Keeping that boundary clear makes it possible to use one authentication system across different products without moving application-specific permissions, business rules, or data into Z0Auth.
