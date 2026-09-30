@@ -1,59 +1,41 @@
-# Alpha compatibility
+# Compatibility during Alpha
 
-Z0Auth is currently being built toward its Alpha release, and compatibility is not yet stable.
+Z0Auth is still establishing its public contracts. Breaking changes may occur when they are necessary for security, correctness, or a coherent product model.
 
-The Alpha release prioritizes a coherent Z0Auth product and security model over preserving interfaces from earlier development versions. APIs, configuration, database models, and behavior may therefore change when necessary.
+This page defines what adopters can reasonably depend on during the Alpha stage.
 
-This page describes the compatibility expectations for the Alpha release.
+## Prefer documented protocol interfaces
 
-## Standards are the stable integration boundary
+OAuth 2.0 and OpenID Connect are the primary application integration boundary.
 
-Applications should integrate with Z0Auth through documented OAuth 2.0 and OpenID Connect behavior rather than depending on internal implementation details.
+When Z0Auth documents support for a protocol flow or contract, integrations should depend on that documented behavior rather than internal routes, database structures, implementation modules, or incidental response fields.
 
-Where Z0Auth claims support for a standard flow or protocol contract, the goal is interoperability with that contract. Changes may still occur during Alpha, but the project should not introduce arbitrary application-specific behavior where a standards-based interface exists.
+Project-specific administrative APIs and configuration may change more frequently while the product is still in Alpha.
 
-Project-specific APIs and configuration have a weaker compatibility guarantee during Alpha.
+## Breaking changes
 
-## Breaking changes are possible
+Changes may affect configuration, administrative APIs, database schemas, deployment requirements, and application-facing behavior that has not reached a stable contract.
 
-During Alpha, changes may affect:
+Breaking changes should be deliberate and documented. Security and correctness take priority over preserving an interface that is incomplete or incorrect.
 
-- configuration;
-- administrative APIs;
-- database schemas;
-- deployment requirements;
-- application-facing behavior that has not yet reached a stable contract.
+The project does not currently promise long-term semantic-versioning stability.
 
-A breaking change should be deliberate and documented. Security and correctness take priority over keeping an incorrect or incomplete interface unchanged.
+## Persisted state and migrations
 
-The Alpha release does not provide long-term semantic-versioning stability.
+Changes to security-sensitive persisted state should use explicit migrations when that state can reasonably be preserved.
 
-## Existing state should be migrated deliberately
+An upgrade must not silently reinterpret existing credentials, sessions, grants, identities, or other security state merely to avoid a migration.
 
-Changes to persisted authentication or security state should use explicit migrations when that state can reasonably be preserved.
+When operator action is required, release documentation should identify what changed, what must be migrated or reconfigured, and what cannot be carried forward safely.
 
-An upgrade must not silently reinterpret existing credentials, sessions, grants, identities, or other security-sensitive state as something different merely to avoid a migration.
+## Undocumented behavior is not a contract
 
-Some changes may still require operator action. When they do, the release documentation should state what changed, what must be migrated or reconfigured, and what cannot be carried forward safely.
+Internal routes, tables, modules, incidental fields, and other undocumented implementation details may change without compatibility guarantees.
 
-## Do not depend on undocumented behavior
+Material under `docs/archive/` is historical reference and must not be treated as an active contract.
 
-Internal routes, database tables, implementation modules, incidental response fields, and other undocumented behavior are not compatibility contracts.
+## What this means for adopters
 
-If an integration depends on something that is not documented as part of the supported interface, assume it may change.
+The current release stage is appropriate for evaluation, development, and integrations that can absorb breaking changes.
 
-The same applies to material under `docs/archive/`. Archived documentation describes earlier product models and is not an active compatibility promise.
-
-## Documentation follows compatibility
-
-When a supported contract changes, the documentation that describes it should change in the same release.
-
-Current guides and reference pages describe supported behavior. The [Alpha roadmap](alpha.md) describes the target scope for the Alpha release.
-
-## After Alpha
-
-The compatibility policy will become stricter as Z0Auth moves beyond Alpha.
-
-The project has not yet defined its post-Alpha versioning and deprecation guarantees. Those guarantees should be published before users are expected to rely on long-term compatibility across releases.
-
-For now, adopters should treat the Alpha release as suitable for evaluation, development, and early integration where breaking changes can be absorbed.
+Before upgrading or depending on a project-specific interface, check the documentation and release notes for the version you are using. The [roadmap](alpha.md) describes planned release scope; it does not itself guarantee that a capability exists in every development build.
