@@ -1,49 +1,39 @@
-# Alpha support and limitations
+# Support and limitations
 
-Z0Auth Alpha is aimed at teams that want to run their own authentication service for web applications, APIs, and backend services.
+Z0Auth Alpha is a self-hosted authentication server for applications, APIs, and backend services that integrate through OAuth 2.0 and OpenID Connect.
 
-This page is a quick fit check. It summarizes the shape of the Alpha release rather than listing every supported feature or protocol detail. The [Alpha roadmap](alpha.md) contains the complete release scope.
+This page describes the main boundaries to consider before adopting it. For the complete Alpha scope, see the [Alpha roadmap](alpha.md).
 
-## A good fit for Alpha
+## Supported use
 
-Z0Auth is a good fit when you want a self-hosted authentication service and are comfortable operating the infrastructure around it.
+Z0Auth is designed for applications that need human sign-in, standards-based token issuance, API protection, single sign-on between related products, or machine-to-machine authentication.
 
-The Alpha release is designed for applications that need standard OAuth 2.0 or OpenID Connect integration, modern user authentication, API protection, single sign-on between related products, or machine-to-machine access.
+Applications are isolated by default. Related applications can deliberately share authentication through Z0Auth without requiring them to share application data or business permissions.
 
-It is also intended for teams that want to keep control of their authentication data, deployment, keys, and policy instead of depending entirely on a hosted identity provider.
+## Self-hosted operation
 
-## What Alpha expects from you
+Z0Auth is software you operate, not a managed identity service.
 
-Z0Auth is self-hosted software, not a managed service.
+A deployment requires the surrounding production infrastructure, including PostgreSQL, HTTPS, secure secret handling, backups, monitoring, and normal operational maintenance. Z0Auth manages authentication and identity security within that environment; it does not operate the environment for you.
 
-You are responsible for running the service and PostgreSQL, providing HTTPS, protecting deployment secrets, maintaining backups, and operating the surrounding infrastructure. Z0Auth provides the authentication system; it does not remove normal production operations.
+## Application responsibilities
 
-Applications also remain responsible for their own business permissions and application data.
+Z0Auth determines who or what has authenticated and provides the protocol and security state needed to establish that identity.
 
-## What Alpha deliberately keeps small
+Applications remain responsible for their own data and business authorization. Decisions such as whether a user may edit a document, approve an order, or access an application-specific feature belong to the application rather than Z0Auth.
 
-The first release focuses on the common authentication and authorization-server workflows needed by web applications, APIs, and services.
+## Product boundaries
 
-It does not try to cover every OAuth extension, every enterprise provisioning model, every deployment topology, or every form of federation in its first release.
+Alpha focuses on the authentication, identity, OAuth, OpenID Connect, and SSO capabilities needed by common application and API integrations.
 
-Areas such as advanced OAuth extensions, enterprise provisioning, cross-instance federation, multi-region operation, and deep customization are beyond the Alpha target.
+It is not intended to provide every enterprise identity feature or deployment model in its first release. Capabilities outside the Alpha scope include areas such as enterprise provisioning, cross-instance federation, and multi-region operation.
 
-If one of those areas is central to your use case, check the [Alpha roadmap](alpha.md) before planning an integration.
+If your integration depends on a specialized protocol extension or deployment model, check the [Alpha roadmap](alpha.md) before adopting Z0Auth.
 
-## Alpha is not a stability promise
+## Alpha stability
 
-Alpha is the first coherent release target, not a long-term compatibility contract.
+Alpha is an early release stage. Interfaces and behavior may still change, and Z0Auth does not provide an uptime or service-level commitment.
 
-Configuration, APIs, schemas, and behavior may still change when needed to correct the product or security model. Where practical, changes that affect persisted state should include a migration path, but consumers should expect some breaking changes during Alpha development.
+Applications should prefer documented OAuth 2.0 and OpenID Connect interfaces over internal APIs or implementation details. See [Alpha compatibility](compatibility.md) for the compatibility expectations during this stage.
 
-Z0Auth also does not make a production uptime or service-level commitment in Alpha.
-
-## Current implementation status
-
-The Alpha product model is defined, but the repository is still being reconciled toward it.
-
-That means the roadmap describes the intended Alpha release, while individual features may still be incomplete or changing in the current codebase. Task guides and reference pages will describe behavior as available only when the implementation and tests support it.
-
-Do not treat the presence of a planned feature in the roadmap as proof that it is already ready to use.
-
-If this matches the kind of authentication system you are looking for, continue with the [product overview](product.md) or the [Alpha roadmap](alpha.md).
+The roadmap describes the target Alpha release; it should not be treated as a guarantee that every planned capability is available in every development build.
