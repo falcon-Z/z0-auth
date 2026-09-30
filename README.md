@@ -29,6 +29,7 @@ src/
   lib/contracts/        # shared validation and TypeScript contracts
 docs/
   api/                  # API contracts, validation, security, and OpenAPI specs
+  roadmap/              # release roadmaps and planned scope
   deployment.md         # operator deployment notes
   development.md        # local development setup
 examples/
@@ -371,6 +372,7 @@ Customer resource servers validate opaque access tokens through `POST /oauth/int
 
 ## Documentation map
 
+- [Z0 Alpha roadmap](docs/roadmap/alpha.md) — public roadmap and release scope for Alpha.
 - [Product overview](docs/product.md)
 - [Alpha architecture specification](docs/alpha-architecture.md) — approved target architecture for Alpha implementation.
 - [Architecture](docs/ARCHITECTURE.md) — current repository architecture until reconciliation is complete.
