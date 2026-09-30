@@ -6,6 +6,7 @@ Z0Auth documentation is organized around what a reader is trying to do. The acti
 
 - [Product overview](overview/product.md) explains what Z0Auth is and why a team might use it.
 - [Alpha support and limitations](overview/support-and-limitations.md) helps evaluate whether the Alpha release fits a use case.
+- [Alpha compatibility](overview/compatibility.md) explains what may change during Alpha and what adopters can safely depend on.
 - [Alpha roadmap](overview/alpha.md) describes the public Alpha scope, exclusions, and release bar.
 - [Alpha architecture](design/alpha-architecture.md) defines the target implementation architecture.
 - [Domain model and glossary](design/domain-model.md) defines the product concepts and terminology.
