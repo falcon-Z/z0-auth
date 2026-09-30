@@ -28,10 +28,14 @@ src/
   app/console/          # React management console
   lib/contracts/        # shared validation and TypeScript contracts
 docs/
+  README.md             # documentation index
   api/                  # API contracts, validation, security, and OpenAPI specs
+  architecture/         # current/target architecture and domain/data models
+  contributing/         # local development and documentation guidance
+  operations/           # deployment and operational guidance
+  product/              # product overview
   roadmap/              # release roadmaps and planned scope
-  deployment.md         # operator deployment notes
-  development.md        # local development setup
+  security/             # threat and security models
 examples/
   oauth-spa/            # public client PKCE sample
   oauth-server/         # confidential client sample
@@ -79,7 +83,7 @@ bun dev
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000). If the database, migrations, or required keys are not ready, the console shows a setup checklist before the owner setup screen.
 
-For the full local development workflow, including the isolated test database, see [docs/development.md](docs/development.md).
+For the full local development workflow, including the isolated test database, see [docs/contributing/development.md](docs/contributing/development.md).
 
 ### Local Docker trial
 
@@ -154,7 +158,7 @@ docker run --rm -p 3000:3000 \
 
 The image contains no `.env` file or generated key material. Supply secrets from your deployment platform; do not place them in the image build context or command history.
 
-For platform-specific notes for Cloud Run, Railway, Render, AWS, and Kubernetes, see [docs/deployment.md](docs/deployment.md).
+For platform-specific notes for Cloud Run, Railway, Render, AWS, and Kubernetes, see [docs/operations/deployment.md](docs/operations/deployment.md).
 
 ## First-time setup and super admin
 
@@ -372,19 +376,19 @@ Customer resource servers validate opaque access tokens through `POST /oauth/int
 
 ## Documentation map
 
+Start with the [documentation index](docs/README.md).
+
 - [Z0 Alpha roadmap](docs/roadmap/alpha.md) — public roadmap and release scope for Alpha.
-- [Product overview](docs/product.md)
-- [Alpha architecture specification](docs/alpha-architecture.md) — approved target architecture for Alpha implementation.
-- [Architecture](docs/ARCHITECTURE.md) — current repository architecture until reconciliation is complete.
-- [Deployment](docs/deployment.md)
-- [Local development](docs/development.md)
-- [Data model](docs/data-model.md)
+- [Product overview](docs/product/overview.md)
+- [Alpha architecture specification](docs/architecture/alpha.md) — approved target architecture for Alpha implementation.
+- [Domain model and glossary](docs/architecture/domain-model.md) — stable Alpha concepts and relationships.
+- [Threat model](docs/security/threat-model.md) — actors, trust boundaries, threats, and required controls.
+- [Current repository architecture](docs/architecture/current.md) — implementation snapshot while reconciliation continues.
+- [Current data model](docs/architecture/data-model.md)
+- [Deployment](docs/operations/deployment.md)
+- [Local development](docs/contributing/development.md)
 - [API documentation](docs/api/README.md)
-- [API contracts](docs/api/CONTRACTS.md)
-- [Validation matrix](docs/api/validation-matrix.md)
-- [Security contract](docs/api/security-contract.md)
-- [UI flow contract](docs/api/ui-flows.md)
-- [Documentation style guide](docs/documentation-guidelines.md)
+- [Documentation style guide](docs/contributing/documentation-guidelines.md)
 
 ## License
 
