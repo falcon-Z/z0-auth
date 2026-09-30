@@ -354,3 +354,12 @@ A self-hosting operator remains responsible for:
 - Ensuring resource servers validate issuer, audience, signatures, expiry, and claims correctly.
 
 Applications remain responsible for application membership, application-specific authorization, application data, data retention, and downstream handling of Z0Auth lifecycle events.
+
+
+## Related design documents
+
+- [Alpha architecture specification](../architecture/alpha.md)
+- [Domain model and glossary](../architecture/domain-model.md)
+- [Threat model](../security/threat-model.md)
+- [Current repository architecture](../architecture/current.md)
+- [Current data model](../architecture/data-model.md)
