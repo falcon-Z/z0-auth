@@ -26,7 +26,7 @@ The first release focuses on the common authentication and authorization-server 
 
 It does not try to cover every OAuth extension, every enterprise provisioning model, every deployment topology, or every form of federation in its first release.
 
-Examples of areas deferred beyond Alpha include advanced protocol extensions, cross-instance federation, automated provisioning such as SCIM, active-active multi-region operation, advanced delegated authorization, and deep white-labeling or localization.
+Areas such as advanced OAuth extensions, enterprise provisioning, cross-instance federation, multi-region operation, and deep customization are beyond the Alpha target.
 
 If one of those areas is central to your use case, check the [Alpha roadmap](alpha.md) before planning an integration.
 
@@ -46,8 +46,4 @@ That means the roadmap describes the intended Alpha release, while individual fe
 
 Do not treat the presence of a planned feature in the roadmap as proof that it is already ready to use.
 
-## When to look elsewhere
-
-Z0Auth may not be the right choice yet if you need a finished managed identity service, strict long-term API stability, active-active multi-region identity infrastructure, broad enterprise provisioning, or advanced OAuth extensions from day one.
-
-If your needs are closer to a self-hosted authentication server for applications and APIs, the [product overview](product.md) and [Alpha roadmap](alpha.md) are the best places to continue.
+If this matches the kind of authentication system you are looking for, continue with the [product overview](product.md) or the [Alpha roadmap](alpha.md).
