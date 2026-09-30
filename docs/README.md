@@ -1,4 +1,4 @@
-# Z0Auth documentation
+# Z0Auth
 
 Z0Auth is an open-source, self-hosted authentication and identity server for applications, APIs, and backend services.
 
@@ -22,23 +22,19 @@ A single Z0Auth deployment can serve multiple applications without forcing them 
 
 ## Project status
 
-Z0Auth is currently being built toward its first **Alpha release**.
+Z0Auth is being built toward its first **Alpha release**. The release scope is defined, but development builds may not yet include every planned capability, and interfaces or configuration may still change.
 
-Alpha is the current release target for Z0Auth, not a separate product. The target scope is defined, but development builds may not yet provide every capability planned for that release. Interfaces and configuration may also change while the project is in Alpha.
+Before adopting Z0Auth, review the [support and limitations](overview/support-and-limitations.md), the [roadmap](overview/alpha.md), and the [compatibility policy](overview/compatibility.md).
 
-If you are considering Z0Auth for a project, read the [support and limitations](overview/support-and-limitations.md) and the [Alpha roadmap](overview/alpha.md). The [Alpha compatibility policy](overview/compatibility.md) explains what integrations can and cannot safely depend on at this stage.
+## Where to go next
 
-## Start with the path that matches what you need
+### Evaluate Z0Auth
 
-### Understand Z0Auth
+Read [Support and limitations](overview/support-and-limitations.md) to determine whether Z0Auth fits your deployment and integration requirements.
 
-Read the [product overview](overview/product.md) for a concise explanation of the problem Z0Auth solves, its main capabilities, and where it fits in an application architecture.
+Read the [Alpha roadmap](overview/alpha.md) when you need the planned release scope, exclusions, or acceptance criteria.
 
-Then use:
-
-- [Support and limitations](overview/support-and-limitations.md) to understand the current product boundaries.
-- [Alpha roadmap](overview/alpha.md) to see the scope and release bar for the first Alpha release.
-- [Alpha compatibility](overview/compatibility.md) to understand stability and breaking-change expectations.
+Read [Compatibility during Alpha](overview/compatibility.md) before depending on project-specific APIs, configuration, persisted state, or other interfaces that may change.
 
 ### Run Z0Auth locally
 
@@ -46,19 +42,16 @@ Use the [Quickstart](getting-started/quickstart.md) to start Z0Auth with Postgre
 
 The quickstart is intended for local evaluation and development rather than production deployment.
 
-### Understand the system design
+### Understand or contribute to the system
 
-If you are contributing to Z0Auth or need to understand its internal model, start with:
+If you are implementing, reviewing, or changing Z0Auth itself, use:
 
-- [Domain model and glossary](design/domain-model.md) for the concepts and terminology used throughout the project.
+- [Domain model and glossary](design/domain-model.md) for the concepts and terminology used throughout the system.
 - [Alpha architecture](design/alpha-architecture.md) for the target system structure and implementation boundaries.
-- [Threat model](design/threat-model.md) for the security boundaries, threats, controls, and accepted Alpha risks.
+- [Threat model](design/threat-model.md) for the security boundaries, threats, controls, and accepted release risks.
+- [Documentation guide](contributing/documentation.md) when writing or changing project documentation.
 
-These documents describe the design of Z0Auth. They are useful when implementing, reviewing, or changing the system, but application integrations should rely on the documented product and protocol interfaces rather than internal implementation details.
-
-### Contribute to the documentation
-
-The [documentation guide](contributing/documentation.md) explains how Z0Auth documentation is structured and how new pages should be written.
+These design documents describe Z0Auth internally. Application integrations should rely on documented product and protocol interfaces rather than implementation details.
 
 ## The main boundary to keep in mind
 
