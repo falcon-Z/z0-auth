@@ -18,16 +18,19 @@ import { fieldErrorsFromProblem } from "../../../lib/form-errors";
 import { fetchRoles } from "../../../lib/rbac-api";
 import { usePermissions } from "../../../hooks/use-permissions";
 
-type InviteFormDialogProps = {
+type InviteFormDialogProps<Result> = {
   open: boolean;
+  audience?: "operator" | "application";
   onOpenChange: (open: boolean) => void;
-  onSubmit: (body: CreateInviteRequest) => Promise<CreateInviteResponse>;
-  onCreated: (result: CreateInviteResponse) => void;
+  onSubmit: (body: CreateInviteRequest) => Promise<Result>;
+  onCreated: (result: Result) => void;
 };
 
-export function InviteFormDialog({ open, onOpenChange, onSubmit, onCreated }: InviteFormDialogProps) {
+export function InviteFormDialog<Result = CreateInviteResponse>({
+  open, audience = "operator", onOpenChange, onSubmit, onCreated,
+}: InviteFormDialogProps<Result>) {
   const { hasScope } = usePermissions();
-  const canPickRoles = hasScope("roles:read");
+  const canPickRoles = audience === "operator" && hasScope("roles:read");
   const [email, setEmail] = useState("");
   const [invitedName, setInvitedName] = useState("");
   const [roles, setRoles] = useState<InstanceRoleSummary[]>([]);
@@ -91,7 +94,7 @@ export function InviteFormDialog({ open, onOpenChange, onSubmit, onCreated }: In
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
-            <DialogTitle>Invite member</DialogTitle>
+            <DialogTitle>{audience === "application" ? "Invite application user" : "Invite member"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <FormField label="Name" htmlFor="invitedName" error={fieldErrors.invitedName}>
@@ -121,9 +124,9 @@ export function InviteFormDialog({ open, onOpenChange, onSubmit, onCreated }: In
                   disabled={roles.length === 0}
                 />
               </FormField>
-            ) : (
+            ) : audience === "operator" ? (
               <p className="text-sm text-muted-foreground">New members will receive the Developer role by default.</p>
-            )}
+            ) : null}
             {roleLoadError ? <p className="text-sm text-destructive">{roleLoadError}</p> : null}
           </div>
           <DialogFooter>

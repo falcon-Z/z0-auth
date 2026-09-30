@@ -18,3 +18,5 @@ console.log("Add both to your secret store (same values on every pod):\n");
 console.log(`INSTANCE_TOKEN_KEY_ID=${kid}`);
 console.log(`INSTANCE_TOKEN_PRIVATE_KEY=${privB64}`);
 console.log(`INSTANCE_TOKEN_PUBLIC_KEY=${pubB64}`);
+
+export {};

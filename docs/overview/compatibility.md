@@ -28,6 +28,12 @@ An upgrade must not silently reinterpret existing credentials, sessions, grants,
 
 When operator action is required, release documentation should identify what changed, what must be migrated or reconfigured, and what cannot be carried forward safely.
 
+Migration `0043_account_domains` gives each existing application a separate Account Domain and each existing application user a distinct internal Account. Matching email addresses, including matches with console identities, do not merge accounts. Existing application-facing user IDs, passwords, lifecycle state, metadata, and security records are preserved.
+
+The `app_users` database interface becomes a compatibility view. Account profile, password, and lifecycle fields are stored in `accounts`; application bindings and metadata remain in `app_account_bindings`. Direct database integrations that depend on `app_users` being a table must be updated. The migration is forward-only; recovery to an older binary requires restoring a compatible backup.
+
+This migration establishes canonical persistence. Full Application Subject/Membership behavior and shared SSO configuration remain tracked in [issue #94](https://github.com/falcon-Z/z0-auth/issues/94) and [issue #95](https://github.com/falcon-Z/z0-auth/issues/95). Legacy service groups retain separate domains during migration. Providers without a recorded issuer retain a provider-specific legacy authority key until provider configuration is reconciled; their email attributes are not used as durable external identity keys.
+
 ## Undocumented behavior is not a contract
 
 Internal routes, tables, modules, incidental fields, and other undocumented implementation details may change without compatibility guarantees.

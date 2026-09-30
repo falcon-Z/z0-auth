@@ -21,3 +21,5 @@ console.log(`INSTANCE_DATA_KEY=${dataKeyHex}`);
 console.log(`INSTANCE_TOKEN_KEY_ID=token-${today}`);
 console.log(`INSTANCE_TOKEN_PRIVATE_KEY=${Buffer.from(tokenPrivate).toString("base64")}`);
 console.log(`INSTANCE_TOKEN_PUBLIC_KEY=${Buffer.from(tokenPublic).toString("base64")}`);
+
+export {};

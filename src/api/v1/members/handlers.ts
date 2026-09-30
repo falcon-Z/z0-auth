@@ -21,8 +21,8 @@ export async function handleListMembers(req: RoutedRequest): Promise<Response> {
   const auth = await requireScope(req, "members:read");
   if (!auth.ok) return auth.response;
 
-  const rawStatus = new URL(req.url).searchParams.get("status") ?? undefined;
-  if (rawStatus && rawStatus !== "active" && rawStatus !== "disabled" && rawStatus !== "locked" && rawStatus !== "deleted") {
+  const rawStatus = new URL(req.url).searchParams.get("status") || undefined;
+  if (rawStatus !== undefined && rawStatus !== "active" && rawStatus !== "disabled" && rawStatus !== "locked" && rawStatus !== "deleted") {
     return problem(400, "Validation Error", "Invalid account status filter.", {
       errors: [{ field: "status", code: ErrorCodes.REQUIRED, message: "Status must be active, disabled, locked, or deleted" }],
     });

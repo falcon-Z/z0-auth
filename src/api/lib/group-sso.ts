@@ -36,7 +36,7 @@ export async function getServiceGroupForApp(appId: string): Promise<ServiceGroup
   const data = row as { group_id: string; sso_enabled: boolean };
   const groupId = String(data.group_id);
 
-  const appRows = await getDb()`
+  const appRows: unknown[] = await getDb()`
     SELECT app_id
     FROM service_group_apps
     WHERE group_id = ${groupId}
@@ -236,7 +236,7 @@ export async function provisionSiblingAppUser(input: {
 }
 
 export async function getGroupConsentedScope(groupMemberId: string): Promise<string> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT c.scope
     FROM service_group_app_users sgau
     JOIN oauth_user_consents c ON c.app_user_id = sgau.app_user_id

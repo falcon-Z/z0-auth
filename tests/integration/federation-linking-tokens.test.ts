@@ -9,6 +9,7 @@ import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { makeStrongPassword } from "../helpers/password";
+import { mockFetch } from "../helpers/fetch";
 import { dispatchApi } from "./api-routes";
 import { dispatchWeb } from "./web-dispatch";
 
@@ -43,8 +44,8 @@ async function ownerLogin() {
   return { csrf, cookie: sessionCookieFromResponse(res)! };
 }
 
-function installMockIdp(fetchImpl: typeof globalThis.fetch) {
-  globalThis.fetch = fetchImpl;
+function installMockIdp(fetchImpl: Parameters<typeof mockFetch>[0]) {
+  globalThis.fetch = mockFetch(fetchImpl);
 }
 
 run("federation linking and tokens", () => {

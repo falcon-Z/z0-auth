@@ -54,7 +54,7 @@ export async function requireInstanceMember(
 }
 
 export async function listInstanceMembers(): Promise<InstanceMemberRow[]> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT
       u.id,
       u.email,

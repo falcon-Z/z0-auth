@@ -221,7 +221,7 @@ Use the console unless you are building automation against the API.
 7. Register any application-specific scopes your app will request.
 8. Configure hosted sign-in options, external providers, and app-group membership if needed.
 
-The application API is documented in [docs/api/references/apps.openapi.yaml](docs/api/references/apps.openapi.yaml). The main routes are:
+The application API is documented in [docs/api/references/apps.openapi.yaml](../../api/references/apps.openapi.yaml). The main routes are:
 
 - `GET /api/v1/apps`
 - `POST /api/v1/apps`
@@ -344,10 +344,10 @@ Available console and API capabilities include:
 
 Relevant API specs:
 
-- [App users](docs/api/references/app-users.openapi.yaml)
-- [Federation providers](docs/api/references/federation.openapi.yaml)
-- [App groups](docs/api/references/service-groups.openapi.yaml)
-- [Sessions](docs/api/references/sessions.openapi.yaml)
+- [App users](../../api/references/app-users.openapi.yaml)
+- [Federation providers](../../api/references/federation.openapi.yaml)
+- [App groups](../../api/references/service-groups.openapi.yaml)
+- [Sessions](../../api/references/sessions.openapi.yaml)
 
 Customer resource servers validate opaque access tokens through `POST /oauth/introspect`, authenticating with the app's confidential client credentials. Confidential clients may use HTTP Basic authentication; public clients continue to use PKCE and do not receive secrets.
 
@@ -387,7 +387,7 @@ Start with the [documentation index](docs/README.md).
 - [Current data model](docs/architecture/data-model.md)
 - [Deployment](docs/operations/deployment.md)
 - [Local development](docs/contributing/development.md)
-- [API documentation](docs/api/README.md)
+- [API documentation](../../api/README.md)
 - [Documentation style guide](docs/contributing/documentation-guidelines.md)
 
 ## License

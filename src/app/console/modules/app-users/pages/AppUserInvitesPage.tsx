@@ -135,6 +135,7 @@ export function AppUserInvitesPage() {
       />
 
       <InviteFormDialog
+        audience="application"
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         onSubmit={(body) => createAppUserInvite(appId, body)}

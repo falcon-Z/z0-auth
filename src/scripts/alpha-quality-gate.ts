@@ -21,13 +21,19 @@ const commonTestArgs = [
   "--parallel=1",
 ];
 const phases: Array<{ label: string; command: string[] }> = [
+  { label: "TypeScript typecheck", command: ["bun", "run", "typecheck"] },
   {
     label: "Pinned Bun runtime qualification",
     command: ["bun", "test", ...commonTestArgs, "tests/unit/bun-runtime-qualification.test.ts"],
   },
   {
     label: "OpenAPI contracts and migration integrity",
-    command: ["bun", "test", ...commonTestArgs, "tests/unit/openapi-contracts.test.ts", "tests/integration/migration-integrity.test.ts"],
+    command: [
+      "bun", "test", ...commonTestArgs,
+      "tests/unit/openapi-contracts.test.ts",
+      "tests/integration/migration-integrity.test.ts",
+      "tests/integration/account-domains.test.ts",
+    ],
   },
   {
     label: "Alpha smoke journeys",
@@ -60,3 +66,5 @@ for (const phase of phases) {
 }
 
 console.log("\nAlpha quality gate passed.");
+
+export {};

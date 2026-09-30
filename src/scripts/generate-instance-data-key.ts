@@ -13,3 +13,5 @@ console.log(`INSTANCE_DATA_KEY_ID=${kid}`);
 console.log(`INSTANCE_DATA_KEY=${hex}`);
 console.log("\nOr base64 form:\n");
 console.log(`INSTANCE_DATA_KEY=${b64}`);
+
+export {};

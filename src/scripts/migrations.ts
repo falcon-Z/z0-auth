@@ -25,7 +25,7 @@ export async function applyMigrations(
     `;
     await tx`ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum TEXT`;
 
-    const appliedRows = await tx`SELECT version, checksum FROM schema_migrations`;
+    const appliedRows: unknown[] = await tx`SELECT version, checksum FROM schema_migrations`;
     const applied = new Map(
       appliedRows.map((row) => [
         String((row as { version: string }).version),

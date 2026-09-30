@@ -2,7 +2,8 @@ const APPLE_AUDIENCE = "https://appleid.apple.com";
 const CLOCK_SKEW_SECONDS = 60;
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const JWKS_TIMEOUT_MS = 5_000;
-const appleJwkCache = new Map<string, { jwk: JsonWebKey; expiresAt: number }>();
+type AppleJsonWebKey = JsonWebKey & { kid?: string };
+const appleJwkCache = new Map<string, { jwk: AppleJsonWebKey; expiresAt: number }>();
 
 function base64UrlEncode(bytes: Uint8Array): string {
   return Buffer.from(bytes)
@@ -33,7 +34,7 @@ export function decodeJwtPayload(token: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
 }
 
-function base64UrlDecode(value: string): Uint8Array {
+function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
   return new Uint8Array(Buffer.from(padded, "base64"));
@@ -67,7 +68,7 @@ export async function verifyAppleIdToken(options: {
       signal: AbortSignal.timeout(JWKS_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error("Apple signing keys are unavailable");
-    const jwks = (await response.json()) as { keys?: JsonWebKey[] };
+    const jwks = (await response.json()) as { keys?: AppleJsonWebKey[] };
     jwk = jwks.keys?.find(
       (candidate) => candidate.kid === header.kid && candidate.kty === "RSA" && candidate.alg === "RS256",
     );

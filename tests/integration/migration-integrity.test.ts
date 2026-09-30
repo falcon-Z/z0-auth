@@ -41,7 +41,9 @@ run("migration release integrity", () => {
         if (version === "0001_baseline") {
           expect((row as { checksum: string | null }).checksum).toBeNull();
         } else {
-          expect((row as { checksum: string }).checksum).toBe(expected.get(version));
+          const expectedChecksum = expected.get(version);
+          if (!expectedChecksum) throw new Error(`Unexpected migration ${version}`);
+          expect((row as { checksum: string }).checksum).toBe(expectedChecksum);
         }
       }
     } finally {

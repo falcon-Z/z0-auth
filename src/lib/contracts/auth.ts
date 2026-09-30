@@ -34,9 +34,12 @@ export type SessionResponse = {
   roles?: string[];
 };
 
-export type AuthenticatedSessionPayload = SessionResponse & {
+export type AuthenticatedSessionResponse = SessionResponse & {
   authenticated: true;
   user: SessionUser;
+};
+
+export type AuthenticatedSessionPayload = AuthenticatedSessionResponse & {
   isInstanceMember: boolean;
   isBootstrap: boolean;
   organizationName: string;

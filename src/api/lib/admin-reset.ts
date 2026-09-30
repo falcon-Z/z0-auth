@@ -75,13 +75,14 @@ export async function issueAppUserAdminReset(req: Request, appId: string, appUse
     const user = row as { email: string; name: string; disabled_at: Date | null; deleted_at: Date | null; app_name: string; client_id: string | null };
     if (user.disabled_at || user.deleted_at) return { error: "state" as const };
     if (!user.client_id) return { error: "credential" as const };
+    const clientId = user.client_id;
     await tx`UPDATE app_password_reset_tokens SET used_at = NOW() WHERE app_user_id = ${appUserId} AND used_at IS NULL`;
     await tx`INSERT INTO app_password_reset_tokens (app_user_id, app_id, token_hash, expires_at) VALUES (${appUserId}, ${appId}, ${jti}, ${new Date(exp * 1000)})`;
     await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
     await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${appUserId} AND used_at IS NULL`;
     await revokeAllOAuthTokensForAppUser(appUserId, tx);
     await writeAuditEvent({ actorUserId, action: "app_user.password_reset_requested", resourceType: "app_user", resourceId: appUserId, payload: { appId } }, tx);
-    return { error: null, user };
+    return { error: null, user: { ...user, client_id: clientId } };
   });
   if (outcome.error === "not_found") return { ok: false, response: problem(404, "Not Found", "App user not found") };
   if (outcome.error === "state") return { ok: false, response: stateConflict() };

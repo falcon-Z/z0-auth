@@ -141,7 +141,7 @@ export async function listAppUsersForApi(
   const q = searchQuery?.trim();
   const pattern = q ? `%${q}%` : null;
 
-  const rows = pattern
+  const rows: AppUserRow[] = pattern
     ? await getDb()`
         SELECT id, app_id, email, name, status, metadata, email_verified_at,
                disabled_at, locked_until, deleted_at, created_at
@@ -841,7 +841,7 @@ export async function listPendingAppUserInvites(
   const app = await findAppRow(appId);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
 
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT id, email, invited_name, expires_at, created_at
     FROM app_user_invites
     WHERE app_id = ${appId}

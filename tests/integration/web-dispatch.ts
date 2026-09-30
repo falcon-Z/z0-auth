@@ -26,7 +26,7 @@ export async function dispatchWeb(req: Request): Promise<Response> {
 
   const inviteToken = tokenFromPath(url.pathname, "/auth/invite");
   if (inviteToken) {
-    const handlers = inviteWebRoutes["/auth/invite/:token"];
+    const handlers: MethodHandlers = inviteWebRoutes["/auth/invite/:token"];
     const method = req.method as keyof MethodHandlers;
     const handler = handlers[method];
     if (!handler) return new Response("Method not allowed", { status: 405 });
@@ -35,7 +35,7 @@ export async function dispatchWeb(req: Request): Promise<Response> {
 
   const appInviteToken = tokenFromPath(url.pathname, "/auth/app-invite");
   if (appInviteToken) {
-    const handlers = appInviteWebRoutes["/auth/app-invite/:token"];
+    const handlers: MethodHandlers = appInviteWebRoutes["/auth/app-invite/:token"];
     const method = req.method as keyof MethodHandlers;
     const handler = handlers[method];
     if (!handler) return new Response("Method not allowed", { status: 405 });
@@ -50,7 +50,7 @@ export async function dispatchWeb(req: Request): Promise<Response> {
       suffix === "start"
         ? "/auth/federation/:providerKey/start"
         : "/auth/federation/:providerKey/callback";
-    const handlers = federationWebRoutes[routeKey];
+    const handlers: MethodHandlers = federationWebRoutes[routeKey];
     const method = req.method as keyof MethodHandlers;
     const handler = handlers[method];
     if (!handler) return new Response("Method not allowed", { status: 405 });
@@ -64,7 +64,7 @@ export async function dispatchWeb(req: Request): Promise<Response> {
     const routeKey = verificationMatch[2]
       ? "/auth/verify-email/:token/accept"
       : "/auth/verify-email/:token";
-    const handlers = emailVerificationWebRoutes[routeKey];
+    const handlers: MethodHandlers = emailVerificationWebRoutes[routeKey];
     const method = req.method as keyof MethodHandlers;
     const handler = handlers[method];
     if (!handler) return new Response("Method not allowed", { status: 405 });

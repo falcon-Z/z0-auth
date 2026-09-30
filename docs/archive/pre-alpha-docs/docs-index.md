@@ -17,15 +17,15 @@ This directory is organized by the kind of question a reader is trying to answer
 ## Security
 
 - [Threat model](security/threat-model.md) — actors, assets, trust boundaries, threats, controls, and accepted Alpha residual risks.
-- [API security contract](api/security-contract.md) — concrete session, CSRF, cookie, OAuth, and API security rules.
+- [API security contract](../../api/security-contract.md) — concrete session, CSRF, cookie, OAuth, and API security rules.
 
 ## API and integration
 
-- [API documentation](api/README.md) — entry point for API contracts and integration references.
-- [API contracts](api/CONTRACTS.md)
-- [Validation matrix](api/validation-matrix.md)
-- [UI flow contract](api/ui-flows.md)
-- [OpenAPI references](api/references/)
+- [API documentation](../../api/README.md) — entry point for API contracts and integration references.
+- [API contracts](../../api/CONTRACTS.md)
+- [Validation matrix](../../api/validation-matrix.md)
+- [UI flow contract](../../api/ui-flows.md)
+- [OpenAPI references](../../api/references/)
 
 ## Operations
 

@@ -25,7 +25,7 @@ export type PreparedAppSession = {
   ipHash: string;
   userAgentHash: string;
   clientLabel: string;
-  ipDisplay: string;
+  ipDisplay: string | null;
 };
 
 export type AppSessionAssurance = {
@@ -240,6 +240,6 @@ function parseCookies(req: Request): Map<string, string> {
 }
 
 
-export function readAppSessionToken(req: BunRequest): string | undefined {
+export function readAppSessionToken(req: Request): string | undefined {
   return parseCookies(req).get(APP_SESSION_COOKIE);
 }

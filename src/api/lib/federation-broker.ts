@@ -130,7 +130,7 @@ async function postTokenRequest(
   tokenUrl: string,
   body: URLSearchParams,
   acceptJson = true,
-): Promise<TokenResponse & { error?: string; error_description?: string }> {
+): Promise<TokenResponse> {
   const headers: Record<string, string> = {
     "Content-Type": "application/x-www-form-urlencoded",
   };
@@ -138,17 +138,37 @@ async function postTokenRequest(
 
   const res = await fetch(tokenUrl, { method: "POST", headers, body: body.toString() });
   const contentType = res.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json")
-    ? ((await res.json()) as TokenResponse & { error?: string; error_description?: string })
-    : (Object.fromEntries(new URLSearchParams(await res.text())) as TokenResponse & {
-        error?: string;
-        error_description?: string;
-      });
+  const payload: unknown = contentType.includes("application/json")
+    ? await res.json()
+    : Object.fromEntries(new URLSearchParams(await res.text()));
+  if (!res.ok) throw new Error("Token exchange failed");
+  return parseUpstreamTokenResponse(payload);
+}
 
-  if (!res.ok || !payload.access_token) {
-    throw new Error(payload.error_description ?? payload.error ?? "Token exchange failed");
+export function parseUpstreamTokenResponse(payload: unknown): TokenResponse {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Invalid upstream token response");
   }
-  return payload;
+  const fields = payload as Record<string, unknown>;
+  if (typeof fields.access_token !== "string" || !fields.access_token) {
+    throw new Error("Token exchange failed");
+  }
+  const result: TokenResponse = { access_token: fields.access_token };
+  for (const name of ["refresh_token", "token_type", "scope", "id_token"] as const) {
+    const value = fields[name];
+    if (value === undefined) continue;
+    if (typeof value !== "string") throw new Error("Invalid upstream token response");
+    result[name] = value;
+  }
+  if (fields.expires_in !== undefined) {
+    const raw = fields.expires_in;
+    const seconds = typeof raw === "string" && /^\d+$/.test(raw) ? Number(raw) : raw;
+    if (typeof seconds !== "number" || !Number.isSafeInteger(seconds) || seconds < 0) {
+      throw new Error("Invalid upstream token lifetime");
+    }
+    result.expires_in = seconds;
+  }
+  return result;
 }
 
 export async function exchangeUpstreamCode(options: {

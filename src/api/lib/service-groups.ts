@@ -36,7 +36,7 @@ function mapSummary(row: GroupRow): ServiceGroupSummary {
 }
 
 async function loadGroupApps(groupId: string): Promise<ServiceGroupAppSummary[]> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT a.id, a.name, a.slug
     FROM service_group_apps sga
     JOIN apps a ON a.id = sga.app_id
@@ -119,7 +119,7 @@ async function validateAppIds(appIds: string[]): Promise<
   const ids = [...new Set(appIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) return { ok: true, ids: [] };
 
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT id, status
     FROM apps
     WHERE id = ANY(${pgTextArray(ids)}::uuid[])
@@ -206,7 +206,7 @@ async function assignAppsToGroup(groupId: string, appIds: string[]): Promise<voi
 }
 
 export async function listServiceGroupsForApi(): Promise<ServiceGroupSummary[]> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT
       g.id,
       g.name,

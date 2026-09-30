@@ -298,6 +298,11 @@ export async function postAppInvitePage(req: BunRequest): Promise<Response> {
   }
 
   const signIn = await runAppInviteAcceptSignIn(req, preview.appId, acceptResult.userId, inviteReturnPath(token));
+  if (!signIn.ok) {
+    const errors = await problemFieldErrors(signIn.response);
+    const { token: csrf, setCookie } = preparePageCsrf(req);
+    return authErrorResponse(renderNewUserAccept(csrf, preview, token, form, errors), req, signIn.response.status, setCookie);
+  }
   if (signIn.mfaRequired) {
     return htmlFormRedirect(req, "/auth/mfa", { setCookie: signIn.setCookie });
   }

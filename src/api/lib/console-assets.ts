@@ -64,7 +64,6 @@ export async function buildConsoleHandler(sourceDocument: string): Promise<(requ
   const result = await Bun.build({
     entrypoints: [sourceDocument],
     target: "browser",
-    write: false,
     publicPath: "/",
     plugins: [tailwindPlugin],
   });

@@ -8,6 +8,7 @@ import {
 } from "@z0/contracts/password-policy";
 
 import { getDb } from "./db";
+import { findAccountForApplication } from "./accounts";
 import { problem } from "./http";
 import { verifyPassword, hashPassword } from "./password";
 import { checkRateLimit, clientIp } from "./rate-limit";
@@ -40,20 +41,15 @@ async function findAppUserForLogin(appId: string, email: string): Promise<{
   locked_until: Date | null;
   deleted_at: Date | null;
 } | null> {
-  const [row] = await getDb()`
-    SELECT id, password_hash, email, disabled_at, locked_until, deleted_at
-    FROM app_users
-    WHERE app_id = ${appId}
-      AND lower(email) = ${email}
-  `;
-  if (!row) return null;
+  const account = await findAccountForApplication(appId, email);
+  if (!account?.appUserId || account.status !== "active") return null;
   return {
-    id: String((row as { id: string }).id),
-    password_hash: (row as { password_hash: string | null }).password_hash,
-    email: (row as { email: string }).email,
-    disabled_at: (row as { disabled_at: Date | null }).disabled_at,
-    locked_until: (row as { locked_until: Date | null }).locked_until,
-    deleted_at: (row as { deleted_at: Date | null }).deleted_at,
+    id: account.appUserId,
+    password_hash: account.passwordHash,
+    email: account.email,
+    disabled_at: account.disabledAt,
+    locked_until: account.lockedUntil,
+    deleted_at: account.deletedAt,
   };
 }
 

@@ -46,6 +46,7 @@ The quickstart is intended for local evaluation and development rather than prod
 
 If you are implementing, reviewing, or changing Z0Auth itself, use:
 
+- [API documentation](api/README.md) for HTTP contracts, OpenAPI references, validation, and hosted authentication flows.
 - [Domain model and glossary](design/domain-model.md) for the concepts and terminology used throughout the system.
 - [Alpha architecture](design/alpha-architecture.md) for the target system structure and implementation boundaries.
 - [Threat model](design/threat-model.md) for the security boundaries, threats, controls, and accepted release risks.
