@@ -42,7 +42,7 @@ async function findAppUserForLogin(appId: string, email: string): Promise<{
   deleted_at: Date | null;
 } | null> {
   const account = await findAccountForApplication(appId, email);
-  if (!account?.appUserId || account.status !== "active") return null;
+  if (!account?.appUserId || account.status !== "active" || account.membershipStatus !== "active") return null;
   return {
     id: account.appUserId,
     password_hash: account.passwordHash,

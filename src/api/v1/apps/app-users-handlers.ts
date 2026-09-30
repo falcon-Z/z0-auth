@@ -1,6 +1,7 @@
 import type {
   CreateAppUserInviteRequest,
   CreateAppUserRequest,
+  ApplicationMembershipRequest,
   PatchAppUserRequest,
 } from "@z0/contracts/app-users";
 import { parseJsonBody } from "@z0/contracts/validation";
@@ -16,6 +17,8 @@ import {
   patchAppUserForApi,
   transitionAppUserForApi,
   revokeAppUserInvite,
+  addApplicationMembershipForApi,
+  removeApplicationMembershipForApi,
 } from "../../lib/app-users";
 import { json, problem } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
@@ -82,6 +85,26 @@ export async function handleGetAppUser(req: RoutedRequest): Promise<Response> {
   const result = await getAppUserDetailForApi(appId, userIdFrom(req));
   if (!result.ok) return result.response;
   return json(result.user);
+}
+
+export async function handleAddApplicationMembership(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+  const auth = await requireScope(req, "apps.users:manage");
+  if (!auth.ok) return auth.response;
+  const parsed = await parseJsonBody<ApplicationMembershipRequest>(req);
+  if (!parsed.ok) return parsed.response;
+  const result = await addApplicationMembershipForApi(appIdFrom(req), parsed.body.accountId, auth.userId);
+  return result.ok ? json(result.user) : result.response;
+}
+
+export async function handleRemoveApplicationMembership(req: RoutedRequest): Promise<Response> {
+  const csrfError = validateCsrf(req);
+  if (csrfError) return csrfError;
+  const auth = await requireScope(req, "apps.users:manage");
+  if (!auth.ok) return auth.response;
+  const result = await removeApplicationMembershipForApi(appIdFrom(req), userIdFrom(req), auth.userId);
+  return result.ok ? json(result.user) : result.response;
 }
 
 export async function handlePatchAppUser(req: RoutedRequest): Promise<Response> {

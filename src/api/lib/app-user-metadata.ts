@@ -2,6 +2,7 @@ import { ErrorCodes } from "@z0/contracts/errors";
 import type { FieldError } from "@z0/contracts/errors";
 
 const MAX_METADATA_BYTES = 4096;
+const RESERVED_FIELDS = new Set(["__proto__", "prototype", "constructor", "sub", "accountId", "accountDomainId", "appId", "userId", "membershipStatus", "status"]);
 
 export function validateAppUserMetadata(
   value: unknown,
@@ -16,6 +17,9 @@ export function validateAppUserMetadata(
         message: "Metadata must be a JSON object",
       },
     ];
+  }
+  if (Object.keys(value).some((key) => RESERVED_FIELDS.has(key))) {
+    return [{ field: "metadata", code: ErrorCodes.INVALID_METADATA, message: "Metadata must not contain reserved identity or security fields" }];
   }
   const serialized = JSON.stringify(value);
   if (serialized.length > MAX_METADATA_BYTES) {

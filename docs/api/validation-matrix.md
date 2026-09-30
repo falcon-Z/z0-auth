@@ -355,6 +355,20 @@ Append-only: no create/update/delete API. Events written by handlers (auth, memb
 
 Device label and masked IP (`client_label`, `ip_display`) match console session list behavior.
 
+## Application membership and subject continuity
+
+| Action | Required behavior | Automated evidence |
+|--------|-------------------|--------------------|
+| Upgrade from `0043` | Preserve subjects, metadata, credentials, and account lifecycle; create separate memberships | `application-memberships.test.ts` |
+| Reserve a subject | Stable under concurrency; no automatic membership or metadata copy | `application-memberships.test.ts` |
+| Remove and rejoin | Preserve OIDC/UserInfo `sub`; revoke local access without affecting another application's membership | `application-memberships.test.ts`, `application-memberships-console.spec.ts` |
+| Disable membership | Account remains active; profile and opaque metadata stay separate | `application-memberships.test.ts` |
+| Suspend account | Domain-wide containment; re-enabling does not restore old authority | `application-memberships.test.ts`, `application-memberships-console.spec.ts` |
+| Provision existing account | Require same domain, management permission, and CSRF; reject deleted accounts and malformed IDs | `application-memberships.test.ts` |
+| Remove concurrently with issuance | Serialize the transition and reject new application authority after removal | `application-memberships.test.ts` |
+
+The membership integration suite runs explicitly in the Alpha quality gate. The console suite runs through `test:e2e`.
+
 ## Notes
 
 - Multi-tenant rules are removed.

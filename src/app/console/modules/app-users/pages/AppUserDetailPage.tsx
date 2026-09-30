@@ -27,6 +27,7 @@ import {
   sendAppUserVerification,
   resetAppUserMfa,
   transitionAppUser,
+  removeApplicationMembership,
 } from "../../../lib/app-users-api";
 import { fetchApp } from "../../../lib/apps-api";
 import {
@@ -121,9 +122,9 @@ export function AppUserDetailPage() {
 
   async function handleToggleStatus() {
     if (!appId || !userId || !user) return;
-    const disabling = user.status === "active" || user.status === "locked";
+    const disabling = user.membershipStatus === "active";
     const ok = await confirm({
-      title: disabling ? "Disable user" : "Enable user",
+      title: disabling ? "Disable membership" : "Enable membership",
       description: disabling
         ? `${user.name} will not be able to sign in to this application.`
         : `${user.name} will be able to sign in again.`,
@@ -135,7 +136,7 @@ export function AppUserDetailPage() {
     setBusyStatus(true);
     setNotice(null);
     try {
-      const updated = await transitionAppUser(appId, userId, disabling ? "disable" : "enable");
+      const updated = await patchAppUser(appId, userId, { membershipStatus: disabling ? "disabled" : "active" });
       if ("userId" in updated) setUser(updated);
       setNotice(disabling ? `${user.name} was disabled.` : `${user.name} was re-enabled.`);
     } catch (e) {
@@ -145,13 +146,59 @@ export function AppUserDetailPage() {
     }
   }
 
+  async function handleRemoveMembership() {
+    if (!appId || !userId || !user) return;
+    const ok = await confirm({
+      title: "Remove application membership",
+      description: `Remove ${user.name} from ${appName ?? "this application"}? Their account and stable subject will be preserved.`,
+      confirmLabel: "Remove membership",
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusyStatus(true);
+    try {
+      setUser(await removeApplicationMembership(appId, userId));
+      setNotice("Application membership removed.");
+      await reloadSessions();
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "Could not remove membership.");
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
+  async function handleAccountStatus() {
+    if (!appId || !userId || !user) return;
+    const disabling = user.accountStatus !== "disabled";
+    const ok = await confirm({
+      title: disabling ? "Suspend account" : "Enable account",
+      description: disabling
+        ? "Suspend the account across every application in its account domain and revoke renewable access."
+        : "Allow new authentication across the account domain. Application memberships remain independent.",
+      confirmLabel: disabling ? "Suspend account" : "Enable account",
+      destructive: disabling,
+    });
+    if (!ok) return;
+    setBusyStatus(true);
+    try {
+      const updated = await transitionAppUser(appId, userId, disabling ? "disable" : "enable");
+      if ("userId" in updated) setUser(updated);
+      setNotice(disabling ? "Account suspended." : "Account enabled.");
+      await reloadSessions();
+    } catch (e) {
+      setNotice(e instanceof ApiError ? e.message : "Could not change account state.");
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
   async function handleLifecycle(action: "unlock" | "delete" | "restore" | "permanently-delete") {
     if (!appId || !userId || !user) return;
     const labels = {
       unlock: ["Unlock user", "Allow this user to try signing in again.", "Unlock"],
-      delete: ["Delete user", "Move this account to deleted state and revoke all access. It can still be restored.", "Delete"],
+      delete: ["Delete account", "Move the account to deleted state for every application in its account domain. It can still be restored.", "Delete"],
       restore: ["Restore user", "Restore this account as disabled. Enable it separately when access should return.", "Restore"],
-      "permanently-delete": ["Permanently delete user", "Remove this account, credentials, grants, sessions, and linked sign-in data. This cannot be undone.", "Permanently delete"],
+      "permanently-delete": ["Permanently delete account", "Remove this account, credentials, grants, sessions, and linked sign-in data. This cannot be undone.", "Permanently delete"],
     } as const;
     const [title, description, confirmLabel] = labels[action];
     const ok = await confirm({
@@ -280,7 +327,7 @@ export function AppUserDetailPage() {
       name={user.name}
       subtitle={user.email}
       badges={
-        <Badge variant={user.status === "active" ? "secondary" : "outline"}>
+        <Badge variant={user.accountStatus === "active" ? "secondary" : "outline"}>
           {user.status}
         </Badge>
       }
@@ -288,6 +335,18 @@ export function AppUserDetailPage() {
       <ActionNotice message={notice} />
 
       <dl className="mb-6 grid gap-4 text-sm">
+        <div>
+          <dt className="text-muted-foreground">Application membership</dt>
+          <dd>{user.membershipStatus}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Account state</dt>
+          <dd>{user.accountStatus}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Account ID</dt>
+          <dd className="break-all">{user.accountId}</dd>
+        </div>
         <div>
           <dt className="text-muted-foreground">Email</dt>
           <dd>{user.email}</dd>
@@ -327,7 +386,7 @@ export function AppUserDetailPage() {
           void handleSaveName();
         }}
       >
-        <FormField label="Name" htmlFor="userName" error={fieldErrors.name}>
+        <FormField label="Account name" htmlFor="userName" error={fieldErrors.name}>
           <Input
             id="userName"
             value={name}
@@ -335,6 +394,7 @@ export function AppUserDetailPage() {
             autoComplete="off"
           />
         </FormField>
+        <p className="text-sm text-muted-foreground">Account profile changes apply across its account domain.</p>
         <FormActions>
           <Button type="submit" disabled={!nameDirty || saving}>
             {saving ? "Saving…" : "Save name"}
@@ -395,17 +455,17 @@ export function AppUserDetailPage() {
       <section className="mt-8 space-y-3 border-t pt-6">
         <h2 className="text-sm font-medium">Account recovery</h2>
         <div className="flex flex-wrap gap-2">
-          {!user.emailVerified && user.status === "active" ? (
+          {!user.emailVerified && user.accountStatus === "active" ? (
             <Button variant="outline" disabled={busyStatus} onClick={() => void handleSendVerification()}>
               Send verification email
             </Button>
           ) : null}
-          {(user.status === "active" || user.status === "locked") ? (
+          {(user.accountStatus === "active" || user.accountStatus === "locked") ? (
             <Button variant="outline" disabled={busyStatus} onClick={() => void handleSendReset()}>
               Send password reset
             </Button>
           ) : null}
-          {user.status === "locked" ? (
+          {user.accountStatus === "locked" ? (
             <Button variant="outline" disabled={busyStatus} onClick={() => void handleLifecycle("unlock")}>
               Unlock user
             </Button>
@@ -413,29 +473,36 @@ export function AppUserDetailPage() {
         </div>
       </section>
 
-      {user.status === "active" || user.status === "locked" ? (
-        <DangerZone
-          title="Disable user"
-          description={`${user.name} will not be able to sign in. Sessions, codes, and tokens will be revoked.`}
-          action={
-            <DestructiveButton disabled={busyStatus} onClick={() => void handleToggleStatus()}>
-              Disable user
-            </DestructiveButton>
-          }
-        />
-      ) : user.status === "disabled" ? (
-        <FormActions>
-          <Button variant="outline" disabled={busyStatus} onClick={() => void handleToggleStatus()}>
-            Enable user
+      <section className="mt-8 space-y-3 border-t pt-6">
+        <h2 className="text-sm font-medium">Application membership</h2>
+        <p className="text-sm text-muted-foreground">Membership controls access to {appName ?? "this application"}. Account state and credentials belong to the account domain.</p>
+        {user.membershipStatus === "active" ? (
+          <Button variant="outline" disabled={busyStatus} onClick={() => void handleToggleStatus()}>Disable membership</Button>
+        ) : (
+          <Button variant="outline" disabled={busyStatus || user.accountStatus === "deleted"} onClick={() => void handleToggleStatus()}>
+            {user.membershipStatus === "removed" ? "Rejoin application" : "Enable membership"}
           </Button>
-        </FormActions>
+        )}
+        {user.membershipStatus !== "removed" ? (
+          <DestructiveButton disabled={busyStatus} onClick={() => void handleRemoveMembership()}>Remove membership</DestructiveButton>
+        ) : null}
+      </section>
+
+      {user.accountStatus !== "deleted" ? (
+        <section className="mt-8 space-y-3 border-t pt-6">
+          <h2 className="text-sm font-medium">Account access</h2>
+          <p className="text-sm text-muted-foreground">Account suspension affects every application in its account domain.</p>
+          <Button variant={user.accountStatus === "disabled" ? "outline" : "destructive"} disabled={busyStatus} onClick={() => void handleAccountStatus()}>
+            {user.accountStatus === "disabled" ? "Enable account" : "Suspend account"}
+          </Button>
+        </section>
       ) : null}
 
-      {user.status !== "deleted" ? (
+      {user.accountStatus !== "deleted" ? (
         <DangerZone
-          title="Delete user"
-          description="Move this account to deleted state. It can be restored later, but access is revoked now."
-          action={<DestructiveButton disabled={busyStatus} onClick={() => void handleLifecycle("delete")}>Delete user</DestructiveButton>}
+          title="Delete account"
+          description="Delete the account for all applications in its account domain. It can be restored later, but access is revoked now."
+          action={<DestructiveButton disabled={busyStatus} onClick={() => void handleLifecycle("delete")}>Delete account</DestructiveButton>}
         />
       ) : (
         <section className="space-y-4 border-t pt-6">

@@ -3,7 +3,9 @@ info:
   title: z0-auth App Users API
   version: 0.1.0
   description: |
-    End users of a registered application (not console instance members).
+    Stable application subjects and their optional application memberships.
+    Membership removal preserves the Account, credentials, and subject.
+    Account lifecycle actions affect the account domain; membership actions are application-local.
     All console routes require a signed-in instance member.
 servers:
   - url: http://localhost:3000
@@ -26,7 +28,7 @@ paths:
         - name: status
           in: query
           schema:
-            $ref: "#/components/schemas/AppUserMembershipStatus"
+            $ref: "#/components/schemas/AppUserAccountStatus"
       responses:
         "200":
           description: App users for this application
@@ -126,6 +128,75 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AppUserDetail"
+  /api/v1/apps/{appId}/memberships:
+    post:
+      tags: [AppUsers]
+      summary: Add or rejoin an existing account to an application
+      description: Requires apps.users:manage. The account must belong to the application's Account Domain. This explicit action preserves credentials and reuses an existing stable subject. Repeated requests do not create duplicate memberships.
+      operationId: addApplicationMembership
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId]
+              properties:
+                accountId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Application membership established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUserDetail"
+        "400":
+          $ref: "common.openapi.yaml#/components/responses/ValidationError"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
+  /api/v1/apps/{appId}/users/{userId}/membership:
+    delete:
+      tags: [AppUsers]
+      summary: Remove application membership while preserving the account and subject
+      description: Requires apps.users:manage. Revokes this application's renewable access. Repeating removal is safe. Metadata stays namespaced to the stable subject and account authenticators are retained.
+      operationId: removeApplicationMembership
+      security:
+        - CsrfHeader: []
+          CsrfCookie: []
+          SessionCookie: []
+      parameters:
+        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+        - $ref: "apps.openapi.yaml#/components/parameters/AppId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Subject with removed membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppUserDetail"
+        "401":
+          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "common.openapi.yaml#/components/responses/NotFound"
   /api/v1/apps/{appId}/users/{userId}/sessions:
     get:
       tags: [AppUsers]
@@ -368,15 +439,18 @@ components:
   schemas:
     AppUserMembershipStatus:
       type: string
+      enum: [active, disabled, removed]
+    AppUserAccountStatus:
+      type: string
       enum: [active, disabled, locked, deleted]
     AppUserSummary:
       type: object
-      required: [userId, appId, email, name, membershipStatus, status, emailVerified, disabledAt, lockedUntil, deletedAt, joinedAt]
+      required: [userId, appId, email, name, membershipStatus, accountStatus, status, emailVerified, disabledAt, lockedUntil, deletedAt, joinedAt]
       properties:
         userId:
           type: string
           format: uuid
-          description: App-local identity (`app_users.id`), not a console `users.id`.
+          description: Stable application-facing subject, distinct from the internal Account and console identity. Preserved across membership removal and rejoin.
         appId:
           type: string
           format: uuid
@@ -387,8 +461,11 @@ components:
           type: string
         membershipStatus:
           $ref: "#/components/schemas/AppUserMembershipStatus"
+        accountStatus:
+          $ref: "#/components/schemas/AppUserAccountStatus"
         status:
-          $ref: "#/components/schemas/AppUserMembershipStatus"
+          description: Effective application access after account and membership state are combined.
+          $ref: "#/components/schemas/AppUserAccountStatus"
         emailVerified: { type: boolean }
         disabledAt: { type: string, format: date-time, nullable: true }
         lockedUntil: { type: string, format: date-time, nullable: true }
@@ -400,8 +477,15 @@ components:
       allOf:
         - $ref: "#/components/schemas/AppUserSummary"
         - type: object
-          required: [metadata, activeSessionCount, mfaEnabled, passkeyCount]
+          required: [accountId, accountDomainId, metadata, activeSessionCount, mfaEnabled, passkeyCount]
           properties:
+            accountId:
+              type: string
+              format: uuid
+              description: Operator-only Account reference for explicit membership provisioning; never the application sub.
+            accountDomainId:
+              type: string
+              format: uuid
             metadata:
               type: object
               nullable: true
@@ -431,12 +515,14 @@ components:
           nullable: true
           additionalProperties: true
     PatchAppUserRequest:
+      description: membershipStatus controls only this application. Name edits affect the shared account profile; metadata remains opaque and application-local.
       type: object
       properties:
         name:
           type: string
         membershipStatus:
-          $ref: "#/components/schemas/AppUserMembershipStatus"
+          type: string
+          enum: [active, disabled]
         metadata:
           type: object
           nullable: true

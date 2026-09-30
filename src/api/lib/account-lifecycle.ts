@@ -82,6 +82,19 @@ export async function clearConsoleSignInFailures(userId: string): Promise<void> 
   `;
 }
 
+/** Account containment crosses every subject in its domain; membership containment does not. */
+export async function revokeCanonicalAccountAccess(tx: SQL, appUserId: string): Promise<void> {
+  const subjects = await tx`
+    SELECT b.id, b.app_id, c.email
+    FROM app_account_bindings b JOIN accounts c ON c.id = b.account_id
+    WHERE b.account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId})
+    ORDER BY b.id
+  `;
+  for (const subject of subjects) {
+    await revokeAppAccountAccess(tx, String(subject.id), String(subject.app_id), String(subject.email));
+  }
+}
+
 export async function clearAppSignInFailures(appUserId: string): Promise<void> {
   await getDb()`
     UPDATE app_users
@@ -126,12 +139,18 @@ export async function finalizeAppPasswordSignIn<T>(
   createAuthority: (tx: SQL) => Promise<T>,
 ): Promise<T | null> {
   return getDb().begin(async (tx) => {
+    await tx`
+      SELECT c.id FROM accounts c JOIN app_account_bindings b ON b.account_id = c.id
+      WHERE b.id = ${appUserId} AND b.app_id = ${appId}
+      FOR UPDATE OF c, b
+    `;
+    // Membership may change while waiting for these locks. Read it using a new
+    // statement snapshot before creating authority, returning a normal denial.
     const [row] = await tx`
       SELECT status, disabled_at, locked_until, deleted_at
       FROM app_users
       WHERE id = ${appUserId}
         AND app_id = ${appId}
-      FOR UPDATE
     `;
     if (!row) return null;
     const current = row as AccountLifecycleRow & { status: string };
@@ -233,7 +252,7 @@ export async function recordAppPasswordFailure(appUserId: string): Promise<boole
       WHERE id = ${appUserId}
     `;
     if (shouldLock && !wasLocked) {
-      await revokeAppAccountAccess(tx, appUserId, String(value.app_id), value.email);
+      await revokeCanonicalAccountAccess(tx, appUserId);
       await writeAuditEvent({
         action: "app_user.locked",
         resourceType: "app_user",
