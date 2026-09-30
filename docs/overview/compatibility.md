@@ -1,10 +1,10 @@
 # Alpha compatibility
 
-Z0Auth Alpha is still allowed to change.
+Z0Auth is currently being built toward its Alpha release, and compatibility is not yet stable.
 
-The project is building toward a coherent first release rather than preserving every interface that existed during development. If an API, configuration shape, database model, or behavior conflicts with the Alpha product or security model, it may change even when that change is breaking.
+The Alpha release prioritizes a coherent Z0Auth product and security model over preserving interfaces from earlier development versions. APIs, configuration, database models, and behavior may therefore change when necessary.
 
-This page describes what adopters can reasonably expect while Z0Auth is in Alpha.
+This page describes the compatibility expectations for the Alpha release.
 
 ## Standards are the stable integration boundary
 
@@ -26,7 +26,7 @@ During Alpha, changes may affect:
 
 A breaking change should be deliberate and documented. Security and correctness take priority over keeping an incorrect or incomplete interface unchanged.
 
-Alpha does not yet promise long-term semantic-versioning stability.
+The Alpha release does not provide long-term semantic-versioning stability.
 
 ## Existing state should be migrated deliberately
 
@@ -48,7 +48,7 @@ The same applies to material under `docs/archive/`. Archived documentation descr
 
 When a supported contract changes, the documentation that describes it should change in the same release.
 
-Current guides and reference pages describe supported behavior. The [Alpha roadmap](alpha.md) describes the target release and may include behavior that is not yet available in the current implementation.
+Current guides and reference pages describe supported behavior. The [Alpha roadmap](alpha.md) describes the target scope for the Alpha release.
 
 ## After Alpha
 
@@ -56,4 +56,4 @@ The compatibility policy will become stricter as Z0Auth moves beyond Alpha.
 
 The project has not yet defined its post-Alpha versioning and deprecation guarantees. Those guarantees should be published before users are expected to rely on long-term compatibility across releases.
 
-For now, adopters should treat Alpha as suitable for evaluation, development, and early integration where breaking changes can be absorbed.
+For now, adopters should treat the Alpha release as suitable for evaluation, development, and early integration where breaking changes can be absorbed.
