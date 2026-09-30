@@ -1,8 +1,8 @@
 # Support and limitations
 
-Z0Auth Alpha is a self-hosted authentication server for applications, APIs, and backend services that integrate through OAuth 2.0 and OpenID Connect.
+Z0Auth is a self-hosted authentication server for applications, APIs, and backend services that integrate through OAuth 2.0 and OpenID Connect.
 
-This page describes the main boundaries to consider before adopting it. For the complete Alpha scope, see the [Alpha roadmap](alpha.md).
+This page describes the main boundaries planned for the Alpha release. For the complete release scope, see the [Alpha roadmap](alpha.md).
 
 ## Supported use
 
@@ -24,7 +24,7 @@ Applications remain responsible for their own data and business authorization. D
 
 ## Product boundaries
 
-Alpha focuses on the authentication, identity, OAuth, OpenID Connect, and SSO capabilities needed by common application and API integrations.
+For the Alpha release, Z0Auth focuses on the authentication, identity, OAuth, OpenID Connect, and SSO capabilities needed by common application and API integrations.
 
 It is not intended to provide every enterprise identity feature or deployment model in its first release. Capabilities outside the Alpha scope include areas such as enterprise provisioning, cross-instance federation, and multi-region operation.
 
@@ -32,7 +32,7 @@ If your integration depends on a specialized protocol extension or deployment mo
 
 ## Alpha stability
 
-Alpha is an early release stage. Interfaces and behavior may still change, and Z0Auth does not provide an uptime or service-level commitment.
+The Alpha release is an early release stage. Interfaces and behavior may still change, and Z0Auth does not provide an uptime or service-level commitment for this release.
 
 Applications should prefer documented OAuth 2.0 and OpenID Connect interfaces over internal APIs or implementation details. See [Alpha compatibility](compatibility.md) for the compatibility expectations during this stage.
 
