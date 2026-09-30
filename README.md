@@ -4,7 +4,7 @@ Z0Auth is a self-hosted OAuth 2.0 and OpenID Connect server for applications, AP
 
 The Alpha product model and release scope are now defined. The implementation and public documentation are being reconciled to that model.
 
-Start with the [documentation index](docs/README.md) and the [Alpha roadmap](docs/overview/alpha.md).
+Start with the [product overview](docs/overview/product.md), the [documentation index](docs/README.md), and the [Alpha roadmap](docs/overview/alpha.md).
 
 For implementation and review work, see the approved Alpha design documents:
 
