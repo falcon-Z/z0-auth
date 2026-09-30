@@ -1,18 +1,12 @@
-# z0-auth
+# Z0Auth
 
-Z0Auth is a self-hosted OAuth 2.0 and OpenID Connect server for applications, APIs, and workloads. The project is under active Alpha development.
+Z0Auth is an open-source, self-hosted authentication and identity server for applications, APIs, and backend services.
 
-The Alpha product model and release scope are now defined. The implementation and public documentation are being reconciled to that model.
+Applications integrate with Z0Auth through OAuth 2.0 and OpenID Connect, while operators retain control of the deployment and its data.
 
-Start with the [product overview](docs/overview/product.md), the [documentation index](docs/README.md), and the [Alpha roadmap](docs/overview/alpha.md).
+Start with the [Z0Auth documentation](docs/README.md) to understand the project, evaluate whether it fits your use case, or run it locally.
 
-For implementation and review work, see the approved Alpha design documents:
-
-- [Alpha architecture](docs/design/alpha-architecture.md)
-- [Domain model and glossary](docs/design/domain-model.md)
-- [Threat model](docs/design/threat-model.md)
-
-Older repository documentation is kept under [docs/archive/pre-alpha-docs](docs/archive/pre-alpha-docs/README.md) while replacement documentation is written. Archived material is not the current product contract.
+For the planned first-release scope, see the [Alpha roadmap](docs/overview/alpha.md).
 
 ## License
 
