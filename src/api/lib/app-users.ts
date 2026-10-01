@@ -188,11 +188,11 @@ export async function getAppUserDetailForApi(
 
   const activeSessionCount = await countActiveAppUserSessions(userId);
   const [mfaRow] = await getDb()`
-    SELECT 1 FROM app_user_totp_factors WHERE app_user_id = ${userId} AND confirmed_at IS NOT NULL
+    SELECT 1 FROM app_user_totp_factors WHERE account_id = ${appUser.account_id} AND confirmed_at IS NOT NULL
   `;
   const [passkeyRow] = await getDb()`
     SELECT COUNT(*)::int AS count FROM app_user_passkeys
-    WHERE app_user_id = ${userId} AND app_id = ${appId} AND removed_at IS NULL
+    WHERE account_id = ${appUser.account_id} AND removed_at IS NULL
   `;
 
   return {
@@ -464,10 +464,6 @@ export async function transitionAppUserForApi(
       }, tx);
       await tx`DELETE FROM magic_link_tokens WHERE realm = 'app' AND app_id = ${appId} AND lower(email) = ${user.email}`;
       await tx`DELETE FROM app_users WHERE app_id = ${appId} AND id = ${userId}`;
-      await tx`
-        DELETE FROM service_group_members gm
-        WHERE NOT EXISTS (SELECT 1 FROM service_group_app_users gu WHERE gu.group_member_id = gm.id)
-      `;
       await tx`
         DELETE FROM app_browser_sessions b
         WHERE NOT EXISTS (SELECT 1 FROM app_user_sessions s WHERE s.browser_session_id = b.id)

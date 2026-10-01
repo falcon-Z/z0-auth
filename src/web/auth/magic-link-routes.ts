@@ -8,8 +8,6 @@ import {
   appSessionCookieHeader,
   createAppSession,
 } from "../../api/lib/app-session";
-import { ensureGroupMemberForAppUser } from "../../api/lib/group-sso";
-import { getDb } from "../../api/lib/db";
 import { validateFormCsrf } from "../../api/lib/csrf";
 import { consumeMagicLinkToken, previewMagicLinkToken, sendMagicLinkForHostedAuth } from "../../api/lib/magic-link";
 import { isSmtpReady } from "../../api/lib/smtp-settings";
@@ -341,14 +339,6 @@ async function postMagicLinkAcceptPage(req: BunRequest): Promise<Response> {
       return htmlFormRedirect(req, "/auth/mfa", { setCookie: challenge.setCookie });
     }
     const session = await createAppSession(consumed.userId, consumed.appId, req);
-    const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${consumed.userId} LIMIT 1`;
-    if (userRow) {
-      await ensureGroupMemberForAppUser(
-        consumed.userId,
-        consumed.appId,
-        String((userRow as { email: string }).email),
-      );
-    }
     setCookie = appSessionCookieHeader(session.token, session.expiresAt);
     return htmlFormRedirect(req, safeReturnPath(returnTo, "/oauth/resume"), { setCookie });
   }

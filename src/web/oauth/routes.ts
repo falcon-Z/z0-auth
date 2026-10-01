@@ -9,8 +9,6 @@ import { withDatabaseErrorHandling } from "../../api/lib/database-errors";
 import { resolveAppSession } from "../../api/lib/app-session";
 import {
   appendSetCookie,
-  getGroupMemberIdForAppUser,
-  groupSsoCoversScope,
   resolveTargetAppSession,
 } from "../../api/lib/group-sso";
 import { loadConfig, requestPublicOrigin } from "../../api/lib/config";
@@ -371,14 +369,8 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
   const appSession = resolved.session;
 
   const storedConsent = await getOAuthUserConsent(appSession.appUserId, client.appId);
-  const groupMemberId = await getGroupMemberIdForAppUser(appSession.appUserId);
-  const groupCoversScope =
-    groupMemberId !== null &&
-    (await groupSsoCoversScope(groupMemberId, normalizedScopeResult.normalizedScope));
-
   if (
-    (storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)) ||
-    groupCoversScope
+    storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)
   ) {
     const redirect = await redirectWithCode(url, client.appId, appSession.appUserId);
     appendSetCookie(redirect.headers, resolved.setCookie);

@@ -9,7 +9,6 @@ import {
   finalizeConsolePasswordSignIn,
 } from "../../src/api/lib/account-lifecycle";
 import { closeDatabase, getDb } from "../../src/api/lib/db";
-import { provisionSiblingAppUser } from "../../src/api/lib/group-sso";
 import { hashPassword } from "../../src/api/lib/password";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import {
@@ -228,40 +227,6 @@ run("account lifecycle", () => {
     const [appState] = await getDb()`SELECT locked_until FROM app_users WHERE id = ${appLoginUserId}`;
     expect((consoleState as { locked_until: Date | null }).locked_until).not.toBeNull();
     expect((appState as { locked_until: Date | null }).locked_until).not.toBeNull();
-  });
-
-  test("group SSO rejects an existing linked target account that is not eligible", async () => {
-    const groupId = crypto.randomUUID();
-    const groupMemberId = crypto.randomUUID();
-    const targetUserId = crypto.randomUUID();
-    await getDb().begin(async (tx) => {
-      await tx`INSERT INTO service_groups (id, name, slug, sso_enabled) VALUES (${groupId}, 'Lifecycle Group', 'lifecycle-group', true)`;
-      await tx`INSERT INTO service_group_members (id, group_id, primary_email) VALUES (${groupMemberId}, ${groupId}, 'linked-target@example.com')`;
-      await tx`
-        INSERT INTO app_users (id, app_id, email, name, password_hash, email_verified_at, disabled_at)
-        VALUES (
-          ${targetUserId}, ${appId}, 'linked-target@example.com', 'Linked Target',
-          ${await hashPassword(appPassword)}, NOW(), NOW()
-        )
-      `;
-      await tx`
-        INSERT INTO service_group_app_users (group_member_id, app_user_id, app_id)
-        VALUES (${groupMemberId}, ${targetUserId}, ${appId})
-      `;
-    });
-
-    const result = await provisionSiblingAppUser({
-      targetAppId: appId,
-      groupMemberId,
-      sourceAppUserId: targetUserId,
-    });
-    expect(result.ok).toBe(false);
-    const [sessionCount] = await getDb()`
-      SELECT COUNT(*)::int AS n
-      FROM app_user_sessions
-      WHERE app_user_id = ${targetUserId} AND revoked_at IS NULL
-    `;
-    expect(Number((sessionCount as { n: number }).n)).toBe(0);
   });
 
   test("legacy PATCH disable revokes every pre-disable bearer credential", async () => {

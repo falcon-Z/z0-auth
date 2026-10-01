@@ -1,332 +1,114 @@
 import type { BunRequest } from "bun";
 
-import { ErrorCodes } from "@z0/contracts/errors";
-import { normalizeEmail } from "@z0/contracts/validation";
-
 import {
   appSessionCookieHeader,
   insertAppSession,
   prepareAppSession,
-  resolveAppSession,
   resolveAppSessionForApp,
   type ActiveAppSession,
 } from "./app-session";
 import { createAppUserMfaChallenge, hasAppUserMfa } from "./mfa";
 import { finalizeAppPasswordSignIn } from "./account-lifecycle";
 import { getDb } from "./db";
-import { scopeIsSubset } from "./oauth-consent";
-import { parseScopeSet } from "./oauth";
-import { problem } from "./http";
+import { createServiceGroups } from "../../capabilities/service-groups";
 
 export type ServiceGroupContext = {
   groupId: string;
+  accountDomainId: string;
   ssoEnabled: boolean;
   appIds: string[];
 };
 
 export async function getServiceGroupForApp(appId: string): Promise<ServiceGroupContext | null> {
   const [row] = await getDb()`
-    SELECT g.id AS group_id, g.sso_enabled
-    FROM service_group_apps sga
-    JOIN service_groups g ON g.id = sga.group_id
-    WHERE sga.app_id = ${appId}
-    LIMIT 1
+    SELECT g.id AS group_id, g.account_domain_id, g.sso_enabled,
+      ARRAY(SELECT app_id::text FROM service_group_apps WHERE group_id = g.id) AS app_ids
+    FROM service_group_apps ga JOIN service_groups g ON g.id = ga.group_id
+    JOIN apps a ON a.id = ga.app_id AND a.account_domain_id = g.account_domain_id
+    WHERE a.id = ${appId} AND a.status = 'active'
   `;
-  if (!row) return null;
-  const data = row as { group_id: string; sso_enabled: boolean };
-  const groupId = String(data.group_id);
-
-  const appRows: unknown[] = await getDb()`
-    SELECT app_id
-    FROM service_group_apps
-    WHERE group_id = ${groupId}
-  `;
-
-  return {
-    groupId,
-    ssoEnabled: data.sso_enabled,
-    appIds: appRows.map((appRow) => String((appRow as { app_id: string }).app_id)),
-  };
-}
-
-export async function getGroupMemberIdForAppUser(appUserId: string): Promise<string | null> {
-  const [row] = await getDb()`
-    SELECT group_member_id
-    FROM service_group_app_users
-    WHERE app_user_id = ${appUserId}
-    LIMIT 1
-  `;
-  return row ? String((row as { group_member_id: string }).group_member_id) : null;
-}
-
-export async function ensureGroupMemberForAppUser(
-  appUserId: string,
-  appId: string,
-  emailRaw: string,
-): Promise<string | null> {
-  const group = await getServiceGroupForApp(appId);
-  if (!group) return null;
-
-  const [verifiedUser] = await getDb()`
-    SELECT 1
-    FROM app_users
-    WHERE id = ${appUserId}
-      AND app_id = ${appId}
-      AND status = 'active'
-      AND disabled_at IS NULL AND deleted_at IS NULL
-      AND (locked_until IS NULL OR locked_until <= NOW())
-      AND email_verified_at IS NOT NULL
-    LIMIT 1
-  `;
-  if (!verifiedUser) return null;
-
-  const existingMemberId = await getGroupMemberIdForAppUser(appUserId);
-  if (existingMemberId) return existingMemberId;
-
-  const email = normalizeEmail(emailRaw);
-
-  const [existingMember] = await getDb()`
-    SELECT id
-    FROM service_group_members
-    WHERE group_id = ${group.groupId}
-      AND primary_email = ${email}
-    LIMIT 1
-  `;
-
-  let groupMemberId: string;
-  if (existingMember) {
-    groupMemberId = String((existingMember as { id: string }).id);
-  } else {
-    const [created] = await getDb()`
-      INSERT INTO service_group_members (group_id, primary_email)
-      VALUES (${group.groupId}, ${email})
-      RETURNING id
-    `;
-    groupMemberId = String((created as { id: string }).id);
-  }
-
-  await getDb()`
-    INSERT INTO service_group_app_users (group_member_id, app_user_id, app_id)
-    VALUES (${groupMemberId}, ${appUserId}, ${appId})
-    ON CONFLICT (app_user_id) DO NOTHING
-  `;
-
-  return groupMemberId;
-}
-
-async function getAppUserProfile(
-  appUserId: string,
-): Promise<{ email: string; name: string; emailVerified: boolean } | null> {
-  const [row] = await getDb()`
-    SELECT email, name, email_verified_at
-    FROM app_users
-    WHERE id = ${appUserId}
-      AND status = 'active'
-      AND disabled_at IS NULL AND deleted_at IS NULL
-      AND (locked_until IS NULL OR locked_until <= NOW())
-    LIMIT 1
-  `;
-  if (!row) return null;
-  const data = row as { email: string; name: string; email_verified_at: Date | null };
-  return { email: data.email, name: data.name, emailVerified: Boolean(data.email_verified_at) };
-}
-
-async function findLinkedAppUser(
-  groupMemberId: string,
-  appId: string,
-): Promise<{ appUserId: string; eligible: boolean } | null> {
-  const [row] = await getDb()`
-    SELECT sgau.app_user_id,
-      (
-        u.status = 'active'
-        AND u.disabled_at IS NULL
-        AND u.deleted_at IS NULL
-        AND (u.locked_until IS NULL OR u.locked_until <= NOW())
-      ) AS eligible
-    FROM service_group_app_users sgau
-    JOIN app_users u ON u.id = sgau.app_user_id AND u.app_id = sgau.app_id
-    WHERE sgau.group_member_id = ${groupMemberId}
-      AND sgau.app_id = ${appId}
-    LIMIT 1
-  `;
-  if (!row) return null;
-  return {
-    appUserId: String((row as { app_user_id: string }).app_user_id),
-    eligible: Boolean((row as { eligible: boolean }).eligible),
-  };
-}
-
-async function findAppUserByEmail(appId: string, email: string): Promise<string | null> {
-  const [row] = await getDb()`
-    SELECT id
-    FROM app_users
-    WHERE app_id = ${appId}
-      AND lower(email) = ${email}
-      AND status = 'active'
-      AND disabled_at IS NULL AND deleted_at IS NULL
-      AND (locked_until IS NULL OR locked_until <= NOW())
-    LIMIT 1
-  `;
-  return row ? String((row as { id: string }).id) : null;
-}
-
-export async function provisionSiblingAppUser(input: {
-  targetAppId: string;
-  groupMemberId: string;
-  sourceAppUserId: string;
-}): Promise<{ ok: true; appUserId: string } | { ok: false; response: Response }> {
-  const existing = await findLinkedAppUser(input.groupMemberId, input.targetAppId);
-  if (existing) {
-    if (!existing.eligible) {
-      return {
-        ok: false,
-        response: problem(401, "Unauthorized", "Target account is no longer available"),
-      };
-    }
-    return { ok: true, appUserId: existing.appUserId };
-  }
-
-  const sourceProfile = await getAppUserProfile(input.sourceAppUserId);
-  if (!sourceProfile) {
-    return {
-      ok: false,
-      response: problem(401, "Unauthorized", "Source account is no longer available"),
-    };
-  }
-  if (!sourceProfile.emailVerified) {
-    return {
-      ok: false,
-      response: problem(403, "Forbidden", "Verify your email before using shared sign-in"),
-    };
-  }
-
-  const existingByEmail = await findAppUserByEmail(input.targetAppId, sourceProfile.email);
-  if (existingByEmail) {
-    return {
-      ok: false,
-      response: problem(409, "Conflict", "An account already exists for this application", {
-        errors: [{
-          field: "_auth",
-          code: ErrorCodes.APP_USER_EXISTS,
-          message: "Sign in to the existing account before linking shared sign-in",
-        }],
-      }),
-    };
-  }
-
-  const [created] = await getDb()`
-    INSERT INTO app_users (app_id, email, name, password_hash, email_verified_at)
-    VALUES (
-      ${input.targetAppId},
-      ${sourceProfile.email},
-      ${sourceProfile.name},
-      NULL,
-      NOW()
-    )
-    RETURNING id
-  `;
-  const appUserId = String((created as { id: string }).id);
-
-  await getDb()`
-    INSERT INTO service_group_app_users (group_member_id, app_user_id, app_id)
-    VALUES (${input.groupMemberId}, ${appUserId}, ${input.targetAppId})
-  `;
-
-  return { ok: true, appUserId };
-}
-
-export async function getGroupConsentedScope(groupMemberId: string): Promise<string> {
-  const rows: unknown[] = await getDb()`
-    SELECT c.scope
-    FROM service_group_app_users sgau
-    JOIN oauth_user_consents c ON c.app_user_id = sgau.app_user_id
-    WHERE sgau.group_member_id = ${groupMemberId}
-  `;
-  const merged = new Set<string>();
-  const portableOidcScopes = new Set(["openid", "profile", "email"]);
-  for (const row of rows) {
-    for (const name of parseScopeSet(String((row as { scope: string }).scope ?? ""))) {
-      if (portableOidcScopes.has(name)) merged.add(name);
-    }
-  }
-  return [...merged].sort().join(" ");
-}
-
-export async function groupSsoCoversScope(groupMemberId: string, requestedScope: string): Promise<boolean> {
-  const portableOidcScopes = new Set(["openid", "profile", "email"]);
-  if ([...parseScopeSet(requestedScope)].some((scope) => !portableOidcScopes.has(scope))) {
-    return false;
-  }
-  const granted = await getGroupConsentedScope(groupMemberId);
-  if (!granted.trim()) return false;
-  return scopeIsSubset(requestedScope, granted);
+  return row ? {
+    groupId: String(row.group_id), accountDomainId: String(row.account_domain_id),
+    ssoEnabled: Boolean(row.sso_enabled), appIds: row.app_ids as string[],
+  } : null;
 }
 
 export type GroupSsoSessionResult =
-  | { ok: true; mfaRequired: false; appUserId: string; appId: string; setCookie: string }
+  | { ok: true; mfaRequired: false; appUserId: string; appId: string; sessionId: string; setCookie: string }
   | { ok: true; mfaRequired: true; appUserId: string; appId: string; setCookie: string }
   | { ok: false };
 
 export async function tryGroupSsoSession(req: BunRequest, targetAppId: string): Promise<GroupSsoSessionResult> {
-  const targetGroup = await getServiceGroupForApp(targetAppId);
-  if (!targetGroup?.ssoEnabled) return { ok: false };
+  const group = await getServiceGroupForApp(targetAppId);
+  if (!group?.ssoEnabled) return { ok: false };
+  const current = await resolveAppSessionForApp(req, null, group.accountDomainId);
+  if (!current || current.appId === targetAppId) return { ok: false };
 
-  const current = await resolveAppSession(req);
-  if (!current) return { ok: false };
-
-  if (current.appId === targetAppId) {
-    return { ok: false };
-  }
-
-  if (!targetGroup.appIds.includes(current.appId)) return { ok: false };
-
-  const sourceGroup = await getServiceGroupForApp(current.appId);
-  if (!sourceGroup || sourceGroup.groupId !== targetGroup.groupId || !sourceGroup.ssoEnabled) {
-    return { ok: false };
-  }
-
-  const groupMemberId = await getGroupMemberIdForAppUser(current.appUserId);
-  if (!groupMemberId) return { ok: false };
-
-  const provisioned = await provisionSiblingAppUser({
-    targetAppId,
-    groupMemberId,
-    sourceAppUserId: current.appUserId,
+  // Only canonical Account equality grants continuity. No email matching, JIT
+  // membership, metadata/profile copying, or sibling consent authority.
+  const [target] = await getDb()`
+    SELECT t.id, t.account_id, t.account_domain_id, t.membership_status,
+      t.status, t.disabled_at, t.deleted_at, t.locked_until, s.account_id AS source_account_id,
+      s.primary_authenticated_at, s.mfa_authenticated_at, s.authentication_method
+    FROM app_user_sessions s
+    JOIN app_users t ON t.account_id = s.account_id AND t.account_domain_id = s.account_domain_id
+    WHERE s.id = ${current.sessionId} AND t.app_id = ${targetAppId}
+  `;
+  const decision = createServiceGroups().resolveSharedSignIn({
+    serviceGroup: { id: group.groupId, accountDomainId: group.accountDomainId,
+      applicationIds: group.appIds, ssoEnabled: group.ssoEnabled },
+    source: { applicationId: current.appId, accountId: String(target?.source_account_id ?? ""),
+      accountDomainId: group.accountDomainId, eligible: true },
+    target: { applicationId: targetAppId, accountId: target ? String(target.account_id) : null,
+      accountDomainId: group.accountDomainId, subjectId: target ? String(target.id) : null,
+      membershipStatus: target?.membership_status ?? "removed",
+      eligible: Boolean(target && target.status === "active" && !target.disabled_at && !target.deleted_at
+        && (!target.locked_until || new Date(target.locked_until).getTime() <= Date.now())) },
   });
-  if (!provisioned.ok) return { ok: false };
-
-  if (await hasAppUserMfa(provisioned.appUserId, targetAppId)) {
+  if (decision.outcome !== "reuse_account") return { ok: false };
+  const appUserId = decision.targetSubjectId;
+  // Preserve the existing MFA gate. Full policy/JIT enrollment is tracked by #105.
+  if (!target.mfa_authenticated_at && (await hasAppUserMfa(appUserId, targetAppId))) {
     const url = new URL(req.url);
-    const challenge = await createAppUserMfaChallenge(
-      req,
-      provisioned.appUserId,
-      targetAppId,
-      "service_group",
-      `${url.pathname}${url.search}`,
-    );
-    return {
-      ok: true,
-      mfaRequired: true,
-      appUserId: provisioned.appUserId,
-      appId: targetAppId,
-      setCookie: challenge.setCookie,
-    };
+    const challenge = await createAppUserMfaChallenge(req, appUserId, targetAppId,
+      "service_group", `${url.pathname}${url.search}`, current.sessionId);
+    return { ok: true, mfaRequired: true, appUserId, appId: targetAppId, setCookie: challenge.setCookie };
   }
 
-  const preparedSession = await prepareAppSession(req);
-  const session = await finalizeAppPasswordSignIn(
-    provisioned.appUserId,
-    targetAppId,
-    (tx) => insertAppSession(tx, provisioned.appUserId, targetAppId, preparedSession),
-  );
+  const prepared = await prepareAppSession(req);
+  const session = await finalizeAppPasswordSignIn(appUserId, targetAppId, async (tx) => {
+    const [source] = await tx`
+      SELECT s.primary_authenticated_at, s.mfa_authenticated_at, s.authentication_method
+      FROM app_user_sessions s JOIN app_browser_sessions b ON b.id = s.browser_session_id
+      JOIN apps a ON a.id = s.app_id
+      JOIN app_users u ON u.id = s.app_user_id AND u.app_id = s.app_id
+      JOIN apps target_app ON target_app.id = ${targetAppId} AND target_app.status = 'active'
+      JOIN service_group_apps source_group ON source_group.app_id = s.app_id
+      JOIN service_group_apps target_group ON target_group.app_id = target_app.id
+        AND target_group.group_id = source_group.group_id
+      JOIN service_groups g ON g.id = source_group.group_id
+      WHERE s.id = ${current.sessionId} AND s.account_id = ${target.account_id}
+        AND a.status = 'active' AND s.revoked_at IS NULL AND s.expires_at > NOW()
+        AND b.revoked_at IS NULL AND b.expires_at > NOW()
+        AND u.status = 'active' AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+        AND (u.locked_until IS NULL OR u.locked_until <= NOW())
+        AND g.id = ${group.groupId} AND g.account_domain_id = s.account_domain_id AND g.sso_enabled
+      FOR UPDATE OF s, b
+      FOR SHARE OF g, a, target_app
+    `;
+    if (!source) return null;
+    const issued = await insertAppSession(tx, appUserId, targetAppId, prepared, {
+      primaryAuthenticatedAt: new Date(source.primary_authenticated_at),
+      mfaAuthenticatedAt: source.mfa_authenticated_at ? new Date(source.mfa_authenticated_at) : null,
+      authenticationMethod: String(source.authentication_method),
+    });
+    const [grant] = await tx`SELECT id FROM app_user_sessions WHERE app_user_id = ${appUserId}
+      AND app_id = ${targetAppId} AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`;
+    return { ...issued, sessionId: String(grant.id) };
+  });
   if (!session) return { ok: false };
-  return {
-    ok: true,
-    mfaRequired: false,
-    appUserId: provisioned.appUserId,
-    appId: targetAppId,
-    setCookie: appSessionCookieHeader(session.token, session.expiresAt),
-  };
+  return { ok: true, mfaRequired: false, appUserId, appId: targetAppId,
+    sessionId: session.sessionId, setCookie: appSessionCookieHeader(session.token, session.expiresAt) };
 }
 
 export type ResolvedTargetAppSession =
@@ -334,27 +116,13 @@ export type ResolvedTargetAppSession =
   | { session: null; mfaRequired: true; setCookie: string }
   | null;
 
-export async function resolveTargetAppSession(
-  req: BunRequest,
-  targetAppId: string,
-): Promise<ResolvedTargetAppSession> {
+export async function resolveTargetAppSession(req: BunRequest, targetAppId: string): Promise<ResolvedTargetAppSession> {
   const direct = await resolveAppSessionForApp(req, targetAppId);
-  if (direct) {
-    return { session: direct };
-  }
-
+  if (direct) return { session: direct };
   const sso = await tryGroupSsoSession(req, targetAppId);
   if (!sso.ok) return null;
   if (sso.mfaRequired) return { session: null, mfaRequired: true, setCookie: sso.setCookie };
-
-  return {
-    session: {
-      appUserId: sso.appUserId,
-      appId: sso.appId,
-      sessionId: "",
-    },
-    setCookie: sso.setCookie,
-  };
+  return { session: { appUserId: sso.appUserId, appId: sso.appId, sessionId: sso.sessionId }, setCookie: sso.setCookie };
 }
 
 export function appendSetCookie(headers: Headers, cookie: string | undefined): void {

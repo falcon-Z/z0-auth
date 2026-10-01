@@ -1,10 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
-import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
+import { APP_SESSION_COOKIE, createAppSession } from "../../src/api/lib/app-session";
 import { closeDatabase } from "../../src/api/lib/db";
 import { getDb } from "../../src/api/lib/db";
-import { ensureGroupMemberForAppUser } from "../../src/api/lib/group-sso";
+import { ensureApplicationSubject } from "../../src/api/lib/accounts";
+import { changeApplicationMembership } from "../../src/api/lib/application-memberships";
+import { runAppLogin } from "../../src/api/lib/app-auth";
+import { beginAppUserMfaEnrollment, confirmAppUserMfaEnrollment, getAppUserMfaStatus, hasAppUserMfa, verifyAppUserMfaProof } from "../../src/api/lib/mfa";
+import { completeMfaSignIn } from "../../src/api/lib/mfa-completion";
+import { generateTotpCode } from "../../src/api/lib/totp";
+import { tryGroupSsoSession } from "../../src/api/lib/group-sso";
+import type { BunRequest } from "bun";
 import { SESSION_COOKIE } from "../../src/api/lib/session";
 import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
@@ -200,6 +207,7 @@ async function approveConsent(input: {
 run("Group SSO flow", () => {
   let clientA = "";
   let clientB = "";
+  let clientSecretB = "";
   let appAId = "";
   let appBId = "";
 
@@ -227,7 +235,8 @@ run("Group SSO flow", () => {
         body: { name: "Projects App", redirectUris: [REDIRECT_B], clientType: "confidential" },
       }),
     );
-    const appB = (await appBRes.json()) as { app: { id: string }; credential: { clientId: string } };
+    const appB = (await appBRes.json()) as { app: { id: string }; credential: { clientId: string }; clientSecret: string };
+    clientSecretB = appB.clientSecret;
     clientB = appB.credential.clientId;
     appBId = appB.app.id;
 
@@ -249,7 +258,7 @@ run("Group SSO flow", () => {
     await closeDatabase();
   });
 
-  test("login to app A then authorize app B skips login and consent", async () => {
+  test("shared authentication requires explicit membership and does not share consent", async () => {
     const appSessionA = await registerAppUser(
       clientA,
       "group-user@example.com",
@@ -263,11 +272,6 @@ run("Group SSO flow", () => {
         AND email = 'group-user@example.com'
       RETURNING id
     `;
-    await ensureGroupMemberForAppUser(
-      String((sourceUser as { id: string }).id),
-      appAId,
-      "group-user@example.com",
-    );
     await approveConsent({ clientId: clientA, redirectUri: REDIRECT_A, appSession: appSessionA });
 
     const params = new URLSearchParams({
@@ -285,48 +289,63 @@ run("Group SSO flow", () => {
     );
 
     expect(authorizeRes.status).toBe(302);
-    const location = authorizeRes.headers.get("location") ?? "";
-    expect(location.startsWith(REDIRECT_B)).toBe(true);
-    expect(new URL(location).searchParams.get("code")).toBeTruthy();
-    expect(new URL(location).searchParams.get("state")).toBe("sso-state");
+    expect(authorizeRes.headers.get("location")).toContain("/auth/login");
+    expect(await getDb()`SELECT id FROM app_account_bindings WHERE app_id = ${appBId}`).toHaveLength(0);
+    expect(await getDb()`SELECT id FROM accounts`).toHaveLength(1);
 
-    const upgradedSession = appSessionFromResponse(authorizeRes);
-    expect(upgradedSession).toBeTruthy();
-    expect(upgradedSession).toBe(appSessionA);
-  });
-
-  test("an unverified matching email cannot claim an existing sibling-app account", async () => {
-    await registerAppUser(clientB, "victim@example.com", appUserPassword, "Victim");
-    const attackerSession = await registerAppUser(
-      clientA,
-      "victim@example.com",
-      appUserPassword,
-      "Attacker",
-    );
-
-    const params = new URLSearchParams({
-      response_type: "code",
-      client_id: clientB,
-      redirect_uri: REDIRECT_B,
-      scope: "openid profile email",
-      state: "takeover-check",
+    const [account] = await getDb()`SELECT account_id FROM app_account_bindings WHERE id = ${sourceUser.id}`;
+    const [owner] = await getDb()`SELECT id FROM users WHERE email = 'owner@example.com'`;
+    const subjectB = await getDb().begin(async (tx) => {
+      const subject = await ensureApplicationSubject(tx, appBId, String(account.account_id));
+      expect(subject).toBeTruthy();
+      await changeApplicationMembership(tx, appBId, subject!, "active", String(owner.id));
+      return subject!;
     });
-    const authorizeRes = await dispatchWeb(
-      new Request(`http://localhost/oauth/authorize?${params.toString()}`, {
-        headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(attackerSession)}` },
-      }),
-    );
+    await getDb()`UPDATE app_account_bindings SET metadata = '{"private":"a"}' WHERE id = ${sourceUser.id}`;
+    const [target] = await getDb()`SELECT account_id, metadata FROM app_users WHERE id = ${subjectB}`;
+    expect(target.account_id).toBe(account.account_id);
+    expect(subjectB).not.toBe(String(sourceUser.id));
+    expect(target.metadata).toBeNull();
 
-    expect(authorizeRes.status).toBe(302);
-    expect(authorizeRes.headers.get("location") ?? "").toContain("/auth/login");
-    const [victimLink] = await getDb()`
-      SELECT 1
-      FROM service_group_app_users sgau
-      JOIN app_users u ON u.id = sgau.app_user_id
-      WHERE u.app_id = ${appBId}
-        AND u.email = 'victim@example.com'
-    `;
-    expect(victimLink).toBeUndefined();
+    const reuse = await dispatchWeb(new Request(`http://localhost/oauth/authorize?${params}`, {
+      headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSessionA)}` },
+    }));
+    expect(reuse.status).toBe(200); // Consent remains app-local until #119 removes it.
+    expect(await reuse.text()).toContain('consent_nonce');
+    expect(appSessionFromResponse(reuse)).toBe(appSessionA);
+    expect(await getDb()`SELECT id FROM accounts`).toHaveLength(1);
+    const code = await approveConsent({ clientId: clientB, redirectUri: REDIRECT_B, appSession: appSessionA, scope: "openid" });
+    expect(code).toBeTruthy();
+    const exchanged = await dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "authorization_code", client_id: clientB, client_secret: clientSecretB,
+        code, redirect_uri: REDIRECT_B }),
+    }));
+    expect(exchanged.status).toBe(200);
+    const tokens = await exchanged.json() as { access_token: string; id_token: string };
+    const identityClaims = JSON.parse(Buffer.from(tokens.id_token.split('.')[1]!, 'base64url').toString());
+    expect(identityClaims.sub).toBe(subjectB);
+    expect(identityClaims.email).toBeUndefined();
+    expect(identityClaims.name).toBeUndefined();
+    const info = await dispatchWeb(new Request("http://localhost/oauth/userinfo", {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    }));
+    expect(info.status).toBe(200);
+    expect(await info.json()).toEqual({ sub: subjectB });
+    const [sourceSession] = await getDb()`SELECT primary_authenticated_at FROM app_user_sessions WHERE app_user_id = ${sourceUser.id}`;
+    const [targetSession] = await getDb()`SELECT primary_authenticated_at FROM app_user_sessions WHERE app_user_id = ${subjectB}`;
+    expect(targetSession.primary_authenticated_at).toEqual(sourceSession.primary_authenticated_at);
+
+    await getDb().begin(tx => changeApplicationMembership(tx, appBId, subjectB, "removed", String(owner.id)));
+    expect((await tryGroupSsoSession(new Request("http://localhost", {
+      headers: { cookie: `${APP_SESSION_COOKIE}=${appSessionA}` },
+    }) as BunRequest, appBId)).ok).toBe(false);
+    expect(await getDb()`SELECT subject_id FROM application_memberships WHERE subject_id = ${subjectB}`).toHaveLength(0);
+    expect(await getDb()`SELECT id FROM accounts`).toHaveLength(1);
+    await getDb().begin(tx => changeApplicationMembership(tx, appBId, subjectB, "active", String(owner.id)));
+    expect((await tryGroupSsoSession(new Request("http://localhost", {
+      headers: { cookie: `${APP_SESSION_COOKIE}=${appSessionA}` },
+    }) as BunRequest, appBId)).ok).toBe(true);
   });
 
   test("same-named developer scopes do not transfer consent between grouped apps", async () => {
@@ -395,4 +414,116 @@ run("Group SSO flow", () => {
     expect(authorizeRes.status).toBe(302);
     expect(authorizeRes.headers.get("location") ?? "").toContain("/auth/login");
   });
+  test("shared Account MFA cannot be bypassed and verified assurance is reused", async () => {
+    const weakSession = await loginAppUser(clientA, "group-user@example.com", appUserPassword);
+    const [source] = await getDb()`SELECT id FROM app_users WHERE app_id = ${appAId} AND email = 'group-user@example.com'`;
+    const [target] = await getDb()`SELECT id FROM app_users WHERE app_id = ${appBId} AND email = 'group-user@example.com'`;
+    const enrollment = await beginAppUserMfaEnrollment(String(source.id), appAId);
+    expect(enrollment).toBeTruthy();
+    const recovery = await confirmAppUserMfaEnrollment(String(source.id), await generateTotpCode(enrollment!.secret, Date.now() - 30_000));
+    expect(recovery).toHaveLength(10);
+    expect(await hasAppUserMfa(String(target.id), appBId)).toBe(true);
+    expect((await getAppUserMfaStatus(String(target.id), appBId)).recoveryCodesRemaining).toBe(10);
+    expect(await beginAppUserMfaEnrollment(String(target.id), appBId)).toBeNull();
+    const loginB = await runAppLogin(new Request("http://localhost/auth/login") as BunRequest,
+      appBId, "group-user@example.com", appUserPassword);
+    expect(loginB.ok && loginB.mfaRequired).toBe(true);
+    const weakReq = new Request("http://localhost/oauth/authorize", {
+      headers: { cookie: `${APP_SESSION_COOKIE}=${weakSession}` },
+    }) as BunRequest;
+    const stepUp = await tryGroupSsoSession(weakReq, appBId);
+    expect(stepUp.ok && stepUp.mfaRequired).toBe(true);
+    if (!stepUp.ok || !stepUp.mfaRequired) throw new Error("Expected shared MFA challenge");
+    const completed = await completeMfaSignIn(new Request("http://localhost/auth/mfa", {
+      headers: { cookie: stepUp.setCookie.split(';')[0] },
+    }) as BunRequest, recovery![0]!);
+    expect(completed.ok).toBe(true);
+    expect((await verifyAppUserMfaProof(String(source.id), recovery![0]!)).ok).toBe(false);
+    if (!completed.ok) throw new Error("Expected MFA completion");
+    // Use a new browser session for B so A has no direct grant in that browser.
+    const freshLoginB = await runAppLogin(new Request("http://localhost/auth/login") as BunRequest,
+      appBId, "group-user@example.com", appUserPassword);
+    if (!freshLoginB.ok || !freshLoginB.mfaRequired) throw new Error("Expected MFA challenge");
+    const strong = await completeMfaSignIn(new Request("http://localhost/auth/mfa", {
+      headers: { cookie: freshLoginB.setCookie.split(';')[0] },
+    }) as BunRequest, recovery![1]!);
+    if (!strong.ok) throw new Error("Expected strong session");
+    const reused = await tryGroupSsoSession(new Request("http://localhost/oauth/authorize", {
+      headers: { cookie: strong.result.setSessionCookie.split(';')[0] },
+    }) as BunRequest, appAId);
+    expect(reused.ok && !reused.mfaRequired).toBe(true);
+    const [shared] = await getDb()`SELECT mfa_authenticated_at FROM app_user_sessions
+      WHERE app_user_id = ${source.id} AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`;
+    expect(shared.mfa_authenticated_at).toBeTruthy();
+  });
+
+  test("SSO MFA preserves aged primary proof and rejects revoked or unavailable sources", async () => {
+    const [identity] = await getDb()`INSERT INTO app_users (app_id, email, name)
+      VALUES (${appAId}, 'sso-step-up@example.com', 'Step Up') RETURNING id, account_id`;
+    const [owner] = await getDb()`SELECT id FROM users WHERE email = 'owner@example.com'`;
+    const subjectB = await getDb().begin(async tx => {
+      const subject = await ensureApplicationSubject(tx, appBId, String(identity.account_id));
+      if (!subject) throw new Error('Expected shared subject');
+      expect(await changeApplicationMembership(tx, appBId, subject, 'active', String(owner.id))).toBe('updated');
+      return subject;
+    });
+    const enrollment = await beginAppUserMfaEnrollment(String(identity.id), appAId);
+    expect(enrollment).toBeTruthy();
+    const recovery = await confirmAppUserMfaEnrollment(String(identity.id),
+      await generateTotpCode(enrollment!.secret, Date.now() - 30_000));
+    if (!recovery) throw new Error('Expected recovery codes');
+    const primaryAt = new Date(Date.now() - 60 * 60 * 1000);
+    const challenge = async () => {
+      resetRateLimitsForTests();
+      const req = new Request('http://localhost/oauth/authorize') as BunRequest;
+      const source = await createAppSession(String(identity.id), appAId, req, {
+        primaryAuthenticatedAt: primaryAt, authenticationMethod: 'password',
+      });
+      const stepUp = await tryGroupSsoSession(new Request(req.url, {
+        headers: { cookie: `${APP_SESSION_COOKIE}=${source.token}` },
+      }) as BunRequest, appBId);
+      if (!stepUp.ok || !stepUp.mfaRequired) throw new Error('Expected shared MFA challenge');
+      const [bound] = await getDb()`SELECT source_session_id FROM app_user_mfa_challenges
+        WHERE app_user_id = ${subjectB} AND consumed_at IS NULL`;
+      expect(bound.source_session_id).toBeTruthy();
+      return { sourceId: String(bound.source_session_id), req: new Request('http://localhost/auth/mfa', {
+        headers: { cookie: stepUp.setCookie.split(';')[0] },
+      }) as BunRequest };
+    };
+    const first = await challenge();
+    const completed = await completeMfaSignIn(first.req, recovery[0]!);
+    expect(completed.ok).toBe(true);
+    const [grant] = await getDb()`SELECT primary_authenticated_at, mfa_authenticated_at, authentication_method
+      FROM app_user_sessions WHERE app_user_id = ${subjectB} AND revoked_at IS NULL`;
+    expect(grant.primary_authenticated_at).toEqual(primaryAt);
+    expect(new Date(grant.mfa_authenticated_at).getTime()).toBeGreaterThan(primaryAt.getTime());
+    expect(grant.authentication_method).toBe('password+totp');
+    const expectDenied = async (req: BunRequest, code: string) => {
+      const result = await completeMfaSignIn(req, code);
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.response.status).toBe(401);
+      expect(await getDb()`SELECT id FROM app_user_sessions WHERE app_user_id = ${subjectB} AND revoked_at IS NULL`).toHaveLength(1);
+    };
+    const revoked = await challenge();
+    await getDb()`UPDATE app_user_sessions SET revoked_at = NOW() WHERE id = ${revoked.sourceId}`;
+    await expectDenied(revoked.req, recovery[1]!);
+    const disabled = await challenge();
+    await getDb()`UPDATE service_groups SET sso_enabled = FALSE WHERE id =
+      (SELECT group_id FROM service_group_apps WHERE app_id = ${appAId})`;
+    await expectDenied(disabled.req, recovery[2]!);
+    await getDb()`UPDATE service_groups SET sso_enabled = TRUE WHERE id =
+      (SELECT group_id FROM service_group_apps WHERE app_id = ${appAId})`;
+    const unbound = await challenge();
+    await getDb()`UPDATE app_user_mfa_challenges SET source_session_id = NULL
+      WHERE source_session_id = ${unbound.sourceId}`;
+    await expectDenied(unbound.req, recovery[3]!);
+    const loggedOut = await challenge();
+    await getDb()`UPDATE app_browser_sessions SET revoked_at = NOW() WHERE id =
+      (SELECT browser_session_id FROM app_user_sessions WHERE id = ${loggedOut.sourceId})`;
+    await expectDenied(loggedOut.req, recovery[4]!);
+    const removed = await challenge();
+    await getDb().begin(tx => changeApplicationMembership(tx, appAId, String(identity.id), 'removed', String(owner.id)));
+    await expectDenied(removed.req, recovery[5]!);
+  });
+
 });

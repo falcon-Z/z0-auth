@@ -9,6 +9,8 @@ export type ServiceGroupSummary = {
   name: string;
   slug: string;
   ssoEnabled: boolean;
+  accountDomainId: string;
+  boundaryLocked: boolean;
   appCount: number;
   createdAt: string;
   updatedAt: string;

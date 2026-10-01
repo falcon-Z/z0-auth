@@ -374,3 +374,7 @@ The membership integration suite runs explicitly in the Alpha quality gate. The 
 - Multi-tenant rules are removed.
 - Internal platform role/scope validation rules are removed.
 - OAuth scope validation remains only for app-facing OAuth contracts.
+
+## Shared SSO Account Domains
+
+Issue #95 is covered by `tests/integration/shared-sso-domains.test.ts` (atomic domain placement, populated rejection, competing assignments, registration races, automatic pre-Alpha grouping retirement, and Account-owned credential persistence), `tests/integration/group-sso-flow.test.ts` (hosted SSO reuse, explicit membership, isolated consent/scopes/metadata, Account MFA, source-authority checks, and authentication timestamp preservation), `tests/integration/passkeys-flow.test.ts` and `tests/integration/shared-passkeys.test.ts` (shared Account credentials and fresh-proof enforcement), and `tests/integration/shared-federation-domains.test.ts` (domain-scoped issuer/subject continuity with independent membership). These run in `quality:alpha` and the full regression suite. The console journey is covered by `tests/e2e/sso-groups-console.spec.ts`.

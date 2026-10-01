@@ -9,6 +9,8 @@ import type {
 import { ErrorCodes } from "@z0/contracts/errors";
 import { validateRequiredString } from "@z0/contracts/validation";
 
+import type { SQL } from "bun";
+
 import { getDb, pgTextArray } from "./db";
 import { problem } from "./http";
 import { isValidSlug, slugifyAppName } from "./slug";
@@ -18,6 +20,8 @@ type GroupRow = {
   name: string;
   slug: string;
   sso_enabled: boolean;
+  account_domain_id: string;
+  boundary_locked: boolean;
   created_at: Date;
   updated_at: Date;
   app_count: number;
@@ -29,6 +33,8 @@ function mapSummary(row: GroupRow): ServiceGroupSummary {
     name: row.name,
     slug: row.slug,
     ssoEnabled: row.sso_enabled,
+    accountDomainId: String(row.account_domain_id),
+    boundaryLocked: Boolean(row.boundary_locked),
     appCount: Number(row.app_count ?? 0),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -56,6 +62,8 @@ async function findGroupRow(groupId: string): Promise<GroupRow | null> {
       g.name,
       g.slug,
       g.sso_enabled,
+      g.account_domain_id,
+      (SELECT identities_created_at IS NOT NULL FROM account_domains WHERE id = g.account_domain_id) AS boundary_locked,
       g.created_at,
       g.updated_at,
       (
@@ -107,11 +115,11 @@ async function validateAppIds(appIds: string[]): Promise<
   | { ok: true; ids: string[] }
   | { ok: false; response: Response }
 > {
-  if (!Array.isArray(appIds)) {
+  if (!Array.isArray(appIds) || appIds.some((id) => typeof id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim()))) {
     return {
       ok: false,
       response: problem(400, "Validation Error", "Invalid request", {
-        errors: [{ field: "appIds", code: ErrorCodes.REQUIRED, message: "appIds must be an array" }],
+        errors: [{ field: "appIds", code: ErrorCodes.REQUIRED, message: "appIds must be an array of application UUIDs" }],
       }),
     };
   }
@@ -178,31 +186,33 @@ async function assertAppsNotInOtherGroup(
   };
 }
 
-async function assignAppsToGroup(groupId: string, appIds: string[]): Promise<void> {
-  await getDb().begin(async (tx) => {
-    if (appIds.length === 0) {
-      await tx`
-        DELETE FROM service_group_app_users sgau
-        USING service_group_members sgm
-        WHERE sgau.group_member_id = sgm.id AND sgm.group_id = ${groupId}
-      `;
-    } else {
-      await tx`
-        DELETE FROM service_group_app_users sgau
-        USING service_group_members sgm
-        WHERE sgau.group_member_id = sgm.id
-          AND sgm.group_id = ${groupId}
-          AND NOT (sgau.app_id IN ${tx(appIds)})
-      `;
+async function assignAppsToGroup(tx: SQL, groupId: string, appIds: string[]): Promise<void> {
+  // Retain unchanged associations: a no-op must work for populated groups.
+  await tx`DELETE FROM service_group_apps WHERE group_id = ${groupId}
+    AND NOT (app_id = ANY(${pgTextArray(appIds)}::uuid[]))`;
+  for (const appId of [...appIds].sort()) {
+    await tx`SELECT id FROM apps WHERE id = ${appId} FOR UPDATE`;
+    const [association] = await tx`SELECT group_id FROM service_group_apps WHERE app_id = ${appId}`;
+    if (association) {
+      if (String(association.group_id) !== groupId) throw new Error("APP_ALREADY_GROUPED");
+      continue;
     }
-    await tx`DELETE FROM service_group_apps WHERE group_id = ${groupId}`;
-    for (const appId of appIds) {
-      await tx`
-        INSERT INTO service_group_apps (group_id, app_id)
-        VALUES (${groupId}, ${appId})
-      `;
-    }
-  });
+    await tx`INSERT INTO service_group_apps (group_id, app_id) VALUES (${groupId}, ${appId})`;
+  }
+}
+
+function groupMutationError(error: unknown): { ok: false; response: Response } {
+  const code = (error as { errno?: string; code?: string }).errno ?? (error as { code?: string }).code;
+  if (code === "23514") return { ok: false, response: problem(409, "Conflict",
+    "Account-domain placement cannot change after identities exist in Alpha", {
+      code: ErrorCodes.ACCOUNT_DOMAIN_IMMUTABLE,
+      errors: [{ field: "appIds", code: ErrorCodes.ACCOUNT_DOMAIN_IMMUTABLE,
+        message: "Populated identity domains cannot join, leave, move, or be deleted." }],
+    }) };
+  if (code === "23505" || code === "40001" || code === "40P01" || (error as Error).message === "APP_ALREADY_GROUPED") {
+    return { ok: false, response: problem(409, "Conflict", "Group configuration changed; reload and retry") };
+  }
+  throw error;
 }
 
 export async function listServiceGroupsForApi(): Promise<ServiceGroupSummary[]> {
@@ -212,6 +222,8 @@ export async function listServiceGroupsForApi(): Promise<ServiceGroupSummary[]> 
       g.name,
       g.slug,
       g.sso_enabled,
+      g.account_domain_id,
+      (SELECT identities_created_at IS NOT NULL FROM account_domains WHERE id = g.account_domain_id) AS boundary_locked,
       g.created_at,
       g.updated_at,
       (
@@ -266,20 +278,19 @@ export async function createServiceGroup(
   const appIdsResult = await validateAppIds(body.appIds ?? []);
   if (!appIdsResult.ok) return appIdsResult;
 
-  const [inserted] = await getDb()`
-    INSERT INTO service_groups (name, slug, sso_enabled)
-    VALUES (${nameResult.name}, ${slug}, ${Boolean(body.ssoEnabled)})
-    RETURNING id
-  `;
-  const groupId = String((inserted as { id: string }).id);
+  let groupId: string;
+  try {
+    groupId = await getDb().begin(async (tx) => {
+      const [inserted] = await tx`
+        INSERT INTO service_groups (name, slug, sso_enabled)
+        VALUES (${nameResult.name}, ${slug}, ${body.ssoEnabled ?? true}) RETURNING id
+      `;
+      const id = String(inserted.id);
+      await assignAppsToGroup(tx, id, appIdsResult.ids);
+      return id;
+    });
+  } catch (error) { return groupMutationError(error); }
 
-  const conflict = await assertAppsNotInOtherGroup(appIdsResult.ids, groupId);
-  if (!conflict.ok) {
-    await getDb()`DELETE FROM service_groups WHERE id = ${groupId}`;
-    return conflict;
-  }
-
-  await assignAppsToGroup(groupId, appIdsResult.ids);
   const detail = await getServiceGroupForApi(groupId);
   if (!detail.ok) return detail;
   return { ok: true, group: detail.group };
@@ -349,14 +360,19 @@ export async function putServiceGroupApps(
     return { ok: false, response: problem(404, "Not Found", "Group not found") };
   }
 
-  const appIdsResult = await validateAppIds(body.appIds ?? []);
+  const appIdsResult = await validateAppIds(body.appIds);
   if (!appIdsResult.ok) return appIdsResult;
 
   const conflict = await assertAppsNotInOtherGroup(appIdsResult.ids, groupId);
   if (!conflict.ok) return conflict;
 
-  await assignAppsToGroup(groupId, appIdsResult.ids);
-  await getDb()`UPDATE service_groups SET updated_at = NOW() WHERE id = ${groupId}`;
+  try {
+    await getDb().begin(async (tx) => {
+      await tx`SELECT id FROM service_groups WHERE id = ${groupId} FOR UPDATE`;
+      await assignAppsToGroup(tx, groupId, appIdsResult.ids);
+      await tx`UPDATE service_groups SET updated_at = NOW() WHERE id = ${groupId}`;
+    });
+  } catch (error) { return groupMutationError(error); }
 
   const detail = await getServiceGroupForApi(groupId);
   if (!detail.ok) return detail;
@@ -371,6 +387,8 @@ export async function deleteServiceGroup(
     return { ok: false, response: problem(404, "Not Found", "Group not found") };
   }
 
-  await getDb()`DELETE FROM service_groups WHERE id = ${groupId}`;
+  try {
+    await getDb()`DELETE FROM service_groups WHERE id = ${groupId}`;
+  } catch (error) { return groupMutationError(error); }
   return { ok: true };
 }

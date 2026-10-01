@@ -69,7 +69,7 @@ run("canonical Account Domains and Accounts", () => {
       await db`INSERT INTO app_password_reset_tokens (app_user_id, app_id, token_hash, expires_at)
         VALUES (${ua.id}, ${a.id}, 'legacy-reset', NOW() + INTERVAL '1 hour')`;
 
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(2);
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(3);
       const rows = await db`SELECT id, account_id, account_domain_id, password_hash, metadata, locked_until FROM app_users ORDER BY name`;
       expect(rows).toHaveLength(2);
       expect(String(rows[0].id)).toBe(String(ua.id));

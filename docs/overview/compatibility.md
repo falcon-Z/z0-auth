@@ -1,6 +1,6 @@
 # Compatibility during Alpha
 
-Z0Auth is still establishing its public contracts. Breaking changes may occur when they are necessary for security, correctness, or a coherent product model.
+Z0Auth is in early development and has no legacy compatibility obligations. The approved Alpha requirements and requirements-gathering decisions define the target behavior. Existing behavior, APIs, schemas, tests, and documentation may be replaced completely when they deviate from that target.
 
 This page defines what adopters can reasonably depend on during the Alpha stage.
 
@@ -16,7 +16,7 @@ Project-specific administrative APIs and configuration may change more frequentl
 
 Changes may affect configuration, administrative APIs, database schemas, deployment requirements, and application-facing behavior that has not reached a stable contract.
 
-Breaking changes should be deliberate and documented. Security and correctness take priority over preserving an interface that is incomplete or incorrect.
+Breaking changes should be deliberate and documented. Approved Alpha behavior, security, and correctness take priority over preserving an existing interface.
 
 The project does not currently promise long-term semantic-versioning stability.
 
@@ -32,13 +32,25 @@ Migration `0043_account_domains` gives each existing application a separate Acco
 
 The `app_users` database interface becomes a compatibility view. Account profile, password, and lifecycle fields are stored in `accounts`; application bindings and metadata remain in `app_account_bindings`. Direct database integrations that depend on `app_users` being a table must be updated. The migration is forward-only; recovery to an older binary requires restoring a compatible backup.
 
-This migration establishes canonical persistence. Shared SSO configuration remains tracked in [issue #95](https://github.com/falcon-Z/z0-auth/issues/95). Legacy service groups retain separate domains during migration. Providers without a recorded issuer retain a provider-specific legacy authority key until provider configuration is reconciled; their email attributes are not used as durable external identity keys.
+This migration establishes canonical persistence. Migration `0043` keeps legacy service groups in separate domains; `0045_shared_sso_account_domains` replaces their identity-linking semantics as described below. Providers without a recorded issuer retain a provider-specific legacy authority key until provider configuration is reconciled; their email attributes are not used as durable external identity keys.
 
 Migration `0044_application_memberships` preserves each existing app-facing ID in `app_account_bindings` as a stable Application Subject and introduces optional `application_memberships` records. Legacy account suspension/deletion remains account state; migrated memberships begin active. Subject metadata stays application-local and survives membership removal.
 
 The app-user API now reports `membershipStatus` (`active`, `disabled`, or `removed`) separately from `accountStatus` (`active`, `disabled`, `locked`, or `deleted`). `status` remains the effective application-access state. PATCH `membershipStatus` changes application access without changing account suspension, passwords, or profile. Removing membership uses `DELETE /api/v1/apps/{appId}/users/{userId}/membership`; explicit provisioning or rejoining an existing domain account uses `POST /api/v1/apps/{appId}/memberships` with `accountId`. Rejoining preserves `sub` and does not restore revoked sessions or tokens. Existing account lifecycle endpoints continue to change the Account across its domain and must not be used as membership removal.
 
 The current hosted application login and grant flows require active application membership. Reserving a subject or authenticating an account does not create membership. Arbitrary metadata such as a role label confers no authority; reserved identity/security fields are rejected. This migration is forward-only, with a compatible backup required for rollback to an older binary.
+
+## Shared SSO Account Domains (migration 0045)
+
+A service group now owns one shared Account Domain. Assign empty applications before registering accounts. A new group enables shared session reuse by default. `ssoEnabled: false` disables session reuse while retaining the shared identity boundary. Groups expose `accountDomainId` and `boundaryLocked`; every application keeps independent subject, membership, metadata, and claim/consent authority. Shared Account passwords, passkeys, the existing single TOTP factor/recovery codes, and external issuer/subject links resolve across subjects in that domain. The target application still requires active membership and must enable the external provider it accepts. SSO preserves authentication timestamps and does not repeat already-satisfied MFA.
+
+Joining a populated independent domain, leaving/moving a populated shared domain, and deleting a populated group return HTTP 409 with `ACCOUNT_DOMAIN_IMMUTABLE`. The first Account permanently fixes domain placement, including after final Account purge. This includes domains with Accounts but no membership in the application being moved. An empty independent app may join an existing shared domain. Replacing an unchanged app list remains valid. Removing an empty app gives it a new private domain. No SSO request automatically provisions membership; use the explicit membership API to grant access to an existing Account.
+
+Pre-Alpha email-based `service_group_members` and `service_group_app_users` links are removed. Migration 0045 automatically retires old group associations for populated applications, leaving their Accounts in independent domains. Empty associated applications move into their group's shared domain. Matching emails and old links never become shared Account authority; independent Accounts, subjects, credentials, memberships, and metadata retain their identity. No operator retirement workflow is required. Populated identity consolidation remains outside Alpha.
+
+The affected populated applications' sessions and human OAuth grants are revoked, unused authorization codes and consent challenges are consumed, and pending service-group MFA challenges are retired. Those applications require fresh authentication to their independent Accounts. Unrelated application grants, console authority, and browser brokers remain unaffected.
+
+The migration runs atomically. Rollback to an older binary requires a compatible backup. The console explains placement restrictions and prevents removal/deletion of populated groups. Target apps receive profile claims only through their own protocol scope checks; source-app metadata and consent never become shared authority.
 
 ## Undocumented behavior is not a contract
 
