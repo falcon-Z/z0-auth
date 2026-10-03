@@ -1,6 +1,6 @@
 import { validateCsrf } from "../../lib/csrf";
 import { json } from "../../lib/http";
-import { requireConsoleOrAppBearer } from "../../lib/app-api-auth";
+import { requireConsoleOrAppBearer, federationTokenResourceAudience } from "../../lib/app-api-auth";
 import type { RoutedRequest } from "../../lib/path-router";
 import { auditFederationTokenAccess, getFederationUserToken, refreshFederationUserToken } from "../../lib/federation-tokens";
 
@@ -13,6 +13,7 @@ export async function handleGetFederationUserToken(req: RoutedRequest): Promise<
     appId,
     consoleScope: "apps.federation:read",
     bearerScope: "federation:token",
+    bearerAudience: federationTokenResourceAudience(appId),
     targetUserId: userId,
   });
   if (!auth.ok) return auth.response;
@@ -47,6 +48,7 @@ export async function handleRefreshFederationUserToken(req: RoutedRequest): Prom
     appId,
     consoleScope: "apps.federation:manage",
     bearerScope: "federation:token",
+    bearerAudience: federationTokenResourceAudience(appId),
     targetUserId: userId,
   });
   if (!auth.ok) return auth.response;

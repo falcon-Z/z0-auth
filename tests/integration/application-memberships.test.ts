@@ -1,3 +1,4 @@
+import { testResourceForClient } from "../helpers/resources";
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import type { BunRequest } from "bun";
 import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
@@ -56,6 +57,7 @@ async function oidcTokens(appId: string, subjectId: string) {
   const verifier = "a".repeat(43);
   const challenge = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
   const code = await issueAuthorizationCode({ appId, appUserId: subjectId, appCredentialId: String(credential.id),
+        resource: await testResourceForClient(String(credential.id)),
     redirectUri: redirect, scope: "openid profile email", codeChallenge: challenge, codeChallengeMethod: "S256", nonce: null });
   const response = await dispatchWeb(new Request("http://localhost/oauth/token", {
     method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -85,7 +87,7 @@ run("Application Subjects and Memberships", () => {
         VALUES (${app.id}, 'person@example.com', 'Person', '{"team":"a"}', 'disabled', NOW()) RETURNING id, account_id`;
       await db`INSERT INTO app_password_reset_tokens (app_id, app_user_id, token_hash, expires_at)
         VALUES (${app.id}, ${user.id}, 'legacy-reset', NOW() + INTERVAL '1 hour')`;
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(3);
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(4);
       const [upgraded] = await db`SELECT id, account_id, account_status, membership_status, metadata FROM app_users`;
       expect(upgraded.id).toBe(user.id);
       expect(upgraded.account_id).toBe(user.account_id);
@@ -226,6 +228,7 @@ run("Application Subjects and Memberships", () => {
   test("concurrent removal and issuance cannot leave renewable application authority", async () => {
     const f = await fixture();
     const [credential] = await getDb()`INSERT INTO oauth_clients (app_id, client_id, label, client_type, redirect_uris, refresh_enabled) VALUES (${f.appA}, 'race-client', 'Test', 'public', ARRAY[${redirect}], TRUE) RETURNING id`;
+    const resource = await testResourceForClient(String(credential.id));
     let release!: () => void;
     const hold = new Promise<void>((resolve) => { release = resolve; });
     let signal!: () => void;
@@ -240,6 +243,7 @@ run("Application Subjects and Memberships", () => {
       throw new Error("Removed membership must not create login authority");
     });
     const issuance = issueAuthorizationCode({ appId: f.appA, appUserId: f.subjectA, appCredentialId: String(credential.id),
+        resource,
       redirectUri: redirect, scope: "openid", codeChallenge: null, codeChallengeMethod: null, nonce: null });
     // Release the transaction once PostgreSQL has observed the competing lock.
     for (let i = 0; i < 100; i++) {

@@ -147,6 +147,9 @@ export const ErrorCodes = {
   PASSKEY_NOT_FOUND: "passkey_not_found",
   PASSKEY_STEP_UP_REQUIRED: "passkey_step_up_required",
   PASSKEY_STATE_CONFLICT: "passkey_state_conflict",
+  RESOURCE_CONFIGURATION_INVALID: "resource_configuration_invalid",
+  RESOURCE_NOT_FOUND: "resource_not_found",
+  RESOURCE_STATE_CONFLICT: "resource_state_conflict",
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

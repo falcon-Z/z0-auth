@@ -1,3 +1,4 @@
+import { testResourceForClient } from "../helpers/resources";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
@@ -157,6 +158,7 @@ async function approveConsent(input: {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: input.clientId,
+    resource: await testResourceForClient(input.clientId),
     redirect_uri: input.redirectUri,
     scope: input.scope ?? "openid profile email",
     state: "test-state",
@@ -191,6 +193,7 @@ async function approveConsent(input: {
         _csrf: consentCsrf,
         response_type: "code",
         client_id: input.clientId,
+    resource: await testResourceForClient(input.clientId),
         redirect_uri: input.redirectUri,
         scope: input.scope ?? "openid profile email",
         state: "test-state",
@@ -277,6 +280,7 @@ run("Group SSO flow", () => {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: clientB,
+    resource: await testResourceForClient(clientB),
       redirect_uri: REDIRECT_B,
       scope: "openid profile email",
       state: "sso-state",
@@ -370,7 +374,7 @@ run("Group SSO flow", () => {
     });
     const authorizeB = await dispatchWeb(
       new Request(
-        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientB)}&redirect_uri=${encodeURIComponent(REDIRECT_B)}&scope=${encodeURIComponent("openid read:records")}&state=scope-isolation`,
+        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientB)}&resource=${encodeURIComponent(await testResourceForClient(clientB))}&redirect_uri=${encodeURIComponent(REDIRECT_B)}&scope=${encodeURIComponent("openid read:records")}&state=scope-isolation`,
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSessionA)}` } },
       ),
     );
@@ -400,6 +404,7 @@ run("Group SSO flow", () => {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: solo.client.clientId,
+    resource: await testResourceForClient(solo.client.clientId),
       redirect_uri: "http://localhost:3000/solo",
       scope: "openid profile email",
       state: "solo-state",

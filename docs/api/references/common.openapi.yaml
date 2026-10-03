@@ -94,6 +94,9 @@ components:
         - app_disabled
         - last_active_credential
         - scope_taken
+        - resource_configuration_invalid
+        - resource_not_found
+        - resource_state_conflict
         - scope_not_found
         - passkey_not_supported
         - passkey_origin_unavailable

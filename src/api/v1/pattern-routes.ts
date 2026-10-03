@@ -1,3 +1,4 @@
+import { handleAvailableResources, handleListResources, handleCreateResource, handlePatchResource, handleDeleteResource, handleListClientResources, handlePutClientResource, handleDeleteClientResource } from "./apps/resources-handlers";
 import type { PathRoute } from "../lib/path-router";
 import { handleAcceptInvite, handleDeclineInvite, handleInvitePreview } from "./invites/handlers";
 import {
@@ -106,6 +107,11 @@ import {
 } from "./apps/app-user-sessions-handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
+  { pattern: "/api/v1/resources", handlers: { GET: handleAvailableResources } },
+  { pattern: "/api/v1/apps/:appId/resources", handlers: { GET: handleListResources, POST: handleCreateResource } },
+  { pattern: "/api/v1/apps/:appId/resources/:resourceId", handlers: { PATCH: handlePatchResource, DELETE: handleDeleteResource } },
+  { pattern: "/api/v1/apps/:appId/clients/:clientId/resources", handlers: { GET: handleListClientResources } },
+  { pattern: "/api/v1/apps/:appId/clients/:clientId/resources/:resourceId", handlers: { PUT: handlePutClientResource, DELETE: handleDeleteClientResource } },
   { pattern: "/api/v1/settings/email/test", handlers: { POST: handleTestEmail } },
   { pattern: "/api/v1/settings/email", handlers: { GET: handleGetEmailSettings, PUT: handlePutEmailSettings } },
   { pattern: "/api/v1/settings/sign-in", handlers: { GET: handleGetInstanceSignInSettings, PUT: handlePutInstanceSignInSettings } },

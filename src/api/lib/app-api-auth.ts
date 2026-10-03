@@ -22,6 +22,7 @@ export async function requireConsoleOrAppBearer(
     appId: string;
     consoleScope: string;
     bearerScope: string;
+    bearerAudience: string;
     targetUserId?: string;
   },
 ): Promise<{ ok: true; auth: AppApiAuth } | { ok: false; response: Response }> {
@@ -37,11 +38,11 @@ export async function requireConsoleOrAppBearer(
       };
     }
 
-    if (access.appId !== options.appId) {
+    if (access.appId !== options.appId || access.audience !== options.bearerAudience) {
       return {
         ok: false,
-        response: problem(403, "Forbidden", "Token is not valid for this application", {
-          errors: [{ field: "_auth", code: ErrorCodes.PERMISSION_DENIED, message: "Token is not valid for this application" }],
+        response: problem(403, "Forbidden", "Token is not valid for this application resource", {
+          errors: [{ field: "_auth", code: ErrorCodes.PERMISSION_DENIED, message: "Token is not valid for this application resource" }],
         }),
       };
     }
@@ -80,3 +81,5 @@ export async function requireConsoleOrAppBearer(
   if (!consoleAuth.ok) return consoleAuth;
   return { ok: true, auth: { mode: "console", userId: consoleAuth.userId } };
 }
+
+export const federationTokenResourceAudience = (appId: string) => `urn:z0:federation-tokens:${appId}`;

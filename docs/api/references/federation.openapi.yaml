@@ -2,7 +2,12 @@ openapi: 3.1.0
 info:
   title: z0-auth Federation API
   version: 0.1.0
-  description: Instance and app-level external OAuth provider configuration (P5).
+  description: >-
+    Instance and app-level external OAuth provider configuration.
+    Upstream-token retrieval bearer calls require a registered audience
+    urn:z0:federation-tokens:<application UUID> and explicit Client permission
+    for that Resource and federation:token scope. Application and subject
+    boundaries are enforced in addition to the audience. Console callers use RBAC.
 servers:
   - url: http://localhost:3000
 tags:

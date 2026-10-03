@@ -1,3 +1,4 @@
+import { testResourceForClient } from "../helpers/resources";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
@@ -189,7 +190,7 @@ run("M06 app hosted auth", () => {
     const appSession = appSessionFromResponse(loginRes);
     expect(appSession).toBeTruthy();
 
-    const authorizeUrl = `/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=abc`;
+    const authorizeUrl = `/oauth/authorize?response_type=code&client_id=${encodeURIComponent(clientId)}&resource=${encodeURIComponent(await testResourceForClient(clientId))}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=abc`;
     const consentPageRes = await dispatchWeb(
       new Request(`http://localhost${authorizeUrl}`, {
         headers: {
@@ -219,6 +220,7 @@ run("M06 app hosted auth", () => {
           _csrf: consentCsrf,
           response_type: "code",
           client_id: clientId,
+    resource: await testResourceForClient(clientId),
           redirect_uri: REDIRECT,
           scope: "",
           state: "abc",
@@ -306,7 +308,7 @@ run("M06 app hosted auth", () => {
     for (const targetClientId of [clientId, clientBId]) {
       const authorize = await dispatchWeb(
         new Request(
-          `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(targetClientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=multi-app`,
+          `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(targetClientId)}&resource=${encodeURIComponent(await testResourceForClient(targetClientId))}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=multi-app`,
           { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(broker)}` } },
         ),
       );

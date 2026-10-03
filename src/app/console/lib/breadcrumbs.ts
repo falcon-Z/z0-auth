@@ -86,11 +86,11 @@ export function staticBreadcrumbsForPath(pathname: string): BreadcrumbSegment[] 
       ];
     }
 
-    if (parts[2] === "permissions") {
+    if (parts[2] === "permissions" || parts[2] === "resources") {
       return [
         { label: "Apps", to: "/apps" },
         { label: "App", to: appBasePath(appId) },
-        { label: "Permissions" },
+        { label: parts[2] === "resources" ? "Resources" : "Permissions" },
       ];
     }
 

@@ -71,6 +71,7 @@ const APP_SIDEBAR_DEFS = [
   { id: "users", label: "Users", segment: "users", exact: true },
   { id: "invites", label: "Invites", segment: "users/invites" },
   { id: "permissions", label: "Permissions", segment: "permissions" },
+  { id: "resources", label: "Resources", segment: "resources" },
 ] as const;
 
 export function appSidebarItems(appId: string): AppSidebarItem[] {

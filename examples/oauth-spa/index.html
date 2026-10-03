@@ -25,6 +25,7 @@
       Redirect URI (must match app registration)
       <input id="redirectUri" type="url" value="http://localhost:5173/callback" style="width: 100%;" />
     </label>
+    <label>Resource audience URI<input id="resource" type="text" placeholder="https://api.example.com/orders" style="width: 100%;" /></label>
     <p><button id="signIn" type="button">Sign in</button></p>
     <pre id="output">Configure client ID, then click Sign in.</pre>
     <script>
@@ -48,10 +49,11 @@
 
       document.getElementById("signIn").addEventListener("click", () => {
         const baseUrl = document.getElementById("baseUrl").value.replace(/\/+$/, "");
+        const resource = document.getElementById("resource").value;
         const clientId = document.getElementById("clientId").value.trim();
         const redirectUri = document.getElementById("redirectUri").value.trim();
-        if (!clientId) {
-          log("Enter a public client ID from the console.");
+        if (!clientId || !resource) {
+          log("Enter a public client ID and its permitted Resource audience URI.");
           return;
         }
 
@@ -63,6 +65,7 @@
         sha256Base64Url(verifier).then((challenge) => {
           const params = new URLSearchParams({
             response_type: "code",
+            resource,
             client_id: clientId,
             redirect_uri: redirectUri,
             scope: "openid profile email",

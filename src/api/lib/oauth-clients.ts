@@ -1,3 +1,4 @@
+import { lockResourceAuthority } from "./oauth-resources";
 import type { SQL } from "bun";
 import type {
   Assurance,
@@ -239,6 +240,7 @@ export async function listClientsForApi(appId: string) {
 }
 export async function createClient(appId: string, body: CreateClientRequest) {
   return getDb().begin(async (tx) => {
+    await lockResourceAuthority(tx, true);
     const [app] = await tx`SELECT * FROM apps WHERE id = ${appId} FOR UPDATE`;
     if (!app) return fail(404, "Application not found.");
     if (app.status !== "active") return fail(409, "Application is disabled.");
@@ -252,6 +254,7 @@ export async function createClient(appId: string, body: CreateClientRequest) {
 }
 async function containClient(tx: SQL, clientId: string, refreshOnly = false) {
   if (!refreshOnly) {
+    await tx`UPDATE oauth_grants SET revoked_at = COALESCE(revoked_at, NOW()) WHERE client_id = ${clientId}`;
     await tx`UPDATE oauth_authorization_codes SET used_at = COALESCE(used_at, NOW()) WHERE app_credential_id = ${clientId}`;
     await tx`UPDATE oauth_consent_challenges SET consumed_at = COALESCE(consumed_at, NOW()), completion_outcome = COALESCE(completion_outcome, 'expired') WHERE app_credential_id = ${clientId}`;
   }
@@ -287,6 +290,7 @@ export async function patchClient(
   )
     return fail(400, "Status must be active or disabled.", "status");
   return getDb().begin(async (tx) => {
+    await lockResourceAuthority(tx, true);
     const [app] = await tx`SELECT * FROM apps WHERE id = ${appId} FOR UPDATE`;
     if (!app) return fail(404, "Application not found.");
     const [row] =
@@ -338,6 +342,7 @@ export async function patchClient(
 }
 export async function rotateClientSecret(appId: string, id: string) {
   return getDb().begin(async (tx) => {
+    await lockResourceAuthority(tx, true);
     const [app] = await tx`SELECT * FROM apps WHERE id = ${appId} FOR UPDATE`;
     if (!app) return fail(404, "Application not found.");
     const [client] =

@@ -1,3 +1,4 @@
+import { lockResourceAuthority, contractResourceGrants } from "./oauth-resources";
 import type { SQL } from "bun";
 import type {
   AppDetail,
@@ -39,8 +40,8 @@ export function mapAppRow(row: AppRow, count: number): AppSummary {
       : null,
   };
 }
-export async function findAppRow(appId: string): Promise<AppRow | null> {
-  const [row] = await getDb()`SELECT * FROM apps WHERE id = ${appId}`;
+export async function findAppRow(appId: string, database: SQL = getDb()): Promise<AppRow | null> {
+  const [row] = await database`SELECT * FROM apps WHERE id = ${appId}`;
   return row ? (row as AppRow) : null;
 }
 export async function listAppsForApi(): Promise<AppSummary[]> {
@@ -169,6 +170,7 @@ export async function patchApp(
   )
     return invalid("Status must be active or disabled.");
   return getDb().begin(async (tx) => {
+    await lockResourceAuthority(tx, true);
     const [row] = await tx`SELECT * FROM apps WHERE id = ${appId} FOR UPDATE`;
     if (!row)
       return {
@@ -181,7 +183,11 @@ export async function patchApp(
       minimum_assurance = ${body.minimumAssurance ?? row.minimum_assurance},
       disabled_at = ${status === "disabled" ? (row.disabled_at ?? new Date()) : null}, updated_at = NOW()
       WHERE id = ${appId} RETURNING *`;
-    if (status === "disabled") await containApplication(tx, appId);
+    if (status === "disabled") {
+      await containApplication(tx, appId);
+      await tx`UPDATE oauth_grants SET revoked_at = COALESCE(revoked_at, NOW()) WHERE app_id = ${appId}`;
+      await contractResourceGrants(tx);
+    }
     const [count] =
       await tx`SELECT COUNT(*)::int AS count FROM oauth_clients WHERE app_id = ${appId} AND status = 'active'`;
     return { ok: true, app: mapAppRow(updated as AppRow, Number(count.count)) };
