@@ -24,6 +24,7 @@ import {
   patchAppClient,
   rotateAppClientSecret,
 } from "../../../lib/apps-api";
+import { ClientResourcesDialog } from "../components/ClientResourcesDialog";
 import { ClientFields, defaultClient } from "../components/ClientFields";
 import { CredentialSecretDialog } from "../components/CredentialSecretDialog";
 
@@ -34,6 +35,7 @@ export function AppSetupPage() {
   const confirm = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
+  const [resourceClient, setResourceClient] = useState<OAuthClientSummary | null>(null);
   const [clients, setClients] = useState<OAuthClientSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -229,6 +231,7 @@ export function AppSetupPage() {
                 >
                   Manage
                 </Button>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => setResourceClient(client)}>Resource access</Button>
                 <Button
                   size="sm"
                   variant="outline"
@@ -292,6 +295,7 @@ export function AppSetupPage() {
           </form>
         </DialogContent>
       </Dialog>
+      {resourceClient && <ClientResourcesDialog appId={appId} client={resourceClient} onClose={() => setResourceClient(null)} />}
       {reveal && (
         <CredentialSecretDialog
           open

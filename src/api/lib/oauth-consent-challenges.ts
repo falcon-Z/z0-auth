@@ -6,6 +6,7 @@ import type {
 } from "../../capabilities/authorization-server";
 import { writeAuditEvent } from "./audit";
 import { sha256Hex } from "./crypto";
+import { lockResourceAuthority } from "./oauth-resources";
 import { getDb } from "./db";
 import { upsertOAuthUserConsent } from "./oauth-consent";
 import { issueAuthorizationCode } from "./oauth";
@@ -18,6 +19,8 @@ type ChallengeRow = {
   app_credential_id: string;
   redirect_uri: string;
   scope: string;
+  resource_id: string;
+  audience: string;
   oauth_state: string | null;
   code_challenge: string | null;
   code_challenge_method: string | null;
@@ -40,6 +43,7 @@ function matchesChallenge(row: ChallengeRow, input: OAuthConsentCompletionInput)
     && row.client_id === input.clientId
     && row.redirect_uri === input.redirectUri
     && row.scope === input.scope
+    && row.audience === input.resource
     && nullableEqual(row.oauth_state, input.state)
     && nullableEqual(row.code_challenge, input.codeChallenge)
     && nullableEqual(row.code_challenge_method, input.codeChallengeMethod)
@@ -83,7 +87,7 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
           code_challenge,
           code_challenge_method,
           oidc_nonce,
-          expires_at
+          expires_at, resource_id
         )
         SELECT
           ${challenge.purpose},
@@ -97,8 +101,9 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
           ${challenge.codeChallenge},
           ${challenge.codeChallengeMethod},
           ${challenge.oidcNonce},
-          clock_timestamp() + (${challenge.lifetimeSeconds} * INTERVAL '1 second')
+          clock_timestamp() + (${challenge.lifetimeSeconds} * INTERVAL '1 second'), resource.id
         FROM oauth_clients credentials
+        JOIN oauth_resources resource ON resource.audience = ${challenge.resource ?? null}
         WHERE credentials.client_id = ${challenge.clientId}
           AND credentials.app_id = ${challenge.appId}
           AND credentials.status = 'active'
@@ -125,6 +130,7 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
     async complete(input: OAuthConsentCompletionInput): Promise<OAuthConsentCompletion> {
       const nonceHash = await sha256Hex(input.nonce);
       return getDb().begin(async (tx) => {
+        await lockResourceAuthority(tx);
         // Client management locks the application and client before retiring
         // challenges. Take those locks first so completion cannot deadlock
         // with disablement or a change to the assurance policy.
@@ -145,7 +151,7 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
             credentials.client_id,
             challenge.app_credential_id,
             challenge.redirect_uri,
-            challenge.scope,
+            challenge.scope, challenge.resource_id, resource.audience,
             challenge.oauth_state,
             challenge.code_challenge,
             challenge.code_challenge_method,
@@ -160,19 +166,9 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
               AND identity.deleted_at IS NULL
               AND (identity.locked_until IS NULL OR identity.locked_until <= clock_timestamp())
               AND challenge.redirect_uri = ANY(credentials.redirect_uris)
-              AND NOT EXISTS (
-                SELECT 1
-                FROM unnest(regexp_split_to_array(challenge.scope, '\\s+')) AS requested(scope_name)
-                WHERE requested.scope_name <> ''
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM app_scopes allowed
-                    WHERE allowed.app_id = challenge.app_id
-                      AND allowed.name = requested.scope_name
-                  )
-              )
             ) AS authority_active
           FROM oauth_consent_challenges challenge
+          JOIN oauth_resources resource ON resource.id = challenge.resource_id AND resource.status = 'active'
           JOIN oauth_clients credentials ON credentials.id = challenge.app_credential_id
           JOIN apps application ON application.id = challenge.app_id
           JOIN app_users identity
@@ -234,6 +230,7 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
             appCredentialId: row.app_credential_id,
             redirectUri: row.redirect_uri,
             scope: row.scope,
+            resource: row.audience,
             codeChallenge: row.code_challenge,
             codeChallengeMethod: row.code_challenge_method,
             nonce: row.oidc_nonce,

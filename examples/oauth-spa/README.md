@@ -12,7 +12,7 @@ cd examples/oauth-spa
 bunx serve -p 5173 .
 ```
 
-3. Open `http://localhost:5173`, paste your `client_id`, and click **Sign in**.
+3. Open `http://localhost:5173`, paste your `client_id` and registered Resource audience URI, and click **Sign in**.
 
 ## What it demonstrates
 
@@ -23,3 +23,5 @@ bunx serve -p 5173 .
 Register a public interactive Client beneath your Application, set its redirect URI and explicitly register `http://localhost:5173` in browser origins. Enable refresh tokens on that Client if the example uses refresh.
 
 Never put a `client_secret` in browser code.
+
+Register the API Resource in **Apps → Resources**, expose `openid`, `profile`, and `email`, and permit the SPA Client to request that Resource and those scopes through **Setup → Resource access**. Each authorization selects one exact audience. Tokens from a different Resource are not authority for this API.

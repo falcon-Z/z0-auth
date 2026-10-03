@@ -7,7 +7,7 @@ info:
     This document defines the shipped authorization-server contract:
     - authorization code flow
     - PKCE required for public clients
-    - opaque access tokens
+    - opaque access tokens bound to one registered Resource audience
     - rotated refresh tokens with family replay revocation
     - RFC 7662 introspection for customer resource servers
 servers:
@@ -28,6 +28,11 @@ paths:
         When the user is authenticated and prior consent in `oauth_user_consents` covers the requested
         scopes, the authorization code is issued without showing the consent screen.
         Otherwise returns an HTML consent page listing requested scopes with human-readable descriptions.
+        Exactly one absolute `resource` URI is required and must be registered and explicitly
+        authorized for the client. Unknown, missing, repeated or unauthorized targets return
+        `invalid_target`. Scopes must be within the selected Resource's client ceiling.
+        Every exchange creates an independent client/principal/Resource/scope grant;
+        remembered approvals never add authority to that grant.
       operationId: getOAuthAuthorize
       parameters:
         - name: response_type
@@ -47,12 +52,19 @@ paths:
           schema:
             type: string
             format: uri
+        - name: resource
+          in: query
+          required: true
+          description: Exact registered audience URI. Alpha supports one Resource per authorization.
+          schema:
+            type: string
+            format: uri
         - name: scope
           in: query
           required: false
           schema:
             type: string
-            description: Space-delimited scopes; must be subset of client-registered scopes.
+            description: Space-delimited requested scopes; must be a subset of the explicit client/Resource ceiling.
         - name: state
           in: query
           required: false
@@ -112,6 +124,12 @@ paths:
       description: |
         Exchanges grants for OAuth tokens.
         Supported `grant_type` values: `authorization_code`, `refresh_token`, `client_credentials`.
+        Access tokens are opaque and their introspection aud is the registered Resource audience.
+        Requests use application/x-www-form-urlencoded. Exactly one resource is required for
+        Client Credentials. Code exchange and refresh inherit the frozen Resource; an optional
+        resource must match it exactly. Repeated resource values are rejected.
+        A code exchange rechecks the ceiling; scope reductions permanently contract existing
+        renewable grants. Separate grants never merge scopes or Resource authority.
         Access tokens are opaque. Authorization code exchange returns a refresh token only when the interactive child Client enables refresh (30-day TTL, rotated on use).
         Refresh clients may send an `Idempotency-Key` so an identical retry within 10 seconds receives
         the original rotation outcome. Reuse with a different key revokes the token family.
@@ -152,9 +170,13 @@ paths:
                 refresh_token:
                   type: string
                   description: Required for `refresh_token`.
+                resource:
+                  type: string
+                  format: uri
+                  description: Required for Client Credentials; optional matching Resource for code exchange/refresh. One value only.
                 scope:
                   type: string
-                  description: Optional for `client_credentials`; subset of app scopes.
+                  description: Optional requested subset of the client/Resource ceiling for Client Credentials, or of the existing grant on refresh. A narrower refresh access token does not expand or replace the grant.
                 client_id:
                   type: string
                 client_secret:
@@ -252,7 +274,7 @@ paths:
         - {}
       tags: [OAuth]
       summary: Inspect an opaque access token
-      description: Confidential resource servers authenticate with HTTP Basic or form credentials. Tokens from another app are always reported inactive.
+      description: The issuing confidential Client authenticates with HTTP Basic or form credentials. Tokens issued to another Client are reported inactive, including Clients in the same Application. Resource servers must verify the returned audience and required scopes.
       operationId: postOAuthIntrospect
       requestBody:
         required: true
@@ -283,7 +305,7 @@ paths:
                   token_type: { type: string }
                   exp: { type: integer }
                   sub: { type: string }
-                  aud: { type: string }
+                  aud: { type: string, description: Exactly one registered Resource audience }
         "401":
           description: Client authentication failed
   /.well-known/openid-configuration:
@@ -399,6 +421,7 @@ components:
             - unauthorized_client
             - unsupported_grant_type
             - invalid_scope
+            - invalid_target
             - invalid_token
             - insufficient_scope
         error_description:

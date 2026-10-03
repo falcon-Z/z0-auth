@@ -249,7 +249,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST /oauth/token` | OIDC scopes | When `openid` is granted, token response includes `id_token` | `invalid_scope` | 400 | Integration logs / API client |
 | `POST /oauth/token` | ID token claims | `iss`, `sub`, `aud`, `exp`, `iat` always present; profile/email claims scope-gated | — | 200 | Integration logs / API client |
 | `POST /oauth/token` | OIDC `nonce` | When supplied at authorize, included unchanged in the ID token | — | 200 | Integration logs / API client |
-| `POST /oauth/introspect` | Client auth | Confidential client Basic or form authentication required; cross-app tokens reported inactive | `invalid_client` | 401 | Resource server |
+| `POST /oauth/introspect` | Client auth | Issuing confidential Client Basic or form authentication required; another Client's tokens reported inactive, including within the same Application | `invalid_client` | 401 | Resource server |
 | `GET /oauth/userinfo` | `Authorization` header | Bearer access token required | `invalid_token` | 401 | Integration logs / API client |
 | `GET /oauth/userinfo` | Access token state | Token must be active, unexpired, and not revoked | `invalid_token` | 401 | Integration logs / API client |
 | `GET /oauth/userinfo` | Scope to claims | Returns only claims allowed by granted scope | `insufficient_scope` | 403 | Integration logs / API client |
@@ -355,3 +355,23 @@ Issue #95 is covered by `tests/integration/shared-sso-domains.test.ts` (atomic d
 ## Application → Client acceptance evidence (#96)
 
 `tests/integration/apps-flow.test.ts` proves mixed server/SPA clients under one Application, one membership and stable ID Token/UserInfo subject, immutable class and purpose, independent redirects/origins, assurance inheritance and concurrent policy changes, RBAC/CSRF/parent binding, and disable/rotation behavior. Protocol, refresh, migration, and regression suites run in `quality:alpha`. `tests/e2e/oauth-clients-console.spec.ts` exercises create/list/manage beneath an Application.
+
+
+## Registered Resources and client authority
+
+| Input/operation | Rule | Result |
+|---|---|---|
+| Resource `audience` | Absolute URI, 1–2048 characters, no fragment, whitespace, userinfo, invalid URI characters or invalid percent encoding; exact spelling is stored | 400 `resource_configuration_invalid` |
+| Resource `name` | Nonempty after trimming, at most 128 characters | 400 `resource_configuration_invalid` |
+| Resource `scopes` | Up to 100 unique OAuth scope names in its owning Application vocabulary | 400 `resource_configuration_invalid` |
+| Resource identity PATCH | Audience, owner and ID cannot change | 400 `resource_configuration_invalid` |
+| Reserved audience / retired Resource PATCH | Retired audiences cannot be reused or restored | 409 `resource_state_conflict` |
+| Unknown Resource/Application/Client UUID | Configuration must exist under the indicated parent | 404 `resource_not_found` |
+| Client permission `scopes` | Explicit subset of selected Resource vocabulary; only the `scopes` field is accepted | 400 `resource_configuration_invalid` |
+| Management reads | `apps.resources:read` for registry; `apps.clients:read` for client ceiling | 401/403 |
+| Management writes | Resource `apps.resources:manage`, ceiling `apps.clients:update`, CSRF and recent console verification | 403 |
+| OAuth `resource` | Exactly one registered, active, client-authorized absolute URI at authorization/Client Credentials; repeat indicators rejected | OAuth `invalid_target` |
+| Requested OAuth scope | Must fit selected client/Resource ceiling; refresh scope must fit its own grant | OAuth `invalid_scope` |
+| Code/refresh resource | Optional repeat must equal frozen grant audience | OAuth `invalid_grant` |
+| Policy contraction | Remove scopes permanently from active grants; never restore old grant scopes on re-add | Future refresh scope contracts |
+| Permission removal / Resource retirement | Revoke renewable grants for that Client/Resource; audience stays reserved | Later refresh fails |

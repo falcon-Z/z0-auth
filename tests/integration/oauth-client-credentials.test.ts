@@ -1,3 +1,4 @@
+import { testResourceForClient } from "../helpers/resources";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { closeDatabase } from "../../src/api/lib/db";
@@ -104,6 +105,7 @@ run("OAuth client credentials grant", () => {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(confidentialClientId),
           client_id: confidentialClientId,
           client_secret: confidentialSecret,
           scope: "read:orders",
@@ -130,6 +132,7 @@ run("OAuth client credentials grant", () => {
         },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(confidentialClientId),
           scope: "read:orders",
         }).toString(),
       }),
@@ -146,6 +149,7 @@ run("OAuth client credentials grant", () => {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(confidentialClientId),
           client_id: confidentialClientId,
           client_secret: confidentialSecret,
           scope: "read:orders",
@@ -176,6 +180,7 @@ run("OAuth client credentials grant", () => {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(confidentialClientId),
           client_id: publicClientId,
         }).toString(),
       }),
@@ -192,6 +197,7 @@ run("OAuth client credentials grant", () => {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(confidentialClientId),
           client_id: confidentialClientId,
           client_secret: confidentialSecret,
           scope: "read:orders",
@@ -215,6 +221,7 @@ run("OAuth client credentials grant", () => {
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(confidentialClientId),
           client_id: confidentialClientId,
           client_secret: confidentialSecret,
           scope: "unknown:scope",

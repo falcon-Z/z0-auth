@@ -1,0 +1,202 @@
+openapi: 3.1.0
+info:
+  title: z0-auth Resource and Client Authority API
+  version: 0.1.0
+  description: |
+    Registered Resources own stable, globally unique access-token audiences. Display names
+    and exposed scopes are mutable; audience and ownership are immutable. DELETE permanently
+    retires a Resource and preserves its audience reservation. New clients have no Resource
+    authority. Permissions explicitly configure each client/Resource/scope ceiling, including
+    Resources owned by another Application. Scope reductions permanently contract existing
+    grants; permission removal and Resource retirement revoke renewable grants. Reconfiguration
+    never resurrects those grants. Operator mutations require CSRF and recent console verification.
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/v1/resources:
+    get:
+      operationId: listAvailableOAuthResources
+      summary: List active Resources across Applications (apps.resources:read)
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {$ref: '#/components/responses/Resources'}
+        '401': {$ref: 'common.openapi.yaml#/components/responses/Unauthorized'}
+        '403': {$ref: 'common.openapi.yaml#/components/responses/Forbidden'}
+  /api/v1/apps/{appId}/resources:
+    parameters:
+      - {$ref: '#/components/parameters/AppId'}
+    get:
+      operationId: listApplicationResources
+      summary: List Resources including retirement reservations (apps.resources:read)
+      security: [{SessionCookie: []}]
+      responses:
+        '200': {$ref: '#/components/responses/Resources'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+    post:
+      operationId: registerOAuthResource
+      summary: Register a Resource (apps.resources:manage)
+      security: [{SessionCookie: [], CsrfHeader: [], CsrfCookie: []}]
+      parameters:
+        - {$ref: 'common.openapi.yaml#/components/parameters/CsrfHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, audience, scopes]
+              properties:
+                name: {type: string, minLength: 1, maxLength: 128}
+                audience: {type: string, format: uri, maxLength: 2048, description: 'Exact absolute URI without fragment, whitespace or userinfo; never normalized or reused.'}
+                scopes: {$ref: '#/components/schemas/ScopeNames'}
+      responses:
+        '201': {$ref: '#/components/responses/Resource'}
+        '400': {$ref: 'common.openapi.yaml#/components/responses/ValidationError'}
+        '403': {$ref: 'common.openapi.yaml#/components/responses/Forbidden'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+        '409': {$ref: 'common.openapi.yaml#/components/responses/Conflict'}
+  /api/v1/apps/{appId}/resources/{resourceId}:
+    parameters:
+      - {$ref: '#/components/parameters/AppId'}
+      - {$ref: '#/components/parameters/ResourceId'}
+    patch:
+      operationId: updateOAuthResource
+      summary: Change name or exposed scopes (apps.resources:manage)
+      security: [{SessionCookie: [], CsrfHeader: [], CsrfCookie: []}]
+      parameters:
+        - {$ref: 'common.openapi.yaml#/components/parameters/CsrfHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: {type: string, minLength: 1, maxLength: 128}
+                scopes: {$ref: '#/components/schemas/ScopeNames'}
+      responses:
+        '200': {$ref: '#/components/responses/Resource'}
+        '400': {$ref: 'common.openapi.yaml#/components/responses/ValidationError'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+        '409': {$ref: 'common.openapi.yaml#/components/responses/Conflict'}
+    delete:
+      operationId: retireOAuthResource
+      summary: Permanently retire Resource (apps.resources:manage)
+      security: [{SessionCookie: [], CsrfHeader: [], CsrfCookie: []}]
+      parameters:
+        - {$ref: 'common.openapi.yaml#/components/parameters/CsrfHeader'}
+      responses:
+        '200': {$ref: '#/components/responses/Resource'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+        '409': {$ref: 'common.openapi.yaml#/components/responses/Conflict'}
+  /api/v1/apps/{appId}/clients/{clientId}/resources:
+    parameters:
+      - {$ref: '#/components/parameters/AppId'}
+      - {$ref: '#/components/parameters/ClientId'}
+    get:
+      operationId: listClientResourcePermissions
+      summary: Inspect client ceiling (apps.clients:read)
+      security: [{SessionCookie: []}]
+      responses:
+        '200':
+          description: Explicit permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [permissions]
+                properties:
+                  permissions:
+                    type: array
+                    items: {$ref: '#/components/schemas/ClientResourcePermission'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+  /api/v1/apps/{appId}/clients/{clientId}/resources/{resourceId}:
+    parameters:
+      - {$ref: '#/components/parameters/AppId'}
+      - {$ref: '#/components/parameters/ClientId'}
+      - {$ref: '#/components/parameters/ResourceId'}
+    put:
+      operationId: setClientResourcePermission
+      summary: Replace scope ceiling for one Resource (apps.clients:update)
+      security: [{SessionCookie: [], CsrfHeader: [], CsrfCookie: []}]
+      parameters:
+        - {$ref: 'common.openapi.yaml#/components/parameters/CsrfHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [scopes]
+              properties:
+                scopes: {$ref: '#/components/schemas/ScopeNames'}
+      responses:
+        '200': {$ref: '#/components/responses/Ok'}
+        '400': {$ref: 'common.openapi.yaml#/components/responses/ValidationError'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+    delete:
+      operationId: removeClientResourcePermission
+      summary: Remove permission and revoke its grants (apps.clients:update)
+      security: [{SessionCookie: [], CsrfHeader: [], CsrfCookie: []}]
+      parameters:
+        - {$ref: 'common.openapi.yaml#/components/parameters/CsrfHeader'}
+      responses:
+        '200': {$ref: '#/components/responses/Ok'}
+        '404': {$ref: 'common.openapi.yaml#/components/responses/NotFound'}
+components:
+  parameters:
+    AppId: {name: appId, in: path, required: true, schema: {type: string, format: uuid}}
+    ClientId: {name: clientId, in: path, required: true, description: 'Internal client UUID, not public client_id.', schema: {type: string, format: uuid}}
+    ResourceId: {name: resourceId, in: path, required: true, schema: {type: string, format: uuid}}
+  schemas:
+    ScopeNames:
+      type: array
+      maxItems: 100
+      uniqueItems: true
+      items: {type: string}
+      description: 'Resource scopes must exist in its owning Application vocabulary. Client scopes must be exposed by that Resource. Empty arrays confer no scopes.'
+    Resource:
+      type: object
+      required: [id, appId, audience, name, status, scopes]
+      properties:
+        id: {type: string, format: uuid}
+        appId: {type: string, format: uuid}
+        audience: {type: string, format: uri}
+        name: {type: string}
+        status: {type: string, enum: [active, retired]}
+        scopes: {$ref: '#/components/schemas/ScopeNames'}
+    ClientResourcePermission:
+      type: object
+      required: [resourceId, audience, name, scopes]
+      properties:
+        resourceId: {type: string, format: uuid}
+        audience: {type: string, format: uri}
+        name: {type: string}
+        scopes: {$ref: '#/components/schemas/ScopeNames'}
+  responses:
+    Resource:
+      description: Resource configuration
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Resource'}
+    Resources:
+      description: Registered Resources
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [resources]
+            properties:
+              resources: {type: array, items: {$ref: '#/components/schemas/Resource'}}
+    Ok:
+      description: Permission updated
+      content:
+        application/json:
+          schema: {type: object, required: [ok], properties: {ok: {type: boolean, const: true}}}
+  securitySchemes:
+    SessionCookie: {$ref: 'common.openapi.yaml#/components/securitySchemes/SessionCookie'}
+    CsrfHeader: {$ref: 'common.openapi.yaml#/components/securitySchemes/CsrfHeader'}
+    CsrfCookie: {$ref: 'common.openapi.yaml#/components/securitySchemes/CsrfCookie'}

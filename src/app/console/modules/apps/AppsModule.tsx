@@ -6,6 +6,7 @@ import { AppUserInviteDetailPage } from "../app-users/pages/AppUserInviteDetailP
 import { AppUserInvitesPage } from "../app-users/pages/AppUserInvitesPage";
 import { AppUsersPage } from "../app-users/pages/AppUsersPage";
 import { AppPermissionsPage } from "../scopes/pages/AppPermissionsPage";
+import { AppResourcesPage } from "./pages/AppResourcesPage";
 import { AppSetupPage } from "./pages/AppSetupPage";
 import { AppSignInPage } from "./pages/AppSignInPage";
 import { AppsListPage } from "./pages/AppsListPage";
@@ -19,6 +20,7 @@ export function AppsModule() {
       <Route path=":appId" element={<AppWorkspaceRoute />}>
         <Route index element={<Navigate to="setup" replace />} />
         <Route path="setup" element={<AppSetupPage />} />
+        <Route path="resources" element={<AppResourcesPage />} />
         <Route path="sign-in" element={<AppSignInPage />} />
         <Route path="users/invites" element={<AppUserInvitesPage />} />
         <Route path="users" element={<AppUsersPage />} />

@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "console",
-      testMatch: /(?:console-shell|members-console|owner-journey-console|mfa-enrollment-console|passkeys-console|application-memberships-console|sso-groups-console|oauth-clients-console)\.spec\.ts/,
+      testMatch: /(?:console-shell|members-console|owner-journey-console|mfa-enrollment-console|passkeys-console|application-memberships-console|sso-groups-console|oauth-clients-console|resources-console)\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],

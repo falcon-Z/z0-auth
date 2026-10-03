@@ -1,3 +1,4 @@
+import { testResourceForClient } from "./resources";
 import { CSRF_COOKIE } from "@z0/contracts/http";
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
 
@@ -16,12 +17,14 @@ export async function approveOAuthConsent(
     redirectUri: string;
     appSession: string;
     scope: string;
+    resource?: string;
     state: string;
   },
 ): Promise<string> {
   const request = new URLSearchParams({
     response_type: "code",
     client_id: input.clientId,
+    resource: input.resource ?? await testResourceForClient(input.clientId),
     redirect_uri: input.redirectUri,
     scope: input.scope,
     state: input.state,

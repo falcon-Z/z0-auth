@@ -40,13 +40,12 @@ import {
   previewAuthorizationCodeForExchange,
   issueAuthorizationCode,
   revokeOAuthToken,
-  validateRequestedScopes,
   verifyOAuthClientSecret,
 } from "../../api/lib/oauth";
 import { buildDiscoveryDocument, getJwks, hasOpenIdScope, issueIdToken } from "../../api/lib/oidc";
+import { resolveResourceAuthority } from "../../api/lib/oauth-resources";
 import { getDb } from "../../api/lib/db";
 import { withSetCookie, preparePageCsrf } from "../csrf-page";
-import { parseFormBody } from "../forms";
 import { escapeHtml, renderAuthPage } from "../html";
 
 const OAUTH_RETURN_COOKIE = "z0_oauth_return";
@@ -217,6 +216,7 @@ async function redirectWithCode(url: URL, appId: string, appUserId: string, sess
     appCredentialId: client.credentialId,
     redirectUri,
     scope,
+    resource: url.searchParams.get("resource")!,
     codeChallenge,
     codeChallengeMethod,
     nonce: url.searchParams.get("nonce"),
@@ -259,9 +259,10 @@ async function renderConsentPage(req: BunRequest, params: {
   codeChallenge: string | null;
   codeChallengeMethod: string | null;
   oidcNonce: string | null;
+  resource: string;
 }): Promise<Response> {
   const csrf = preparePageCsrf(req);
-  const context = await getOAuthConsentPageContext(params.appId, params.scope);
+  const context = await getOAuthConsentPageContext(params.appId, params.scope, params.resource);
   const challenge = await authorizationServer.beginConsent({
     responseType: "code",
     appUserId: params.appUserId,
@@ -269,6 +270,7 @@ async function renderConsentPage(req: BunRequest, params: {
     clientId: params.clientId,
     redirectUri: params.redirectUri,
     scope: params.scope,
+    resource: params.resource,
     state: params.state,
     codeChallenge: params.codeChallenge,
     codeChallengeMethod: params.codeChallengeMethod,
@@ -277,6 +279,7 @@ async function renderConsentPage(req: BunRequest, params: {
   const body = `<form method="post" action="/oauth/authorize" class="auth-card">
       <h2>Authorize ${escapeHtml(context.appName)}</h2>
       ${renderScopeList(context.scopes)}
+      <input type="hidden" name="resource" value="${escapeHtml(params.resource)}" />
       <input type="hidden" name="_csrf" value="${escapeHtml(csrf.token)}" />
       <input type="hidden" name="response_type" value="code" />
       <input type="hidden" name="client_id" value="${escapeHtml(params.clientId)}" />
@@ -343,10 +346,9 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
   if (url.searchParams.get("response_type") !== "code") {
     return authorizeErrorRedirect(url, "unsupported_response_type", "response_type=code is required");
   }
-  const normalizedScopeResult = await validateRequestedScopes(client.appId, url.searchParams.get("scope") ?? "");
-  if (!normalizedScopeResult.ok) {
-    return authorizeErrorRedirect(url, "invalid_scope", "Requested scope is not allowed for this app");
-  }
+  if (url.searchParams.getAll("resource").length !== 1) return authorizeErrorRedirect(url, "invalid_target", "Exactly one resource is required");
+  const authority = await resolveResourceAuthority(getDb(), client.credentialId, url.searchParams.get("resource") ?? undefined, url.searchParams.get("scope") ?? "");
+  if (!authority.ok) return authorizeErrorRedirect(url, authority.error, "Requested resource or scopes are not permitted for this client");
   if (client.clientType === "public" && (!url.searchParams.get("state")?.trim())) {
     return authorizeErrorRedirect(url, "invalid_request", "state is required for public clients");
   }
@@ -379,7 +381,7 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
   }
   const storedConsent = await getOAuthUserConsent(appSession.appUserId, client.appId);
   if (
-    storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)
+    storedConsent && scopeIsSubset(authority.scope, storedConsent.scope)
   ) {
     const redirect = await redirectWithCode(url, client.appId, appSession.appUserId, appSession.sessionId);
     appendSetCookie(redirect.headers, resolved.setCookie);
@@ -392,7 +394,8 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
     clientId,
     redirectUri: url.searchParams.get("redirect_uri")!,
     state: url.searchParams.get("state"),
-    scope: normalizedScopeResult.normalizedScope,
+    scope: authority.scope,
+    resource: authority.audience,
     codeChallenge: url.searchParams.get("code_challenge")?.trim() ?? null,
     codeChallengeMethod: url.searchParams.get("code_challenge_method"),
     oidcNonce: url.searchParams.get("nonce"),
@@ -482,8 +485,22 @@ function oauthErrorResponseWithCors(
   return withOAuthCors(oauthErrorResponse(status, error, description), origin, allowed);
 }
 
+async function parseOAuthForm(req: Request): Promise<Record<string, string> | Response> {
+  if (req.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase() !== "application/x-www-form-urlencoded") {
+    return oauthErrorResponse(400, "invalid_request", "Use application/x-www-form-urlencoded");
+  }
+  if (Number(req.headers.get("content-length") ?? "0") > 64 * 1024) return oauthErrorResponse(400, "invalid_request", "Request is too large");
+  const bytes = await req.arrayBuffer();
+  if (bytes.byteLength > 64 * 1024) return oauthErrorResponse(400, "invalid_request", "Request is too large");
+  const params = new URLSearchParams(new TextDecoder().decode(bytes));
+  const resources = params.getAll("resource");
+  if (resources.length > 1 || (resources.length === 1 && !resources[0])) return oauthErrorResponse(400, "invalid_target", "At most one nonempty resource indicator is allowed");
+  return Object.fromEntries(params);
+}
+
 async function postToken(req: BunRequest): Promise<Response> {
-  const body = await parseFormBody(req);
+  const body = await parseOAuthForm(req);
+  if (body instanceof Response) return body;
   if (!body.grant_type) {
     return oauthErrorResponse(400, "invalid_request", "grant_type is required");
   }
@@ -504,6 +521,7 @@ async function postToken(req: BunRequest): Promise<Response> {
       client,
       redirectUri: body.redirect_uri,
       codeVerifier: body.code_verifier,
+      resource: body.resource,
     });
     if (!preview.ok) {
       return oauthErrorResponseWithCors(
@@ -559,6 +577,7 @@ async function postToken(req: BunRequest): Promise<Response> {
       client,
       redirectUri: body.redirect_uri,
       codeVerifier: body.code_verifier,
+      resource: body.resource,
     });
     if (!exchanged.ok) {
       return oauthErrorResponseWithCors(
@@ -599,9 +618,11 @@ async function postToken(req: BunRequest): Promise<Response> {
       refreshToken: body.refresh_token,
       client,
       retryKey,
+      scope: body.scope,
+      resource: body.resource,
     });
     if (!refreshed.ok) {
-      return oauthErrorResponseWithCors(req, client, 400, "invalid_grant", "refresh token is invalid or expired");
+      return oauthErrorResponseWithCors(req, client, 400, refreshed.error, "refresh grant or requested scope is invalid");
     }
     return jsonOAuthResponse(req, {
       access_token: refreshed.accessToken,
@@ -613,12 +634,12 @@ async function postToken(req: BunRequest): Promise<Response> {
   }
 
   if (body.grant_type === "client_credentials") {
-    const issued = await issueClientCredentialsToken({ client, scope: body.scope ?? "" });
+    const issued = await issueClientCredentialsToken({ client, scope: body.scope ?? "", resource: body.resource });
     if (!issued.ok) {
       if (issued.error === "unauthorized_client") {
         return oauthErrorResponseWithCors(req, client, 400, "unauthorized_client", "client is not allowed to use this grant");
       }
-      return oauthErrorResponseWithCors(req, client, 400, "invalid_scope", "requested scope is not allowed for this app");
+      return oauthErrorResponseWithCors(req, client, 400, issued.error, "requested resource or scope is not allowed for this client");
     }
     return jsonOAuthResponse(req, {
       access_token: issued.accessToken,
@@ -632,7 +653,8 @@ async function postToken(req: BunRequest): Promise<Response> {
 }
 
 async function postAuthorize(req: BunRequest): Promise<Response> {
-  const body = await parseFormBody(req);
+  const body = await parseOAuthForm(req);
+  if (body instanceof Response) return body;
   const csrfError = validateFormCsrf(req, body._csrf);
   if (csrfError) return csrfError;
   const consentNonce = getCookie(req, OAUTH_CONSENT_COOKIE);
@@ -654,6 +676,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     });
     if (body.state) params.set("state", body.state);
     if (body.scope) params.set("scope", body.scope);
+    if (body.resource) params.set("resource", body.resource);
     if (body.code_challenge) params.set("code_challenge", body.code_challenge);
     if (body.code_challenge_method) params.set("code_challenge_method", body.code_challenge_method);
     if (body.nonce) params.set("nonce", body.nonce);
@@ -674,6 +697,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     clientId: body.client_id ?? "",
     redirectUri: body.redirect_uri ?? "",
     scope: normalizeScopeString(body.scope ?? ""),
+    resource: body.resource ?? "",
     state: body.state || null,
     codeChallenge: body.code_challenge || null,
     codeChallengeMethod: body.code_challenge_method || null,
@@ -710,7 +734,8 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
 }
 
 async function postRevoke(req: BunRequest): Promise<Response> {
-  const body = await parseFormBody(req);
+  const body = await parseOAuthForm(req);
+  if (body instanceof Response) return body;
   if (!body.token) {
     return oauthErrorResponse(400, "invalid_request", "token is required");
   }
@@ -724,7 +749,8 @@ async function postRevoke(req: BunRequest): Promise<Response> {
 }
 
 async function postIntrospect(req: BunRequest): Promise<Response> {
-  const body = await parseFormBody(req);
+  const body = await parseOAuthForm(req);
+  if (body instanceof Response) return body;
   if (!body.token) return oauthErrorResponse(400, "invalid_request", "token is required");
 
   const credentials = oauthClientCredentials(req, body);
@@ -735,7 +761,7 @@ async function postIntrospect(req: BunRequest): Promise<Response> {
   const token = await findOAuthAccessToken(body.token);
   const active = Boolean(
     token &&
-      token.appId === auth.client.appId &&
+      token.appCredentialId === auth.client.credentialId &&
       !token.revokedAt &&
       new Date(token.expiresAt).getTime() > Date.now(),
   );
@@ -750,7 +776,7 @@ async function postIntrospect(req: BunRequest): Promise<Response> {
     scope: token.scope,
     exp: Math.floor(new Date(token.expiresAt).getTime() / 1000),
     sub: token.appUserId ?? auth.client.clientId,
-    aud: token.appId,
+    aud: token.audience,
   }, auth.client);
 }
 

@@ -1,3 +1,4 @@
+import { testResourceForClient } from "../helpers/resources";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import {
@@ -313,6 +314,7 @@ run("Applications and child OAuth clients", () => {
         appId,
         appUserId: String(identity.id),
         appCredentialId: id,
+        resource: await testResourceForClient(id),
         redirectUri,
         scope: "openid profile",
         codeChallenge: challenge,
@@ -373,11 +375,12 @@ run("Applications and child OAuth clients", () => {
     const [identity] =
       await getDb()`SELECT id FROM app_users WHERE app_id = ${appId} AND email = 'person@example.com'`;
     const stale = (await findActiveOAuthClient(serverClientId))!;
-    const issue = () =>
+    const issue = async () =>
       issueAuthorizationCode({
         appId,
         appUserId: String(identity.id),
         appCredentialId: serverId,
+        resource: await testResourceForClient(serverId),
         redirectUri: REDIRECT,
         scope: "openid",
         codeChallenge: null,
@@ -514,6 +517,7 @@ run("Applications and child OAuth clients", () => {
       appId,
       appUserId: String(identity.id),
       appCredentialId: serverId,
+        resource: await testResourceForClient(serverId),
       redirectUri: REDIRECT,
       scope: "openid",
       codeChallenge: null,
@@ -525,6 +529,7 @@ run("Applications and child OAuth clients", () => {
         appId,
         appUserId: String(identity.id),
         appCredentialId: serverId,
+        resource: await testResourceForClient(serverId),
         redirectUri: REDIRECT,
         scope: "openid",
         codeChallenge: null,
@@ -561,10 +566,10 @@ run("Applications and child OAuth clients", () => {
       appId,
       buildRequest("GET", "/"),
     );
-    const authorize = () =>
+    const authorize = async () =>
       dispatchWeb(
         new Request(
-          `http://localhost/oauth/authorize?response_type=code&client_id=${serverClientId}&redirect_uri=${encodeURIComponent(REDIRECT)}&scope=openid`,
+          `http://localhost/oauth/authorize?response_type=code&client_id=${serverClientId}&resource=${encodeURIComponent(await testResourceForClient(serverClientId))}&redirect_uri=${encodeURIComponent(REDIRECT)}&scope=openid`,
           { headers: { cookie: `${APP_SESSION_COOKIE}=${session.token}` } },
         ),
       );
@@ -576,6 +581,7 @@ run("Applications and child OAuth clients", () => {
       appId,
       appUserId: String(identity.id),
       appCredentialId: serverId,
+        resource: await testResourceForClient(serverId),
       redirectUri: REDIRECT,
       scope: "openid",
       codeChallenge: null,
@@ -607,6 +613,7 @@ run("Applications and child OAuth clients", () => {
     });
     const input = {
       responseType: "code" as const,
+      resource: await testResourceForClient(created.client.clientId),
       appId: created.app.id,
       appUserId: String(identity.id),
       clientId: created.client.clientId,

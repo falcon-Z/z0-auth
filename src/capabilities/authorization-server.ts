@@ -14,6 +14,7 @@ export type OAuthConsentChallengeInput = {
   clientId: string;
   redirectUri: string;
   scope: string;
+  resource: string;
   state: string | null;
   codeChallenge: string | null;
   codeChallengeMethod: string | null;

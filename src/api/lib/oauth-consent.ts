@@ -109,6 +109,7 @@ export type OAuthConsentPageContext = {
 export async function getOAuthConsentPageContext(
   appId: string,
   requestedScope: string,
+  resource?: string,
 ): Promise<OAuthConsentPageContext> {
   const [appRow] = await getDb()`
     SELECT name
@@ -128,7 +129,7 @@ export async function getOAuthConsentPageContext(
     const rows = await getDb()`
       SELECT name, description
       FROM app_scopes
-      WHERE app_id = ${appId}
+      WHERE app_id = COALESCE((SELECT app_id FROM oauth_resources WHERE audience = ${resource ?? null}), ${appId}::uuid)
     `;
     const byName = new Map(
       (rows as { name: string; description: string | null }[]).map((row) => [row.name, row.description]),

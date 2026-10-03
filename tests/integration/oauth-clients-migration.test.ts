@@ -44,7 +44,7 @@ run("Application/Client upgrade", () => {
       await db`INSERT INTO instance_role_scopes (role_id, scope_key) VALUES (${role.id}, 'apps.credentials:create')`;
       expect(
         await applyMigrations(db, path.join(sqlDir, "migrations"), false),
-      ).toBe(1);
+      ).toBe(2);
       const [child] =
         await db`SELECT * FROM oauth_clients WHERE id = ${client.id}`;
       expect(child.client_id).toBe("existing-client");

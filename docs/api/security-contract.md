@@ -371,3 +371,14 @@ OIDC builds on OAuth with discovery metadata, JWK distribution, ID tokens, and u
 ### Application and Client authority
 
 Client class and purpose are immutable. Client protocol configuration, including redirects, browser origins, refresh capability and stronger assurance, belongs to `oauth_clients`, separately from the Application's identity and membership. Raising the Application minimum cannot weaken any child policy. Code and refresh issuance recheck live parent/child authority under locks; a refresh replacement racing containment cannot remain renewable after re-enable. Strong proof is bound to the current browser-authorized session at code issuance, and issuance assurance is carried into the refresh family. Default-deny workload purpose prevents confidential human Clients from also using Client Credentials.
+
+
+## Resource audience and grant boundaries
+
+Every new token is bound to one registered Resource. Application membership and application scope registration do not implicitly authorize a Client to that Resource. Operator configuration must explicitly select the Client/Resource scope ceiling. Authorization and Client Credentials reject unknown or unauthorized targets and reject requested scopes outside that ceiling. Code exchange and refresh cannot switch audiences; exchange rechecks current policy inside the issuance transaction.
+
+Each successful code exchange or Client Credentials request establishes a separate grant for its Client, human subject or workload Client principal, Resource and requested scopes. Authority is never merged from another grant or historical approval. Refresh uses its own grant. Reducing Resource scopes, renaming/deleting application scopes, or reducing a Client ceiling permanently contracts existing grant authority. Removing permission or retiring a Resource revokes its renewable grants. Policy changes serialize with issuance across database connections, including Resources owned by another Application. Retired audiences cannot be reassigned.
+
+During the opaque-token implementation stage, introspection returns the exact Resource audience and only the issuing Client may introspect its token. Resource servers must compare `aud` to their own registered audience and enforce the relevant scope. Full JWT access-token delivery remains separately tracked. Existing retry/replay containment is preserved; refresh retries additionally bind the requested scope to the idempotency key so a retry cannot return a different scope request's response.
+
+The built-in upstream-token retrieval API requires audience `urn:z0:federation-tokens:<application UUID>` for bearer callers, in addition to `federation:token` and the existing subject/application checks. Operators explicitly register that Resource and permit the calling Client; a token for another API cannot call the retrieval API even when its scope has the same name. Console calls continue to use operator permissions.

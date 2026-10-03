@@ -1,3 +1,5 @@
+import type { SQL } from "bun";
+import { lockResourceAuthority, contractResourceGrants } from "./oauth-resources";
 import type {
   AppScopeSummary,
   CreateAppScopeRequest,
@@ -46,8 +48,8 @@ async function appNotFoundResponse(): Promise<Response> {
   });
 }
 
-async function findScopeRow(appId: string, scopeId: string): Promise<ScopeRow | null> {
-  const [row] = await getDb()`
+async function findScopeRow(appId: string, scopeId: string, database: SQL = getDb()): Promise<ScopeRow | null> {
+  const [row] = await database`
     SELECT id, app_id, name, description, created_at, updated_at
     FROM app_scopes
     WHERE app_id = ${appId}
@@ -93,11 +95,12 @@ export async function listScopesForApi(
   };
 }
 
-export async function createScopeForApi(
+async function createScopeForApiInTransaction(
   appId: string,
   body: CreateAppScopeRequest,
+  database: SQL,
 ): Promise<{ ok: true; scope: AppScopeSummary } | { ok: false; response: Response }> {
-  const app = await findAppRow(appId);
+  const app = await findAppRow(appId, database);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
 
   const nameErrors = validateScopeName(body.name);
@@ -117,7 +120,7 @@ export async function createScopeForApi(
       : body.description.trim() || null;
 
   try {
-    const [inserted] = await getDb()`
+    const [inserted] = await database`
       INSERT INTO app_scopes (app_id, name, description)
       VALUES (${appId}, ${name}, ${description})
       RETURNING id, app_id, name, description, created_at, updated_at
@@ -153,15 +156,16 @@ export async function createScopeForApi(
   }
 }
 
-export async function patchScopeForApi(
+async function patchScopeForApiInTransaction(
   appId: string,
   scopeId: string,
   body: PatchAppScopeRequest,
+  database: SQL,
 ): Promise<{ ok: true; scope: AppScopeSummary } | { ok: false; response: Response }> {
-  const app = await findAppRow(appId);
+  const app = await findAppRow(appId, database);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
 
-  const existing = await findScopeRow(appId, scopeId);
+  const existing = await findScopeRow(appId, scopeId, database);
   if (!existing) {
     return {
       ok: false,
@@ -194,7 +198,7 @@ export async function patchScopeForApi(
         : body.description.trim() || null;
 
   try {
-    const [updated] = await getDb()`
+    const [updated] = await database`
       UPDATE app_scopes
       SET name = ${name},
           description = ${description},
@@ -234,14 +238,15 @@ export async function patchScopeForApi(
   }
 }
 
-export async function deleteScopeForApi(
+async function deleteScopeForApiInTransaction(
   appId: string,
   scopeId: string,
+  database: SQL,
 ): Promise<{ ok: true } | { ok: false; response: Response }> {
-  const app = await findAppRow(appId);
+  const app = await findAppRow(appId, database);
   if (!app) return { ok: false, response: await appNotFoundResponse() };
 
-  const [deleted] = await getDb()`
+  const [deleted] = await database`
     DELETE FROM app_scopes
     WHERE app_id = ${appId}
       AND id = ${scopeId}
@@ -256,4 +261,23 @@ export async function deleteScopeForApi(
     };
   }
   return { ok: true };
+}
+
+async function scopeMutation<T extends { ok: boolean }>(appId: string, operation: (tx: SQL) => Promise<T>): Promise<T> {
+  return getDb().begin(async tx => {
+    await lockResourceAuthority(tx, true);
+    await tx`SELECT id FROM apps WHERE id = ${appId} FOR UPDATE`;
+    const result = await operation(tx);
+    if (result.ok) await contractResourceGrants(tx);
+    return result;
+  });
+}
+export function createScopeForApi(appId: string, body: CreateAppScopeRequest) {
+  return scopeMutation(appId, tx => createScopeForApiInTransaction(appId, body, tx));
+}
+export function patchScopeForApi(appId: string, scopeId: string, body: PatchAppScopeRequest) {
+  return scopeMutation(appId, tx => patchScopeForApiInTransaction(appId, scopeId, body, tx));
+}
+export function deleteScopeForApi(appId: string, scopeId: string) {
+  return scopeMutation(appId, tx => deleteScopeForApiInTransaction(appId, scopeId, tx));
 }

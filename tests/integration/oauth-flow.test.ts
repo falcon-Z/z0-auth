@@ -1,3 +1,4 @@
+import { testResourceForClient } from "../helpers/resources";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { CSRF_COOKIE } from "@z0/contracts/http";
@@ -134,6 +135,7 @@ async function approveConsent(input: {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: input.clientId,
+    resource: await testResourceForClient(input.clientId),
     redirect_uri: input.redirectUri,
     scope: input.scope ?? "openid profile email",
     state: input.state ?? "test-state",
@@ -175,6 +177,7 @@ async function approveConsent(input: {
         _csrf: consentCsrf,
         response_type: "code",
         client_id: input.clientId,
+    resource: await testResourceForClient(input.clientId),
         redirect_uri: input.redirectUri,
         scope: input.scope ?? "openid profile email",
         state: input.state ?? "test-state",
@@ -203,6 +206,7 @@ async function prepareConsentSubmission(input: {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: input.clientId,
+    resource: await testResourceForClient(input.clientId),
     redirect_uri: input.redirectUri,
     scope: input.scope,
     state: input.state,
@@ -221,7 +225,7 @@ async function prepareConsentSubmission(input: {
 
   return {
     nonce,
-    submit(overrides: Record<string, string> = {}) {
+    async submit(overrides: Record<string, string> = {}) {
       return dispatchWeb(new Request("http://localhost/oauth/authorize", {
         method: "POST",
         headers: {
@@ -234,6 +238,7 @@ async function prepareConsentSubmission(input: {
           _csrf: csrf,
           response_type: "code",
           client_id: input.clientId,
+    resource: await testResourceForClient(input.clientId),
           redirect_uri: input.redirectUri,
           scope: input.scope,
           state: input.state,
@@ -384,7 +389,7 @@ run("OAuth authorization code flow", () => {
     const appSession = await loginAppUser(publicClientId, appUserEmail, appUserPassword);
     const res = await dispatchWeb(
       new Request(
-        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(publicClientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=pkce-state`,
+        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(publicClientId)}&resource=${encodeURIComponent(await testResourceForClient(publicClientId))}&redirect_uri=${encodeURIComponent(REDIRECT)}&state=pkce-state`,
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` } },
       ),
     );
@@ -401,7 +406,7 @@ run("OAuth authorization code flow", () => {
     const challenge = await pkceChallengeFromVerifier(verifier);
     const res = await dispatchWeb(
       new Request(
-        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(publicClientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256`,
+        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(publicClientId)}&resource=${encodeURIComponent(await testResourceForClient(publicClientId))}&redirect_uri=${encodeURIComponent(REDIRECT)}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256`,
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` } },
       ),
     );
@@ -452,7 +457,7 @@ run("OAuth authorization code flow", () => {
     ]) {
       const res = await dispatchWeb(
         new Request(
-          `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(confidentialClientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+          `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(confidentialClientId)}&resource=${encodeURIComponent(await testResourceForClient(confidentialClientId))}&redirect_uri=${encodeURIComponent(redirectUri)}`,
         ),
       );
       expect(res.status).toBe(400);
@@ -465,7 +470,7 @@ run("OAuth authorization code flow", () => {
     const appSession = await loginAppUser(confidentialClientId, appUserEmail, appUserPassword);
     const res = await dispatchWeb(
       new Request(
-        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(confidentialClientId)}&redirect_uri=${encodeURIComponent(REDIRECT)}&scope=unknown:scope`,
+        `http://localhost/oauth/authorize?response_type=code&client_id=${encodeURIComponent(confidentialClientId)}&resource=${encodeURIComponent(await testResourceForClient(confidentialClientId))}&redirect_uri=${encodeURIComponent(REDIRECT)}&scope=unknown:scope`,
         { headers: { cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(appSession)}` } },
       ),
     );
@@ -480,6 +485,7 @@ run("OAuth authorization code flow", () => {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: confidentialClientId,
+    resource: await testResourceForClient(confidentialClientId),
       redirect_uri: REDIRECT,
       scope: "openid profile email read:orders",
       state: "deny-state",
@@ -509,6 +515,7 @@ run("OAuth authorization code flow", () => {
           _csrf: consentCsrf,
           response_type: "code",
           client_id: confidentialClientId,
+    resource: await testResourceForClient(confidentialClientId),
           redirect_uri: REDIRECT,
           scope: "openid profile email read:orders",
           state: "deny-state",
@@ -603,6 +610,7 @@ run("OAuth authorization code flow", () => {
     const secondReplica = createAuthorizationServer({ consentChallenges: authority });
     const input = {
       responseType: "code" as const,
+      resource: await testResourceForClient(confidentialClientId),
       appId: confidentialAppId,
       appUserId: confidentialAppUserId,
       clientId: confidentialClientId,
@@ -644,6 +652,7 @@ run("OAuth authorization code flow", () => {
     });
     const input = {
       responseType: "code" as const,
+      resource: await testResourceForClient(confidentialClientId),
       appId: confidentialAppId,
       appUserId: confidentialAppUserId,
       clientId: confidentialClientId,
@@ -802,6 +811,7 @@ run("OAuth authorization code flow", () => {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: confidentialClientId,
+    resource: await testResourceForClient(confidentialClientId),
       redirect_uri: REDIRECT,
       scope: "openid profile email",
       state: "skip-state",
@@ -822,6 +832,7 @@ run("OAuth authorization code flow", () => {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: confidentialClientId,
+    resource: await testResourceForClient(confidentialClientId),
       redirect_uri: REDIRECT,
       scope: "openid profile email read:orders",
       state: "expand-state",
@@ -870,6 +881,7 @@ run("OAuth authorization code flow", () => {
     const params = new URLSearchParams({
       response_type: "code",
       client_id: publicClientId,
+    resource: await testResourceForClient(publicClientId),
       redirect_uri: REDIRECT,
       scope: "openid profile email",
       state: "branding-state",

@@ -1,3 +1,5 @@
+import { testResourceForClient } from "../helpers/resources";
+import { federationTokenResourceAudience } from "../../src/api/lib/app-api-auth";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { APP_SESSION_COOKIE } from "../../src/api/lib/app-session";
@@ -361,12 +363,24 @@ run("federation linking and tokens", () => {
       (user) => user.email === "m2m@example.com",
     )!.userId;
 
+    const wrongAudience = await testResourceForClient(workload.client.clientId);
+    const wrongToken = await dispatchWeb(new Request("http://localhost/oauth/token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "client_credentials", client_id: workload.client.clientId, client_secret: workload.clientSecret, resource: wrongAudience, scope: "federation:token" }),
+    }));
+    expect(wrongToken.status).toBe(200);
+    const wrongAccess = (await wrongToken.json() as { access_token: string }).access_token;
+    expect((await dispatchApi(buildRequest("POST", `/api/v1/apps/${appId}/users/${userId}/federation/${providerId}/token/refresh`, {
+      headers: { Authorization: `Bearer ${wrongAccess}` },
+    }))).status).toBe(403);
+
     const machineTokenRes = await dispatchWeb(
       new Request("http://localhost/oauth/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
+          resource: await testResourceForClient(workload.client.clientId, federationTokenResourceAudience(appId)),
           client_id: workload.client.clientId,
           client_secret: workload.clientSecret,
           scope: "federation:token",
