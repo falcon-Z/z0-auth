@@ -12,6 +12,7 @@ import {
   resolveTargetAppSession,
 } from "../../api/lib/group-sso";
 import { loadConfig, requestPublicOrigin } from "../../api/lib/config";
+import { isSerializedHttpOrigin } from "../../api/lib/browser-origins";
 import { validateFormCsrf } from "../../api/lib/csrf";
 import { problem } from "../../api/lib/http";
 import { clientIp, isRateLimited, recordRateLimitHit } from "../../api/lib/rate-limit";
@@ -431,11 +432,37 @@ async function getResume(req: BunRequest): Promise<Response> {
 
 async function oauthCorsPreflight(req: BunRequest): Promise<Response> {
   const origin = req.headers.get("Origin");
-  const allowed = await isOAuthCorsOriginAllowed(origin);
-  if (!allowed) {
-    return new Response(null, { status: 403 });
+  const clientIds = new URL(req.url).searchParams.getAll("client_id");
+  const method = new URL(req.url).pathname === "/oauth/token" ? "POST" : "GET";
+  const permittedHeaders = method === "POST" ? ["content-type", "idempotency-key"] : ["authorization"];
+  const requestedHeaders = req.headers.get("Access-Control-Request-Headers");
+  if (clientIds.length !== 1 || !clientIds[0] ||
+      req.headers.get("Access-Control-Request-Method") !== method ||
+      (requestedHeaders !== null && requestedHeaders.split(",").some(header => !permittedHeaders.includes(header.trim().toLowerCase()))) ||
+      !await isOAuthCorsOriginAllowed(origin, clientIds[0])) {
+    return new Response(null, { status: 403, headers: buildOAuthCorsHeaders(null, method) });
   }
-  return new Response(null, { status: 204, headers: buildOAuthCorsHeaders(origin) });
+  const headers = buildOAuthCorsHeaders(origin, method);
+  headers.set("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers");
+  return new Response(null, { status: 204, headers });
+}
+
+// Same-origin and server requests need no CORS grant. All cross-origin browser
+// requests must use this public interactive Client's explicit registration.
+function browserRequestAllowed(req: Request, client: { clientType: string; purpose: string; browserOrigins: string[] }): boolean {
+  const origin = req.headers.get("Origin");
+  if (origin === null) return true;
+  return isSerializedHttpOrigin(origin) && (origin === requestPublicOrigin(req) ||
+    (client.clientType === "public" && client.purpose === "interactive" && isOriginAllowedForClient(origin, client.browserOrigins)));
+}
+
+function browserOriginDenied(): Response {
+  return withOAuthCors(oauthErrorResponse(403, "access_denied", "browser origin is not registered for this client"), null, false);
+}
+
+function queryClientMatches(req: Request, clientId: string): boolean {
+  const ids = new URL(req.url).searchParams.getAll("client_id");
+  return ids.length === 0 || (ids.length === 1 && ids[0] === clientId);
 }
 
 async function authenticateOAuthClient(
@@ -493,6 +520,7 @@ async function parseOAuthForm(req: Request): Promise<Record<string, string> | Re
   const bytes = await req.arrayBuffer();
   if (bytes.byteLength > 64 * 1024) return oauthErrorResponse(400, "invalid_request", "Request is too large");
   const params = new URLSearchParams(new TextDecoder().decode(bytes));
+  if (params.getAll("client_id").length > 1) return oauthErrorResponse(400, "invalid_request", "client_id must not be repeated");
   const resources = params.getAll("resource");
   if (resources.length > 1 || (resources.length === 1 && !resources[0])) return oauthErrorResponse(400, "invalid_target", "At most one nonempty resource indicator is allowed");
   return Object.fromEntries(params);
@@ -507,9 +535,13 @@ async function postToken(req: BunRequest): Promise<Response> {
 
   const credentials = oauthClientCredentials(req, body);
   if (credentials instanceof Response) return credentials;
+  if (!queryClientMatches(req, credentials.clientId)) {
+    return oauthErrorResponse(400, "invalid_request", "URL client_id must match the requesting client");
+  }
   const auth = await authenticateOAuthClient(req, credentials.clientId, credentials.clientSecret);
   if (auth instanceof Response) return auth;
   const { client } = auth;
+  if (!browserRequestAllowed(req, client)) return browserOriginDenied();
 
   if (body.grant_type === "authorization_code") {
     if (!body.code || !body.redirect_uri) {
@@ -802,27 +834,32 @@ async function getUserinfo(req: BunRequest): Promise<Response> {
   const token = bearerToken(req);
   if (!token) {
     const res = oauthErrorResponse(401, "invalid_token", "access token is required");
-    const allowed = await isOAuthCorsOriginAllowed(origin);
-    return withOAuthCors(res, origin, allowed);
+    return withOAuthCors(res, origin, false, "GET");
   }
   const accessToken = await findOAuthAccessToken(token);
   if (!accessToken || accessToken.revokedAt || new Date(accessToken.expiresAt).getTime() <= Date.now()) {
     const res = oauthErrorResponse(401, "invalid_token", "access token is invalid or expired");
-    const allowed = await isOAuthCorsOriginAllowed(origin);
-    return withOAuthCors(res, origin, allowed);
+    return withOAuthCors(res, origin, false, "GET");
   }
 
   if (!accessToken.appUserId) {
     const res = oauthErrorResponse(401, "invalid_token", "access token subject is invalid");
-    const allowed = await isOAuthCorsOriginAllowed(origin);
-    return withOAuthCors(res, origin, allowed);
+    return withOAuthCors(res, origin, false, "GET");
   }
+
+  const client = await findActiveOAuthClient(accessToken.clientId);
+  if (!client) return oauthErrorResponse(401, "invalid_token", "access token client is unavailable");
+  if (!queryClientMatches(req, client.clientId)) {
+    return oauthErrorResponse(400, "invalid_request", "URL client_id must match the bearer token client");
+  }
+  if (!browserRequestAllowed(req, client)) return browserOriginDenied();
+  const allowed = client.clientType === "public" && client.purpose === "interactive" &&
+    isOriginAllowedForClient(origin, client.browserOrigins);
 
   const scopes = parseScopeSet(accessToken.scope);
   if (!scopes.has("openid")) {
     const res = oauthErrorResponse(403, "insufficient_scope", "token does not grant required scope");
-    const allowed = await isOAuthCorsOriginAllowed(origin);
-    return withOAuthCors(res, origin, allowed);
+    return withOAuthCors(res, origin, allowed, "GET");
   }
 
   const [appUserRow] = await getDb()`
@@ -835,7 +872,7 @@ async function getUserinfo(req: BunRequest): Promise<Response> {
     LIMIT 1
   `;
   if (!appUserRow) {
-    return oauthErrorResponse(401, "invalid_token", "access token subject is invalid");
+    return withOAuthCors(oauthErrorResponse(401, "invalid_token", "access token subject is invalid"), origin, allowed, "GET");
   }
   const appUser = appUserRow as {
     id: string;
@@ -853,8 +890,7 @@ async function getUserinfo(req: BunRequest): Promise<Response> {
     claims.name = appUser.name;
   }
 
-  const allowed = await isOAuthCorsOriginAllowed(origin);
-  return withOAuthCors(Response.json(claims), origin, allowed);
+  return withOAuthCors(Response.json(claims), origin, allowed, "GET");
 }
 
 export const oauthWebRoutes = {

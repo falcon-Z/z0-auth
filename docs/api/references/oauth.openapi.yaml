@@ -118,6 +118,44 @@ paths:
                     code: "invalid_redirect_uri"
                     detail: "redirect_uri must exactly match a registered URI"
   /oauth/token:
+    options:
+      tags: [OAuth]
+      summary: Check token browser access for one Client
+      operationId: optionsOAuthToken
+      description: |
+        Preflight requires an exact Origin explicitly registered to the active public
+        interactive Client identified by one URL client_id. Redirects grant no CORS authority.
+        Permits POST with Content-Type and Idempotency-Key. No cookie credentials are allowed.
+      parameters:
+        - &browserClientId
+          name: client_id
+          in: query
+          required: true
+          description: One exact Client ID, matching the actual form/authentication or bearer Client.
+          schema:
+            type: string
+        - name: Origin
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Access-Control-Request-Method
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [POST]
+        - name: Access-Control-Request-Headers
+          in: header
+          required: false
+          description: Only Content-Type and Idempotency-Key are permitted (case insensitive).
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Client browser origin, method and headers permitted; no-store, varies by Origin/method/headers.
+        "403":
+          description: Missing, ambiguous, unknown or inactive Client; disallowed Origin, method or headers. No CORS permission.
     post:
       tags: [OAuth]
       summary: Token endpoint
@@ -133,10 +171,20 @@ paths:
         Access tokens are opaque. Authorization code exchange returns a refresh token only when the interactive child Client enables refresh (30-day TTL, rotated on use).
         Refresh clients may send an `Idempotency-Key` so an identical retry within 10 seconds receives
         the original rotation outcome. Reuse with a different key revokes the token family.
-        Public interactive clients require CORS `Origin` to match a separately registered browser origin.
+        Cross-origin browser requests require Origin to match that public interactive
+        Client's explicit browserOrigins. Disallowed origins return 403 before code/refresh mutation.
+        Requests needing preflight use /oauth/token?client_id=<Client ID>; the form/Basic
+        Client must match the URL. Empty, conflicting or repeated Client IDs are rejected.
+        Same-origin and no-Origin requests keep ordinary protocol authentication requirements.
         Client Credentials is limited to explicit confidential workload Clients.
       operationId: postOAuthToken
       parameters:
+        - name: client_id
+          in: query
+          required: false
+          description: Required for browser preflight; must match the Client in the form or HTTP Basic authentication.
+          schema:
+            type: string
         - name: Idempotency-Key
           in: header
           required: false
@@ -186,6 +234,12 @@ paths:
                   type: string
                   description: Required for public clients on `authorization_code` and validated against stored PKCE challenge.
       responses:
+        "403":
+          description: Browser origin not registered for the requesting Client; grant is not consumed and no CORS permission is returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
         "200":
           description: Tokens issued
           content:
@@ -335,14 +389,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/JwksResponse"
   /oauth/userinfo:
+    options:
+      tags: [OAuth]
+      summary: Check UserInfo browser access for one Client
+      operationId: optionsOAuthUserinfo
+      description: |
+        Requires one URL client_id and its own exact registered Origin on an active
+        public interactive Client beneath an active Application. Permits GET with Authorization.
+        The actual request binds the URL Client to the bearer token's issuing Client.
+      parameters:
+        - *browserClientId
+        - name: Origin
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Access-Control-Request-Method
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [GET]
+        - name: Access-Control-Request-Headers
+          in: header
+          required: false
+          description: Only Authorization is permitted (case insensitive).
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Browser permission for this Client; no-store, varies by Origin/method/headers.
+        "403":
+          description: Client, Origin, method or headers not permitted; no CORS permission.
     get:
       tags: [OAuth]
       summary: OIDC userinfo endpoint
-      description: Returns scope-filtered user claims for a valid bearer access token.
+      description: |
+        Returns scope-filtered user claims for a valid bearer access token. Browser
+        Origin must belong to that token's active public interactive Client. No global
+        registered-origin permission is used for successful or failed responses.
+        Requests needing preflight include one matching URL client_id.
+      parameters:
+        - name: client_id
+          in: query
+          required: false
+          description: Must match the bearer token's issuing Client; required for preflight.
+          schema:
+            type: string
       operationId: getUserinfo
       security:
         - bearerAuth: []
       responses:
+        "400":
+          description: URL Client ID is empty, repeated or conflicts with the bearer token's Client.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthErrorResponse"
         "200":
           description: User claims for authenticated app user
           content:
@@ -361,7 +464,7 @@ paths:
                     error: "invalid_token"
                     error_description: "access token is invalid or expired"
         "403":
-          description: Access token does not grant required OIDC scopes
+          description: Disallowed browser origin or access token lacking required OIDC scopes
           content:
             application/json:
               schema:

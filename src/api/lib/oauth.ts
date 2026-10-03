@@ -57,6 +57,7 @@ type AuthorizationCodePreview = {
 };
 
 export type OAuthAccessTokenRecord = {
+  clientId: string;
   appId: string;
   appUserId: string | null;
   scope: string;
@@ -895,6 +896,7 @@ export async function findOAuthAccessToken(
       t.app_id,
       t.app_user_id,
       t.app_credential_id,
+      ac.client_id,
       t.scope,
       t.expires_at,
       t.revoked_at, resource.audience, t.grant_id
@@ -927,6 +929,7 @@ export async function findOAuthAccessToken(
     appId: data.app_id,
     appUserId: data.app_user_id ? String(data.app_user_id) : null,
     appCredentialId: data.app_credential_id,
+    clientId: String(row.client_id),
     scope: data.scope ?? "",
     expiresAt: data.expires_at,
     revokedAt: data.revoked_at,

@@ -14,6 +14,7 @@ import { randomToken } from "./crypto";
 import { hashPassword } from "./password";
 import { loadConfig } from "./config";
 import { validateRedirectUris } from "./redirect-uris";
+import { isRegistrableBrowserOrigin } from "./browser-origins";
 
 export type ClientRow = {
   id: string;
@@ -183,19 +184,7 @@ export function validateClient(
         "Each browser origin must be a string.",
         "browserOrigins",
       );
-    try {
-      const url = new URL(origin);
-      if (
-        url.origin !== origin ||
-        url.username ||
-        url.password ||
-        !["http:", "https:"].includes(url.protocol) ||
-        origin.includes("*") ||
-        (url.protocol === "http:" &&
-          !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
-      )
-        throw new Error();
-    } catch {
+    if (!isRegistrableBrowserOrigin(origin)) {
       return fail(
         400,
         "Browser origin must be an exact HTTPS origin or loopback HTTP origin, without a path.",

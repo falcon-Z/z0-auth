@@ -106,8 +106,9 @@ export function ClientFields({
                 }
               />
               <p className="text-xs text-muted-foreground">
-                One origin per line, such as https://app.example.com. Register
-                origins separately from callbacks.
+                One exact HTTPS origin per line, such as https://app.example.com,
+                without a path or trailing slash. HTTP is allowed only for loopback
+                development. Redirect URIs do not grant browser access.
               </p>
             </div>
           )}

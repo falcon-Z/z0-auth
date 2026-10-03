@@ -300,7 +300,11 @@ These rules are required for the OAuth authorization server baseline.
 ### CORS (browser clients)
 
 - `POST /oauth/token` and `GET /oauth/userinfo` return CORS headers when `Origin` exactly matches the public interactive Client's explicit `browser_origins` registration.
-- `OPTIONS` preflight permits origins explicitly registered by an active public interactive Client beneath an active Application. The actual response checks the requesting Client's own origins.
+- `OPTIONS /oauth/token?client_id=<Client ID>` and `OPTIONS /oauth/userinfo?client_id=<Client ID>` resolve one exact active public interactive Client beneath an active Application. A missing, empty, repeated or unknown URL Client ID, unregistered/malformed Origin, unsupported method or header returns 403 without CORS permission. Token preflight permits POST with Content-Type and Idempotency-Key; UserInfo permits GET with Authorization. No cookie credential permission is returned.
+- Browser requests that need preflight include that same URL Client ID in the actual endpoint URL. The token form/authenticated Client must match it; UserInfo binds it to the bearer token's Client. Conflicts or repeated Client IDs return 400 `invalid_request`. Simple token requests can identify the Client solely in the form.
+- Disallowed cross-origin token and UserInfo requests return 403 `access_denied` without CORS permission. Token requests are rejected before consuming codes or rotating refresh tokens. Same-origin requests and requests without Origin retain their ordinary authentication/grant requirements. No instance-wide origin lookup grants access or exposes UserInfo errors.
+- Registrations accept at most 20 exact HTTPS origins (scheme, host, optional nondefault port), with HTTP limited to localhost, 127.0.0.1 and ::1. Paths, trailing slashes, query strings, fragments, userinfo, wildcards and noncanonical spellings are rejected. Redirect registration confers no CORS authority. Removing an origin or disabling the Client/parent removes browser permission.
+- CORS responses vary by Origin and avoid caching; preflight additionally varies by requested method and headers. Authorization, login, MFA and recovery surfaces do not enable CORS.
 - Public clients must send `state` on `/oauth/authorize`
 
 ### Client credentials (machine-to-machine)

@@ -201,8 +201,8 @@ run("Applications and child OAuth clients", () => {
     expect(publicClient && isAllowedRedirectUri(publicClient, REDIRECT)).toBe(
       false,
     );
-    expect(await isOAuthCorsOriginAllowed("http://localhost:3001")).toBe(true);
-    expect(await isOAuthCorsOriginAllowed("http://localhost:3000")).toBe(false);
+    expect(await isOAuthCorsOriginAllowed("http://localhost:3001", spaClientId)).toBe(true);
+    expect(await isOAuthCorsOriginAllowed("http://localhost:3000", spaClientId)).toBe(false);
     for (const browserOrigins of [
       ["https://app.example.com/path"],
       ["https://*.example.com"],

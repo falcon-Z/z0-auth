@@ -17,7 +17,7 @@ bunx serve -p 5173 .
 ## What it demonstrates
 
 - Authorization code flow with PKCE and `state`
-- Token exchange from the browser (requires P4M6 CORS on `/oauth/token`)
+- Token exchange from the browser (requires explicit Client browser-origin registration)
 - Userinfo call with the access token
 
 Register a public interactive Client beneath your Application, set its redirect URI and explicitly register `http://localhost:5173` in browser origins. Enable refresh tokens on that Client if the example uses refresh.
@@ -25,3 +25,11 @@ Register a public interactive Client beneath your Application, set its redirect 
 Never put a `client_secret` in browser code.
 
 Register the API Resource in **Apps → Resources**, expose `openid`, `profile`, and `email`, and permit the SPA Client to request that Resource and those scopes through **Setup → Resource access**. Each authorization selects one exact audience. Tokens from a different Resource are not authority for this API.
+
+Browser requests use `/oauth/token?client_id=<Client ID>` and
+`/oauth/userinfo?client_id=<Client ID>`. This lets OPTIONS preflight resolve the
+Client without a request body or bearer token. Keep `client_id` in the token
+form as well; it must match the URL. UserInfo checks that the URL identifies the
+bearer token's issuing Client. Origin registration never replaces PKCE or bearer
+authentication. Server requests without Origin can continue to use the plain
+endpoint URLs.

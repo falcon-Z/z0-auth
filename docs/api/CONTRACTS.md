@@ -187,3 +187,19 @@ Delete also requires `expectedGraceDays` matching the policy the Operator review
 It is bound into the verification challenge. A changed policy fails with 409 and
 must be reviewed again, so a previously recoverable confirmation cannot silently
 become immediate permanent purge after an instance configuration change.
+
+## Explicit SPA origins (#99)
+
+Public interactive Clients manage `browserOrigins` independently of `redirectUris`
+through Client create/PATCH and the console's **Browser origins** field. No origins
+are inferred on create, migration or redirect changes. Browser preflight addresses
+`/oauth/token?client_id=<Client ID>` or `/oauth/userinfo?client_id=<Client ID>`;
+actual requests must identify the same Client in their form/authentication or bearer
+token. The origin must belong to that Client. See [the browser security contract](security-contract.md#cors-browser-clients)
+and [SPA example](../../examples/oauth-spa/README.md).
+
+`oauth-browser-origins.test.ts` proves origin validation, cross-client rejection,
+nonconsumption of denied code/refresh grants, URL/form/bearer binding, same-origin
+and server requests, origin removal, containment and navigation-only auth surfaces.
+It runs in the focused Alpha acceptance gate and full regression suite. The console
+and actual browser preflight journey is in `oauth-clients-console.spec.ts`.

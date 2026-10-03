@@ -386,3 +386,20 @@ Issue #95 is covered by `tests/integration/shared-sso-domains.test.ts` (atomic d
 
 Lifecycle integration and upgrade evidence run in the focused Alpha quality gate
 and full regression suite. The console lifecycle journey is run with Playwright.
+
+## Explicit browser-origin authority (APP-20, UX-05)
+
+| Input/operation | Rule | Result |
+| --- | --- | --- |
+| Client `browserOrigins` | Up to 20 exact HTTPS origins; HTTP only for explicit loopback; public interactive Clients only | 400 `invalid_client_configuration` |
+| Redirect URI registration | Does not register its origin or change browser origins | No browser authority inferred |
+| Token/UserInfo preflight | One URL `client_id`, exact own-client Origin, allowed endpoint method and headers, active Client/parent | 204 with CORS permission, otherwise 403 without it |
+| Cross-origin token/UserInfo | Actual form/authentication or bearer token identifies the permitted Client | 403 `access_denied` without CORS permission on disallowed origin |
+| URL Client ID mismatch/repeat | Query Client ID must equal actual requesting Client; repeated form IDs rejected | 400 `invalid_request` |
+| Denied code/refresh request | Check origin before grant mutation | Original grant remains usable |
+| Same-origin / no Origin | Ordinary protocol and authentication requirements | No additional CORS grant required |
+| Origin removed / Client or parent disabled | Recheck current registration for each request | Browser access denied |
+| Hosted auth / authorize / recovery | Navigation surfaces | No browser CORS |
+
+Evidence: `oauth-browser-origins.test.ts` runs in `quality:alpha`; console management
+and browser preflight are exercised by `oauth-clients-console.spec.ts`.

@@ -100,7 +100,7 @@
         const clientId = document.getElementById("clientId").value.trim();
         const redirectUri = document.getElementById("redirectUri").value.trim();
 
-        const tokenRes = await fetch(`${baseUrl}/oauth/token`, {
+        const tokenRes = await fetch(`${baseUrl}/oauth/token?client_id=${encodeURIComponent(clientId)}`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
@@ -117,7 +117,7 @@
           return;
         }
 
-        const userinfoRes = await fetch(`${baseUrl}/oauth/userinfo`, {
+        const userinfoRes = await fetch(`${baseUrl}/oauth/userinfo?client_id=${encodeURIComponent(clientId)}`, {
           headers: { Authorization: `Bearer ${tokens.access_token}` },
         });
         const userinfo = await userinfoRes.json();

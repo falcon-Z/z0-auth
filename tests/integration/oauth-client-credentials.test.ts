@@ -235,18 +235,20 @@ run("OAuth client credentials grant", () => {
 });
 
 run("OAuth CORS", () => {
+  let clientId = "";
   beforeAll(async () => {
     await resetTestDatabase();
     resetRateLimitsForTests();
     await completeSetup();
     const { csrf, cookie } = await ownerLogin();
-    await dispatchApi(
+    const created = await dispatchApi(
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
         body: {name: "CORS App", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: [SPA_ORIGIN]}},
       }),
     );
+    clientId = (await created.json()).client.clientId;
   });
 
   afterAll(async () => {
@@ -255,7 +257,7 @@ run("OAuth CORS", () => {
 
   test("OPTIONS preflight allows explicitly registered browser origin", async () => {
     const res = await dispatchWeb(
-      new Request("http://localhost/oauth/token", {
+      new Request(`http://localhost/oauth/token?client_id=${encodeURIComponent(clientId)}`, {
         method: "OPTIONS",
         headers: {
           Origin: SPA_ORIGIN,
@@ -269,7 +271,7 @@ run("OAuth CORS", () => {
 
   test("OPTIONS preflight blocks unknown origin", async () => {
     const res = await dispatchWeb(
-      new Request("http://localhost/oauth/token", {
+      new Request(`http://localhost/oauth/token?client_id=${encodeURIComponent(clientId)}`, {
         method: "OPTIONS",
         headers: {
           Origin: "http://evil.example",

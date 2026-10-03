@@ -39,6 +39,7 @@ const phases: Array<{ label: string; command: string[] }> = [
       "tests/integration/oauth-resources-migration.test.ts",
       "tests/integration/oauth-resources.test.ts",
       "tests/integration/oauth-client-credentials.test.ts",
+      "tests/integration/oauth-browser-origins.test.ts",
       "tests/integration/oauth-refresh-flow.test.ts",
       "tests/integration/account-domains.test.ts",
       "tests/integration/application-memberships.test.ts",

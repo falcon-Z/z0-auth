@@ -94,3 +94,14 @@ Delete/Purge action. `REGISTRATION_DELETION_GRACE_DAYS` defaults to 30; zero mak
 deleting irreversible. Permanent purge physically removes configuration and
 scoped protocol/identity state. Shared SSO credentials and unrelated Applications
 survive; purged Resource audiences and Client IDs remain reserved forever.
+
+## SPA browser access (#99)
+
+Client `browser_origins` storage from migration 0046 is retained; no new migration
+or origin inference is needed. Preflight no longer accepts an origin registered
+by a different Client. Browser integrations needing preflight must include one
+matching `client_id` in the token/UserInfo URL. Existing no-Origin server calls
+continue to authenticate through the form or HTTP Basic, and UserInfo through its
+bearer token. Cross-origin calls outside the specific Client's registration are
+rejected before token grant mutations. Update SPA integrations using the example
+and register origins explicitly through Client management.

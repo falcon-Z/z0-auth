@@ -760,6 +760,8 @@ components:
             format: uri
           description: Required, nonempty for interactive clients; empty for workloads.
         browserOrigins: &id003
+          description: Up to 20 exact HTTPS origins, or loopback HTTP origins; no paths, query, fragments, wildcards or trailing slashes. Only public interactive Clients; defaults to empty and never inferred from redirects.
+          maxItems: 20
           type: array
           items:
             type: string
