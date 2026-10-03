@@ -1,60 +1,69 @@
 export type AppStatus = "active" | "disabled";
-
-/** `public` = browser SPA (PKCE, no client secret). `confidential` = server app with secret. */
+export type Assurance = "baseline" | "strong";
 export type AppClientType = "public" | "confidential";
+export type ClientPurpose = "interactive" | "workload";
+export type ClientStatus =
+  "active" | "disabled" | "pending_deletion" | "purged";
 
 export type AppSummary = {
   id: string;
   name: string;
   slug: string;
-  clientType: AppClientType;
   status: AppStatus;
-  redirectUris: string[];
-  activeCredentialCount: number;
+  minimumAssurance: Assurance;
+  activeClientCount: number;
   createdAt: string;
   updatedAt: string;
   disabledAt: string | null;
 };
-
 export type AppDetail = AppSummary;
-
-export type CreateAppRequest = {
-  name: string;
-  redirectUris: string[];
-  clientType: AppClientType;
-};
-
-export type CreateAppResponse = {
-  app: AppDetail;
-  credential: AppCredentialSummary;
-  /** Shown once for confidential clients; null for public clients. */
-  clientSecret: string | null;
-};
-
-export type PatchAppRequest = {
-  name?: string;
-  redirectUris?: string[];
-  status?: AppStatus;
-};
-
-export type CredentialStatus = "active" | "revoked";
-
-export type AppCredentialSummary = {
+export type OAuthClientSummary = {
   id: string;
+  appId: string;
   clientId: string;
   label: string;
-  status: CredentialStatus;
+  clientType: AppClientType;
+  purpose: ClientPurpose;
+  status: ClientStatus;
+  redirectUris: string[];
+  browserOrigins: string[];
+  refreshEnabled: boolean;
+  assuranceOverride: Assurance | null;
+  effectiveAssurance: Assurance;
   createdAt: string;
-  revokedAt: string | null;
+  updatedAt: string;
+  disabledAt: string | null;
 };
-
-export type CreateCredentialRequest = {
+export type CreateClientRequest = {
+  label: string;
+  clientType: AppClientType;
+  purpose: ClientPurpose;
+  redirectUris?: string[];
+  browserOrigins?: string[];
+  refreshEnabled?: boolean;
+  assuranceOverride?: Assurance | null;
+};
+export type PatchClientRequest = {
   label?: string;
+  redirectUris?: string[];
+  browserOrigins?: string[];
+  refreshEnabled?: boolean;
+  assuranceOverride?: Assurance | null;
+  status?: "active" | "disabled";
 };
-
-export type CreateCredentialResponse = {
-  credential: AppCredentialSummary;
+export type CreateClientResponse = {
+  client: OAuthClientSummary;
   clientSecret: string | null;
 };
-
-export type RotateCredentialResponse = CreateCredentialResponse;
+export type CreateAppRequest = {
+  name: string;
+  minimumAssurance?: Assurance;
+  initialClient: CreateClientRequest;
+};
+export type CreateAppResponse = CreateClientResponse & { app: AppDetail };
+export type PatchAppRequest = {
+  name?: string;
+  status?: AppStatus;
+  minimumAssurance?: Assurance;
+};
+export type RotateClientSecretResponse = CreateClientResponse;

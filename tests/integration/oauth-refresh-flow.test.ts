@@ -101,15 +101,15 @@ run("OAuth refresh token lifecycle", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "Refresh App", redirectUris: [REDIRECT], clientType: "confidential" },
+        body: {name: "Refresh App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     const app = (await appRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
       clientSecret: string;
     };
-    clientId = app.credential.clientId;
+    clientId = app.client.clientId;
     clientSecret = app.clientSecret;
     appId = app.app.id;
 

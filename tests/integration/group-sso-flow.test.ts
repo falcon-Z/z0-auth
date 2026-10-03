@@ -221,23 +221,23 @@ run("Group SSO flow", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "Tasks App", redirectUris: [REDIRECT_A], clientType: "confidential" },
+        body: {name: "Tasks App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: [REDIRECT_A], refreshEnabled: true, browserOrigins: []}},
       }),
     );
-    const appA = (await appARes.json()) as { app: { id: string }; credential: { clientId: string } };
-    clientA = appA.credential.clientId;
+    const appA = (await appARes.json()) as { app: { id: string }; client: { clientId: string } };
+    clientA = appA.client.clientId;
     appAId = appA.app.id;
 
     const appBRes = await dispatchApi(
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "Projects App", redirectUris: [REDIRECT_B], clientType: "confidential" },
+        body: {name: "Projects App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: [REDIRECT_B], refreshEnabled: true, browserOrigins: []}},
       }),
     );
-    const appB = (await appBRes.json()) as { app: { id: string }; credential: { clientId: string }; clientSecret: string };
+    const appB = (await appBRes.json()) as { app: { id: string }; client: { clientId: string }; clientSecret: string };
     clientSecretB = appB.clientSecret;
-    clientB = appB.credential.clientId;
+    clientB = appB.client.clientId;
     appBId = appB.app.id;
 
     const groupRes = await dispatchApi(
@@ -385,10 +385,10 @@ run("Group SSO flow", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "Solo App", redirectUris: ["http://localhost:3000/solo"], clientType: "confidential" },
+        body: {name: "Solo App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["http://localhost:3000/solo"], refreshEnabled: true, browserOrigins: []}},
       }),
     );
-    const solo = (await soloRes.json()) as { credential: { clientId: string } };
+    const solo = (await soloRes.json()) as { client: { clientId: string } };
 
     const appSessionA = await registerAppUser(
       clientA,
@@ -399,7 +399,7 @@ run("Group SSO flow", () => {
 
     const params = new URLSearchParams({
       response_type: "code",
-      client_id: solo.credential.clientId,
+      client_id: solo.client.clientId,
       redirect_uri: "http://localhost:3000/solo",
       scope: "openid profile email",
       state: "solo-state",

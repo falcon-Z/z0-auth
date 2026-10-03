@@ -48,16 +48,12 @@ run("passkey ceremonies", () => {
     const app = await dispatchApi(buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: session },
-      body: {
-        name: "Passkey App",
-        redirectUris: ["http://localhost:3000/oauth/callback"],
-        clientType: "public",
-      },
+      body: {name: "Passkey App", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: ["http://localhost:3000/oauth/callback"], refreshEnabled: true, browserOrigins: (["http://localhost:3000/oauth/callback"]).map(uri => new URL(uri).origin)}},
     }));
     expect(app.status).toBe(201);
-    const created = (await app.json()) as { app: { id: string }; credential: { clientId: string } };
+    const created = (await app.json()) as { app: { id: string }; client: { clientId: string } };
     appId = created.app.id;
-    clientId = created.credential.clientId;
+    clientId = created.client.clientId;
   }, 15_000);
 
   test("starts strict registration and keeps safe list output", async () => {

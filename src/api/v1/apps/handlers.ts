@@ -1,16 +1,23 @@
-import type { CreateAppRequest, CreateCredentialRequest, PatchAppRequest } from "@z0/contracts/apps";
+import type {
+  CreateAppRequest,
+  CreateClientRequest,
+  PatchAppRequest,
+  PatchClientRequest,
+} from "@z0/contracts/apps";
 import { parseJsonBody } from "@z0/contracts/validation";
 
 import {
   createApp,
-  createCredential,
   getAppForApi,
   listAppsForApi,
-  listCredentialsForApi,
   patchApp,
-  revokeCredential,
-  rotateCredential,
 } from "../../lib/apps";
+import {
+  createClient,
+  listClientsForApi,
+  patchClient,
+  rotateClientSecret,
+} from "../../lib/oauth-clients";
 import { writeAuditEvent } from "../../lib/audit";
 import { validateCsrf } from "../../lib/csrf";
 import { json } from "../../lib/http";
@@ -43,7 +50,10 @@ export async function handleCreateApp(req: RoutedRequest): Promise<Response> {
     action: "app.created",
     resourceType: "app",
     resourceId: result.data.app.id,
-    payload: { slug: result.data.app.slug, clientType: result.data.app.clientType },
+    payload: {
+      slug: result.data.app.slug,
+      minimumAssurance: result.data.app.minimumAssurance,
+    },
   });
 
   return json(result.data, { status: 201 });
@@ -84,89 +94,54 @@ export async function handlePatchApp(req: RoutedRequest): Promise<Response> {
   return json(result.app);
 }
 
-export async function handleListCredentials(req: RoutedRequest): Promise<Response> {
-  const appId = req.pathParams?.appId ?? "";
-  const auth = await requireScope(req, "apps.credentials:read");
+export async function handleListClients(req: RoutedRequest): Promise<Response> {
+  const auth = await requireScope(req, "apps.clients:read");
   if (!auth.ok) return auth.response;
-
-  const result = await listCredentialsForApi(appId);
-  if (!result.ok) return result.response;
-  return json({ credentials: result.credentials });
+  const result = await listClientsForApi(req.pathParams?.appId ?? "");
+  return result.ok ? json({ clients: result.clients }) : result.response;
 }
-
-export async function handleCreateCredential(req: RoutedRequest): Promise<Response> {
-  const csrfError = validateCsrf(req);
-  if (csrfError) return csrfError;
-
-  const appId = req.pathParams?.appId ?? "";
-  const auth = await requireScope(req, "apps.credentials:create");
+async function clientMutation(
+  req: RoutedRequest,
+  operation: "create" | "update" | "rotate",
+) {
+  const csrf = validateCsrf(req);
+  if (csrf) return csrf;
+  const auth = await requireScope(req, `apps.clients:${operation}`);
   if (!auth.ok) return auth.response;
-  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
-  if (stepUpError) return stepUpError;
-
-  const parsed = await parseJsonBody<CreateCredentialRequest>(req);
-  if (!parsed.ok) return parsed.response;
-
-  const result = await createCredential(appId, parsed.body);
+  const stepUp = await requireRecentConsoleMfa(req, auth.userId);
+  if (stepUp) return stepUp;
+  const appId = req.pathParams?.appId ?? "";
+  const id = req.pathParams?.clientId ?? "";
+  const parsed =
+    operation === "rotate"
+      ? null
+      : await parseJsonBody<CreateClientRequest & PatchClientRequest>(req);
+  if (parsed && !parsed.ok) return parsed.response;
+  const result =
+    operation === "create"
+      ? await createClient(appId, parsed!.body)
+      : operation === "update"
+        ? await patchClient(appId, id, parsed!.body)
+        : await rotateClientSecret(appId, id);
   if (!result.ok) return result.response;
-
+  const client = "data" in result ? result.data.client : result.client;
   await writeAuditEvent({
     actorUserId: auth.userId,
-    action: "credential.created",
-    resourceType: "credential",
-    resourceId: result.data.credential.id,
-    payload: { appId, label: result.data.credential.label },
+    action: `client.${operation === "create" ? "created" : operation === "update" ? "updated" : "secret_rotated"}`,
+    resourceType: "oauth_client",
+    resourceId: client.id,
+    payload: { appId, status: client.status },
   });
-
-  return json(result.data, { status: 201 });
+  return json("data" in result ? result.data : result.client, {
+    status: operation === "create" ? 201 : 200,
+  });
 }
-
-export async function handleRevokeCredential(req: RoutedRequest): Promise<Response> {
-  const csrfError = validateCsrf(req);
-  if (csrfError) return csrfError;
-
-  const appId = req.pathParams?.appId ?? "";
-  const credentialId = req.pathParams?.credentialId ?? "";
-  const auth = await requireScope(req, "apps.credentials:revoke");
-  if (!auth.ok) return auth.response;
-  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
-  if (stepUpError) return stepUpError;
-
-  const result = await revokeCredential(appId, credentialId);
-  if (!result.ok) return result.response;
-
-  await writeAuditEvent({
-    actorUserId: auth.userId,
-    action: "credential.revoked",
-    resourceType: "credential",
-    resourceId: credentialId,
-    payload: { appId },
-  });
-
-  return json({ ok: true });
+export async function handleCreateClient(req: RoutedRequest) {
+  return clientMutation(req, "create");
 }
-
-export async function handleRotateCredential(req: RoutedRequest): Promise<Response> {
-  const csrfError = validateCsrf(req);
-  if (csrfError) return csrfError;
-
-  const appId = req.pathParams?.appId ?? "";
-  const credentialId = req.pathParams?.credentialId ?? "";
-  const auth = await requireScope(req, "apps.credentials:rotate");
-  if (!auth.ok) return auth.response;
-  const stepUpError = await requireRecentConsoleMfa(req, auth.userId);
-  if (stepUpError) return stepUpError;
-
-  const result = await rotateCredential(appId, credentialId);
-  if (!result.ok) return result.response;
-
-  await writeAuditEvent({
-    actorUserId: auth.userId,
-    action: "credential.rotated",
-    resourceType: "credential",
-    resourceId: credentialId,
-    payload: { appId },
-  });
-
-  return json(result.data);
+export async function handlePatchClient(req: RoutedRequest) {
+  return clientMutation(req, "update");
+}
+export async function handleRotateClientSecret(req: RoutedRequest) {
+  return clientMutation(req, "rotate");
 }

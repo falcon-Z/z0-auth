@@ -18,7 +18,7 @@ export function AppGlobalActions() {
     const ok = await confirm({
       title: disabling ? "Disable app" : "Enable app",
       description: disabling
-        ? "New credentials cannot be created while disabled."
+        ? "New authorization and token issuance stop for every child client."
         : "The app will be active again.",
       confirmLabel: disabling ? "Disable" : "Enable",
       destructive: disabling,
@@ -50,7 +50,7 @@ export function AppGlobalActions() {
         open={editOpen}
         onOpenChange={setEditOpen}
         mode="edit"
-        initial={{ name: app.name, redirectUris: app.redirectUris }}
+        initial={{ name: app.name, minimumAssurance: app.minimumAssurance }}
         onSubmit={(body) => patchApp(appId, body)}
         onSuccess={(updated) => {
           setApp(updated);

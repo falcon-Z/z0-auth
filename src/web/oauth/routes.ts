@@ -33,6 +33,7 @@ import {
   exchangeRefreshToken,
   findOAuthAccessToken,
   findActiveOAuthClient,
+  sessionMeetsClientAssurance,
   isAllowedRedirectUri,
   issueClientCredentialsToken,
   parseScopeSet,
@@ -199,7 +200,7 @@ async function recordOAuthClientAuthFailure(req: Request, clientId: string): Pro
   });
 }
 
-async function redirectWithCode(url: URL, appId: string, appUserId: string): Promise<Response> {
+async function redirectWithCode(url: URL, appId: string, appUserId: string, sessionId: string): Promise<Response> {
   const redirectUri = url.searchParams.get("redirect_uri")!;
   const state = url.searchParams.get("state");
   const scope = (url.searchParams.get("scope") ?? "").trim().replace(/\s+/g, " ");
@@ -209,7 +210,8 @@ async function redirectWithCode(url: URL, appId: string, appUserId: string): Pro
   const client = await findActiveOAuthClient(clientId);
   if (!client) return problem(400, "Bad Request", "Unknown client_id");
 
-  const code = await issueAuthorizationCode({
+  let code: string;
+  try { code = await issueAuthorizationCode({
     appId,
     appUserId,
     appCredentialId: client.credentialId,
@@ -218,7 +220,11 @@ async function redirectWithCode(url: URL, appId: string, appUserId: string): Pro
     codeChallenge,
     codeChallengeMethod,
     nonce: url.searchParams.get("nonce"),
-  });
+    sessionId,
+  }); } catch (error) {
+    if (!(error instanceof Error) || !["invalid_authorization_authority", "insufficient_assurance"].includes(error.message)) throw error;
+    return problem(400, "Bad Request", "Authorization authority changed; start again.", {code: "access_denied"});
+  }
 
   const redirect = new URL(redirectUri);
   redirect.searchParams.set("code", code);
@@ -333,6 +339,7 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
       code: "invalid_redirect_uri",
     });
   }
+  if (client.purpose !== "interactive") return problem(400, "Bad Request", "Workload clients cannot authorize human users.", {code: "unauthorized_client"});
   if (url.searchParams.get("response_type") !== "code") {
     return authorizeErrorRedirect(url, "unsupported_response_type", "response_type=code is required");
   }
@@ -367,12 +374,14 @@ async function getAuthorize(req: BunRequest): Promise<Response> {
   }
 
   const appSession = resolved.session;
-
+  if (!await sessionMeetsClientAssurance(client, appSession.sessionId)) {
+    return problem(403, "Verification Required", "Stronger verification is required for this client.", {code: "insufficient_assurance"});
+  }
   const storedConsent = await getOAuthUserConsent(appSession.appUserId, client.appId);
   if (
     storedConsent && scopeIsSubset(normalizedScopeResult.normalizedScope, storedConsent.scope)
   ) {
-    const redirect = await redirectWithCode(url, client.appId, appSession.appUserId);
+    const redirect = await redirectWithCode(url, client.appId, appSession.appUserId, appSession.sessionId);
     appendSetCookie(redirect.headers, resolved.setCookie);
     return redirect;
   }
@@ -450,11 +459,11 @@ async function authenticateOAuthClient(
 function jsonOAuthResponse(
   req: BunRequest,
   payload: Record<string, unknown>,
-  client: { redirectUris: string[] },
+  client: { browserOrigins: string[] },
   status = 200,
 ): Response {
   const origin = req.headers.get("Origin");
-  const allowed = isOriginAllowedForClient(origin, client.redirectUris);
+  const allowed = isOriginAllowedForClient(origin, client.browserOrigins);
   const response = Response.json(payload, { status });
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("Pragma", "no-cache");
@@ -463,13 +472,13 @@ function jsonOAuthResponse(
 
 function oauthErrorResponseWithCors(
   req: BunRequest,
-  client: { redirectUris: string[] } | null,
+  client: { browserOrigins: string[] } | null,
   status: number,
   error: string,
   description: string,
 ): Response {
   const origin = req.headers.get("Origin");
-  const allowed = client ? isOriginAllowedForClient(origin, client.redirectUris) : false;
+  const allowed = client ? isOriginAllowedForClient(origin, client.browserOrigins) : false;
   return withOAuthCors(oauthErrorResponse(status, error, description), origin, allowed);
 }
 
@@ -670,6 +679,7 @@ async function postAuthorize(req: BunRequest): Promise<Response> {
     codeChallengeMethod: body.code_challenge_method || null,
     oidcNonce: body.nonce || null,
     decision: body.consent ?? "",
+    sessionId: appSession.sessionId,
   });
 
   if (completion.outcome === "missing") {

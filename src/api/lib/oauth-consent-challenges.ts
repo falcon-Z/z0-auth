@@ -98,7 +98,7 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
           ${challenge.codeChallengeMethod},
           ${challenge.oidcNonce},
           clock_timestamp() + (${challenge.lifetimeSeconds} * INTERVAL '1 second')
-        FROM app_credentials credentials
+        FROM oauth_clients credentials
         WHERE credentials.client_id = ${challenge.clientId}
           AND credentials.app_id = ${challenge.appId}
           AND credentials.status = 'active'
@@ -125,6 +125,18 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
     async complete(input: OAuthConsentCompletionInput): Promise<OAuthConsentCompletion> {
       const nonceHash = await sha256Hex(input.nonce);
       return getDb().begin(async (tx) => {
+        // Client management locks the application and client before retiring
+        // challenges. Take those locks first so completion cannot deadlock
+        // with disablement or a change to the assurance policy.
+        const [context] = await tx`
+          SELECT app_id, app_credential_id FROM oauth_consent_challenges
+          WHERE nonce_hash = ${nonceHash} AND purpose = 'oauth_consent'
+        `;
+        if (context) {
+          await tx`SELECT id FROM apps WHERE id = ${context.app_id} FOR SHARE`;
+          await tx`SELECT id FROM oauth_clients WHERE id = ${context.app_credential_id}
+            AND app_id = ${context.app_id} FOR SHARE`;
+        }
         const [record] = await tx`
           SELECT
             challenge.id,
@@ -141,13 +153,13 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
             challenge.expires_at <= clock_timestamp() AS expired,
             challenge.consumed_at,
             (
-              credentials.status = 'active'
+              credentials.status = 'active' AND credentials.purpose = 'interactive'
               AND application.status = 'active'
               AND identity.status = 'active'
               AND identity.disabled_at IS NULL
               AND identity.deleted_at IS NULL
               AND (identity.locked_until IS NULL OR identity.locked_until <= clock_timestamp())
-              AND challenge.redirect_uri = ANY(application.redirect_uris)
+              AND challenge.redirect_uri = ANY(credentials.redirect_uris)
               AND NOT EXISTS (
                 SELECT 1
                 FROM unnest(regexp_split_to_array(challenge.scope, '\\s+')) AS requested(scope_name)
@@ -161,14 +173,14 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
               )
             ) AS authority_active
           FROM oauth_consent_challenges challenge
-          JOIN app_credentials credentials ON credentials.id = challenge.app_credential_id
+          JOIN oauth_clients credentials ON credentials.id = challenge.app_credential_id
           JOIN apps application ON application.id = challenge.app_id
           JOIN app_users identity
             ON identity.id = challenge.app_user_id
             AND identity.app_id = challenge.app_id
           WHERE challenge.nonce_hash = ${nonceHash}
             AND challenge.purpose = 'oauth_consent'
-          FOR UPDATE OF challenge, credentials, application, identity
+          FOR UPDATE OF challenge, identity
         `;
         if (!record) {
           await auditRejection("missing", input, undefined, tx);
@@ -214,16 +226,27 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
           return { outcome: "denied", redirectUri: row.redirect_uri, state: row.oauth_state };
         }
 
-        const code = await issueAuthorizationCode({
-          appId: row.app_id,
-          appUserId: row.app_user_id,
-          appCredentialId: row.app_credential_id,
-          redirectUri: row.redirect_uri,
-          scope: row.scope,
-          codeChallenge: row.code_challenge,
-          codeChallengeMethod: row.code_challenge_method,
-          nonce: row.oidc_nonce,
-        }, tx);
+        let code: string;
+        try {
+          code = await issueAuthorizationCode({
+            appId: row.app_id,
+            appUserId: row.app_user_id,
+            appCredentialId: row.app_credential_id,
+            redirectUri: row.redirect_uri,
+            scope: row.scope,
+            codeChallenge: row.code_challenge,
+            codeChallengeMethod: row.code_challenge_method,
+            nonce: row.oidc_nonce,
+            sessionId: input.sessionId,
+          }, tx);
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !["insufficient_assurance", "invalid_authorization_authority"].includes(error.message)
+          ) throw error;
+          await tx`UPDATE oauth_consent_challenges SET consumed_at = NOW(), completion_outcome = 'mismatched' WHERE id = ${row.id}`;
+          return { outcome: "mismatched" };
+        }
         await upsertOAuthUserConsent({
           appUserId: row.app_user_id,
           appId: row.app_id,

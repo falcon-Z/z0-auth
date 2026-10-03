@@ -90,16 +90,16 @@ async function createAppWithCredential(csrf: string, cookie: string, name: strin
     buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: cookie },
-      body: { name, redirectUris: [REDIRECT], clientType: "confidential" },
+      body: { name, initialClient: {label: "Server", redirectUris: [REDIRECT], clientType: "confidential", purpose: "interactive", refreshEnabled: true} },
     }),
   );
   expect(appRes.status).toBe(201);
   const created = (await appRes.json()) as {
     app: { id: string };
-    credential: { clientId: string };
+    client: { clientId: string };
   };
 
-  return { appId: created.app.id, clientId: created.credential.clientId };
+  return { appId: created.app.id, clientId: created.client.clientId };
 }
 
 run("M06 app hosted auth", () => {

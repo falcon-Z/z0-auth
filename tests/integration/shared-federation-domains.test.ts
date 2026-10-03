@@ -10,8 +10,8 @@ const profile = { subject: "upstream-person", email: "person@example.com", email
   name: "Original profile", raw: { sub: "upstream-person" } };
 
 async function application(slug: string) {
-  const [row] = await getDb()`INSERT INTO apps (name, slug, client_type, redirect_uris)
-    VALUES (${slug}, ${slug}, 'public', '{}') RETURNING id`;
+  const [row] = await getDb()`INSERT INTO apps (name, slug)
+    VALUES (${slug}, ${slug}) RETURNING id`;
   return String(row.id);
 }
 async function provider(key: string, issuer = "https://idp.example.com") {

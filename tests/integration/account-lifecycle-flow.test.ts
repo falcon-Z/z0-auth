@@ -72,7 +72,7 @@ run("account lifecycle", () => {
     const appRes = await dispatchApi(buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: cookie },
-      body: { name: "Lifecycle App", redirectUris: ["https://example.com/callback"], clientType: "confidential" },
+      body: {name: "Lifecycle App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["https://example.com/callback"], refreshEnabled: true, browserOrigins: []}},
     }));
     appId = String(((await appRes.json()) as { app: { id: string } }).app.id);
     const userRes = await dispatchApi(buildRequest("POST", `/api/v1/apps/${appId}/users`, {

@@ -79,17 +79,13 @@ run("federation linking and tokens", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: session },
-        body: {
-          name: `Fed App ${suffix}`,
-          redirectUris: ["http://localhost:3000/oauth/callback"],
-          clientType: "confidential",
-        },
+        body: {name: `Fed App ${suffix}`, initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["http://localhost:3000/oauth/callback"], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     expect(appRes.status).toBe(201);
     const created = (await appRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
       clientSecret: string;
     };
 
@@ -129,7 +125,7 @@ run("federation linking and tokens", () => {
       csrf,
       session,
       appId: created.app.id,
-      clientId: created.credential.clientId,
+      clientId: created.client.clientId,
       clientSecret: created.clientSecret,
       providerId: provider.id,
       providerKey: `mock-${suffix}`,
@@ -222,11 +218,7 @@ run("federation linking and tokens", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: first.csrf,
         cookies: { [SESSION_COOKIE]: first.session },
-        body: {
-          name: "Second Realm App",
-          redirectUris: ["http://localhost:3000/second-callback"],
-          clientType: "confidential",
-        },
+        body: {name: "Second Realm App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["http://localhost:3000/second-callback"], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     expect(secondAppRes.status).toBe(201);
@@ -339,10 +331,27 @@ run("federation linking and tokens", () => {
   });
 
   test("machine token with federation:token scope can refresh upstream token", async () => {
-    const { appId, clientId, clientSecret, providerId, providerKey } = await createAppWithProvider("m2m");
+    const { appId, clientId, providerId, providerKey } = await createAppWithProvider("m2m");
     await federatedSignIn(clientId, providerKey, "mock-subject-m2m", "m2m@example.com");
 
     const { csrf, cookie: session } = await ownerLogin();
+    const workloadRes = await dispatchApi(
+      buildRequest("POST", `/api/v1/apps/${appId}/clients`, {
+        csrfToken: csrf,
+        cookies: { [SESSION_COOKIE]: session },
+        body: {
+          label: "Federation token worker",
+          clientType: "confidential",
+          purpose: "workload",
+        },
+      }),
+    );
+    expect(workloadRes.status).toBe(201);
+    const workload = await workloadRes.json() as {
+      client: { clientId: string; appId: string };
+      clientSecret: string;
+    };
+    expect(workload.client.appId).toBe(appId);
     const usersRes = await dispatchApi(
       buildRequest("GET", `/api/v1/apps/${appId}/users`, {
         cookies: { [SESSION_COOKIE]: session },
@@ -358,8 +367,8 @@ run("federation linking and tokens", () => {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           grant_type: "client_credentials",
-          client_id: clientId,
-          client_secret: clientSecret,
+          client_id: workload.client.clientId,
+          client_secret: workload.clientSecret,
           scope: "federation:token",
         }).toString(),
       }),

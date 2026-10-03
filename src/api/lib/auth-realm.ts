@@ -78,10 +78,10 @@ export async function findAppByClientId(clientId: string): Promise<AppClientRow 
       a.name AS app_name,
       a.status AS app_status,
       c.client_id
-    FROM app_credentials c
+    FROM oauth_clients c
     JOIN apps a ON a.id = c.app_id
     WHERE c.client_id = ${clientId}
-      AND c.status = 'active'
+      AND c.status = 'active' AND c.purpose = 'interactive'
     LIMIT 1
   `;
   if (!row) return null;
@@ -98,7 +98,7 @@ export async function findAppByClientId(clientId: string): Promise<AppClientRow 
 export async function findAppIdByClientId(clientId: string): Promise<string | null> {
   const [row] = await getDb()`
     SELECT app_id
-    FROM app_credentials
+    FROM oauth_clients
     WHERE client_id = ${clientId}
     LIMIT 1
   `;
@@ -134,9 +134,9 @@ export async function resolveAuthRealm(
 export async function findActiveClientIdForApp(appId: string): Promise<string | null> {
   const [row] = await getDb()`
     SELECT client_id
-    FROM app_credentials
+    FROM oauth_clients
     WHERE app_id = ${appId}
-      AND status = 'active'
+      AND status = 'active' AND purpose = 'interactive'
     ORDER BY created_at ASC
     LIMIT 1
   `;

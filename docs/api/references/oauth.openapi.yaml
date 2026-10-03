@@ -112,10 +112,11 @@ paths:
       description: |
         Exchanges grants for OAuth tokens.
         Supported `grant_type` values: `authorization_code`, `refresh_token`, `client_credentials`.
-        Access tokens are opaque. Authorization code exchange returns a refresh token (30-day TTL, rotated on use).
+        Access tokens are opaque. Authorization code exchange returns a refresh token only when the interactive child Client enables refresh (30-day TTL, rotated on use).
         Refresh clients may send an `Idempotency-Key` so an identical retry within 10 seconds receives
         the original rotation outcome. Reuse with a different key revokes the token family.
-        Browser clients require CORS `Origin` to match a registered redirect URI origin.
+        Public interactive clients require CORS `Origin` to match a separately registered browser origin.
+        Client Credentials is limited to explicit confidential workload Clients.
       operationId: postOAuthToken
       parameters:
         - name: Idempotency-Key

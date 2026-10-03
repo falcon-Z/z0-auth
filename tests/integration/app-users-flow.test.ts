@@ -54,7 +54,7 @@ async function createApp(csrf: string, cookie: string, name: string) {
     buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: cookie },
-      body: { name, redirectUris: [REDIRECT], clientType: "confidential" },
+      body: { name, initialClient: {label: "Server", redirectUris: [REDIRECT], clientType: "confidential", purpose: "interactive", refreshEnabled: true} },
     }),
   );
   expect(res.status).toBe(201);

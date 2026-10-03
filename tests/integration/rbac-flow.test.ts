@@ -130,7 +130,7 @@ run("platform RBAC (P1)", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie! },
-        body: { name: "Blocked App", redirectUris: ["https://example.com/callback"], clientType: "confidential" },
+        body: {name: "Blocked App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["https://example.com/callback"], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     expect(createRes.status).toBe(403);

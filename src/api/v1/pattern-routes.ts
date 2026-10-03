@@ -49,13 +49,13 @@ import {
 } from "./rbac/handlers";
 import {
   handleCreateApp,
-  handleCreateCredential,
+  handleCreateClient,
   handleGetApp,
   handleListApps,
-  handleListCredentials,
+  handleListClients,
   handlePatchApp,
-  handleRevokeCredential,
-  handleRotateCredential,
+  handlePatchClient,
+  handleRotateClientSecret,
 } from "./apps/handlers";
 import {
   handleCreateScope,
@@ -130,16 +130,16 @@ export const v1PatternRoutes: PathRoute[] = [
     handlers: { POST: handleRefreshFederationUserToken },
   },
   {
-    pattern: "/api/v1/apps/:appId/credentials",
-    handlers: { GET: handleListCredentials, POST: handleCreateCredential },
+    pattern: "/api/v1/apps/:appId/clients",
+    handlers: { GET: handleListClients, POST: handleCreateClient },
   },
   {
-    pattern: "/api/v1/apps/:appId/credentials/:credentialId",
-    handlers: { DELETE: handleRevokeCredential },
+    pattern: "/api/v1/apps/:appId/clients/:clientId",
+    handlers: { PATCH: handlePatchClient },
   },
   {
-    pattern: "/api/v1/apps/:appId/credentials/:credentialId/rotate",
-    handlers: { POST: handleRotateCredential },
+    pattern: "/api/v1/apps/:appId/clients/:clientId/rotate",
+    handlers: { POST: handleRotateClientSecret },
   },
   {
     pattern: "/api/v1/apps/:appId/scopes",
