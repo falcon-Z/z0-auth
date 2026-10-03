@@ -1,3 +1,4 @@
+import { handleListClientSecrets, handleCreateClientSecret, handleRevokeClientSecret } from "./apps/client-secrets-handlers";
 import { handleAvailableResources, handleListResources, handleCreateResource, handlePatchResource, handleDeleteResource, handleListClientResources, handlePutClientResource, handleDeleteClientResource } from "./apps/resources-handlers";
 import type { PathRoute } from "../lib/path-router";
 import { handleAcceptInvite, handleDeclineInvite, handleInvitePreview } from "./invites/handlers";
@@ -58,7 +59,6 @@ import {
   handleListClients,
   handlePatchApp,
   handlePatchClient,
-  handleRotateClientSecret,
 } from "./apps/handlers";
 import {
   handleCreateScope,
@@ -149,8 +149,12 @@ export const v1PatternRoutes: PathRoute[] = [
     handlers: { PATCH: handlePatchClient },
   },
   {
-    pattern: "/api/v1/apps/:appId/clients/:clientId/rotate",
-    handlers: { POST: handleRotateClientSecret },
+    pattern: "/api/v1/apps/:appId/clients/:clientId/secrets",
+    handlers: { GET: handleListClientSecrets, POST: handleCreateClientSecret },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/clients/:clientId/secrets/:secretId/revoke",
+    handlers: { POST: handleRevokeClientSecret },
   },
   {
     pattern: "/api/v1/apps/:appId/scopes",

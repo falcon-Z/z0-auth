@@ -11,7 +11,8 @@ import { validateRequiredString } from "@z0/contracts/validation";
 import { getDb, pgTextArray } from "./db";
 import { problem } from "./http";
 import { randomToken } from "./crypto";
-import { hashPassword } from "./password";
+import { writeAuditEvent } from "./audit";
+import { insertClientSecret } from "./client-secrets";
 import { loadConfig } from "./config";
 import { validateRedirectUris } from "./redirect-uris";
 import { isRegistrableBrowserOrigin } from "./browser-origins";
@@ -33,7 +34,6 @@ export type ClientRow = {
   disabled_at: Date | null;
   deletion_started_at: Date | null;
   purge_after: Date | null;
-  client_secret_hash: string | null;
 };
 type ClientConfig = Required<CreateClientRequest>;
 function fail(status: number, detail: string, field = "client") {
@@ -210,15 +210,18 @@ export async function insertClient(
   appId: string,
   config: ClientConfig,
   minimum: Assurance,
+  actorUserId?: string,
 ): Promise<CreateClientResponse> {
-  const secret = config.clientType === "confidential" ? randomToken(32) : null;
-  const hash = secret ? await hashPassword(secret) : null;
   const [row] =
-    await tx`INSERT INTO oauth_clients (app_id, client_id, client_secret_hash, label, client_type, purpose,
+    await tx`INSERT INTO oauth_clients (app_id, client_id, label, client_type, purpose,
     redirect_uris, browser_origins, refresh_enabled, assurance_override)
-    VALUES (${appId}, ${`z0_${randomToken(16)}`}, ${hash}, ${config.label}, ${config.clientType}, ${config.purpose},
+    VALUES (${appId}, ${`z0_${randomToken(16)}`}, ${config.label}, ${config.clientType}, ${config.purpose},
       ${pgTextArray(config.redirectUris)}, ${pgTextArray(config.browserOrigins)}, ${config.refreshEnabled}, ${config.assuranceOverride}) RETURNING *`;
-  return { client: mapClient(row as ClientRow, minimum), clientSecret: secret };
+  const created = config.clientType === "confidential"
+    ? await insertClientSecret(tx, appId, String(row.id), actorUserId) : { secret: null, clientSecret: null };
+  await writeAuditEvent({ actorUserId, action: "client.created", resourceType: "oauth_client", resourceId: String(row.id),
+    payload: { appId, status: row.status } }, tx);
+  return { client: mapClient(row as ClientRow, minimum), ...created };
 }
 export async function listClientsForApi(appId: string) {
   const [app] =
@@ -231,7 +234,7 @@ export async function listClientsForApi(appId: string) {
     clients: rows.map((r: ClientRow) => mapClient(r, app.minimum_assurance)),
   };
 }
-export async function createClient(appId: string, body: CreateClientRequest) {
+export async function createClient(appId: string, body: CreateClientRequest, actorUserId?: string) {
   return getDb().begin(async (tx) => {
     await lockResourceAuthority(tx, true);
     const [app] = await tx`SELECT * FROM apps WHERE id = ${appId} FOR UPDATE`;
@@ -241,7 +244,7 @@ export async function createClient(appId: string, body: CreateClientRequest) {
     if (!config.ok) return config;
     return {
       ok: true as const,
-      data: await insertClient(tx, appId, config.value, app.minimum_assurance),
+      data: await insertClient(tx, appId, config.value, app.minimum_assurance, actorUserId),
     };
   });
 }
@@ -330,47 +333,6 @@ export async function patchClient(
     return {
       ok: true as const,
       client: mapClient(updated as ClientRow, app.minimum_assurance),
-    };
-  });
-}
-export async function rotateClientSecret(appId: string, id: string) {
-  return getDb().begin(async (tx) => {
-    await lockResourceAuthority(tx, true);
-    const [app] = await tx`SELECT * FROM apps WHERE id = ${appId} FOR UPDATE`;
-    if (!app) return fail(404, "Application not found.");
-    const [client] =
-      await tx`SELECT * FROM oauth_clients WHERE id = ${id} AND app_id = ${appId} FOR UPDATE`;
-    if (!client) return fail(404, "Client not found.");
-    if (client.client_type === "public")
-      return {
-        ok: false as const,
-        response: problem(
-          409,
-          "Conflict",
-          "Public clients do not use secrets.",
-          {
-            errors: [
-              {
-                field: "client",
-                code: "public_client_no_secret",
-                message: "Public clients do not use secrets.",
-              },
-            ],
-          },
-        ),
-      };
-    if (app.status !== "active" || client.status !== "active")
-      return fail(409, "Client is disabled.");
-    const secret = randomToken(32);
-    const hash = await hashPassword(secret);
-    const [updated] =
-      await tx`UPDATE oauth_clients SET client_secret_hash = ${hash}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
-    return {
-      ok: true as const,
-      data: {
-        client: mapClient(updated as ClientRow, app.minimum_assurance),
-        clientSecret: secret,
-      },
     };
   });
 }

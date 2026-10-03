@@ -44,12 +44,13 @@ run("Application/Client upgrade", () => {
       await db`INSERT INTO instance_role_scopes (role_id, scope_key) VALUES (${role.id}, 'apps.credentials:create')`;
       expect(
         await applyMigrations(db, path.join(sqlDir, "migrations"), false),
-      ).toBe(3);
+      ).toBe(4);
       const [child] =
         await db`SELECT * FROM oauth_clients WHERE id = ${client.id}`;
       expect(child.client_id).toBe("existing-client");
       expect(child.app_id).toBe(app.id);
-      expect(child.client_secret_hash).toBe("existing-verifier");
+      expect(child.client_secret_hash).toBeUndefined();
+      expect((await db`SELECT secret_digest FROM client_secrets WHERE client_id = ${client.id}`)[0].secret_digest).toBe("existing-verifier");
       expect(child.client_type).toBe("confidential");
       expect(child.redirect_uris).toEqual(["https://example.com/callback"]);
       expect(child.purpose).toBe("interactive");

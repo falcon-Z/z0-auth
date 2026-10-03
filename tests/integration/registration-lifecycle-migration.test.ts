@@ -27,7 +27,7 @@ run("Registration lifecycle upgrade", () => {
       const [identity] = await db`INSERT INTO app_users(app_id, email, name) VALUES (${app.id}, 'person@example.com', 'Person') RETURNING account_id`;
       const [role] = await db`INSERT INTO instance_roles(key, name) VALUES ('editor-lifecycle', 'Editor') RETURNING id`;
       await db`INSERT INTO instance_role_scopes(role_id, scope_key) VALUES (${role.id}, 'apps:update'), (${role.id}, 'apps.clients:update')`;
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(1);
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(2);
       const [upgraded] = await db`SELECT account_domain_id, status, disabled_at, purge_after, deletion_started_at FROM apps WHERE id = ${app.id}`;
       expect(upgraded.account_domain_id).toBe(app.account_domain_id);
       expect(upgraded.status).toBe("disabled"); expect(upgraded.disabled_at).toEqual(app.disabled_at);

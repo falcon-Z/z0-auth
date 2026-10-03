@@ -354,14 +354,46 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PatchClientRequest'
-  /api/v1/apps/{appId}/clients/{clientId}/rotate:
+  /api/v1/apps/{appId}/clients/{clientId}/secrets:
+    get:
+      tags: [Applications]
+      summary: List safe metadata for every Client secret
+      operationId: listClientSecrets
+      description: Requires apps.clients:read. Values and digests are never returned. Public clients return an empty list. Responses use Cache-Control no-store.
+      security:
+      - SessionCookie: []
+      parameters:
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: Secret metadata, with expiry evaluated at read time
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secrets]
+                properties:
+                  secrets:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClientSecretSummary'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
     post:
-      tags:
-      - Applications
-      summary: Rotate client secret
-      operationId: rotateAppClient
-      description: Replaces the secret for the same `clientId`. Returns the new secret
-        once.
+      tags: [Applications]
+      summary: Add an independent confidential Client secret
+      operationId: createClientSecret
+      description: >-
+        Requires apps.clients:rotate, CSRF and recent privileged verification.
+        Client and Application must be active and Client must be confidential.
+        Does not replace or revoke existing secrets. Returns the generated value
+        only once with Cache-Control no-store. No expiry is imposed by default.
+        replacementFor records a same-Client audit relationship only.
       security:
       - CsrfHeader: []
         CsrfCookie: []
@@ -370,14 +402,21 @@ paths:
       - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
       - $ref: '#/components/parameters/AppId'
       - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientSecretRequest'
       responses:
-        '200':
-          description: Client configuration and one-time plaintext secret (null for
-            public clients)
+        '201':
+          description: Independent secret metadata and one-time value
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateClientResponse'
+                $ref: '#/components/schemas/CreateClientSecretResponse'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
         '401':
           $ref: common.openapi.yaml#/components/responses/Unauthorized
         '403':
@@ -385,9 +424,65 @@ paths:
         '404':
           $ref: common.openapi.yaml#/components/responses/NotFound
         '409':
-          description: Application disabled
+          description: Public Client or unavailable Client/Application
+  /api/v1/apps/{appId}/clients/{clientId}/secrets/{secretId}/revoke:
+    post:
+      tags: [Applications]
+      summary: Permanently revoke an individual Client secret
+      operationId: revokeClientSecret
+      description: >-
+        Requires apps.clients:revoke, CSRF and recent privileged verification.
+        Ordinary revocation of an active Client's last usable secret returns 409
+        with code last_usable_secret and explains the outage. Add and deploy a
+        replacement first. Compromised revocation can revoke the final secret
+        immediately. Expired alternatives do not count as usable. Disabled or
+        Pending Deletion registrations may revoke their last secret ordinarily.
+        Retrying an already-completed revocation returns existing metadata.
+        Revocation stops future authentication and is rechecked during token
+        issuance; already-issued access tokens expire normally. Responses use no-store.
+      security:
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
+      parameters:
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ClientId'
+      - name: secretId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [ordinary, compromised] }
+      responses:
+        '200':
+          description: Revoked secret metadata; never contains its value or digest
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret]
+                properties:
+                  secret:
+                    $ref: '#/components/schemas/ClientSecretSummary'
         '400':
           $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
+          description: Ordinary revocation requires another usable secret for this active Client
   /api/v1/registration-lifecycle-policy:
     get:
       summary: Read the configured registration deletion grace period
@@ -782,9 +877,15 @@ components:
       required:
       - client
       - clientSecret
+      - secret
       properties:
         client:
           $ref: '#/components/schemas/OAuthClientSummary'
+        secret:
+          oneOf:
+          - $ref: '#/components/schemas/ClientSecretSummary'
+          - type: 'null'
+          description: Safe metadata for the initial secret. Null for public clients.
         clientSecret:
           type:
           - string
@@ -813,11 +914,17 @@ components:
       - app
       - client
       - clientSecret
+      - secret
       properties:
         app:
           $ref: '#/components/schemas/AppDetail'
         client:
           $ref: '#/components/schemas/OAuthClientSummary'
+        secret:
+          oneOf:
+          - $ref: '#/components/schemas/ClientSecretSummary'
+          - type: 'null'
+          description: Safe metadata for the initial secret. Null for public clients.
         clientSecret:
           type:
           - string
@@ -859,3 +966,35 @@ components:
           minimum: 0
           maximum: 365
           description: Mandatory for delete; must match the reviewed current policy and is bound into its verification challenge
+    ClientSecretSummary:
+      type: object
+      additionalProperties: false
+      required: [id, clientId, label, status, createdAt, createdBy, expiresAt, lastUsedAt, revokedAt, revokedBy, revocationReason]
+      properties:
+        id: { type: string, format: uuid, description: Stable non-secret identifier }
+        clientId: { type: string, format: uuid, description: Parent Client record UUID }
+        label: { type: [string, 'null'] }
+        status: { type: string, enum: [active, expired, revoked] }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: [string, 'null'], format: uuid, description: Null when the creator is unknown or removed }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        lastUsedAt: { type: [string, 'null'], format: date-time, description: Last successful Client authentication; failed attempts do not update it }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        revokedBy: { type: [string, 'null'], format: uuid }
+        revocationReason: { type: [string, 'null'], enum: [ordinary, compromised, null] }
+    CreateClientSecretRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        label: { type: [string, 'null'], minLength: 1, maxLength: 64 }
+        expiresAt: { type: [string, 'null'], format: date-time, description: Future RFC 3339 timestamp or null for no expiry }
+        replacementFor: { type: string, format: uuid, description: Optional same-Client secret ID for the audit relationship }
+    CreateClientSecretResponse:
+      type: object
+      required: [secret, clientSecret]
+      properties:
+        secret:
+          $ref: '#/components/schemas/ClientSecretSummary'
+        clientSecret:
+          type: string
+          description: Generated value returned only in this creation response

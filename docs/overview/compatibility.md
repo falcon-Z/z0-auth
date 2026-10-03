@@ -105,3 +105,10 @@ continue to authenticate through the form or HTTP Basic, and UserInfo through it
 bearer token. Cross-origin calls outside the specific Client's registration are
 rejected before token grant mutations. Update SPA integrations using the example
 and register origins explicitly through Client management.
+
+
+## Independent Client secrets (migration 0049)
+
+Client verifiers move from `oauth_clients.client_secret_hash` into `client_secrets` without changing Client IDs, registrations, Resource permissions or token bindings. Existing confidential Client Argon2id verifiers remain usable unless already revoked; no plaintext is recovered and unknown historical creators/last-use times remain null. Public Clients acquire no secret. Newly generated credentials use a secret lookup UUID plus 256 random bits and a one-way digest.
+
+The destructive `/clients/:clientId/rotate` API is replaced by `/clients/:clientId/secrets` (GET metadata, POST addition) and `/secrets/:secretId/revoke` (POST with explicit ordinary/compromised reason). Create a secret, deploy it, then revoke the old secret. Creating Application/Client registrations now includes initial `secret` metadata as well as the one-time `clientSecret` value; both are null for public Clients. Existing `apps.clients:rotate` grants authorize addition and `apps.clients:revoke` grants authorize individual revocation. Secret authentication for public Clients and mixed Basic/form authentication are rejected.

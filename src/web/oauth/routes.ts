@@ -152,20 +152,21 @@ function oauthClientCredentials(
     return { clientId: body.client_id, clientSecret: body.client_secret };
   }
 
-  const [scheme, encoded] = authorization.split(/\s+/, 2);
-  if (scheme?.toLowerCase() !== "basic" || !encoded) {
+  if (body.client_secret !== undefined) return oauthErrorResponse(400, "invalid_request", "Use one client authentication method per request");
+  const [scheme, encoded, extra] = authorization.trim().split(/\s+/);
+  if (scheme?.toLowerCase() !== "basic" || !encoded || extra || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
   let decoded: string;
   try {
-    decoded = Buffer.from(encoded, "base64").toString("utf8");
+    decoded = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.from(encoded, "base64"));
   } catch {
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
   const separator = decoded.indexOf(":");
   if (separator < 1) return oauthErrorResponse(401, "invalid_client", "client authentication failed");
-  const clientId = safeDecodeURIComponent(decoded.slice(0, separator));
-  const clientSecret = safeDecodeURIComponent(decoded.slice(separator + 1));
+  const clientId = safeDecodeURIComponent(decoded.slice(0, separator).replaceAll("+", " "));
+  const clientSecret = safeDecodeURIComponent(decoded.slice(separator + 1).replaceAll("+", " "));
   if (clientId === null || clientSecret === null) {
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
@@ -478,7 +479,7 @@ async function authenticateOAuthClient(
     await recordOAuthClientAuthFailure(req, clientId);
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
   }
-  const clientAuthOk = await verifyOAuthClientSecret(client, clientSecret);
+  const clientAuthOk = client.clientType === "public" && req.headers.has("Authorization") ? false : await verifyOAuthClientSecret(client, clientSecret);
   if (!clientAuthOk) {
     await recordOAuthClientAuthFailure(req, clientId);
     return oauthErrorResponse(401, "invalid_client", "client authentication failed");
@@ -520,7 +521,7 @@ async function parseOAuthForm(req: Request): Promise<Record<string, string> | Re
   const bytes = await req.arrayBuffer();
   if (bytes.byteLength > 64 * 1024) return oauthErrorResponse(400, "invalid_request", "Request is too large");
   const params = new URLSearchParams(new TextDecoder().decode(bytes));
-  if (params.getAll("client_id").length > 1) return oauthErrorResponse(400, "invalid_request", "client_id must not be repeated");
+  if (params.getAll("client_id").length > 1 || params.getAll("client_secret").length > 1) return oauthErrorResponse(400, "invalid_request", "client credentials must not be repeated");
   const resources = params.getAll("resource");
   if (resources.length > 1 || (resources.length === 1 && !resources[0])) return oauthErrorResponse(400, "invalid_target", "At most one nonempty resource indicator is allowed");
   return Object.fromEntries(params);
@@ -612,6 +613,7 @@ async function postToken(req: BunRequest): Promise<Response> {
       resource: body.resource,
     });
     if (!exchanged.ok) {
+      if (exchanged.error === "invalid_client") return oauthErrorResponse(401, "invalid_client", "client authentication failed");
       return oauthErrorResponseWithCors(
         req,
         client,
@@ -654,6 +656,7 @@ async function postToken(req: BunRequest): Promise<Response> {
       resource: body.resource,
     });
     if (!refreshed.ok) {
+      if (refreshed.error === "invalid_client") return oauthErrorResponse(401, "invalid_client", "client authentication failed");
       return oauthErrorResponseWithCors(req, client, 400, refreshed.error, "refresh grant or requested scope is invalid");
     }
     return jsonOAuthResponse(req, {
@@ -668,6 +671,7 @@ async function postToken(req: BunRequest): Promise<Response> {
   if (body.grant_type === "client_credentials") {
     const issued = await issueClientCredentialsToken({ client, scope: body.scope ?? "", resource: body.resource });
     if (!issued.ok) {
+      if (issued.error === "invalid_client") return oauthErrorResponse(401, "invalid_client", "client authentication failed");
       if (issued.error === "unauthorized_client") {
         return oauthErrorResponseWithCors(req, client, 400, "unauthorized_client", "client is not allowed to use this grant");
       }

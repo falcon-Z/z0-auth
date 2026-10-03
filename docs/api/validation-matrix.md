@@ -127,7 +127,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 
 | Operation / field | Rule | Result |
 | --- | --- | --- |
-| `POST /api/v1/apps` | Name, optional minimum assurance, required `initialClient` | Application + child Client created atomically; returns `app`, `client`, `clientSecret` |
+| `POST /api/v1/apps` | Name, optional minimum assurance, required `initialClient` | Application + child Client created atomically; returns `app`, `client`, `secret`, `clientSecret` |
 | `PATCH /api/v1/apps/:appId` | Display name, lifecycle, minimum assurance only | Client protocol fields rejected |
 | `GET …/clients` | `apps.clients:read` | Child configurations without secrets |
 | `POST …/clients` | `apps.clients:create`, CSRF, existing privileged verification | Independent Client ID; public has no secret; confidential secret shown once |
@@ -137,7 +137,9 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | Interactive purpose | Nonempty registered redirects; public clients use PKCE | Client Credentials rejected |
 | Browser origins | Explicit exact origins on public interactive clients | Redirect registration grants no CORS authority |
 | Refresh capability | Explicit opt-in, false by default | Code response omits refresh unless enabled; disable revokes families and retry responses |
-| `POST …/clients/:clientId/rotate` | `apps.clients:rotate`, CSRF, privileged verification; active confidential Client and parent | Stable Client ID; secret returned once; public clients return 409 |
+| `GET …/clients/:clientId/secrets` | `apps.clients:read`; parent binding | Safe per-secret metadata only; public clients return an empty list |
+| `POST …/clients/:clientId/secrets` | `apps.clients:rotate`, CSRF, recent verification; active confidential Client and parent; optional label/future expiry | Stable Client ID; additional independent secret returned once; no default expiry; public clients return 409 |
+| `POST …/secrets/:secretId/revoke` | `apps.clients:revoke`, CSRF, recent verification; same-Client secret; explicit ordinary/compromised reason | Ordinary last-usable revocation returns 409 with outage explanation; compromised last-secret revocation succeeds; expiry/revocation rechecked during issuance |
 | Disable child / parent | Blocks authorization, exchange, refresh and new workload issuance | Child containment stays local; re-enable never restores revoked authority |
 
 ## Application scopes (`/api/v1/apps/:appId/scopes`)

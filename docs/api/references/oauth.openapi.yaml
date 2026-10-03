@@ -177,6 +177,13 @@ paths:
         Client must match the URL. Empty, conflicting or repeated Client IDs are rejected.
         Same-origin and no-Origin requests keep ordinary protocol authentication requirements.
         Client Credentials is limited to explicit confidential workload Clients.
+        Confidential Clients support client_secret_basic and client_secret_post.
+        Any unexpired, unrevoked secret belonging to that Client can authenticate;
+        multiple secrets may be valid concurrently. Public Clients never accept
+        secret authentication. Use one authentication method per request; mixed
+        methods, malformed Basic and repeated credential parameters are rejected.
+        Successful authentication updates that individual secret's lastUsedAt;
+        failure does not. Secret validity is rechecked during issuance.
       operationId: postOAuthToken
       parameters:
         - name: client_id

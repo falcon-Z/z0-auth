@@ -10,6 +10,7 @@ import type {
 } from "@z0/contracts/apps";
 import { validateRequiredString } from "@z0/contracts/validation";
 import { getDb } from "./db";
+import { writeAuditEvent } from "./audit";
 import { problem } from "./http";
 import { slugifyAppName, isValidSlug } from "./slug";
 import { seedDefaultOidcScopesForApp } from "./default-app-scopes";
@@ -80,6 +81,7 @@ function isAssurance(value: unknown): value is Assurance {
 }
 export async function createApp(
   body: CreateAppRequest,
+  actorUserId?: string,
 ): Promise<
   { ok: true; data: CreateAppResponse } | { ok: false; response: Response }
 > {
@@ -117,8 +119,11 @@ export async function createApp(
           String(app.id),
           client.value,
           minimum,
+          actorUserId,
         );
         await seedDefaultOidcScopesForApp(tx, String(app.id));
+        await writeAuditEvent({ actorUserId, action: "app.created", resourceType: "app", resourceId: String(app.id),
+          payload: { slug, minimumAssurance: minimum } }, tx);
         return { app: mapAppRow(app as AppRow, 1), ...created };
       });
       return { ok: true, data };

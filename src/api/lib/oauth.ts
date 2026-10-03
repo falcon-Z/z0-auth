@@ -4,7 +4,7 @@ import { writeRefreshTokenReuseAuditRecord } from "./audit";
 import { randomToken, sha256Hex } from "./crypto";
 import { getDb } from "./db";
 import { lockResourceAuthority, resolveResourceAuthority } from "./oauth-resources";
-import { verifyPassword } from "./password";
+import { authenticateClientSecret, secretStillUsable } from "./client-secrets";
 import { decryptSecret, encryptSecret } from "./settings-crypto";
 
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000;
@@ -26,7 +26,8 @@ export type OAuthClient = {
   appId: string;
   clientId: string;
   clientType: "public" | "confidential";
-  clientSecretHash: string | null;
+  /** Set by successful secret verification; rechecked under issuance locks. */
+  authenticatedSecretId?: string;
   redirectUris: string[];
   browserOrigins: string[];
   purpose: "interactive" | "workload";
@@ -103,6 +104,12 @@ async function lockClientAuthority(tx: SQL, appId: string, id: string) {
   await tx`SELECT id FROM oauth_clients WHERE id = ${id} AND app_id = ${appId} FOR SHARE`;
 }
 
+async function authenticatedSecretStillUsable(tx: SQL, client: OAuthClient) {
+  // Internal domain callers may issue under their own trusted authentication context.
+  // HTTP callers always carry the independently authenticated secret identifier.
+  return !client.authenticatedSecretId || await secretStillUsable(tx, client.credentialId, client.authenticatedSecretId);
+}
+
 export async function findActiveOAuthClient(
   clientId: string,
 ): Promise<OAuthClient | null> {
@@ -111,7 +118,6 @@ export async function findActiveOAuthClient(
       c.id AS credential_id,
       c.app_id,
       c.client_id,
-      c.client_secret_hash,
       c.client_type,
       c.redirect_uris, c.browser_origins, c.purpose, c.refresh_enabled,
       CASE WHEN a.minimum_assurance = 'strong' OR c.assurance_override = 'strong' THEN 'strong' ELSE 'baseline' END AS effective_assurance
@@ -128,7 +134,6 @@ export async function findActiveOAuthClient(
     credential_id: string;
     app_id: string;
     client_id: string;
-    client_secret_hash: string | null;
     client_type: "public" | "confidential";
     redirect_uris: string[];
     browser_origins: string[];
@@ -141,7 +146,6 @@ export async function findActiveOAuthClient(
     appId: String(data.app_id),
     clientId: data.client_id,
     clientType: data.client_type,
-    clientSecretHash: data.client_secret_hash,
     redirectUris: (data.redirect_uris as string[]) ?? [],
     browserOrigins: data.browser_origins,
     purpose: data.purpose,
@@ -161,9 +165,7 @@ export async function verifyOAuthClientSecret(
   client: OAuthClient,
   providedSecret: string | undefined,
 ): Promise<boolean> {
-  if (client.clientType === "public") return true;
-  if (!providedSecret || !client.clientSecretHash) return false;
-  return verifyPassword(providedSecret, client.clientSecretHash);
+  return authenticateClientSecret(client, providedSecret);
 }
 
 export async function validateRequestedScopes(
@@ -303,7 +305,7 @@ export async function exchangeAuthorizationCode(input: {
   resource?: string;
 }): Promise<
   | ({ ok: true } & OAuthTokenSuccess)
-  | { ok: false; error: "invalid_grant" | "invalid_request" }
+  | { ok: false; error: "invalid_grant" | "invalid_request" | "invalid_client" }
 > {
   if (input.client.purpose !== "interactive")
     return { ok: false, error: "invalid_grant" };
@@ -344,6 +346,7 @@ export async function exchangeAuthorizationCode(input: {
         input.client.appId,
         input.client.credentialId,
       );
+      if (!await authenticatedSecretStillUsable(tx, input.client)) throw new Error("invalid_client");
       const [fresh] = await tx`
         SELECT c.id, c.used_at, c.expires_at, ac.refresh_enabled
         FROM oauth_authorization_codes c
@@ -372,6 +375,7 @@ export async function exchangeAuthorizationCode(input: {
         throw new Error("invalid_grant");
       }
 
+      if (!await authenticatedSecretStillUsable(tx, input.client)) throw new Error("invalid_client");
       const [resourceRow] = await tx`SELECT audience FROM oauth_resources WHERE id = ${codeRow.resource_id}`;
       const authority = await resolveResourceAuthority(tx, input.client.credentialId, resourceRow?.audience, codeRow.scope);
       if (!authority.ok || (input.resource !== undefined && input.resource !== authority.audience)) throw new Error("invalid_grant");
@@ -428,8 +432,8 @@ export async function exchangeAuthorizationCode(input: {
       return Boolean(fresh.refresh_enabled);
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "invalid_grant") {
-      return { ok: false, error: "invalid_grant" };
+    if (error instanceof Error && (error.message === "invalid_grant" || error.message === "invalid_client")) {
+      return { ok: false, error: error.message };
     }
     throw error;
   }
@@ -550,7 +554,7 @@ export type RefreshTokenExchangeInput = {
 };
 
 export type RefreshTokenExchangeResult =
-  ({ ok: true } & OAuthTokenSuccess) | { ok: false; error: "invalid_grant" | "invalid_scope" };
+  ({ ok: true } & OAuthTokenSuccess) | { ok: false; error: "invalid_grant" | "invalid_scope" | "invalid_client" };
 
 async function exchangeRefreshTokenWithDatabase(
   database: SQL,
@@ -573,6 +577,7 @@ async function exchangeRefreshTokenWithDatabase(
       input.client.appId,
       input.client.credentialId,
     );
+    if (!await authenticatedSecretStillUsable(tx, input.client)) return { ok: false as const, error: "invalid_client" as const };
     // Recovery/lifecycle transitions lock the Account before revoking families.
     // Inserts also take exclusive identity locks through the membership trigger.
     // Acquire them before the family lock without a later shared-lock upgrade.
@@ -621,6 +626,7 @@ async function exchangeRefreshTokenWithDatabase(
       `;
     if (!row) return { ok: false as const };
     const refresh = row as RefreshTokenRow;
+    if (!await authenticatedSecretStillUsable(tx, input.client)) return { ok: false as const, error: "invalid_client" as const };
 
     if (input.resource !== undefined && input.resource !== refresh.audience) return { ok: false as const };
 
@@ -781,10 +787,11 @@ export async function issueClientCredentialsToken(input: {
   client: OAuthClient;
   scope: string;
   resource?: string;
-}): Promise<({ ok: true } & OAuthTokenSuccess) | { ok: false; error: "invalid_scope" | "invalid_target" | "unauthorized_client" }> {
+}): Promise<({ ok: true } & OAuthTokenSuccess) | { ok: false; error: "invalid_scope" | "invalid_target" | "unauthorized_client" | "invalid_client" }> {
   if (input.client.clientType !== "confidential" || input.client.purpose !== "workload") return { ok: false, error: "unauthorized_client" };
   return getDb().begin(async tx => {
     await lockClientAuthority(tx, input.client.appId, input.client.credentialId);
+    if (!await authenticatedSecretStillUsable(tx, input.client)) return { ok: false as const, error: "invalid_client" as const };
     const [client] = await tx`SELECT c.id FROM oauth_clients c JOIN apps a ON a.id = c.app_id
       WHERE c.id = ${input.client.credentialId} AND c.status = 'active' AND a.status = 'active' AND c.purpose = 'workload' AND c.client_type = 'confidential'`;
     if (!client) return { ok: false as const, error: "unauthorized_client" as const };

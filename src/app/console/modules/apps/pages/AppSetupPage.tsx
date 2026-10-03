@@ -1,3 +1,4 @@
+import { ClientSecretsDialog } from "../components/ClientSecretsDialog";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type {
@@ -24,7 +25,6 @@ import {
   fetchAppClients,
   fetchRegistrationLifecyclePolicy,
   patchAppClient,
-  rotateAppClientSecret,
 } from "../../../lib/apps-api";
 import { ClientResourcesDialog } from "../components/ClientResourcesDialog";
 import { ClientFields, defaultClient } from "../components/ClientFields";
@@ -39,6 +39,7 @@ export function AppSetupPage() {
   const confirm = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
+  const [secretClient, setSecretClient] = useState<OAuthClientSummary | null>(null);
   const [resourceClient, setResourceClient] = useState<OAuthClientSummary | null>(null);
   const [clients, setClients] = useState<OAuthClientSummary[]>([]);
   const [graceDays, setGraceDays] = useState<number | null>(null);
@@ -145,30 +146,6 @@ export function AppSetupPage() {
       setBusy(false);
     }
   }
-  async function rotate(client: OAuthClientSummary) {
-    if (
-      !(await confirm({
-        title: "Rotate secret",
-        description: "The current secret will stop working immediately.",
-        confirmLabel: "Rotate",
-        destructive: true,
-      }))
-    )
-      return;
-    setBusy(true);
-    try {
-      const result = await rotateAppClientSecret(appId, client.id);
-      setReveal({
-        clientId: client.clientId,
-        clientSecret: result.clientSecret,
-        title: "Secret rotated",
-      });
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Could not rotate secret.");
-    } finally {
-      setBusy(false);
-    }
-  }
   if (loading) return <ListPageSkeleton />;
   return (
     <div className="space-y-6">
@@ -249,19 +226,15 @@ export function AppSetupPage() {
                 </Button></>}
               </>
             )}
-            {hasScope("apps.clients:rotate") &&
+            {hasScope("apps.clients:read") &&
               client.clientType === "confidential" && (
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={
-                    busy ||
-                    client.status !== "active" ||
-                    app.status !== "active"
-                  }
-                  onClick={() => void rotate(client)}
+                  disabled={busy}
+                  onClick={() => setSecretClient(client)}
                 >
-                  Rotate secret
+                  Secrets
                 </Button>
               )}
           </div>
@@ -318,6 +291,7 @@ export function AppSetupPage() {
         }}
         onError={setNotice}
       />}
+      {secretClient && <ClientSecretsDialog app={app} client={secretClient} onClose={() => setSecretClient(null)} />}
       {resourceClient && <ClientResourcesDialog appId={appId} client={resourceClient} onClose={() => setResourceClient(null)} />}
       {reveal && (
         <CredentialSecretDialog

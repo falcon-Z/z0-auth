@@ -98,6 +98,8 @@ describe("OpenAPI release contracts", () => {
       "/api/auth/forgot-password",
       "/api/auth/reset-password",
       "/api/v1/apps",
+      "/api/v1/apps/{appId}/clients/{clientId}/secrets",
+      "/api/v1/apps/{appId}/clients/{clientId}/secrets/{secretId}/revoke",
       "/api/v1/registration-lifecycle-policy",
       "/api/v1/apps/{appId}/lifecycle",
       "/api/v1/apps/{appId}/clients/{clientId}/lifecycle",

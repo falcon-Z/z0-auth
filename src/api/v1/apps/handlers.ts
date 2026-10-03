@@ -21,7 +21,6 @@ import {
   createClient,
   listClientsForApi,
   patchClient,
-  rotateClientSecret,
 } from "../../lib/oauth-clients";
 import { writeAuditEvent } from "../../lib/audit";
 import { validateCsrf } from "../../lib/csrf";
@@ -47,21 +46,10 @@ export async function handleCreateApp(req: RoutedRequest): Promise<Response> {
   const parsed = await parseJsonBody<CreateAppRequest>(req);
   if (!parsed.ok) return parsed.response;
 
-  const result = await createApp(parsed.body);
+  const result = await createApp(parsed.body, auth.userId);
   if (!result.ok) return result.response;
 
-  await writeAuditEvent({
-    actorUserId: auth.userId,
-    action: "app.created",
-    resourceType: "app",
-    resourceId: result.data.app.id,
-    payload: {
-      slug: result.data.app.slug,
-      minimumAssurance: result.data.app.minimumAssurance,
-    },
-  });
-
-  return json(result.data, { status: 201 });
+  return json(result.data, { status: 201, headers: { "Cache-Control": "no-store", Pragma: "no-cache" } });
 }
 
 export async function handleGetApp(req: RoutedRequest): Promise<Response> {
@@ -107,7 +95,7 @@ export async function handleListClients(req: RoutedRequest): Promise<Response> {
 }
 async function clientMutation(
   req: RoutedRequest,
-  operation: "create" | "update" | "rotate",
+  operation: "create" | "update",
 ) {
   const csrf = validateCsrf(req);
   if (csrf) return csrf;
@@ -117,28 +105,23 @@ async function clientMutation(
   if (stepUp) return stepUp;
   const appId = req.pathParams?.appId ?? "";
   const id = req.pathParams?.clientId ?? "";
-  const parsed =
-    operation === "rotate"
-      ? null
-      : await parseJsonBody<CreateClientRequest & PatchClientRequest>(req);
-  if (parsed && !parsed.ok) return parsed.response;
-  const result =
-    operation === "create"
-      ? await createClient(appId, parsed!.body)
-      : operation === "update"
-        ? await patchClient(appId, id, parsed!.body)
-        : await rotateClientSecret(appId, id);
+  const parsed = await parseJsonBody<CreateClientRequest & PatchClientRequest>(req);
+  if (!parsed.ok) return parsed.response;
+  const result = operation === "create"
+    ? await createClient(appId, parsed.body, auth.userId)
+    : await patchClient(appId, id, parsed.body);
   if (!result.ok) return result.response;
   const client = "data" in result ? result.data.client : result.client;
-  await writeAuditEvent({
+  if (operation === "update") await writeAuditEvent({
     actorUserId: auth.userId,
-    action: `client.${operation === "create" ? "created" : operation === "update" ? "updated" : "secret_rotated"}`,
+    action: "client.updated",
     resourceType: "oauth_client",
     resourceId: client.id,
     payload: { appId, status: client.status },
   });
   return json("data" in result ? result.data : result.client, {
     status: operation === "create" ? 201 : 200,
+    headers: { "Cache-Control": "no-store", Pragma: "no-cache" },
   });
 }
 export async function handleCreateClient(req: RoutedRequest) {
@@ -146,9 +129,6 @@ export async function handleCreateClient(req: RoutedRequest) {
 }
 export async function handlePatchClient(req: RoutedRequest) {
   return clientMutation(req, "update");
-}
-export async function handleRotateClientSecret(req: RoutedRequest) {
-  return clientMutation(req, "rotate");
 }
 
 export async function handleRegistrationLifecyclePolicy(req: RoutedRequest) {

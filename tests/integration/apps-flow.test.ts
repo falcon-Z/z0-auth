@@ -244,8 +244,8 @@ run("Applications and child OAuth clients", () => {
       (
         await request(
           "POST",
-          `/api/v1/apps/${appId}/clients/${serverId}/rotate`,
-          undefined,
+          `/api/v1/apps/${appId}/clients/${serverId}/secrets`,
+          {},
           false,
         )
       ).status,
@@ -283,7 +283,7 @@ run("Applications and child OAuth clients", () => {
         `/api/v1/apps/${appId}/clients/${spaId}`,
         { label: "Forbidden" },
       ],
-      ["POST", `/api/v1/apps/${appId}/clients/${serverId}/rotate`, undefined],
+      ["POST", `/api/v1/apps/${appId}/clients/${serverId}/secrets`, {}],
     ] as const) {
       expect(
         (
@@ -657,23 +657,24 @@ run("Applications and child OAuth clients", () => {
       await completion;
     }
   });
-  test("secret rotation keeps the Client ID and public clients have no secret", async () => {
+  test("adding secrets keeps the Client ID and public clients have no secret", async () => {
     const response = await request(
       "POST",
-      `/api/v1/apps/${appId}/clients/${serverId}/rotate`,
+      `/api/v1/apps/${appId}/clients/${serverId}/secrets`,
+      {},
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const result = await response.json();
-    expect(result.client.clientId).toBe(serverClientId);
+    expect(result.secret.clientId).toBe(serverId);
     expect(result.clientSecret).not.toBe(serverSecret);
     expect(
       await verifyOAuthClientSecret(
         (await findActiveOAuthClient(serverClientId))!,
         serverSecret,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
-      (await request("POST", `/api/v1/apps/${appId}/clients/${spaId}/rotate`))
+      (await request("POST", `/api/v1/apps/${appId}/clients/${spaId}/secrets`, {}))
         .status,
     ).toBe(409);
   });

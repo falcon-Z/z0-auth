@@ -58,6 +58,7 @@ export type PatchClientRequest = {
 export type CreateClientResponse = {
   client: OAuthClientSummary;
   clientSecret: string | null;
+  secret: ClientSecretSummary | null;
 };
 export type CreateAppRequest = {
   name: string;
@@ -70,7 +71,28 @@ export type PatchAppRequest = {
   status?: "active" | "disabled";
   minimumAssurance?: Assurance;
 };
-export type RotateClientSecretResponse = CreateClientResponse;
+export type ClientSecretSummary = {
+  id: string;
+  /** Parent Client record UUID, distinct from the protocol client_id. */
+  clientId: string;
+  label: string | null;
+  status: "active" | "expired" | "revoked";
+  createdAt: string;
+  createdBy: string | null;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  revokedBy: string | null;
+  revocationReason: "ordinary" | "compromised" | null;
+};
+export type CreateClientSecretRequest = {
+  label?: string | null;
+  expiresAt?: string | null;
+  /** Safe audit relationship; does not revoke the referenced secret. */
+  replacementFor?: string;
+};
+export type CreateClientSecretResponse = { secret: ClientSecretSummary; clientSecret: string };
+export type RevokeClientSecretRequest = { reason: "ordinary" | "compromised" };
 
 export type RegistrationLifecycleAction = "delete" | "restore" | "purge";
 export type RegistrationLifecycleRequest = {

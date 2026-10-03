@@ -50,3 +50,8 @@ curl -s -X POST http://localhost:3000/oauth/token \
 ```
 
 Register `https://api.example.com/orders` as a Resource, expose `read:orders` from the owning Application vocabulary, and explicitly permit the workload Client to request that Resource and scope. New Clients have no implicit Resource permissions.
+
+
+Client-secret rotation uses the console's **Secrets** controls: add a new secret, deploy it to the server and confirm its last successful use, then revoke the old secret. Both secrets authenticate the same Client ID during deployment. Values are shown once; losing one requires creating a replacement. Optional per-secret expiry is available with no mandatory default. For suspected compromise, revoke immediately using the explicit compromise option, including when it is the last secret. Already-issued short-lived access tokens expire normally.
+
+The token endpoint also accepts HTTP Basic (`client_secret_basic`), for example `curl --user 'CLIENT_ID:CLIENT_SECRET' …` with form fields for the grant and Resource. Use one authentication method in each request; do not combine Basic with a form `client_secret`.

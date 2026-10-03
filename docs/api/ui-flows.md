@@ -137,7 +137,7 @@ The Add app user dialog supports New account and Existing account. Existing acco
 
 ## Application and Client management
 
-Add app creates the Application with its minimum assurance and initial Client. The Client form chooses interactive sign-in or backend workload purpose and the public/confidential class. Setup lists all child Clients; Add client creates another entry without a new user or membership. Manage edits client label, redirects, explicit browser origins, refresh capability and stronger assurance. Class and purpose remain fixed. Disable/Enable controls child issuance; confidential clients expose Rotate secret with one-time copying. Application Edit manages only its name and minimum assurance.
+Add app creates the Application with its minimum assurance and initial Client. The Client form chooses interactive sign-in or backend workload purpose and the public/confidential class. Setup lists all child Clients; Add client creates another entry without a new user or membership. Manage edits client label, redirects, explicit browser origins, refresh capability and stronger assurance. Class and purpose remain fixed. Disable/Enable controls child issuance; confidential clients expose Secrets with per-secret status, creator, expiry and last successful use. Add secret accepts an optional label/expiry and shows its value once. Rotation uses add → deploy → revoke. Ordinary revocation of the last usable secret explains the outage and offers Add replacement; an explicit suspected-compromise choice allows immediate final-secret revocation. Dismissing or reloading clears the value. Application Edit manages only its name and minimum assurance.
 
 
 ## Resource configuration

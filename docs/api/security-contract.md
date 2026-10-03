@@ -178,7 +178,7 @@ One-way hashes (not encrypted — verification only, plaintext never stored):
 
 | Stored value | Table / column | Protection |
 |--------------|----------------|------------|
-| OAuth client secret | `oauth_clients.client_secret_hash` | Password-style hash |
+| OAuth client secret | `client_secrets.secret_digest` | SHA-256 of a generated 256-bit random credential; pre-upgrade Argon2id verifiers retained |
 | OAuth / refresh tokens | `oauth_* .token_hash` | SHA-256 hash |
 | Session tokens | `sessions.token_hash`, `app_browser_sessions.token_hash` | SHA-256 hash |
 | MFA recovery/challenge/remembered tokens | `*_mfa_* .code_hash` / `.token_hash` | SHA-256 hash |
@@ -315,7 +315,7 @@ These rules are required for the OAuth authorization server baseline.
 
 ### Client authentication
 
-- Confidential clients: `client_secret` at token endpoint
+- Confidential clients: `client_secret_basic` or `client_secret_post` at the token endpoint, using one independently valid secret belonging to that Client; mixed methods are rejected
 - Public clients: PKCE only; no secret in browser
 
 Reserved error codes: `invalid_client`, `unauthorized_client` (see `ErrorCodes` in `src/lib/contracts/errors.ts`).
@@ -386,3 +386,10 @@ Each successful code exchange or Client Credentials request establishes a separa
 During the opaque-token implementation stage, introspection returns the exact Resource audience and only the issuing Client may introspect its token. Resource servers must compare `aud` to their own registered audience and enforce the relevant scope. Full JWT access-token delivery remains separately tracked. Existing retry/replay containment is preserved; refresh retries additionally bind the requested scope to the idempotency key so a retry cannot return a different scope request's response.
 
 The built-in upstream-token retrieval API requires audience `urn:z0:federation-tokens:<application UUID>` for bearer callers, in addition to `federation:token` and the existing subject/application checks. Operators explicitly register that Resource and permit the calling Client; a token for another API cannot call the retrieval API even when its scope has the same name. Console calls continue to use operator permissions.
+
+
+## Independent confidential Client secrets (APP-21–APP-29)
+
+Each Client secret has its own UUID, creator/time, optional label/expiry, last successful authentication time and irreversible revocation metadata. Public Clients receive no secret and reject secret-based authentication. New credentials contain a non-secret lookup UUID and 256 bits of cryptographic randomness; only a SHA-256 verifier is stored and digest comparisons use constant-time equality. Migration 0049 preserves existing Argon2id verifiers without recovering plaintext, merging Clients or granting new authority. Values appear only in creation responses, which use `Cache-Control: no-store`; lists, configuration and audit omit values and digests.
+
+Adding a secret leaves other secrets valid. Rotation is explicit add → deploy → revoke. Ordinary revocation of an active registration's final usable secret returns an outage explanation and requires a replacement; an explicit compromised-secret request can revoke the final secret immediately. Disabled registrations can deliberately decommission their last secret. Revocation changes no already-issued access token and never revives on re-enable. Secret writes and safe audit events commit together. Authentication and issuance coordinate with management through Application/Client locks and recheck the authenticated secret's expiry/revocation before consuming Code/Refresh grants or issuing workload tokens. Failed verification does not alter successful-use metadata.

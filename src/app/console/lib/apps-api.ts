@@ -9,7 +9,10 @@ import type {
   CreateClientResponse,
   OAuthClientSummary,
   PatchClientRequest,
-  RotateClientSecretResponse,
+  ClientSecretSummary,
+  CreateClientSecretRequest,
+  CreateClientSecretResponse,
+  RevokeClientSecretRequest,
 } from "@z0/contracts/apps";
 import { apiFetch } from "./http-client";
 export async function fetchApps(): Promise<AppSummary[]> {
@@ -50,11 +53,14 @@ export function patchAppClient(
     body,
   });
 }
-export function rotateAppClientSecret(appId: string, id: string) {
-  return apiFetch<RotateClientSecretResponse>(
-    `/api/v1/apps/${appId}/clients/${id}/rotate`,
-    { method: "POST" },
-  );
+export async function fetchClientSecrets(appId: string, id: string) {
+  return (await apiFetch<{ secrets: ClientSecretSummary[] }>(`/api/v1/apps/${appId}/clients/${id}/secrets`)).secrets;
+}
+export function addClientSecret(appId: string, id: string, body: CreateClientSecretRequest) {
+  return apiFetch<CreateClientSecretResponse>(`/api/v1/apps/${appId}/clients/${id}/secrets`, { method: "POST", body });
+}
+export function revokeClientSecret(appId: string, id: string, secretId: string, body: RevokeClientSecretRequest) {
+  return apiFetch<{ secret: ClientSecretSummary }>(`/api/v1/apps/${appId}/clients/${id}/secrets/${secretId}/revoke`, { method: "POST", body });
 }
 
 export function fetchRegistrationLifecyclePolicy() {
