@@ -39,7 +39,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {PRIMARY_NAV.map((item) => {
-                if (!canAccess && item.path !== "/profile") return null;
+                if (!canAccess) return null;
                 const isActive = isNavItemActive(location.pathname, item.path);
                 return (
                   <SidebarMenuItem key={item.id}>

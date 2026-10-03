@@ -33,7 +33,7 @@ function mapRoleSummary(row: {
 }
 
 export async function listInstanceRoles(): Promise<InstanceRoleSummary[]> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT
       r.id,
       r.key,
@@ -63,7 +63,7 @@ export async function getInstanceRole(roleId: string): Promise<InstanceRoleDetai
   `;
   if (!row) return null;
 
-  const scopeRows = await getDb()`
+  const scopeRows: unknown[] = await getDb()`
     SELECT scope_key FROM instance_role_scopes WHERE role_id = ${roleId} ORDER BY scope_key
   `;
 

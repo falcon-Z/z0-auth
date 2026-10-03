@@ -9,6 +9,7 @@ import { resetRateLimitsForTests } from "../../src/api/lib/rate-limit";
 import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 import { buildRequest, fetchCsrfToken } from "../helpers/http";
 import { makeStrongPassword } from "../helpers/password";
+import { mockFetch } from "../helpers/fetch";
 import { dispatchApi } from "./api-routes";
 import { dispatchWeb } from "./web-dispatch";
 
@@ -48,7 +49,7 @@ run("federation flow", () => {
     await resetTestDatabase();
     resetRateLimitsForTests();
 
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = mockFetch(async (input, init) => {
       const url = String(input);
       if (url.startsWith(MOCK_TOKEN_URL)) {
         return new Response(
@@ -73,7 +74,7 @@ run("federation flow", () => {
         );
       }
       return originalFetch(input, init);
-    };
+    });
 
     const csrf = await fetchCsrfToken(dispatchApi);
     await dispatchApi(

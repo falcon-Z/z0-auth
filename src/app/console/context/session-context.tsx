@@ -1,4 +1,4 @@
-import type { SessionResponse } from "@z0/contracts/auth";
+import type { AuthenticatedSessionResponse } from "@z0/contracts/auth";
 import {
   createContext,
   useCallback,
@@ -15,7 +15,7 @@ import { loadSession, postLogout } from "../lib/api";
 import { hasConsoleAccess } from "../lib/console-access";
 
 type SessionContextValue = {
-  session: SessionResponse;
+  session: AuthenticatedSessionResponse;
   refreshSession: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -35,7 +35,7 @@ function SessionRevalidator({ onRevalidate }: { onRevalidate: () => Promise<void
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<SessionResponse | null>(null);
+  const [session, setSession] = useState<AuthenticatedSessionResponse | null>(null);
   const [gate, setGate] = useState<"loading" | "ready" | "unavailable">("loading");
   const refreshSeq = useRef(0);
 

@@ -373,7 +373,7 @@ run("OAuth authorization code flow", () => {
       client_secret: confidentialSecret,
     });
     expect(tokenRes.status).toBe(200);
-    const token = (await tokenRes.json()) as { access_token: string; token_type: string; expires_in: number };
+    const token = (await tokenRes.json()) as { access_token: string; token_type: string; expires_in: number; refresh_token?: string };
     expect(token.access_token.startsWith("z0_at_")).toBe(true);
     expect(token.token_type).toBe("Bearer");
     expect(token.expires_in).toBeGreaterThan(0);

@@ -247,7 +247,7 @@ async function recordCeremonyFailure(ceremony: Ceremony): Promise<void> {
 }
 
 async function consumeCeremony(ceremony: Ceremony, tx: SQL): Promise<boolean> {
-  const rows = ceremony.realm === "console"
+  const rows: unknown[] = ceremony.realm === "console"
     ? await tx`UPDATE user_passkey_ceremonies SET consumed_at = NOW() WHERE id = ${ceremony.id} AND consumed_at IS NULL AND expires_at > NOW() RETURNING id`
     : await tx`UPDATE app_user_passkey_ceremonies SET consumed_at = NOW() WHERE id = ${ceremony.id} AND consumed_at IS NULL AND expires_at > NOW() RETURNING id`;
   return Boolean(rows[0]);
@@ -269,7 +269,7 @@ function mapSummary(row: Record<string, unknown>): PasskeySummary {
 }
 
 export async function listPasskeys(context: PasskeyContext): Promise<PasskeyList> {
-  const rows = context.realm === "console"
+  const rows: unknown[] = context.realm === "console"
     ? await getDb()`SELECT id, label, created_at, last_used_at, backup_eligible, backup_state FROM user_passkeys WHERE user_id = ${context.userId} AND removed_at IS NULL ORDER BY created_at DESC`
     : await getDb()`SELECT id, label, created_at, last_used_at, backup_eligible, backup_state FROM app_user_passkeys WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL ORDER BY created_at DESC`;
   const passkeys = rows.map((row) => mapSummary(row as Record<string, unknown>));
@@ -349,7 +349,7 @@ export async function startPasskeyRegistration(
   if (!listed.canRegister) {
     return { ok: false, response: passkeyProblem(409, "Remove a passkey before adding another.", ErrorCodes.PASSKEY_LIMIT_REACHED) };
   }
-  const rows = context.realm === "console"
+  const rows: unknown[] = context.realm === "console"
     ? await getDb()`SELECT credential_id FROM user_passkeys WHERE user_id = ${context.userId} AND removed_at IS NULL`
     : await getDb()`SELECT credential_id FROM app_user_passkeys WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL`;
   const userHandle = await ensureHandle(context);
@@ -516,7 +516,7 @@ export async function startPasskeyAuthentication(
       if (row) identityId = String((row as { id: string }).id);
     }
   }
-  const rows = input.realm === "console"
+  const rows: unknown[] = input.realm === "console"
     ? await getDb()`SELECT credential_id FROM user_passkeys WHERE user_id = ${identityId}::uuid AND removed_at IS NULL ORDER BY created_at DESC`
     : await getDb()`SELECT credential_id FROM app_user_passkeys WHERE app_user_id = ${identityId}::uuid AND app_id = ${input.appId!} AND removed_at IS NULL ORDER BY created_at DESC`;
   const challenge = randomToken(32);
@@ -670,7 +670,9 @@ export async function finishPasskeyAuthentication(
       ? await resolveSession(req)
       : await resolveAppSessionForApp(req, ceremony.appId)
     : null;
-  if (ceremony.purpose === "step_up" && (!currentSession || (ceremony.realm === "console" ? currentSession.userId !== ceremony.identityId : currentSession.appUserId !== ceremony.identityId))) {
+  if (ceremony.purpose === "step_up" && (!currentSession || (ceremony.realm === "console"
+    ? !("userId" in currentSession) || currentSession.userId !== ceremony.identityId
+    : !("appUserId" in currentSession) || currentSession.appUserId !== ceremony.identityId))) {
     return { ok: false, response: problem(401, "Unauthorized", "Authentication required") };
   }
   const preparedConsole = ceremony.purpose === "authentication" && ceremony.realm === "console" ? await prepareSession(req) : null;
@@ -742,7 +744,7 @@ export async function finishPasskeyAuthentication(
 export async function renamePasskey(context: PasskeyContext, passkeyId: string, labelRaw: string): Promise<boolean | Response> {
   const label = normalizeLabel(labelRaw, false);
   if (!label) return passkeyProblem(400, "Passkey name must contain 1 to 80 characters.", ErrorCodes.PASSKEY_NAME_INVALID, "label");
-  const rows = context.realm === "console"
+  const rows: unknown[] = context.realm === "console"
     ? await getDb()`UPDATE user_passkeys SET label = ${label}, updated_at = NOW() WHERE id = ${passkeyId} AND user_id = ${context.userId} AND removed_at IS NULL RETURNING id`
     : await getDb()`UPDATE app_user_passkeys SET label = ${label}, updated_at = NOW() WHERE id = ${passkeyId} AND app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL RETURNING id`;
   if (!rows[0]) return false;
@@ -774,7 +776,7 @@ export async function removePasskey(context: PasskeyContext, passkeyId: string, 
 }
 
 export async function resetPasskeys(tx: SQL, context: PasskeyContext): Promise<number> {
-  const rows = context.realm === "console"
+  const rows: unknown[] = context.realm === "console"
     ? await tx`UPDATE user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE user_id = ${context.userId} AND removed_at IS NULL RETURNING credential_id`
     : await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL RETURNING credential_id`;
   for (const row of rows) {

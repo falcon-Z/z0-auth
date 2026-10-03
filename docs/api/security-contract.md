@@ -1,14 +1,16 @@
 # Security and auth behavior contract
 
-Normative rules for sessions, CSRF, cookies, and OAuth. All new API and UI work must comply before shipping.
+Security behavior and implementation rules for the current development build. The [Alpha architecture](../design/alpha-architecture.md) defines the target boundaries during reconciliation.
 
-**Related:** `docs/api/references/common.openapi.yaml`, `docs/architecture/current.md`, `src/api/lib/session.ts`, `src/api/lib/csrf.ts`.
+**Related:** `docs/api/references/common.openapi.yaml`, `docs/design/alpha-architecture.md`, `src/api/lib/session.ts`, `src/api/lib/csrf.ts`.
 
 ---
 
 ## Sessions
 
 Two session cookies with separate lifetime policies and the same CSRF rules. **App context** (`client_id`) selects Application End User vs Operator sign-in.
+
+End-user profile, password, and lifecycle fields are owned by `accounts` within an `account_domain_id`. The `app_users` compatibility view exposes these fields through application bindings; application metadata stays in `app_account_bindings`. Sessions, recovery credentials, authenticators, and external links carry account/domain ownership in addition to their existing application context. Console identities remain in the separate `users` realm.
 
 ### Console (`z0_session`)
 
@@ -178,7 +180,7 @@ One-way hashes (not encrypted — verification only, plaintext never stored):
 | OAuth / refresh tokens | `oauth_* .token_hash` | SHA-256 hash |
 | Session tokens | `sessions.token_hash`, `app_browser_sessions.token_hash` | SHA-256 hash |
 | MFA recovery/challenge/remembered tokens | `*_mfa_* .code_hash` / `.token_hash` | SHA-256 hash |
-| Console / app user passwords | `password_credentials`, `app_users.password_hash` | Password hash |
+| Console / end-user passwords | `password_credentials`, `accounts.password_hash` | Password hash |
 
 Encrypted value format:
 

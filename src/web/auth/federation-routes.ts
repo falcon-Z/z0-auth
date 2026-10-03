@@ -218,7 +218,7 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
       payload: { appUserId: linked.appUserId, providerKey: provider.key },
     });
 
-    const resumeTarget = safeReturnPath(stored.returnTo) ?? "/oauth/resume";
+    const resumeTarget = safeReturnPath(stored.returnTo, "/oauth/resume");
     const headers = new Headers({ Location: resumeTarget });
     headers.append("Set-Cookie", appSessionCookieHeader(session.token, session.expiresAt));
     headers.append("Set-Cookie", clearFederationStateCookieHeader());

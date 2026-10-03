@@ -7,3 +7,5 @@ The material is historical reference only. It may describe app-local users, Serv
 Do not use files in this directory as the current integration, deployment, API, security, or product contract.
 
 Useful examples or operational details may be brought back into active documentation only after they are checked against the current Alpha design, implementation, and tests.
+
+The API documentation is maintained at [docs/api/](../../api/README.md).

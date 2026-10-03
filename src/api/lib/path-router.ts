@@ -51,10 +51,11 @@ export async function dispatchPatternRoutes(
       return handler(routed);
     }
 
+    const handlers = route.handlers;
     const method = req.method as keyof MethodHandlers;
-    const handler = route.handlers[method];
+    const handler = handlers[method];
     if (!handler) {
-      const allowed = Object.keys(route.handlers).filter((m) => route.handlers[m as keyof MethodHandlers]);
+      const allowed = Object.keys(handlers).filter((m) => handlers[m as keyof MethodHandlers]);
       return methodNotAllowed(allowed);
     }
 

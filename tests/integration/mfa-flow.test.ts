@@ -10,7 +10,7 @@ import { makeStrongPassword } from "../helpers/password";
 import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
-const password = makeStrongPassword("MfaOwner");
+const password = makeStrongPassword();
 
 function cookieFromResponse(response: Response, name: string): string | undefined {
   const raw = response.headers.getSetCookie?.().find((cookie) => cookie.startsWith(`${name}=`));

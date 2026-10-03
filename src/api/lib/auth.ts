@@ -25,7 +25,7 @@ export async function buildSessionResponse(req: Request): Promise<SessionRespons
   return buildAuthenticatedSessionPayload(session.userId);
 }
 
-export async function requireSession(req: BunRequest): Promise<
+export async function requireSession(req: Request): Promise<
   | { ok: true; userId: string; sessionId: string }
   | { ok: false; response: Response }
 > {

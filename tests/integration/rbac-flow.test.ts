@@ -84,9 +84,9 @@ run("platform RBAC (P1)", () => {
       }),
     );
     expect(res.status).toBe(200);
-    const { roles } = (await res.json()) as { roles: { key: string; name: string }[] };
+    const { roles } = (await res.json()) as { roles: { id: string; key: string; name: string }[] };
     expect(roles.some((role) => role.key === "viewer")).toBe(true);
-    viewerRoleId = roles.find((role) => role.key === "viewer")!.id as unknown as string;
+    viewerRoleId = roles.find((role) => role.key === "viewer")!.id;
     expect(viewerRoleId).toBeTruthy();
   });
 

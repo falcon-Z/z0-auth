@@ -460,4 +460,4 @@ Bridged global `users` to apps. **Do not build on this.** Removed in migration `
 ## Related docs
 
 - [ARCHITECTURE.md](./current.md)
-- [api/security-contract.md](../api/security-contract.md)
+- [api/security-contract.md](../../../api/security-contract.md)

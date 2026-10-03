@@ -1,1 +1,1 @@
-export const CURRENT_SCHEMA_VERSION = "0037_account_lifecycle";
+export const CURRENT_SCHEMA_VERSION = "0043_account_domains";

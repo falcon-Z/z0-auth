@@ -123,7 +123,7 @@ export function AppGroupsPage() {
       await reload();
     } catch (e) {
       if (e instanceof ApiError) {
-        setFieldErrors(fieldErrorsFromProblem(e.body));
+        setFieldErrors(fieldErrorsFromProblem(e.problem));
         setNotice(e.message);
       } else {
         setNotice("Could not save group.");

@@ -1,10 +1,10 @@
-import { test as setup, expect } from "@playwright/test";
+import { test as setup, expect, type APIRequestContext } from "@playwright/test";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../src/lib/contracts/http";
 import { e2ePassword } from "./test-credentials";
 
 const authFile = "tests/e2e/.auth/user.json";
 
-async function fetchCsrf(request: Parameters<Parameters<typeof setup>[1]>[0]["request"]): Promise<string> {
+async function fetchCsrf(request: APIRequestContext): Promise<string> {
   const statusRes = await request.get("/api/setup/status");
   expect(statusRes.ok()).toBeTruthy();
   const setCookie = statusRes.headers()["set-cookie"] ?? "";

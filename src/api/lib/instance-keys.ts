@@ -42,7 +42,7 @@ function keysFilePath(): string {
   return path.resolve(loadConfig().instanceKeysPath);
 }
 
-function base64ToBytes(b64: string): Uint8Array {
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
@@ -62,7 +62,7 @@ function base64UrlEncodeText(text: string): string {
   return base64UrlEncode(new TextEncoder().encode(text));
 }
 
-function base64UrlDecode(value: string): Uint8Array {
+function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/");
   const pad = (4 - (padded.length % 4)) % 4;
   return new Uint8Array(Buffer.from(padded + "=".repeat(pad), "base64"));
@@ -118,7 +118,7 @@ async function generateTokenKeyPair(): Promise<{ privateKey: CryptoKey; publicKe
 
 async function importDataKeyBytes(raw: Uint8Array): Promise<CryptoKey> {
   if (raw.length !== 32) throw new Error("Data encryption key must be exactly 32 bytes.");
-  return crypto.subtle.importKey("raw", raw, { name: DATA_ALGO, length: 256 }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", Uint8Array.from(raw), { name: DATA_ALGO, length: 256 }, false, ["encrypt", "decrypt"]);
 }
 
 async function importDataKeyB64(b64: string): Promise<CryptoKey> {

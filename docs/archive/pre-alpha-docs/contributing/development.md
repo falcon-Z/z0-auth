@@ -95,7 +95,7 @@ The management console talks to the same JSON API as external clients. Shared pi
 | `api.ts` | Session helpers (`loadSession`, `postLogout`) |
 | `form-errors.ts` | Map `errors[].field` from API responses to form state |
 
-Contracts and error codes: `src/lib/contracts/` and [api/README.md](../api/README.md).
+Contracts and error codes: `src/lib/contracts/` and [api/README.md](../../../api/README.md).
 
 ## UI (shadcn)
 

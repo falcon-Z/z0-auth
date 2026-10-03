@@ -13,11 +13,11 @@ export { requireInstanceMember };
 
 export async function getMemberScopeKeys(userId: string): Promise<string[]> {
   if (await isBootstrapMember(userId)) {
-    const rows = await getDb()`SELECT key FROM platform_scopes ORDER BY key`;
+    const rows: unknown[] = await getDb()`SELECT key FROM platform_scopes ORDER BY key`;
     return rows.map((row) => String((row as { key: string }).key));
   }
 
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT DISTINCT rs.scope_key
     FROM instance_member_roles mr
     JOIN instance_role_scopes rs ON rs.role_id = mr.role_id
@@ -35,7 +35,7 @@ export async function memberHasScope(userId: string, scopeKey: string): Promise<
 export async function getScopeKeysForRoleIds(roleIds: string[], db: SQL = getDb()): Promise<string[]> {
   const keys = new Set<string>();
   for (const roleId of roleIds) {
-    const rows = await db`
+    const rows: unknown[] = await db`
       SELECT scope_key FROM instance_role_scopes WHERE role_id = ${roleId}
     `;
     for (const row of rows) {
@@ -102,12 +102,12 @@ export async function requireScope(
 }
 
 export async function listPlatformResources(): Promise<PlatformResource[]> {
-  const resourceRows = await getDb()`
+  const resourceRows: unknown[] = await getDb()`
     SELECT key, parent_key, label
     FROM platform_resources
     ORDER BY sort_order, key
   `;
-  const scopeRows = await getDb()`
+  const scopeRows: unknown[] = await getDb()`
     SELECT key, resource_key, action, label, description
     FROM platform_scopes
     ORDER BY key
@@ -238,7 +238,7 @@ export async function applyInviteRolesToMember(
   tx?: SQL,
 ): Promise<void> {
   const db = tx ?? getDb();
-  const rows = await db`
+  const rows: unknown[] = await db`
     SELECT role_id FROM instance_invite_roles WHERE invite_id = ${inviteId}
   `;
   const roleIds = rows.map((row) => String((row as { role_id: string }).role_id));
@@ -271,7 +271,7 @@ export async function assignBootstrapOwnerRoleInTx(tx: SQL, userId: string): Pro
 }
 
 export async function getMemberRoleSummaries(userId: string) {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT
       r.id,
       r.key,

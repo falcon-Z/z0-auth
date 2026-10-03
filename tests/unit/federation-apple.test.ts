@@ -74,7 +74,7 @@ describe("federation apple", () => {
     const jwk = await crypto.subtle.exportKey("jwk", keys.publicKey);
     Object.assign(jwk, { kid: "apple-test-key", alg: "RS256", use: "sig" });
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => Response.json({ keys: [jwk] });
+    globalThis.fetch = Object.assign(async () => Response.json({ keys: [jwk] }), { preconnect: originalFetch.preconnect });
     try {
       const token = await signedAppleToken({ privateKey: keys.privateKey });
       const claims = await verifyAppleIdToken({

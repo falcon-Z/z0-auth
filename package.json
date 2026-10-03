@@ -8,6 +8,7 @@
     "dev": "bun --hot src/server.ts",
     "start": "NODE_ENV=production bun dist/server.js",
     "build": "bun src/scripts/build.ts",
+    "typecheck": "tsc --noEmit",
     "test": "bun test --preload ./tests/preload.ts --max-concurrency=1 --parallel=1 tests/unit tests/integration tests/api",
     "runtime:qualify": "bun src/scripts/qualify-bun-runtime.ts",
     "quality:alpha": "NODE_ENV=test bun src/scripts/alpha-quality-gate.ts",
@@ -44,6 +45,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "bun-plugin-tailwind": "^0.1.2",
-    "tailwindcss": "^4.1.16"
+    "tailwindcss": "^4.1.16",
+    "typescript": "5.9.3"
   }
 }

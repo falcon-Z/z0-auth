@@ -111,7 +111,7 @@ async function userExistsByEmail(email: string): Promise<boolean> {
 }
 
 async function roleSummariesForInvite(inviteId: string, db: SQL = getDb()): Promise<RoleSummary[]> {
-  const rows = await db`
+  const rows: unknown[] = await db`
     SELECT r.id, r.key, r.name
     FROM instance_invite_roles ir
     JOIN instance_roles r ON r.id = ir.role_id
@@ -611,7 +611,7 @@ async function memberRolesByUserIds(userIds: string[]): Promise<Map<string, Role
   const map = new Map<string, RoleSummary[]>();
   if (userIds.length === 0) return map;
 
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT mr.member_user_id, r.id, r.key, r.name
     FROM instance_member_roles mr
     JOIN instance_roles r ON r.id = mr.role_id
@@ -633,7 +633,7 @@ async function inviteRolesByInviteIds(inviteIds: string[]): Promise<Map<string, 
   const map = new Map<string, RoleSummary[]>();
   if (inviteIds.length === 0) return map;
 
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT ir.invite_id, r.id, r.key, r.name
     FROM instance_invite_roles ir
     JOIN instance_roles r ON r.id = ir.role_id
@@ -652,7 +652,7 @@ async function inviteRolesByInviteIds(inviteIds: string[]): Promise<Map<string, 
 }
 
 export async function listInstanceMembersForApi(statusFilter?: InstanceMember["status"]): Promise<InstanceMember[]> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT
       u.id,
       u.email,
@@ -710,7 +710,7 @@ export async function listInstanceMembersForApi(statusFilter?: InstanceMember["s
 }
 
 export async function listPendingInstanceInvites(): Promise<PendingInvite[]> {
-  const rows = await getDb()`
+  const rows: unknown[] = await getDb()`
     SELECT id, email, invited_name, expires_at, created_at
     FROM instance_invites
     WHERE status = 'pending'

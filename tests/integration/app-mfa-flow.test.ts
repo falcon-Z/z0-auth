@@ -18,8 +18,8 @@ import { makeStrongPassword } from "../helpers/password";
 import { dispatchApi } from "./api-routes";
 
 const run = hasTestDatabase() ? describe : describe.skip;
-const ownerPassword = makeStrongPassword("AppMfaOwner");
-const appPassword = makeStrongPassword("AppMfaUser");
+const ownerPassword = makeStrongPassword();
+const appPassword = makeStrongPassword();
 
 function cookie(response: Response, name: string): string | undefined {
   const raw = response.headers.getSetCookie?.().find((value) => value.startsWith(`${name}=`));
