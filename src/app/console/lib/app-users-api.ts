@@ -68,6 +68,14 @@ export async function patchAppUser(
   });
 }
 
+export async function removeApplicationMembership(appId: string, userId: string): Promise<AppUserDetail> {
+  return apiFetch(`/api/v1/apps/${appId}/users/${userId}/membership`, { method: "DELETE" });
+}
+
+export async function addApplicationMembership(appId: string, accountId: string): Promise<AppUserDetail> {
+  return apiFetch(`/api/v1/apps/${appId}/memberships`, { method: "POST", body: { accountId } });
+}
+
 export async function fetchAppUserInvites(appId: string): Promise<PendingAppUserInvite[]> {
   const { invites } = await apiFetch<{ invites: PendingAppUserInvite[] }>(
     `/api/v1/apps/${appId}/users/invites`,

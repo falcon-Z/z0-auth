@@ -27,6 +27,8 @@ import {
   handleAppUserAdminReset,
   handleAppUserMfaReset,
   handleRevokeAppUserInvite,
+  handleAddApplicationMembership,
+  handleRemoveApplicationMembership,
 } from "./apps/app-users-handlers";
 import {
   handleListSessions,
@@ -158,6 +160,14 @@ export const v1PatternRoutes: PathRoute[] = [
   {
     pattern: "/api/v1/apps/:appId/users",
     handlers: { GET: handleListAppUsers, POST: handleCreateAppUser },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/memberships",
+    handlers: { POST: handleAddApplicationMembership },
+  },
+  {
+    pattern: "/api/v1/apps/:appId/users/:userId/membership",
+    handlers: { DELETE: handleRemoveApplicationMembership },
   },
   {
     pattern: "/api/v1/apps/:appId/users/:userId/sessions",

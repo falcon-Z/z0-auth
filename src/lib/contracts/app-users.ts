@@ -1,6 +1,7 @@
 import type { EmailDeliveryStatus } from "./email-delivery";
 
-export type AppUserMembershipStatus = "active" | "disabled" | "locked" | "deleted";
+export type AppUserMembershipStatus = "active" | "disabled" | "removed";
+export type AppUserAccountStatus = "active" | "disabled" | "locked" | "deleted";
 
 export type AppUserSummary = {
   userId: string;
@@ -8,7 +9,9 @@ export type AppUserSummary = {
   email: string;
   name: string;
   membershipStatus: AppUserMembershipStatus;
-  status: AppUserMembershipStatus;
+  /** Effective application access, including account and membership state. */
+  status: AppUserAccountStatus;
+  accountStatus: AppUserAccountStatus;
   emailVerified: boolean;
   disabledAt: string | null;
   lockedUntil: string | null;
@@ -17,6 +20,9 @@ export type AppUserSummary = {
 };
 
 export type AppUserDetail = AppUserSummary & {
+  /** Operator-only references; never used as the public protocol sub. */
+  accountId: string;
+  accountDomainId: string;
   metadata: Record<string, unknown> | null;
   activeSessionCount: number;
   mfaEnabled: boolean;
@@ -33,8 +39,12 @@ export type CreateAppUserRequest = {
 
 export type PatchAppUserRequest = {
   name?: string;
-  membershipStatus?: AppUserMembershipStatus;
+  membershipStatus?: "active" | "disabled";
   metadata?: Record<string, unknown> | null;
+};
+
+export type ApplicationMembershipRequest = {
+  accountId: string;
 };
 
 export type AccountLifecycleAction = "disable" | "enable" | "unlock" | "delete" | "restore" | "permanently-delete";

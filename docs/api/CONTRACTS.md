@@ -111,3 +111,11 @@ Use underscore-prefixed fields for non-input failures:
 External references use relative paths, e.g. `$ref: "common.openapi.yaml#/components/responses/ValidationError"`.
 
 `bun run quality:alpha` parses every OpenAPI document, requires unique operation IDs, resolves local file and JSON Pointer references, and checks the alpha-critical endpoint inventory. Run it before merging contract changes.
+
+## Application subjects and memberships
+
+An app-facing `userId` is the stable application subject, distinct from the internal Account ID. Subjects and their metadata survive membership removal. Membership is application-local; account suspension, credentials, recovery and profile belong to the Account Domain. Responses expose `membershipStatus`, `accountStatus`, and effective `status` separately. Operator detail responses include `accountId` and `accountDomainId` for explicit membership provisioning; these references are never used as the application-facing `sub`.
+
+`PATCH /api/v1/apps/{appId}/users/{userId}` accepts membership `active` or `disabled` without mutating account security state. `DELETE /api/v1/apps/{appId}/users/{userId}/membership` removes membership and revokes that application's renewable authority. `POST /api/v1/apps/{appId}/memberships` explicitly provisions/rejoins an existing Account in the same domain; it reuses the same subject. These operations require console `apps.users:manage` permission and CSRF protection. Account lifecycle routes remain domain-wide operations. Authentication/subject reservation alone never enrolls an account.
+
+Application metadata is opaque context stored under the subject. It cannot change Z0Auth authorization or overwrite reserved identity/security fields (`sub`, `accountId`, `accountDomainId`, `appId`, `userId`, `membershipStatus`, `status`, and JavaScript prototype fields).

@@ -33,6 +33,7 @@ const phases: Array<{ label: string; command: string[] }> = [
       "tests/unit/openapi-contracts.test.ts",
       "tests/integration/migration-integrity.test.ts",
       "tests/integration/account-domains.test.ts",
+      "tests/integration/application-memberships.test.ts",
     ],
   },
   {

@@ -181,7 +181,7 @@ export function AppUsersPage() {
           { id: "email", header: "Email", accessorFn: (row) => row.email, cell: (row) => row.email },
           {
             id: "status",
-            header: "Status",
+            header: "Membership",
             accessorFn: (row) => row.membershipStatus,
             cell: (row) => (
               <Badge variant={row.membershipStatus === "active" ? "secondary" : "outline"}>
@@ -189,6 +189,7 @@ export function AppUsersPage() {
               </Badge>
             ),
           },
+          { id: "accountStatus", header: "Account state", accessorFn: (row) => row.accountStatus, cell: (row) => row.accountStatus },
         ]}
         rows={users}
         onRowClick={(row) => navigate(`/apps/${appId}/users/${row.userId}`)}
@@ -202,7 +203,7 @@ export function AppUsersPage() {
           </div>
         }
         rowActions={(row) =>
-          row.status === "active" ? (
+          row.membershipStatus === "active" ? (
             <DestructiveButton
               type="button"
               size="sm"
@@ -211,7 +212,7 @@ export function AppUsersPage() {
             >
               Disable
             </DestructiveButton>
-          ) : row.status === "disabled" ? (
+          ) : row.accountStatus !== "deleted" ? (
             <Button
               type="button"
               variant="ghost"
@@ -219,7 +220,7 @@ export function AppUsersPage() {
               disabled={busyId === row.userId}
               onClick={() => void handleEnable(row)}
             >
-              Enable
+              {row.membershipStatus === "removed" ? "Rejoin" : "Enable"}
             </Button>
           ) : null
         }

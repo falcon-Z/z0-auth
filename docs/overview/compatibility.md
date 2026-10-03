@@ -32,7 +32,13 @@ Migration `0043_account_domains` gives each existing application a separate Acco
 
 The `app_users` database interface becomes a compatibility view. Account profile, password, and lifecycle fields are stored in `accounts`; application bindings and metadata remain in `app_account_bindings`. Direct database integrations that depend on `app_users` being a table must be updated. The migration is forward-only; recovery to an older binary requires restoring a compatible backup.
 
-This migration establishes canonical persistence. Full Application Subject/Membership behavior and shared SSO configuration remain tracked in [issue #94](https://github.com/falcon-Z/z0-auth/issues/94) and [issue #95](https://github.com/falcon-Z/z0-auth/issues/95). Legacy service groups retain separate domains during migration. Providers without a recorded issuer retain a provider-specific legacy authority key until provider configuration is reconciled; their email attributes are not used as durable external identity keys.
+This migration establishes canonical persistence. Shared SSO configuration remains tracked in [issue #95](https://github.com/falcon-Z/z0-auth/issues/95). Legacy service groups retain separate domains during migration. Providers without a recorded issuer retain a provider-specific legacy authority key until provider configuration is reconciled; their email attributes are not used as durable external identity keys.
+
+Migration `0044_application_memberships` preserves each existing app-facing ID in `app_account_bindings` as a stable Application Subject and introduces optional `application_memberships` records. Legacy account suspension/deletion remains account state; migrated memberships begin active. Subject metadata stays application-local and survives membership removal.
+
+The app-user API now reports `membershipStatus` (`active`, `disabled`, or `removed`) separately from `accountStatus` (`active`, `disabled`, `locked`, or `deleted`). `status` remains the effective application-access state. PATCH `membershipStatus` changes application access without changing account suspension, passwords, or profile. Removing membership uses `DELETE /api/v1/apps/{appId}/users/{userId}/membership`; explicit provisioning or rejoining an existing domain account uses `POST /api/v1/apps/{appId}/memberships` with `accountId`. Rejoining preserves `sub` and does not restore revoked sessions or tokens. Existing account lifecycle endpoints continue to change the Account across its domain and must not be used as membership removal.
+
+The current hosted application login and grant flows require active application membership. Reserving a subject or authenticating an account does not create membership. Arbitrary metadata such as a role label confers no authority; reserved identity/security fields are rejected. This migration is forward-only, with a compatible backup required for rollback to an older binary.
 
 ## Undocumented behavior is not a contract
 

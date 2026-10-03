@@ -128,3 +128,9 @@ Console member self-service sessions remain at `/profile/sessions` (`GET/DELETE 
 | 403 | CSRF failure |
 | 429 | Rate limited |
 | 503 | API before setup complete |
+
+## Application membership and account state
+
+The app-user detail page presents Application membership separately from Account state. Disable membership, Remove membership, and Rejoin application affect only the selected application. Removal retains the Account, credentials, metadata, and stable subject; rejoining does not restore revoked authority.
+
+The Add app user dialog supports New account and Existing account. Existing account uses the operator-visible Account ID to add explicit membership in the same domain while preserving credentials. Suspend account, Enable account, and Delete account describe their effect across every application in the account domain and use separate confirmations.
