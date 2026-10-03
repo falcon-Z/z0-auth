@@ -306,7 +306,7 @@ run("SSO Account Domain placement", () => {
       expect(upgraded.account_domain_id).toBe(upgraded.group_domain);
       const [retired] = await db`SELECT to_regclass('service_group_members') AS members, to_regclass('service_group_app_users') AS links`;
       expect(retired.members).toBeNull(); expect(retired.links).toBeNull();
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(2);
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(3);
       expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(0);
     } finally { await db.close(); await rm(previous, { recursive: true, force: true }); }
   });

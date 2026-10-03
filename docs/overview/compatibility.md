@@ -80,3 +80,17 @@ Historical application-audience codes, consent transactions, access tokens and r
 Access tokens remain opaque in this implementation stage; introspection exposes the Resource audience and is restricted to the issuing Client. Resource servers must require their exact audience and required scopes. JWT access-token delivery is tracked separately in #116 and #120. This migration runs atomically, is idempotent, and does not assign any old token to a new audience. Rollback requires a compatible backup and binary.
 
 The built-in upstream-token retrieval API requires audience `urn:z0:federation-tokens:<application UUID>` for bearer callers, in addition to `federation:token` and the existing subject/application checks. Operators explicitly register that Resource and permit the calling Client; a token for another API cannot call the retrieval API even when its scope has the same name. Console calls continue to use operator permissions.
+
+Migration `0048_application_client_lifecycle` adds recoverable Application and
+Client deletion, stored purge deadlines, one-use verification challenges and
+permanent Client ID reservations. It preserves existing registrations, Account
+Domain placement, disabled state and Resource permissions. `apps:delete` remains
+separate from ordinary edit access; roles that already hold it also receive the
+narrower `apps.clients:delete` permission because deleting an Application already
+includes its children. Client editors do not implicitly gain deletion authority.
+
+The lifecycle API requires explicit ID confirmation and fresh proof for each
+Delete/Purge action. `REGISTRATION_DELETION_GRACE_DAYS` defaults to 30; zero makes
+deleting irreversible. Permanent purge physically removes configuration and
+scoped protocol/identity state. Shared SSO credentials and unrelated Applications
+survive; purged Resource audiences and Client IDs remain reserved forever.

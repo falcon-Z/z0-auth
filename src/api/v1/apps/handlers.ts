@@ -1,3 +1,8 @@
+import type { RegistrationLifecycleRequest } from "@z0/contracts/apps";
+import { registrationLifecycle, prepareRegistrationVerification } from "../../lib/registration-lifecycle";
+import { loadConfig } from "../../lib/config";
+import { getDb } from "../../lib/db";
+import { resolveSession } from "../../lib/session";
 import type {
   CreateAppRequest,
   CreateClientRequest,
@@ -20,7 +25,7 @@ import {
 } from "../../lib/oauth-clients";
 import { writeAuditEvent } from "../../lib/audit";
 import { validateCsrf } from "../../lib/csrf";
-import { json } from "../../lib/http";
+import { json, problem } from "../../lib/http";
 import { requireScope } from "../../lib/platform-rbac";
 import type { RoutedRequest } from "../../lib/path-router";
 import { requireRecentConsoleMfa } from "../../lib/mfa";
@@ -144,4 +149,52 @@ export async function handlePatchClient(req: RoutedRequest) {
 }
 export async function handleRotateClientSecret(req: RoutedRequest) {
   return clientMutation(req, "rotate");
+}
+
+export async function handleRegistrationLifecyclePolicy(req: RoutedRequest) {
+  const auth = await requireScope(req, "apps:read");
+  if (!auth.ok) return auth.response;
+  return json({ graceDays: loadConfig().registrationDeletionGraceDays });
+}
+export async function handleRegistrationLifecycle(req: RoutedRequest) {
+  const csrf = validateCsrf(req);
+  if (csrf) return csrf;
+  const appId = req.pathParams?.appId ?? "";
+  const clientId = req.pathParams?.clientId;
+  const auth = await requireScope(req, clientId ? "apps.clients:delete" : "apps:delete");
+  if (!auth.ok) return auth.response;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuid.test(appId) || (clientId && !uuid.test(clientId))) return problem(404, "Not Found", "Registration not found.");
+  const parsed = await parseJsonBody<RegistrationLifecycleRequest>(req);
+  if (!parsed.ok) return parsed.response;
+  if (Object.keys(parsed.body).some(key => !["action", "confirmation", "expectedGraceDays"].includes(key)) || !["delete", "restore", "purge"].includes(parsed.body.action)) return problem(400, "Validation Error", "Choose delete, restore or purge.");
+  if (parsed.body.action === "delete" && parsed.body.expectedGraceDays !== loadConfig().registrationDeletionGraceDays)
+    return problem(409, "Conflict", "The deletion grace policy changed or was not confirmed. Review it before deleting.");
+  const [target] = clientId
+    ? await getDb()`SELECT status, client_id AS confirmation FROM oauth_clients WHERE id = ${clientId} AND app_id = ${appId}`
+    : await getDb()`SELECT status, id::text AS confirmation FROM apps WHERE id = ${appId}`;
+  if (!target) return problem(404, "Not Found", "Registration not found.");
+  if (parsed.body.action !== "restore" && parsed.body.confirmation !== target.confirmation)
+    return problem(400, "Validation Error", "Confirm the exact Application ID or Client ID.");
+  if ((parsed.body.action === "delete") === (target.status === "pending_deletion"))
+    return problem(409, "Conflict", "Delete enters Pending Deletion; restore and purge require Pending Deletion.");
+  const session = await resolveSession(req);
+  if (!session || session.userId !== auth.userId) return problem(401, "Unauthorized", "Authentication required.");
+  const proof = parsed.body.action !== "restore" ? await prepareRegistrationVerification({
+    token: req.headers.get("X-Registration-Verification"), sessionId: session.sessionId, actorUserId: auth.userId,
+    appId, clientId, action: parsed.body.action, graceDays: parsed.body.action === "delete" ? parsed.body.expectedGraceDays : undefined,
+  }) : undefined;
+  if (proof === null) return problem(403, "Forbidden", "Verification expired, consumed or does not match this action.");
+  const stepUp = await requireRecentConsoleMfa(req, auth.userId, proof?.issuedAt);
+  if (stepUp) {
+    if (!proof) return stepUp;
+    const detail = await stepUp.json();
+    return json({ ...detail, registrationVerification: proof.token }, { status: stepUp.status, headers: { "Content-Type": "application/problem+json", "Cache-Control": "no-store" } });
+  }
+  const verifiedSession = await resolveSession(req);
+  if (!verifiedSession || verifiedSession.userId !== auth.userId) return problem(401, "Unauthorized", "Authentication required.");
+  const result = await registrationLifecycle({ appId, clientId, body: parsed.body, actorUserId: auth.userId,
+    sessionId: session.sessionId, verificationHash: proof?.hash,
+    verifiedAt: new Date(Math.max(verifiedSession.primaryAuthenticatedAt.getTime(), verifiedSession.mfaAuthenticatedAt?.getTime() ?? 0)) });
+  return result.ok ? json(result.data) : result.response;
 }

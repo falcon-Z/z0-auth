@@ -1,3 +1,4 @@
+import type { RegistrationLifecycleRequest, RegistrationLifecycleResponse } from "@z0/contracts/apps";
 import type {
   AppDetail,
   AppSummary,
@@ -54,4 +55,12 @@ export function rotateAppClientSecret(appId: string, id: string) {
     `/api/v1/apps/${appId}/clients/${id}/rotate`,
     { method: "POST" },
   );
+}
+
+export function fetchRegistrationLifecyclePolicy() {
+  return apiFetch<{ graceDays: number }>("/api/v1/registration-lifecycle-policy");
+}
+export function changeRegistrationLifecycle(appId: string, body: RegistrationLifecycleRequest, clientId?: string) {
+  const path = clientId ? `/api/v1/apps/${appId}/clients/${clientId}/lifecycle` : `/api/v1/apps/${appId}/lifecycle`;
+  return apiFetch<RegistrationLifecycleResponse<AppDetail | OAuthClientSummary>>(path, { method: "POST", body });
 }

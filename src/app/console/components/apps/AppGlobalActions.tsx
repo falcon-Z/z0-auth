@@ -39,10 +39,10 @@ export function AppGlobalActions() {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setEditOpen(true)}>
+      <Button variant="outline" disabled={app.status === "pending_deletion"} onClick={() => setEditOpen(true)}>
         Edit
       </Button>
-      <Button variant="outline" disabled={busy} onClick={() => void toggleDisabled()}>
+      <Button variant="outline" disabled={busy || app.status === "pending_deletion"} onClick={() => void toggleDisabled()}>
         {app.status === "active" ? "Disable" : "Enable"}
       </Button>
 

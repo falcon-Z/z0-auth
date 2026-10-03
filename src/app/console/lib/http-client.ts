@@ -93,6 +93,11 @@ async function apiFetchInternal<T>(path: string, options: ApiFetchOptions, allow
 
   const problem = await parseProblem(res);
   if (problem) {
+    if (problem.registrationVerification) {
+      const retryHeaders = new Headers(options.headers);
+      retryHeaders.set("X-Registration-Verification", problem.registrationVerification);
+      options = { ...options, headers: retryHeaders };
+    }
     const stepUpRequired = problem.errors?.some((error) => error.code === "mfa_step_up_required");
     if (allowStepUp && stepUpRequired && path !== "/api/auth/mfa/step-up") {
       const passkeys = await apiFetchInternal<{ passkeys: unknown[] }>("/api/auth/passkeys", { method: "GET" }, false).catch(() => ({ passkeys: [] }));

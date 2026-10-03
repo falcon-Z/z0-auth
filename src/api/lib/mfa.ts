@@ -712,7 +712,7 @@ export function mfaClientLabel(req: BunRequest): string {
   return parseClientLabel(req.headers.get("user-agent") ?? "");
 }
 
-export async function requireRecentConsoleMfa(req: Request, userId: string): Promise<Response | null> {
+export async function requireRecentConsoleMfa(req: Request, userId: string, verifiedAfter?: Date): Promise<Response | null> {
   const totpEnabled = await hasConsoleMfa(userId);
   const passkeyEnabled = await hasConsolePasskeys(userId);
   const session = await resolveSession(req);
@@ -730,14 +730,15 @@ export async function requireRecentConsoleMfa(req: Request, userId: string): Pro
     maximumAgeMs: 10 * 60 * 1000,
     now: session.resolvedAt,
   });
-  if (decision.allowed) return null;
+  const verifiedAt = factorEnabled ? session.mfaAuthenticatedAt ?? session.primaryAuthenticatedAt : session.primaryAuthenticatedAt;
+  if (decision.allowed && (!verifiedAfter || verifiedAt.getTime() > verifiedAfter.getTime())) return null;
   await writeAuditEvent({
     actorUserId: userId,
     action: "session.assurance_denied",
     resourceType: "session",
     resourceId: session.sessionId,
     payload: {
-      reason: decision.reason,
+      reason: decision.allowed ? "fresh_verification_required" : decision.reason,
       currentAssurance: session.assuranceLevel,
       requiredAssurance: requiredAssuranceLevel,
     },

@@ -15,7 +15,7 @@ import { hashPassword } from "./password";
 import { loadConfig } from "./config";
 import { validateRedirectUris } from "./redirect-uris";
 
-type ClientRow = {
+export type ClientRow = {
   id: string;
   app_id: string;
   client_id: string;
@@ -30,6 +30,8 @@ type ClientRow = {
   created_at: Date;
   updated_at: Date;
   disabled_at: Date | null;
+  deletion_started_at: Date | null;
+  purge_after: Date | null;
   client_secret_hash: string | null;
 };
 type ClientConfig = Required<CreateClientRequest>;
@@ -48,7 +50,7 @@ function fail(status: number, detail: string, field = "client") {
     ),
   };
 }
-function mapClient(row: ClientRow, minimum: Assurance): OAuthClientSummary {
+export function mapClient(row: ClientRow, minimum: Assurance): OAuthClientSummary {
   return {
     id: String(row.id),
     appId: String(row.app_id),
@@ -57,6 +59,8 @@ function mapClient(row: ClientRow, minimum: Assurance): OAuthClientSummary {
     clientType: row.client_type,
     purpose: row.purpose,
     status: row.status,
+    deletionStartedAt: row.deletion_started_at ? new Date(row.deletion_started_at).toISOString() : null,
+    purgeAfter: row.purge_after ? new Date(row.purge_after).toISOString() : null,
     redirectUris: row.redirect_uris,
     browserOrigins: row.browser_origins,
     refreshEnabled: row.refresh_enabled,
@@ -252,7 +256,7 @@ export async function createClient(appId: string, body: CreateClientRequest) {
     };
   });
 }
-async function containClient(tx: SQL, clientId: string, refreshOnly = false) {
+export async function containClient(tx: SQL, clientId: string, refreshOnly = false) {
   if (!refreshOnly) {
     await tx`UPDATE oauth_grants SET revoked_at = COALESCE(revoked_at, NOW()) WHERE client_id = ${clientId}`;
     await tx`UPDATE oauth_authorization_codes SET used_at = COALESCE(used_at, NOW()) WHERE app_credential_id = ${clientId}`;

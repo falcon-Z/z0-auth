@@ -1,0 +1,90 @@
+import { test, expect } from "@playwright/test";
+import { requireE2ePassword } from "./test-credentials";
+
+test("settings separates disable, recoverable deletion, restoration and freshly verified permanent purge", async ({ page }) => {
+  test.skip(process.env.REGISTRATION_DELETION_GRACE_DAYS === "0", "Run the zero-grace journey with immediate purge configured.");
+  let verifications = 0;
+  page.on("dialog", async dialog => {
+    expect(dialog.type()).toBe("prompt");
+    expect(dialog.message()).toContain("current password");
+    verifications++;
+    await dialog.accept(requireE2ePassword());
+  });
+  await page.goto("/apps");
+  await page.locator("header").getByRole("button", { name: "Add app" }).click();
+  const name = `Lifecycle ${Date.now()}`;
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByLabel("Client label").fill("Primary client");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page).toHaveURL(/\/apps\/.+\/setup/);
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  const appId = page.url().match(/\/apps\/([^/]+)/)![1]!;
+  const row = page.getByRole("row").filter({ hasText: "Primary client" });
+  const clientId = (await row.locator("td").nth(1).innerText()).trim();
+  await expect(page.getByRole("button", { name: "Delete permanently", exact: true })).toHaveCount(0);
+  async function manage() { await row.getByRole("button", { name: "Manage", exact: true }).click(); }
+  async function deleteClient() {
+    await manage();
+    await expect(page.getByRole("button", { name: "Delete permanently", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Delete client", exact: true }).click();
+    const confirmation = page.getByRole("dialog", { name: "Delete client", exact: true });
+    await expect(confirmation.getByRole("button", { name: "Delete", exact: true })).toBeDisabled();
+    await confirmation.getByLabel("Type the Client ID to confirm").fill(clientId);
+    await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(row).toContainText("pending_deletion");
+  }
+  await deleteClient();
+  expect(verifications).toBe(1);
+  await page.reload();
+  await manage();
+  await expect(page.getByRole("dialog", { name: "Manage client" })).toContainText("Recovery deadline:");
+  await page.getByRole("button", { name: "Restore client", exact: true }).click();
+  await page.getByRole("dialog", { name: "Restore client" }).getByRole("button", { name: "Restore", exact: true }).click();
+  await expect(row).toContainText("active");
+  await deleteClient();
+  await manage();
+  await page.getByRole("dialog", { name: "Manage client" }).getByRole("button", { name: "Delete permanently", exact: true }).click();
+  const purgeClient = page.getByRole("dialog", { name: "Permanently delete client" });
+  await purgeClient.getByLabel("Type the Client ID to confirm").fill(clientId);
+  await purgeClient.getByRole("button", { name: "Delete permanently", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+  expect(verifications).toBe(3);
+  await expect(page.getByRole("button", { name: "Delete permanently", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Delete application", exact: true }).click();
+  const deleteApp = page.getByRole("dialog", { name: "Delete application", exact: true });
+  await deleteApp.getByLabel("Type the Application ID to confirm").fill(appId);
+  await deleteApp.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByText("Pending Deletion. Recovery deadline:", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Edit", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Restore application", exact: true })).toBeEnabled();
+  await page.reload();
+  await page.getByRole("button", { name: "Delete permanently", exact: true }).click();
+  const purgeApp = page.getByRole("dialog", { name: "Permanently delete application" });
+  await purgeApp.getByLabel("Type the Application ID to confirm").fill(appId);
+  await purgeApp.getByRole("button", { name: "Delete permanently", exact: true }).click();
+  await expect(page).toHaveURL(/\/apps$/);
+  await expect(page.getByRole("row").filter({ hasText: name })).toHaveCount(0);
+  expect(verifications).toBe(5);
+});
+
+test("zero grace clearly confirms irreversible purge before the initial Delete action", async ({ page }) => {
+  test.skip(process.env.REGISTRATION_DELETION_GRACE_DAYS !== "0", "Requires the zero-grace configuration.");
+  page.on("dialog", dialog => dialog.accept(requireE2ePassword()));
+  await page.goto("/apps");
+  await page.locator("header").getByRole("button", { name: "Add app" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(`Immediate ${Date.now()}`);
+  await page.getByLabel("Client label").fill("Immediate client");
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page).toHaveURL(/\/apps\/.+\/setup/);
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  const appId = page.url().match(/\/apps\/([^/]+)/)![1]!;
+  await expect(page.getByText("Recovery is disabled.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Delete permanently", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Delete application", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Permanently delete application" });
+  await expect(dialog).toContainText("permanently removes");
+  await dialog.getByLabel("Type the Application ID to confirm").fill(appId);
+  await dialog.getByRole("button", { name: "Delete permanently", exact: true }).click();
+  await expect(page).toHaveURL(/\/apps$/);
+});

@@ -145,3 +145,14 @@ Add app creates the Application with its minimum assurance and initial Client. T
 **Apps → Permissions** defines the application's scope vocabulary. **Apps → Resources** registers APIs, exposes selected vocabulary scopes, edits display names/scopes, and permanently retires an API after confirmation. The audience URI is disabled when editing and remains reserved after retirement. **Apps → Setup → Resource access** selects registered APIs for each child Client and the maximum scopes it may request. Removing scopes or access explains the effect on existing grants. Empty permissions mean the Client cannot obtain any Resource access token.
 
 Authorization requests include one exact `resource` URI. Hosted authorization freezes that Resource with the reviewed request. Token exchange and refresh may omit `resource` to inherit it, or repeat the same URI. A different Resource requires an independent authorization grant.
+
+Application and OAuth Client settings place Delete in a low-prominence area at
+the bottom. Disabled, Pending Deletion and permanent purge are separate actions.
+Pending Deletion shows the recovery deadline and offers Restore and Delete
+Permanently; permanent purge is absent on active/disabled registrations. Delete
+requires typing the Application ID or Client ID, then a fresh password/MFA/passkey
+proof. Delete Permanently repeats confirmation and requires a new proof for that
+action. The zero-grace configuration clearly states that Delete is irreversible.
+Client deletion leaves sibling clients and Application identities intact;
+Application deletion contains every child. Restoration explains that revoked
+authorization codes and refresh tokens stay revoked.

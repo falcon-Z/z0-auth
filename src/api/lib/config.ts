@@ -28,6 +28,7 @@ export type AppConfig = {
   publicOrigin?: string;
   /** Optional first-owner bootstrap from deployment configuration. */
   bootstrapOwner: BootstrapOwnerConfig;
+  registrationDeletionGraceDays: number;
 };
 
 export type ConfigErrorReason = "missing" | "invalid" | "incomplete" | "unsafe";
@@ -270,6 +271,7 @@ export function loadConfig(): AppConfig {
           return value;
         })(),
     publicOrigin: parsePublicOrigin(),
+    registrationDeletionGraceDays: parseEnvironmentInteger("REGISTRATION_DELETION_GRACE_DAYS", 30, { min: 0, max: 365 }),
     bootstrapOwner,
   };
 }

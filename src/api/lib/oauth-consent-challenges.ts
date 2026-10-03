@@ -74,44 +74,50 @@ export function createPostgresOAuthConsentChallengeAuthority(): OAuthConsentChal
   return {
     async create(challenge: OAuthConsentChallenge): Promise<void> {
       const nonceHash = await sha256Hex(challenge.nonce);
-      const created = await getDb()`
-        INSERT INTO oauth_consent_challenges (
-          purpose,
-          nonce_hash,
-          app_user_id,
-          app_id,
-          app_credential_id,
-          redirect_uri,
-          scope,
-          oauth_state,
-          code_challenge,
-          code_challenge_method,
-          oidc_nonce,
-          expires_at, resource_id
-        )
-        SELECT
-          ${challenge.purpose},
-          ${nonceHash},
-          ${challenge.appUserId},
-          ${challenge.appId},
-          credentials.id,
-          ${challenge.redirectUri},
-          ${challenge.scope},
-          ${challenge.state},
-          ${challenge.codeChallenge},
-          ${challenge.codeChallengeMethod},
-          ${challenge.oidcNonce},
-          clock_timestamp() + (${challenge.lifetimeSeconds} * INTERVAL '1 second'), resource.id
-        FROM oauth_clients credentials
-        JOIN oauth_resources resource ON resource.audience = ${challenge.resource ?? null}
-        WHERE credentials.client_id = ${challenge.clientId}
-          AND credentials.app_id = ${challenge.appId}
-          AND credentials.status = 'active'
-        RETURNING id
-      `;
-      if (created.length !== 1) {
-        throw new Error("Cannot create an OAuth consent challenge for an inactive client");
-      }
+      await getDb().begin(async tx => {
+        await lockResourceAuthority(tx);
+        await tx`SELECT id FROM apps WHERE id = ${challenge.appId} FOR SHARE`;
+        await tx`SELECT id FROM oauth_clients WHERE client_id = ${challenge.clientId} AND app_id = ${challenge.appId} FOR SHARE`;
+        const created = await tx`
+          INSERT INTO oauth_consent_challenges (
+            purpose,
+            nonce_hash,
+            app_user_id,
+            app_id,
+            app_credential_id,
+            redirect_uri,
+            scope,
+            oauth_state,
+            code_challenge,
+            code_challenge_method,
+            oidc_nonce,
+            expires_at, resource_id
+          )
+          SELECT
+            ${challenge.purpose},
+            ${nonceHash},
+            ${challenge.appUserId},
+            ${challenge.appId},
+            credentials.id,
+            ${challenge.redirectUri},
+            ${challenge.scope},
+            ${challenge.state},
+            ${challenge.codeChallenge},
+            ${challenge.codeChallengeMethod},
+            ${challenge.oidcNonce},
+            clock_timestamp() + (${challenge.lifetimeSeconds} * INTERVAL '1 second'), resource.id
+          FROM oauth_clients credentials
+          JOIN apps application ON application.id = credentials.app_id AND application.status = 'active'
+          JOIN oauth_resources resource ON resource.audience = ${challenge.resource ?? null} AND resource.status = 'active'
+          WHERE credentials.client_id = ${challenge.clientId}
+            AND credentials.app_id = ${challenge.appId}
+            AND credentials.status = 'active' AND credentials.purpose = 'interactive'
+          RETURNING id
+        `;
+        if (created.length !== 1) {
+          throw new Error("Cannot create an OAuth consent challenge for an inactive client");
+        }
+      });
     },
 
     async findContext(nonce: string) {

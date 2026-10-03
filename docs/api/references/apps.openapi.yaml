@@ -388,6 +388,129 @@ paths:
           description: Application disabled
         '400':
           $ref: common.openapi.yaml#/components/responses/ValidationError
+  /api/v1/registration-lifecycle-policy:
+    get:
+      summary: Read the configured registration deletion grace period
+      operationId: getRegistrationLifecyclePolicy
+      security:
+      - SessionCookie: []
+      responses:
+        '200':
+          description: Requires apps:read
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [graceDays]
+                properties:
+                  graceDays: { type: integer, minimum: 0, maximum: 365 }
+  /api/v1/apps/{appId}/lifecycle:
+    post:
+      summary: Schedule deletion, restore, or permanently purge an Application
+      operationId: changeApplicationLifecycle
+      description: >-
+        Requires apps:delete, CSRF and fresh verification. Delete and purge require
+        exact confirmation and a one-use action/session/registration-bound verification
+        challenge. A 403 response supplies registrationVerification and reauthentication
+        instructions; verify then retry with X-Registration-Verification. Restore requires
+        Pending Deletion before the stored recovery deadline. Purge requires Pending
+        Deletion and a separate fresh proof. Zero configured grace immediately purges.
+      security:
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
+      parameters:
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - name: X-Registration-Verification
+        in: header
+        required: false
+        schema: { type: string }
+        description: One-use verification challenge returned by this action's first request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationLifecycleRequest'
+      responses:
+        '200':
+          description: Lifecycle changed; registration is null after physical purge
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, registration]
+                properties:
+                  status: { type: string, enum: [active, pending_deletion, purged] }
+                  registration:
+                    oneOf:
+                    - $ref: '#/components/schemas/AppDetail'
+                    - type: 'null'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
+          description: Invalid transition, expired recovery period or unavailable parent Application
+  /api/v1/apps/{appId}/clients/{clientId}/lifecycle:
+    post:
+      summary: Schedule deletion, restore, or permanently purge a Client
+      operationId: changeClientLifecycle
+      description: >-
+        Requires apps.clients:delete, CSRF and fresh verification. Delete and purge require
+        exact confirmation and a one-use action/session/registration-bound verification
+        challenge. A 403 response supplies registrationVerification and reauthentication
+        instructions; verify then retry with X-Registration-Verification. Restore requires
+        Pending Deletion before the stored recovery deadline. Purge requires Pending
+        Deletion and a separate fresh proof. Zero configured grace immediately purges.
+      security:
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
+      parameters:
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ClientId'
+      - name: X-Registration-Verification
+        in: header
+        required: false
+        schema: { type: string }
+        description: One-use verification challenge returned by this action's first request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationLifecycleRequest'
+      responses:
+        '200':
+          description: Lifecycle changed; registration is null after physical purge
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, registration]
+                properties:
+                  status: { type: string, enum: [active, pending_deletion, purged] }
+                  registration:
+                    oneOf:
+                    - $ref: '#/components/schemas/OAuthClientSummary'
+                    - type: 'null'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
+          description: Invalid transition, expired recovery period or unavailable parent Application
 components:
   parameters:
     AppId:
@@ -463,6 +586,7 @@ components:
       enum:
       - active
       - disabled
+      - pending_deletion
     Assurance:
       type: string
       enum:
@@ -499,6 +623,8 @@ components:
       - createdAt
       - updatedAt
       - disabledAt
+      - deletionStartedAt
+      - purgeAfter
       properties:
         id:
           type: string
@@ -524,6 +650,13 @@ components:
           - string
           - 'null'
           format: date-time
+        deletionStartedAt:
+          type: [string, 'null']
+          format: date-time
+        purgeAfter:
+          type: [string, 'null']
+          format: date-time
+          description: Stored recovery deadline; restoration is disallowed after this time
     AppDetail:
       $ref: '#/components/schemas/AppSummary'
     OAuthClientSummary:
@@ -544,6 +677,8 @@ components:
       - createdAt
       - updatedAt
       - disabledAt
+      - deletionStartedAt
+      - purgeAfter
       properties:
         id:
           type: string
@@ -595,6 +730,13 @@ components:
           - string
           - 'null'
           format: date-time
+        deletionStartedAt:
+          type: [string, 'null']
+          format: date-time
+        purgeAfter:
+          type: [string, 'null']
+          format: date-time
+          description: Stored recovery deadline; restoration is disallowed after this time
     CreateClientRequest:
       type: object
       additionalProperties: false
@@ -685,7 +827,8 @@ components:
         name:
           type: string
         status:
-          $ref: '#/components/schemas/AppStatus'
+          type: string
+          enum: [active, disabled]
         minimumAssurance:
           $ref: '#/components/schemas/Assurance'
     PatchClientRequest:
@@ -698,4 +841,19 @@ components:
         refreshEnabled: *id004
         assuranceOverride: *id005
         status:
-          $ref: '#/components/schemas/AppStatus'
+          type: string
+          enum: [active, disabled]
+    RegistrationLifecycleRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [delete, restore, purge] }
+        confirmation:
+          type: string
+          description: Exact Application UUID or public Client ID; mandatory for delete and purge
+        expectedGraceDays:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: Mandatory for delete; must match the reviewed current policy and is bound into its verification challenge

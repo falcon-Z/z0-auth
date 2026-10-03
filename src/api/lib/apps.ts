@@ -19,9 +19,11 @@ export type AppRow = {
   id: string;
   name: string;
   slug: string;
-  status: "active" | "disabled";
+  status: AppSummary["status"];
   minimum_assurance: Assurance;
   disabled_at: Date | null;
+  deletion_started_at: Date | null;
+  purge_after: Date | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -32,7 +34,9 @@ export function mapAppRow(row: AppRow, count: number): AppSummary {
     slug: row.slug,
     status: row.status,
     minimumAssurance: row.minimum_assurance,
-    activeClientCount: count,
+    activeClientCount: row.status === "active" ? count : 0,
+    deletionStartedAt: row.deletion_started_at ? new Date(row.deletion_started_at).toISOString() : null,
+    purgeAfter: row.purge_after ? new Date(row.purge_after).toISOString() : null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     disabledAt: row.disabled_at
@@ -177,6 +181,7 @@ export async function patchApp(
         ok: false,
         response: problem(404, "Not Found", "Application not found."),
       };
+    if (row.status === "pending_deletion") return { ok: false, response: problem(409, "Conflict", "Restore the pending Application before editing it.") };
     const status = body.status ?? row.status;
     const [updated] =
       await tx`UPDATE apps SET name = ${body.name?.trim() ?? row.name}, status = ${status},

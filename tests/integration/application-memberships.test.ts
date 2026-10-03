@@ -87,7 +87,7 @@ run("Application Subjects and Memberships", () => {
         VALUES (${app.id}, 'person@example.com', 'Person', '{"team":"a"}', 'disabled', NOW()) RETURNING id, account_id`;
       await db`INSERT INTO app_password_reset_tokens (app_id, app_user_id, token_hash, expires_at)
         VALUES (${app.id}, ${user.id}, 'legacy-reset', NOW() + INTERVAL '1 hour')`;
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(4);
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(5);
       const [upgraded] = await db`SELECT id, account_id, account_status, membership_status, metadata FROM app_users`;
       expect(upgraded.id).toBe(user.id);
       expect(upgraded.account_id).toBe(user.account_id);

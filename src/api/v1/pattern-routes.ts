@@ -49,6 +49,8 @@ import {
   handleTransferOwnership,
 } from "./rbac/handlers";
 import {
+  handleRegistrationLifecycle,
+  handleRegistrationLifecyclePolicy,
   handleCreateApp,
   handleCreateClient,
   handleGetApp,
@@ -107,6 +109,9 @@ import {
 } from "./apps/app-user-sessions-handlers";
 
 export const v1PatternRoutes: PathRoute[] = [
+  { pattern: "/api/v1/registration-lifecycle-policy", handlers: { GET: handleRegistrationLifecyclePolicy } },
+  { pattern: "/api/v1/apps/:appId/lifecycle", handlers: { POST: handleRegistrationLifecycle } },
+  { pattern: "/api/v1/apps/:appId/clients/:clientId/lifecycle", handlers: { POST: handleRegistrationLifecycle } },
   { pattern: "/api/v1/resources", handlers: { GET: handleAvailableResources } },
   { pattern: "/api/v1/apps/:appId/resources", handlers: { GET: handleListResources, POST: handleCreateResource } },
   { pattern: "/api/v1/apps/:appId/resources/:resourceId", handlers: { PATCH: handlePatchResource, DELETE: handleDeleteResource } },

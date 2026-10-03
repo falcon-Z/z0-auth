@@ -46,7 +46,7 @@ run("Resource authority upgrade", () => {
       await db`INSERT INTO instance_role_scopes(role_id, scope_key) VALUES (${role.id}, 'apps.scopes:read'), (${role.id}, 'apps.scopes:manage')`;
       expect(
         await applyMigrations(db, path.join(sqlDir, "migrations"), false),
-      ).toBe(1);
+      ).toBe(2);
       expect(await db`SELECT id FROM oauth_resources`).toHaveLength(0);
       expect(
         await db`SELECT client_id FROM client_resource_permissions`,

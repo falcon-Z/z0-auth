@@ -149,3 +149,16 @@ describe("full startup configuration", () => {
   });
 
 });
+
+describe("registration deletion grace", () => {
+  test("defaults to 30 days and accepts zero while rejecting malformed limits", () => {
+    delete process.env.REGISTRATION_DELETION_GRACE_DAYS;
+    expect(loadConfig().registrationDeletionGraceDays).toBe(30);
+    process.env.REGISTRATION_DELETION_GRACE_DAYS = "0";
+    expect(loadConfig().registrationDeletionGraceDays).toBe(0);
+    for (const value of ["-1", "1.5", "366", "", "days"]) {
+      process.env.REGISTRATION_DELETION_GRACE_DAYS = value;
+      expect(() => loadConfig()).toThrow("REGISTRATION_DELETION_GRACE_DAYS");
+    }
+  });
+});

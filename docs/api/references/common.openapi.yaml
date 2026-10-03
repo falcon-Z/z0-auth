@@ -147,6 +147,9 @@ components:
           items:
             type: string
           description: Allowed HTTP methods (405 responses).
+        registrationVerification:
+          type: string
+          description: One-use registration lifecycle challenge; retry with X-Registration-Verification after reauthentication
         requiredAssurance:
           type: string
           enum: [primary, multi_factor, phishing_resistant]

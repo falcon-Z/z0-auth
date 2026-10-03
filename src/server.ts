@@ -1,3 +1,4 @@
+import { purgeExpiredRegistrations } from "./api/lib/registration-lifecycle";
 import { serve } from "bun";
 
 import { apiRouteMap, dispatchApiRequest } from "./api/dispatch";
@@ -85,15 +86,28 @@ const server = serve({
 
 printStartupSummary(config, readiness);
 
+// One worker per replica is safe: deadline checks and purge use transactional
+// authority locks. Failed work remains pending for the next retry/restart.
+let lifecycleWork: Promise<unknown> | null = null;
+const lifecycleTimer = setInterval(() => {
+  if (lifecycleWork) return;
+  lifecycleWork = evaluateReadiness().then(async readiness => {
+    if (!readiness.ready) return;
+    await purgeExpiredRegistrations();
+  }).catch(() => console.error("Registration lifecycle maintenance failed; will retry."))
+    .finally(() => { lifecycleWork = null; });
+}, 30_000);
+
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 async function shutdown(): Promise<void> {
+  clearInterval(lifecycleTimer);
   const timeout = new Promise<never>((_, reject) => {
     setTimeout(() => reject(new Error("Shutdown timeout")), SHUTDOWN_TIMEOUT_MS);
   });
 
   try {
-    await Promise.race([Promise.all([closeDatabase(), server.stop()]), timeout]);
+    await Promise.race([(async () => { await lifecycleWork; await Promise.all([closeDatabase(), server.stop()]); })(), timeout]);
   } catch (error) {
     console.error("Error during shutdown:", error);
   }

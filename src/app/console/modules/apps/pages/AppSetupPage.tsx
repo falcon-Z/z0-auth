@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import type {
   CreateClientRequest,
   OAuthClientSummary,
+  AppDetail,
 } from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import { useConfirm } from "../../../components/feedback/ConfirmDialog";
 import {
   createAppClient,
   fetchAppClients,
+  fetchRegistrationLifecyclePolicy,
   patchAppClient,
   rotateAppClientSecret,
 } from "../../../lib/apps-api";
@@ -28,15 +30,18 @@ import { ClientResourcesDialog } from "../components/ClientResourcesDialog";
 import { ClientFields, defaultClient } from "../components/ClientFields";
 import { CredentialSecretDialog } from "../components/CredentialSecretDialog";
 
+import { RegistrationLifecycleControls } from "../components/RegistrationLifecycleControls";
+
 type Reveal = { clientId: string; clientSecret: string | null; title: string };
 export function AppSetupPage() {
-  const { appId, app, setNotice } = useAppWorkspace();
+  const { appId, app, setApp, setNotice } = useAppWorkspace();
   const { hasScope } = usePermissions();
   const confirm = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
   const [resourceClient, setResourceClient] = useState<OAuthClientSummary | null>(null);
   const [clients, setClients] = useState<OAuthClientSummary[]>([]);
+  const [graceDays, setGraceDays] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [reveal, setReveal] = useState<Reveal | null>(null);
@@ -46,7 +51,9 @@ export function AppSetupPage() {
   const [error, setError] = useState<string | null>(null);
   const reload = useCallback(async () => {
     try {
-      setClients(await fetchAppClients(appId));
+      const [loaded, policy] = await Promise.all([fetchAppClients(appId), fetchRegistrationLifecyclePolicy()]);
+      setClients(loaded);
+      setGraceDays(policy.graceDays);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Could not load clients.");
     } finally {
@@ -221,7 +228,7 @@ export function AppSetupPage() {
         emptyMessage="No clients."
         rowActions={(client) => (
           <div className="flex gap-2">
-            {hasScope("apps.clients:update") && (
+            {(hasScope("apps.clients:update") || hasScope("apps.clients:delete")) && (
               <>
                 <Button
                   size="sm"
@@ -231,15 +238,15 @@ export function AppSetupPage() {
                 >
                   Manage
                 </Button>
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => setResourceClient(client)}>Resource access</Button>
+                {hasScope("apps.clients:update") && <><Button size="sm" variant="outline" disabled={busy || client.status === "pending_deletion" || app.status === "pending_deletion"} onClick={() => setResourceClient(client)}>Resource access</Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={busy || app.status !== "active"}
+                  disabled={busy || app.status !== "active" || client.status === "pending_deletion"}
                   onClick={() => void toggle(client)}
                 >
                   {client.status === "active" ? "Disable" : "Enable"}
-                </Button>
+                </Button></>}
               </>
             )}
             {hasScope("apps.clients:rotate") &&
@@ -268,13 +275,13 @@ export function AppSetupPage() {
                 {editing ? "Manage client" : "Add client"}
               </DialogTitle>
             </DialogHeader>
-            <div className="py-4">
+            {editing?.status !== "pending_deletion" && (!editing || hasScope("apps.clients:update")) && <div className="py-4">
               <ClientFields
                 value={value}
                 onChange={setValue}
                 immutable={Boolean(editing)}
               />
-            </div>
+            </div>}
             {error && (
               <p role="alert" className="text-sm text-destructive">
                 {error}
@@ -288,13 +295,29 @@ export function AppSetupPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={busy}>
+              {editing?.status !== "pending_deletion" && (!editing || hasScope("apps.clients:update")) && <Button type="submit" disabled={busy || app.status === "pending_deletion"}>
                 {busy ? "Saving…" : editing ? "Save" : "Create client"}
-              </Button>
+              </Button>}
             </DialogFooter>
           </form>
+          {editing && hasScope("apps.clients:delete") && graceDays !== null && <RegistrationLifecycleControls
+            appId={appId} app={app} client={editing} graceDays={graceDays}
+            disabled={busy}
+            onChanged={async () => { setOpen(false); await reload(); setNotice("Client lifecycle updated."); }}
+            onError={setError}
+          />}
         </DialogContent>
       </Dialog>
+      {hasScope("apps:delete") && graceDays !== null && <RegistrationLifecycleControls
+        appId={appId} app={app} graceDays={graceDays} disabled={busy}
+        onChanged={async updated => {
+          if (!updated) { navigate("/apps"); return; }
+          setApp(updated as AppDetail);
+          await reload();
+          setNotice("Application lifecycle updated.");
+        }}
+        onError={setNotice}
+      />}
       {resourceClient && <ClientResourcesDialog appId={appId} client={resourceClient} onClose={() => setResourceClient(null)} />}
       {reveal && (
         <CredentialSecretDialog

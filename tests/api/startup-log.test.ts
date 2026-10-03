@@ -27,6 +27,7 @@ describe("printStartupSummary", () => {
           operatorSessionAbsoluteHours: 12,
           instanceKeysPath: ".data/test-instance-keys.json",
           bootstrapOwner: {},
+    registrationDeletionGraceDays: 30,
         },
         {
           ready: false,

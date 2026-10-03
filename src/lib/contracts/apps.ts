@@ -1,4 +1,4 @@
-export type AppStatus = "active" | "disabled";
+export type AppStatus = "active" | "disabled" | "pending_deletion";
 export type Assurance = "baseline" | "strong";
 export type AppClientType = "public" | "confidential";
 export type ClientPurpose = "interactive" | "workload";
@@ -15,6 +15,8 @@ export type AppSummary = {
   createdAt: string;
   updatedAt: string;
   disabledAt: string | null;
+  deletionStartedAt: string | null;
+  purgeAfter: string | null;
 };
 export type AppDetail = AppSummary;
 export type OAuthClientSummary = {
@@ -33,6 +35,8 @@ export type OAuthClientSummary = {
   createdAt: string;
   updatedAt: string;
   disabledAt: string | null;
+  deletionStartedAt: string | null;
+  purgeAfter: string | null;
 };
 export type CreateClientRequest = {
   label: string;
@@ -63,7 +67,20 @@ export type CreateAppRequest = {
 export type CreateAppResponse = CreateClientResponse & { app: AppDetail };
 export type PatchAppRequest = {
   name?: string;
-  status?: AppStatus;
+  status?: "active" | "disabled";
   minimumAssurance?: Assurance;
 };
 export type RotateClientSecretResponse = CreateClientResponse;
+
+export type RegistrationLifecycleAction = "delete" | "restore" | "purge";
+export type RegistrationLifecycleRequest = {
+  action: RegistrationLifecycleAction;
+  /** Exact Application ID or public Client ID; mandatory for delete and purge. */
+  confirmation?: string;
+  /** Mandatory for delete: the grace policy the Operator explicitly reviewed. */
+  expectedGraceDays?: number;
+};
+export type RegistrationLifecycleResponse<T> = {
+  status: "pending_deletion" | "active" | "purged";
+  registration: T | null;
+};

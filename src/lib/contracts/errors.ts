@@ -14,6 +14,7 @@ export type ProblemDetail = {
   code?: string;
   retryAfter?: number;
   allowed?: string[];
+  registrationVerification?: string;
   requiredAssurance?: "primary" | "multi_factor" | "phishing_resistant";
   reauthentication?: {
     method: "password" | "mfa" | "passkey";

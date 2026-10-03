@@ -131,3 +131,59 @@ Manage children at `/api/v1/apps/:appId/clients` (GET/POST), `…/:clientId` (PA
 Browser origins are registered independently for public interactive Clients. Refresh capability defaults to false and must be enabled explicitly. Disabling refresh revokes existing families and cached retry results. Disabling a Client contains its renewable authority; disabling the Application contains every child. Re-enabling permits new use without reviving revoked grants. Pending deletion and permanent purge transitions are tracked in #98; multiple concurrent secrets are tracked in #100.
 
 Acceptance evidence: `tests/integration/apps-flow.test.ts` proves shared subjects/membership, immutable class/purpose, management RBAC/CSRF, assurance enforcement, and concurrent containment. `tests/integration/oauth-clients-migration.test.ts` proves preservation of identity and operator grants during upgrade. `tests/e2e/oauth-clients-console.spec.ts` exercises server, SPA, and workload Client creation and management. The backend evidence is included in `bun run quality:alpha`.
+
+### Application and Client lifecycle (APP-09–APP-14)
+
+`PATCH /api/v1/apps/:appId` and the corresponding child Client PATCH accept
+`active` / `disabled` only. Disable blocks new authorization, code exchange,
+refresh and workload issuance, revoking codes, challenges, grants and refresh
+families transactionally with issuance. Application containment covers every
+child Client; Client containment preserves siblings and Account Domain sessions.
+Re-enable allows future use without resurrecting revoked authority. Existing
+self-contained access tokens retain their bounded validity until expiry.
+
+`POST /api/v1/apps/:appId/lifecycle` and
+`POST /api/v1/apps/:appId/clients/:clientId/lifecycle` accept
+`{ action: "delete" | "restore" | "purge", confirmation?: string, expectedGraceDays?: number }`.
+They require `apps:delete` / `apps.clients:delete`, CSRF and recent Operator proof.
+Delete and purge additionally require the exact Application UUID / public Client
+ID and a fresh action-specific verification challenge. The first confirmed request
+returns 403 with `registrationVerification` and existing password/MFA/passkey
+reauthentication instructions. Verify, then retry the same request with
+`X-Registration-Verification`. The proof expires in ten minutes, is bound to the
+Operator session, Application, Client and action, and is consumed once. Permanent
+purge requires a new verification after Pending Deletion; an old Delete proof
+cannot authorize it. Merely providing the confirmation text is insufficient.
+
+Delete enters Pending Deletion and immediately contains renewable authority.
+`deletionStartedAt` and `purgeAfter` expose its stored recovery window. Restore
+before the deadline preserves identity/configuration, leaves individually disabled
+children disabled, and never revives revoked protocol state. A pending Client
+can be restored only when its parent is active. Purge is a separate irreversible
+transition available only after Pending Deletion. An expired deadline cannot be
+restored even when maintenance has not yet removed the row.
+
+`REGISTRATION_DELETION_GRACE_DAYS` configures future Application and Client
+deletion windows (default 30; whole days 0–365). Zero means immediate permanent
+purge after fresh verification and explicit irreversible confirmation. Existing
+deadlines do not change when configuration changes.
+`GET /api/v1/registration-lifecycle-policy` exposes `{ graceDays }` to Operators
+with `apps:read`. Each server retries expired purges every 30 seconds using the
+same transactional locks as issuance/recovery, including after restart. Failures
+leave durable pending work for a later retry; replicas cannot double-purge.
+
+Client purge removes configuration, secrets and Client protocol state, preserving
+its Application, memberships and subjects. Application purge removes its child
+Clients, subjects/memberships, custom metadata, scoped sessions and protocol state.
+Its private Account Domain and credentials are removed; shared SSO Accounts,
+authenticators and sibling sessions remain intact. Resource audiences remain
+retired reservations with no owner and cannot be reassigned. Only Client ID and
+retirement time survive in the Client reservation ledger; Client IDs cannot be
+reused. Business data held by relying applications is outside this purge.
+Lifecycle transitions and automatic purge write audit evidence in the same
+transaction as the change.
+
+Delete also requires `expectedGraceDays` matching the policy the Operator reviewed.
+It is bound into the verification challenge. A changed policy fails with 409 and
+must be reviewed again, so a previously recoverable confirmation cannot silently
+become immediate permanent purge after an instance configuration change.

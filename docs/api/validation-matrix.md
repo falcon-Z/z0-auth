@@ -375,3 +375,14 @@ Issue #95 is covered by `tests/integration/shared-sso-domains.test.ts` (atomic d
 | Code/refresh resource | Optional repeat must equal frozen grant audience | OAuth `invalid_grant` |
 | Policy contraction | Remove scopes permanently from active grants; never restore old grant scopes on re-add | Future refresh scope contracts |
 | Permission removal / Resource retirement | Revoke renewable grants for that Client/Resource; audience stays reserved | Later refresh fails |
+
+| Application/Client lifecycle | Evidence |
+| --- | --- |
+| APP-09–APP-11: containment and no authority resurrection | `registration-lifecycle.test.ts`: Client-only vs Application containment, workload issuance, revoked codes/refresh, shared SSO isolation, issuance races; `apps-flow.test.ts`: authorization completion race |
+| APP-12: recoverable deletion, configured deadlines and purge | `registration-lifecycle.test.ts`: restoration before deadline, rejection after deadline, concurrent expiry workers, zero grace, private vs shared domain purge |
+| APP-13: two-stage destructive workflow | `registration-lifecycle.test.ts`: confirmation/CSRF/RBAC, fresh action/session/registration-bound one-use proof; `registration-lifecycle-console.spec.ts`: separate Delete/Restore/Delete Permanently and verification |
+| APP-14: permanent Client ID retirement | `registration-lifecycle.test.ts`: purge removes configuration/protocol state, reinsertion and tombstone deletion rejected |
+| Upgrade compatibility | `registration-lifecycle-migration.test.ts`: preserves active/disabled Clients, identities, Resource authority and permission ceilings; migration integrity suite |
+
+Lifecycle integration and upgrade evidence run in the focused Alpha quality gate
+and full regression suite. The console lifecycle journey is run with Playwright.
