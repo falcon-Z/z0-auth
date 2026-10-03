@@ -18,7 +18,6 @@ import {
   insertAppSession,
   prepareAppSession,
 } from "./app-session";
-import { ensureGroupMemberForAppUser } from "./group-sso";
 import { writeAuditEvent } from "./audit";
 import {
   accountCanAuthenticate,
@@ -195,7 +194,6 @@ export async function runAppLogin(
       fieldErrors: [{ field: "_auth", message: invalidMessage }],
     };
   }
-  await ensureGroupMemberForAppUser(user.id, appId, user.email);
 
   await writeAuditEvent({
     action: "auth.app_login_succeeded",
@@ -325,9 +323,6 @@ export async function runAppInviteAcceptSignIn(
     };
   }
   const session = await issueAppSession(req, appUserId, appId);
-  const [row] = await getDb()`SELECT email FROM app_users WHERE id = ${appUserId} LIMIT 1`;
-  if (row) {
-    await ensureGroupMemberForAppUser(appUserId, appId, String((row as { email: string }).email));
-  }
+
   return { ok: true, mfaRequired: false, setCookie: session.setCookie, appUserId: session.appUserId };
 }

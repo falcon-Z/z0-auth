@@ -35,7 +35,7 @@ End-user profile, password, and lifecycle fields are owned by `accounts` within 
 | Absolute lifetime | **14 days** |
 | Revocation | Hosted logout revokes the browser broker and its app grants; it never clears the separate `z0_session` console cookie |
 | OAuth | `/oauth/authorize` and `/oauth/resume` use **app** session when returning from hosted auth |
-| Cross-app | One browser credential may contain isolated grants for several apps. OAuth resolves only the requested app grant; service-group SSO may deliberately provision a sibling grant. |
+| Cross-app | One browser credential may contain isolated grants for several apps. OAuth resolves only the requested app grant; SSO may reuse an active session for the same canonical Account in an explicitly shared domain only when the target has active membership. It creates no Account, subject, or membership and transfers no consent or metadata. |
 
 **Sign-in mode on `/auth/*`:** If the request includes a resolvable `client_id` (query or preserved in `z0_oauth_return`), treat as **app user** sign-in: authenticate `app_users`, issue `z0_app_session`, then redirect to the app (via OAuth `return_to`). Otherwise **console** sign-in: `users` + `z0_session`. Same HTML shell and CSRF; social provider buttons only on app sign-in when configured.
 
@@ -45,12 +45,12 @@ End-user profile, password, and lifecycle fields are owned by `accounts` within 
 
 ## Multi-factor authentication
 
-TOTP MFA is available independently to console members and app users. A console factor belongs to one `users.id`; an app-user factor belongs to one app-scoped `app_users.id`. Matching email addresses never share a factor, recovery code, challenge, or remembered browser.
+TOTP MFA is available independently to console members and application Accounts. A console factor belongs to one `users.id`; an application factor and its recovery codes belong to one canonical `accounts.id`, shared across that Account's subjects in an explicitly configured SSO domain. Matching email addresses in independent domains never share factors or recovery codes. Challenges retain their target application context; remembered-browser credentials remain application-local.
 
 - TOTP follows RFC 6238 with HMAC-SHA-1, six digits, a 30-second period, and a one-step clock-skew window. Seeds are encrypted with the instance data key.
 - Enrollment expires after 10 minutes and does not enable MFA until a current code is verified. Ten 128-bit recovery codes are shown once and stored only as SHA-256 hashes.
-- After any supported primary method succeeds, an MFA-enabled identity receives a five-minute `z0_mfa_challenge` cookie instead of a full realm session. Password, magic link, federation, invitations, and service-group reuse all use this gate.
-- A challenge is single-use, bound to realm, identity, app where relevant, IP/client hashes, and a safe return path. Five failed proofs consume it. A TOTP time step and each recovery code can be accepted only once.
+- After any supported primary method succeeds, an MFA-enabled identity receives a five-minute `z0_mfa_challenge` cookie instead of a full realm session. Password, magic link, federation, and invitations use this gate. SSO preserves primary/MFA authentication timestamps and reuses verified assurance; a weaker session must pass the shared Account MFA gate.
+- A challenge is single-use, bound to realm, identity, app where relevant, IP/client hashes, and a safe return path. SSO challenges also bind the source session and require its browser, membership, and enabled shared group to remain eligible at completion. Five failed proofs consume it. A TOTP time step and each recovery code can be accepted only once.
 - `Remember this browser` is unchecked by default. Remembered tokens last 30 days, rotate after use, are stored hashed, and are limited to five per identity. App remembered cookies are isolated by app. Reuse of a rotated token revokes every remembered token for that identity/app.
 - Remembered browsers bypass the sign-in MFA prompt only. They do not set `mfa_authenticated_at` and cannot satisfy sensitive-action checks.
 - Named sensitive console mutations require authentication within the last 10 minutes. Operators without an enrolled factor re-enter their current password; Operators with a factor establish multi-factor or phishing-resistant assurance. Permission and CSRF checks still apply and stronger assurance never grants a scope.
@@ -61,7 +61,9 @@ MFA enrollment, challenge, recovery, and remembered-browser responses use `Cache
 
 ## Passkeys
 
-WebAuthn passkeys are separate for console members and each app-local user. A credential registered to one realm or app is never offered or accepted in another.
+WebAuthn passkeys belong to console members or canonical application Accounts. Deliberately grouped applications may use the same Account's passkeys through their own active memberships and subjects. Independent Account Domains and the console realm remain isolated.
+
+Application Account passkeys, handles, TOTP factors, recovery codes, and external identity links retain their enrollment application's identifiers as historical provenance. Deleting that application does not remove credentials used by surviving subjects; permanent Account deletion removes its credentials.
 
 - `PUBLIC_ORIGIN` is the exact expected WebAuthn origin. Its lowercase hostname is the relying-party ID. Production requires HTTPS; development also permits `http://localhost` with any port. Request headers and app redirect URIs cannot change either value.
 - Registration requires user presence and user verification, requests no attestation, prefers a discoverable credential, and accepts ES256 or RS256. Authentication also requires user verification. A successful assertion is both primary authentication and fresh MFA, so it bypasses a TOTP prompt for that sign-in and satisfies the 10-minute sensitive-action check.
@@ -127,12 +129,12 @@ Operators may create the first owner from deployment configuration instead of th
 
 ## Account lifecycle and recovery
 
-- Console identities (`users`) and app-local identities (`app_users`) have separate lifecycle state, credentials, sessions, recovery, and audit records.
+- Console identities (`users`) and canonical application Accounts (`accounts`) have separate lifecycle state, credentials, sessions, recovery, and audit records. Independent applications have separate Account Domains; deliberately grouped applications share Account lifecycle and authenticators while retaining independent membership and grants.
 - Authentication requires no disable timestamp, no delete timestamp, and no unexpired temporary lock. Public password, magic-link, reset-request, and verification-request responses do not reveal which state caused rejection.
 - Ten consecutive password failures within 15 minutes lock that account for 15 minutes. Existing IP-based request limits still apply. A successful password reset, magic link, or trusted external-provider sign-in clears the password lock.
 - Disable, lock, and recoverable delete revoke active realm sessions. Disable and delete also invalidate pending authorization codes, access/refresh tokens, reset links, magic links, verification links, and stored upstream tokens where applicable.
 - Restore always returns an account as disabled. Enabling never revives old sessions or tokens.
-- Permanent deletion is separate, CSRF-protected, and requires the exact normalized email. It cannot target the acting console member, owner, or last active console member. App-user deletion never crosses its `app_id` boundary.
+- Permanent deletion is separate, CSRF-protected, and requires the exact normalized email. It cannot target the acting console member, owner, or last active console member. The current application-user purge rejects an Account with subjects in other applications. Membership removal revokes only the target application's authority and does not delete the shared Account.
 - Administrator reset sends the existing single-use recovery flow. Operators cannot set, retrieve, or view a user's password or raw production reset link.
 - Self-registered app users can verify email through a hashed single-use 24-hour token when SMTP is ready. Verification is reflected in OIDC/userinfo but is not an alpha sign-in requirement.
 

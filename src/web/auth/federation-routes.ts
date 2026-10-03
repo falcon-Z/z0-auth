@@ -4,11 +4,11 @@ import { safeDecodeURIComponent } from "@z0/contracts/validation";
 import { resolveAuthRealm } from "../../api/lib/auth-realm";
 import {
   appSessionCookieHeader,
-  createAppSession,
+  insertAppSession,
+  prepareAppSession,
 } from "../../api/lib/app-session";
-import { ensureGroupMemberForAppUser } from "../../api/lib/group-sso";
+import { finalizeAppPasswordSignIn } from "../../api/lib/account-lifecycle";
 import { writeAuditEvent } from "../../api/lib/audit";
-import { getDb } from "../../api/lib/db";
 import {
   FEDERATION_STATE_COOKIE,
   buildFederationState,
@@ -199,18 +199,15 @@ export async function getFederationCallback(req: BunRequest): Promise<Response> 
       return new Response(null, { status: 302, headers });
     }
 
-    const session = await createAppSession(linked.appUserId, stored.appId, req, {
-      authenticationMethod: "federation",
+    const prepared = await prepareAppSession(req);
+    const session = await finalizeAppPasswordSignIn(linked.appUserId, stored.appId, async (tx) => {
+      const [app] = await tx`SELECT status FROM apps WHERE id = ${stored.appId} FOR SHARE`;
+      if (!app || app.status !== "active") return null;
+      return insertAppSession(tx, linked.appUserId, stored.appId, prepared, {
+        authenticationMethod: "federation",
+      });
     });
-    const [userRow] = await getDb()`SELECT email FROM app_users WHERE id = ${linked.appUserId} LIMIT 1`;
-    if (userRow) {
-      await ensureGroupMemberForAppUser(
-        linked.appUserId,
-        stored.appId,
-        String((userRow as { email: string }).email),
-      );
-    }
-
+    if (!session) return htmlErrorPage(req, "Sign-in failed", "Sign-in could not be completed.");
     await writeAuditEvent({
       action: "auth.app_federation_login_succeeded",
       resourceType: "app",

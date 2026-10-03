@@ -2,7 +2,6 @@ import { ErrorCodes } from "@z0/contracts/errors";
 import { normalizeEmail } from "@z0/contracts/validation";
 
 import { getDb } from "./db";
-import { ensureGroupMemberForAppUser } from "./group-sso";
 import { problem } from "./http";
 
 export type NormalizedIdpProfile = {
@@ -21,41 +20,45 @@ async function findIdentityBySubject(
   appId: string,
   providerId: string,
   subject: string,
-): Promise<{ id: string; app_user_id: string; app_id: string; available: boolean } | null> {
+): Promise<{ id: string; app_user_id: string | null; available: boolean } | null> {
   const [row] = await getDb()`
-    SELECT i.id, i.app_user_id, i.app_id,
-      (u.disabled_at IS NULL AND u.deleted_at IS NULL) AS available
-    FROM app_user_identities i
-    JOIN app_users u ON u.id = i.app_user_id AND u.app_id = i.app_id
-    WHERE i.app_id = ${appId}
-      AND i.identity_provider_id = ${providerId}
+    SELECT i.id, b.id AS app_user_id,
+      (c.status = 'active' AND c.disabled_at IS NULL AND c.deleted_at IS NULL
+        AND COALESCE(m.status = 'active', FALSE)) AS available
+    FROM apps a JOIN accounts c ON c.account_domain_id = a.account_domain_id
+    JOIN app_user_identities i ON i.account_id = c.id AND i.account_domain_id = c.account_domain_id
+    JOIN identity_providers p ON p.id = ${providerId}
+    LEFT JOIN app_account_bindings b ON b.app_id = a.id AND b.account_id = c.id
+    LEFT JOIN application_memberships m ON m.subject_id = b.id
+    WHERE a.id = ${appId} AND a.status = 'active'
+      AND i.issuer = COALESCE(NULLIF(p.issuer, ''), 'urn:z0-auth:legacy-provider:' || p.id)
       AND i.provider_subject = ${subject}
     LIMIT 1
   `;
   if (!row) return null;
-  const r = row as { id: string; app_user_id: string; app_id: string; available: boolean };
-  return { id: String(r.id), app_user_id: String(r.app_user_id), app_id: String(r.app_id), available: Boolean(r.available) };
+  return { id: String(row.id), app_user_id: row.app_user_id ? String(row.app_user_id) : null, available: Boolean(row.available) };
 }
 
 async function findAppUserByEmail(
   appId: string,
   email: string,
-): Promise<{ id: string; email_verified_at: Date | null; password_hash: string | null } | null> {
+): Promise<{ id: string | null; email_verified_at: Date | null; password_hash: string | null; available: boolean } | null> {
   const [row] = await getDb()`
-    SELECT id, email_verified_at, password_hash
-    FROM app_users
-    WHERE app_id = ${appId}
-      AND lower(email) = ${email}
-      AND status = 'active'
-      AND disabled_at IS NULL AND deleted_at IS NULL
+    SELECT b.id, c.email_verified_at, c.password_hash,
+      (c.status = 'active' AND c.disabled_at IS NULL AND c.deleted_at IS NULL
+        AND COALESCE(m.status = 'active', FALSE)) AS available
+    FROM apps a JOIN accounts c ON c.account_domain_id = a.account_domain_id
+    LEFT JOIN app_account_bindings b ON b.app_id = a.id AND b.account_id = c.id
+    LEFT JOIN application_memberships m ON m.subject_id = b.id
+    WHERE a.id = ${appId} AND a.status = 'active' AND lower(c.email) = ${email}
     LIMIT 1
   `;
   if (!row) return null;
-  const r = row as { id: string; email_verified_at: Date | null; password_hash: string | null };
   return {
-    id: String(r.id),
-    email_verified_at: r.email_verified_at,
-    password_hash: r.password_hash,
+    id: row.id ? String(row.id) : null,
+    email_verified_at: row.email_verified_at,
+    password_hash: row.password_hash,
+    available: Boolean(row.available),
   };
 }
 
@@ -67,11 +70,12 @@ async function emailLinkedToOtherSubject(
 ): Promise<boolean> {
   const [row] = await getDb()`
     SELECT 1
-    FROM app_user_identities
-    WHERE app_id = ${appId}
-      AND identity_provider_id = ${providerId}
-      AND lower(provider_email) = ${email}
-      AND provider_subject <> ${subject}
+    FROM app_user_identities i JOIN apps a ON a.account_domain_id = i.account_domain_id
+    JOIN identity_providers p ON p.id = ${providerId}
+    WHERE a.id = ${appId}
+      AND i.issuer = COALESCE(NULLIF(p.issuer, ''), 'urn:z0-auth:legacy-provider:' || p.id)
+      AND lower(i.provider_email) = ${email}
+      AND i.provider_subject <> ${subject}
     LIMIT 1
   `;
   return Boolean(row);
@@ -87,7 +91,7 @@ export async function linkFederationIdentity(options: {
 
   const existing = await findIdentityBySubject(appId, providerId, profile.subject);
   if (existing) {
-    if (!existing.available) {
+    if (!existing.available || !existing.app_user_id) {
       return { ok: false, response: problem(401, "Unauthorized", "Sign-in could not be completed", {
         errors: [{ field: "_auth", code: ErrorCodes.FEDERATION_FAILED, message: "Sign-in could not be completed" }],
       }) };
@@ -105,11 +109,7 @@ export async function linkFederationIdentity(options: {
           profile = ${JSON.stringify(profile.raw)}::jsonb
       WHERE id = ${existing.id}
     `;
-    await ensureGroupMemberForAppUser(
-      existing.app_user_id,
-      appId,
-      email ?? profile.email ?? `${profile.subject}@federated.local`,
-    );
+
     return { ok: true, appUserId: existing.app_user_id, created: false };
   }
 
@@ -125,6 +125,11 @@ export async function linkFederationIdentity(options: {
 
     const appUser = await findAppUserByEmail(appId, email);
     if (appUser) {
+      if (!appUser.available || !appUser.id) {
+        return { ok: false, response: problem(401, "Unauthorized", "Sign-in could not be completed", {
+          errors: [{ field: "_auth", code: ErrorCodes.FEDERATION_FAILED, message: "Sign-in could not be completed" }],
+        }) };
+      }
       const localVerified = Boolean(appUser.email_verified_at);
       if (!localVerified && !profile.emailVerified) {
         return {
@@ -173,7 +178,6 @@ export async function linkFederationIdentity(options: {
         WHERE id = ${appUser.id} AND app_id = ${appId}
       `;
 
-      await ensureGroupMemberForAppUser(appUser.id, appId, email);
       return { ok: true, appUserId: appUser.id, created: false };
     }
   }
@@ -181,49 +185,51 @@ export async function linkFederationIdentity(options: {
   const displayName = profile.name?.trim() || email?.split("@")[0] || "User";
   const insertEmail = email ?? `${profile.subject}@federated.local`;
 
-  const [created] = await getDb()`
-    INSERT INTO app_users (
-      app_id,
-      email,
-      name,
-      password_hash,
-      status,
-      email_verified_at
-    )
-    VALUES (
-      ${appId},
-      ${insertEmail},
-      ${displayName},
-      NULL,
-      'active',
-      ${profile.emailVerified ? new Date() : null}
-    )
-    RETURNING id
-  `;
-  const appUserId = String((created as { id: string }).id);
+  const appUserId = await getDb().begin(async (tx) => {
+    const [created] = await tx`
+      INSERT INTO app_users (
+        app_id,
+        email,
+        name,
+        password_hash,
+        status,
+        email_verified_at
+      )
+      VALUES (
+        ${appId},
+        ${insertEmail},
+        ${displayName},
+        NULL,
+        'active',
+        ${profile.emailVerified ? new Date() : null}
+      )
+      RETURNING id
+    `;
+    const appUserId = String((created as { id: string }).id);
 
-  await getDb()`
-    INSERT INTO app_user_identities (
-      app_user_id,
-      app_id,
-      identity_provider_id,
-      provider_subject,
-      provider_email,
-      email_verified,
-      profile
-    )
-    VALUES (
-      ${appUserId},
-      ${appId},
-      ${providerId},
-      ${profile.subject},
-      ${email},
-      ${profile.emailVerified},
-      ${JSON.stringify(profile.raw)}::jsonb
-    )
-  `;
+    await tx`
+      INSERT INTO app_user_identities (
+        app_user_id,
+        app_id,
+        identity_provider_id,
+        provider_subject,
+        provider_email,
+        email_verified,
+        profile
+      )
+      VALUES (
+        ${appUserId},
+        ${appId},
+        ${providerId},
+        ${profile.subject},
+        ${email},
+        ${profile.emailVerified},
+        ${JSON.stringify(profile.raw)}::jsonb
+      )
+    `;
+    return appUserId;
+  });
 
-  await ensureGroupMemberForAppUser(appUserId, appId, insertEmail);
   return { ok: true, appUserId, created: true };
 }
 

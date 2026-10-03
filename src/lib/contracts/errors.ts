@@ -114,6 +114,7 @@ export const ErrorCodes = {
   /** Upstream provider rejected a token refresh. */
   FEDERATION_TOKEN_REFRESH_FAILED: "federation_token_refresh_failed",
   /** Application already belongs to another service group. */
+  ACCOUNT_DOMAIN_IMMUTABLE: "ACCOUNT_DOMAIN_IMMUTABLE",
   APP_ALREADY_GROUPED: "app_already_grouped",
   /** Requested account lifecycle transition is not valid from the current state. */
   ACCOUNT_STATE_CONFLICT: "account_state_conflict",

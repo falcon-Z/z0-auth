@@ -153,6 +153,7 @@ export async function resolveAppSession(req: Request): Promise<ActiveAppSession 
 export async function resolveAppSessionForApp(
   req: Request,
   appId: string | null,
+  accountDomainId: string | null = null,
 ): Promise<ActiveAppSession | null> {
   const token = parseCookies(req).get(APP_SESSION_COOKIE);
   if (!token) return null;
@@ -162,6 +163,7 @@ export async function resolveAppSessionForApp(
     SELECT s.id AS session_id, s.app_user_id, s.app_id, b.id AS browser_session_id
     FROM app_browser_sessions b
     JOIN app_user_sessions s ON s.browser_session_id = b.id
+    JOIN apps a ON a.id = s.app_id AND a.status = 'active'
     JOIN app_users u ON u.id = s.app_user_id AND u.app_id = s.app_id
     WHERE b.token_hash = ${tokenHash}
       AND b.revoked_at IS NULL
@@ -173,6 +175,7 @@ export async function resolveAppSessionForApp(
       AND u.deleted_at IS NULL
       AND (u.locked_until IS NULL OR u.locked_until <= NOW())
       AND (${appId}::uuid IS NULL OR s.app_id = ${appId})
+      AND (${accountDomainId}::uuid IS NULL OR s.account_domain_id = ${accountDomainId})
     ORDER BY s.last_seen_at DESC
     LIMIT 1
   `;

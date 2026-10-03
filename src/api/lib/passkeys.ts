@@ -28,8 +28,7 @@ import {
   appSessionCookieHeader,
   resolveAppSessionForApp,
 } from "./app-session";
-import { accountCanAuthenticate, type AccountLifecycleRow } from "./account-lifecycle";
-import { ensureGroupMemberForAppUser } from "./group-sso";
+import { accountCanAuthenticate, revokeCanonicalAccountAccess, type AccountLifecycleRow } from "./account-lifecycle";
 import { writeAuditEvent } from "./audit";
 import { deriveOpaquePublicValue } from "./instance-keys";
 
@@ -271,7 +270,7 @@ function mapSummary(row: Record<string, unknown>): PasskeySummary {
 export async function listPasskeys(context: PasskeyContext): Promise<PasskeyList> {
   const rows: unknown[] = context.realm === "console"
     ? await getDb()`SELECT id, label, created_at, last_used_at, backup_eligible, backup_state FROM user_passkeys WHERE user_id = ${context.userId} AND removed_at IS NULL ORDER BY created_at DESC`
-    : await getDb()`SELECT id, label, created_at, last_used_at, backup_eligible, backup_state FROM app_user_passkeys WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL ORDER BY created_at DESC`;
+    : await getDb()`SELECT id, label, created_at, last_used_at, backup_eligible, backup_state FROM app_user_passkeys WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND removed_at IS NULL ORDER BY created_at DESC`;
   const passkeys = rows.map((row) => mapSummary(row as Record<string, unknown>));
   return { passkeys, canRegister: passkeys.length < MAX_PASSKEYS, maxPasskeys: MAX_PASSKEYS };
 }
@@ -286,8 +285,8 @@ async function requireFreshRegistrationSession(context: PasskeyContext, sessionI
       `
     : await getDb()`
         SELECT s.primary_authenticated_at, s.mfa_authenticated_at,
-          EXISTS (SELECT 1 FROM app_user_totp_factors f WHERE f.app_user_id = s.app_user_id AND f.confirmed_at IS NOT NULL)
-          OR EXISTS (SELECT 1 FROM app_user_passkeys p WHERE p.app_user_id = s.app_user_id AND p.app_id = s.app_id AND p.removed_at IS NULL) AS strong_method
+          EXISTS (SELECT 1 FROM app_user_totp_factors f WHERE f.account_id = s.account_id AND f.confirmed_at IS NOT NULL)
+          OR EXISTS (SELECT 1 FROM app_user_passkeys p WHERE p.account_id = s.account_id AND p.removed_at IS NULL) AS strong_method
         FROM app_user_sessions s WHERE s.id = ${sessionId} AND s.app_user_id = ${context.appUserId} AND s.app_id = ${context.appId} AND s.revoked_at IS NULL
       `;
   if (!row) return problem(401, "Unauthorized", "Authentication required");
@@ -322,8 +321,8 @@ async function ensureHandle(context: PasskeyContext): Promise<string> {
     const [row] = await getDb()`SELECT user_handle FROM user_passkey_handles WHERE user_id = ${context.userId}`;
     return String((row as { user_handle: string }).user_handle);
   }
-  await getDb()`INSERT INTO app_user_passkey_handles (app_user_id, app_id, user_handle) VALUES (${context.appUserId}, ${context.appId}, ${handle}) ON CONFLICT (app_user_id) DO NOTHING`;
-  const [row] = await getDb()`SELECT user_handle FROM app_user_passkey_handles WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId}`;
+  await getDb()`INSERT INTO app_user_passkey_handles (app_user_id, app_id, user_handle) VALUES (${context.appUserId}, ${context.appId}, ${handle}) ON CONFLICT (account_id) DO NOTHING`;
+  const [row] = await getDb()`SELECT user_handle FROM app_user_passkey_handles WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId})`;
   return String((row as { user_handle: string }).user_handle);
 }
 
@@ -351,7 +350,7 @@ export async function startPasskeyRegistration(
   }
   const rows: unknown[] = context.realm === "console"
     ? await getDb()`SELECT credential_id FROM user_passkeys WHERE user_id = ${context.userId} AND removed_at IS NULL`
-    : await getDb()`SELECT credential_id FROM app_user_passkeys WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL`;
+    : await getDb()`SELECT credential_id FROM app_user_passkeys WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND removed_at IS NULL`;
   const userHandle = await ensureHandle(context);
   const challenge = randomToken(32);
   const options = await generateRegistrationOptions({
@@ -438,10 +437,17 @@ export async function finishPasskeyRegistration(
   const credentialId = String(info.credential.id);
   try {
     const created = await getDb().begin(async (tx) => {
+      if (context.realm === "app") {
+        await tx`SELECT c.id FROM accounts c JOIN app_account_bindings b ON b.account_id = c.id
+          WHERE b.id = ${context.appUserId} AND b.app_id = ${context.appId} FOR UPDATE OF c, b`;
+        const [eligible] = await tx`SELECT status, disabled_at, locked_until, deleted_at FROM app_users
+          WHERE id = ${context.appUserId} AND app_id = ${context.appId}`;
+        if (!eligible || eligible.status !== "active" || !accountCanAuthenticate(eligible as AccountLifecycleRow)) return null;
+      }
       if (!(await consumeCeremony(ceremony, tx))) return null;
       const [count] = context.realm === "console"
         ? await tx`SELECT COUNT(*)::int AS count FROM user_passkeys WHERE user_id = ${context.userId} AND removed_at IS NULL`
-        : await tx`SELECT COUNT(*)::int AS count FROM app_user_passkeys WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL`;
+        : await tx`SELECT COUNT(*)::int AS count FROM app_user_passkeys WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND removed_at IS NULL`;
       if (Number((count as { count: number }).count) >= MAX_PASSKEYS) return null;
       await tx`INSERT INTO passkey_credential_registry (credential_id, realm) VALUES (${credentialId}, ${context.realm})`;
       const publicKey = Buffer.from(info.credential.publicKey).toString("base64");
@@ -518,7 +524,7 @@ export async function startPasskeyAuthentication(
   }
   const rows: unknown[] = input.realm === "console"
     ? await getDb()`SELECT credential_id FROM user_passkeys WHERE user_id = ${identityId}::uuid AND removed_at IS NULL ORDER BY created_at DESC`
-    : await getDb()`SELECT credential_id FROM app_user_passkeys WHERE app_user_id = ${identityId}::uuid AND app_id = ${input.appId!} AND removed_at IS NULL ORDER BY created_at DESC`;
+    : await getDb()`SELECT credential_id FROM app_user_passkeys WHERE account_id = (SELECT account_id FROM app_users WHERE id = ${identityId}::uuid AND app_id = ${input.appId!} AND status = 'active' AND disabled_at IS NULL AND deleted_at IS NULL AND (locked_until IS NULL OR locked_until <= NOW())) AND removed_at IS NULL ORDER BY created_at DESC`;
   const challenge = randomToken(32);
   const decoyScope = `${input.realm}:${input.appId ?? "console"}:${normalizeEmail(input.email ?? input.identityId ?? "unknown")}`;
   const allowCredentialIds = await decoyCredentialIds(
@@ -556,10 +562,13 @@ async function credentialForCeremony(ceremony: Ceremony, credentialId: string): 
           AND p.removed_at IS NULL AND r.active = TRUE
       `
     : await getDb()`
-        SELECT p.id, p.app_user_id AS identity_id, p.app_id, p.credential_id, p.public_key,
+        SELECT p.id, u.id AS identity_id, u.app_id, p.credential_id, p.public_key,
           p.signature_counter, p.transports, p.backup_eligible
         FROM app_user_passkeys p JOIN passkey_credential_registry r ON r.credential_id = p.credential_id
-        WHERE p.app_user_id = ${ceremony.identityId} AND p.app_id = ${ceremony.appId!}
+        JOIN app_users u ON u.account_id = p.account_id AND u.account_domain_id = p.account_domain_id
+        WHERE u.id = ${ceremony.identityId} AND u.app_id = ${ceremony.appId!}
+          AND u.status = 'active' AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+          AND (u.locked_until IS NULL OR u.locked_until <= NOW())
           AND p.credential_id = ${credentialId} AND p.removed_at IS NULL AND r.active = TRUE
       `;
   if (!row) return null;
@@ -571,7 +580,7 @@ async function expectedUserHandle(ceremony: Ceremony): Promise<string | null> {
   if (!ceremony.identityId) return null;
   const [row] = ceremony.realm === "console"
     ? await getDb()`SELECT user_handle FROM user_passkey_handles WHERE user_id = ${ceremony.identityId}`
-    : await getDb()`SELECT user_handle FROM app_user_passkey_handles WHERE app_user_id = ${ceremony.identityId} AND app_id = ${ceremony.appId!}`;
+    : await getDb()`SELECT user_handle FROM app_user_passkey_handles WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${ceremony.identityId} AND app_id = ${ceremony.appId!})`;
   if (!row) return null;
   return Buffer.from(String((row as { user_handle: string }).user_handle), "hex").toString("base64url");
 }
@@ -583,11 +592,10 @@ async function respondToCounterAnomaly(ceremony: Ceremony, credential: Credentia
       await tx`UPDATE user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE id = ${credential.id} AND removed_at IS NULL`;
       await tx`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${ceremony.identityId} AND revoked_at IS NULL`;
     } else {
-      await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE id = ${credential.id} AND app_id = ${ceremony.appId!} AND removed_at IS NULL`;
-      await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${ceremony.identityId} AND app_id = ${ceremony.appId!} AND revoked_at IS NULL`;
-      await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${ceremony.identityId} AND app_id = ${ceremony.appId!} AND used_at IS NULL`;
-      await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE app_user_id = ${ceremony.identityId} AND app_id = ${ceremony.appId!} AND revoked_at IS NULL`;
-      await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE app_user_id = ${ceremony.identityId} AND app_id = ${ceremony.appId!} AND revoked_at IS NULL`;
+      await tx`SELECT c.id FROM accounts c JOIN app_account_bindings b ON b.account_id = c.id
+        WHERE b.id = ${ceremony.identityId} FOR UPDATE OF c`;
+      await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE id = ${credential.id} AND removed_at IS NULL`;
+      await revokeCanonicalAccountAccess(tx, ceremony.identityId!);
     }
     await tx`UPDATE passkey_credential_registry SET active = FALSE, removed_at = NOW() WHERE credential_id = ${credential.credential_id}`;
     await writeAuditEvent({
@@ -683,15 +691,19 @@ export async function finishPasskeyAuthentication(
       const [app] = await tx`SELECT status FROM apps WHERE id = ${ceremony.appId!} FOR SHARE`;
       if (!app || String((app as { status: string }).status) !== "active") return null;
     }
+    if (ceremony.realm === "app") {
+      await tx`SELECT c.id FROM accounts c JOIN app_account_bindings b ON b.account_id = c.id
+        WHERE b.id = ${ceremony.identityId!} AND b.app_id = ${ceremony.appId!} FOR UPDATE OF c, b`;
+    }
     const [account] = ceremony.realm === "console"
       ? await tx`SELECT status, disabled_at, locked_until, deleted_at FROM users WHERE id = ${ceremony.identityId!} FOR UPDATE`
-      : await tx`SELECT status, disabled_at, locked_until, deleted_at, email FROM app_users WHERE id = ${ceremony.identityId!} AND app_id = ${ceremony.appId!} FOR UPDATE`;
+      : await tx`SELECT status, disabled_at, locked_until, deleted_at, email FROM app_users WHERE id = ${ceremony.identityId!} AND app_id = ${ceremony.appId!}`;
     if (!account) return null;
     const state = account as AccountLifecycleRow & { status: string; email?: string };
     if (state.status !== "active" || !accountCanAuthenticate(state)) return null;
     const [lockedCredential] = ceremony.realm === "console"
       ? await tx`SELECT signature_counter FROM user_passkeys WHERE id = ${credential.id} AND removed_at IS NULL FOR UPDATE`
-      : await tx`SELECT signature_counter FROM app_user_passkeys WHERE id = ${credential.id} AND app_id = ${ceremony.appId!} AND removed_at IS NULL FOR UPDATE`;
+      : await tx`SELECT signature_counter FROM app_user_passkeys WHERE id = ${credential.id} AND account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${ceremony.identityId!} AND app_id = ${ceremony.appId!}) AND removed_at IS NULL FOR UPDATE`;
     if (!lockedCredential || Number((lockedCredential as { signature_counter: number }).signature_counter) !== Number(credential.signature_counter)) return null;
     if (!(await consumeCeremony(ceremony, tx))) return null;
     if (ceremony.realm === "console") {
@@ -717,7 +729,7 @@ export async function finishPasskeyAuthentication(
     return { ...session, email: state.email ?? null };
   });
   if (!authority) return { ok: false, response: generic() };
-  if (ceremony.realm === "app" && authority.email) await ensureGroupMemberForAppUser(ceremony.identityId!, ceremony.appId!, authority.email);
+
   await writeAuditEvent({
     actorUserId: ceremony.realm === "console" ? ceremony.identityId! : undefined,
     action: ceremony.purpose === "step_up" ? "passkey.step_up_succeeded" : "passkey.authentication_succeeded",
@@ -746,7 +758,7 @@ export async function renamePasskey(context: PasskeyContext, passkeyId: string, 
   if (!label) return passkeyProblem(400, "Passkey name must contain 1 to 80 characters.", ErrorCodes.PASSKEY_NAME_INVALID, "label");
   const rows: unknown[] = context.realm === "console"
     ? await getDb()`UPDATE user_passkeys SET label = ${label}, updated_at = NOW() WHERE id = ${passkeyId} AND user_id = ${context.userId} AND removed_at IS NULL RETURNING id`
-    : await getDb()`UPDATE app_user_passkeys SET label = ${label}, updated_at = NOW() WHERE id = ${passkeyId} AND app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL RETURNING id`;
+    : await getDb()`UPDATE app_user_passkeys SET label = ${label}, updated_at = NOW() WHERE id = ${passkeyId} AND account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND removed_at IS NULL RETURNING id`;
   if (!rows[0]) return false;
   await writeAuditEvent({ actorUserId: context.realm === "console" ? context.userId : undefined, action: "passkey.renamed", resourceType: context.realm === "console" ? "console_member" : "app_user", resourceId: context.realm === "console" ? context.userId : context.appUserId, payload: { realm: context.realm, appId: context.realm === "app" ? context.appId : undefined } });
   return true;
@@ -754,20 +766,24 @@ export async function renamePasskey(context: PasskeyContext, passkeyId: string, 
 
 export async function removePasskey(context: PasskeyContext, passkeyId: string, currentSessionId: string): Promise<boolean> {
   const removed = await getDb().begin(async (tx) => {
+    if (context.realm === "app") {
+      await tx`SELECT c.id FROM accounts c JOIN app_account_bindings b ON b.account_id = c.id
+        WHERE b.id = ${context.appUserId} AND b.app_id = ${context.appId} FOR UPDATE OF c, b`;
+    }
     const [row] = context.realm === "console"
       ? await tx`UPDATE user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE id = ${passkeyId} AND user_id = ${context.userId} AND removed_at IS NULL RETURNING credential_id`
-      : await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE id = ${passkeyId} AND app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL RETURNING credential_id`;
+      : await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE id = ${passkeyId} AND account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND removed_at IS NULL RETURNING credential_id`;
     if (!row) return false;
     await tx`UPDATE passkey_credential_registry SET active = FALSE, removed_at = NOW() WHERE credential_id = ${String((row as { credential_id: string }).credential_id)}`;
     if (context.realm === "console") {
       await tx`UPDATE sessions SET revoked_at = NOW() WHERE user_id = ${context.userId} AND id != ${currentSessionId} AND revoked_at IS NULL`;
       await tx`UPDATE user_passkey_ceremonies SET consumed_at = NOW() WHERE user_id = ${context.userId} AND consumed_at IS NULL`;
     } else {
-      await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND id != ${currentSessionId} AND revoked_at IS NULL`;
-      await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND used_at IS NULL`;
-      await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND revoked_at IS NULL`;
-      await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND revoked_at IS NULL`;
-      await tx`UPDATE app_user_passkey_ceremonies SET consumed_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND consumed_at IS NULL`;
+      await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND id != ${currentSessionId} AND revoked_at IS NULL`;
+      await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND used_at IS NULL`;
+      await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND revoked_at IS NULL`;
+      await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND revoked_at IS NULL`;
+      await tx`UPDATE app_user_passkey_ceremonies SET consumed_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND consumed_at IS NULL`;
     }
     await writeAuditEvent({ actorUserId: context.realm === "console" ? context.userId : undefined, action: "passkey.removed", resourceType: context.realm === "console" ? "console_member" : "app_user", resourceId: context.realm === "console" ? context.userId : context.appUserId, payload: { realm: context.realm, appId: context.realm === "app" ? context.appId : undefined } }, tx);
     return true;
@@ -778,12 +794,12 @@ export async function removePasskey(context: PasskeyContext, passkeyId: string, 
 export async function resetPasskeys(tx: SQL, context: PasskeyContext): Promise<number> {
   const rows: unknown[] = context.realm === "console"
     ? await tx`UPDATE user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE user_id = ${context.userId} AND removed_at IS NULL RETURNING credential_id`
-    : await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND removed_at IS NULL RETURNING credential_id`;
+    : await tx`UPDATE app_user_passkeys SET removed_at = NOW(), updated_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND removed_at IS NULL RETURNING credential_id`;
   for (const row of rows) {
     await tx`UPDATE passkey_credential_registry SET active = FALSE, removed_at = NOW() WHERE credential_id = ${String((row as { credential_id: string }).credential_id)}`;
   }
   if (context.realm === "console") await tx`UPDATE user_passkey_ceremonies SET consumed_at = NOW() WHERE user_id = ${context.userId} AND consumed_at IS NULL`;
-  else await tx`UPDATE app_user_passkey_ceremonies SET consumed_at = NOW() WHERE app_user_id = ${context.appUserId} AND app_id = ${context.appId} AND consumed_at IS NULL`;
+  else await tx`UPDATE app_user_passkey_ceremonies SET consumed_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${context.appUserId} AND app_id = ${context.appId}) AND consumed_at IS NULL`;
   return rows.length;
 }
 

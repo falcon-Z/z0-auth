@@ -1,81 +1,46 @@
 export type ServiceGroupAccess = {
   id: string;
+  accountDomainId: string;
   applicationIds: readonly string[];
   ssoEnabled: boolean;
 };
 
-export type LinkSetAccess = {
-  serviceGroupId: string;
-  applicationIdentities: Readonly<Record<string, string>>;
-};
-
 export type AuthorizeSharedSignIn = {
-  source: {
-    applicationId: string;
-    applicationIdentityId: string;
-    eligible: boolean;
-    linkVerified: boolean;
-  };
+  serviceGroup: ServiceGroupAccess;
+  source: { applicationId: string; accountId: string; accountDomainId: string; eligible: boolean };
   target: {
     applicationId: string;
-    applicationIdentityEligible?: boolean;
-    hasUnlinkedApplicationIdentity: boolean;
+    accountId: string | null;
+    accountDomainId: string;
+    subjectId: string | null;
+    membershipStatus: "active" | "disabled" | "removed";
+    eligible: boolean;
   };
-  serviceGroup: ServiceGroupAccess;
-  linkSet: LinkSetAccess;
 };
 
 export type SharedSignInDecision =
-  | { outcome: "use_linked_identity"; targetApplicationIdentityId: string }
-  | { outcome: "jit_provisioning_required" }
-  | {
-    outcome: "denied";
-    reason:
-      | "service_group_not_available"
-      | "source_identity_unavailable"
-      | "link_not_verified"
-      | "target_identity_unavailable"
-      | "target_identity_proof_required";
-  };
+  | { outcome: "reuse_account"; targetSubjectId: string }
+  | { outcome: "denied"; reason: "service_group_not_available" | "source_identity_unavailable"
+    | "different_account" | "target_membership_unavailable" };
 
 export interface ServiceGroups {
-  resolveSharedSignIn(
-    input: AuthorizeSharedSignIn,
-  ): SharedSignInDecision;
+  resolveSharedSignIn(input: AuthorizeSharedSignIn): SharedSignInDecision;
 }
 
 export function createServiceGroups(): ServiceGroups {
   return {
-    resolveSharedSignIn(input) {
-      const { serviceGroup, linkSet } = input;
-      if (
-        !serviceGroup.ssoEnabled
-        || input.source.applicationId === input.target.applicationId
-        || !serviceGroup.applicationIds.includes(input.source.applicationId)
-        || !serviceGroup.applicationIds.includes(input.target.applicationId)
-        || linkSet.serviceGroupId !== serviceGroup.id
-      ) {
+    resolveSharedSignIn({ serviceGroup: group, source, target }) {
+      if (!group.ssoEnabled || source.applicationId === target.applicationId
+        || !group.applicationIds.includes(source.applicationId) || !group.applicationIds.includes(target.applicationId)
+        || source.accountDomainId !== group.accountDomainId || target.accountDomainId !== group.accountDomainId) {
         return { outcome: "denied", reason: "service_group_not_available" };
       }
-
-      const linkedSource = linkSet.applicationIdentities[input.source.applicationId];
-      const linkedTarget = linkSet.applicationIdentities[input.target.applicationId];
-      if (!input.source.eligible) {
-        return { outcome: "denied", reason: "source_identity_unavailable" };
+      if (!source.eligible) return { outcome: "denied", reason: "source_identity_unavailable" };
+      if (target.accountId !== source.accountId) return { outcome: "denied", reason: "different_account" };
+      if (!target.subjectId || target.membershipStatus !== "active" || !target.eligible) {
+        return { outcome: "denied", reason: "target_membership_unavailable" };
       }
-      if (!input.source.linkVerified || linkedSource !== input.source.applicationIdentityId) {
-        return { outcome: "denied", reason: "link_not_verified" };
-      }
-
-      if (linkedTarget) {
-        return input.target.applicationIdentityEligible
-          ? { outcome: "use_linked_identity", targetApplicationIdentityId: linkedTarget }
-          : { outcome: "denied", reason: "target_identity_unavailable" };
-      }
-      if (input.target.hasUnlinkedApplicationIdentity) {
-        return { outcome: "denied", reason: "target_identity_proof_required" };
-      }
-      return { outcome: "jit_provisioning_required" };
+      return { outcome: "reuse_account", targetSubjectId: target.subjectId };
     },
   };
 }

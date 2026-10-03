@@ -265,7 +265,7 @@ export async function revokeAppUserRememberedBrowser(appUserId: string, appId: s
 
 export type ResolvedMfaChallenge =
   | { realm: "console"; id: string; userId: string; primaryMethod: string; returnPath: string | null }
-  | { realm: "app"; id: string; appUserId: string; appId: string; primaryMethod: string; returnPath: string | null };
+  | { realm: "app"; id: string; appUserId: string; appId: string; primaryMethod: string; returnPath: string | null; sourceSessionId: string | null };
 
 function noStoreEnrollment(secret: string, issuer: string, account: string): MfaEnrollment {
   return {
@@ -286,8 +286,8 @@ export async function hasAppUserMfa(appUserId: string, appId: string): Promise<b
   const [row] = await getDb()`
     SELECT 1
     FROM app_user_totp_factors f
-    JOIN app_users u ON u.id = f.app_user_id
-    WHERE f.app_user_id = ${appUserId} AND u.app_id = ${appId} AND f.confirmed_at IS NOT NULL
+    JOIN app_users u ON u.account_id = f.account_id
+    WHERE u.id = ${appUserId} AND u.app_id = ${appId} AND f.confirmed_at IS NOT NULL
   `;
   return Boolean(row);
 }
@@ -317,9 +317,9 @@ export async function getAppUserMfaStatus(appUserId: string, appId: string): Pro
     SELECT f.confirmed_at, f.created_at,
       COUNT(c.id) FILTER (WHERE c.used_at IS NULL)::int AS recovery_count
     FROM app_user_totp_factors f
-    JOIN app_users u ON u.id = f.app_user_id AND u.app_id = ${appId}
-    LEFT JOIN app_user_mfa_recovery_codes c ON c.app_user_id = f.app_user_id
-    WHERE f.app_user_id = ${appUserId}
+    JOIN app_users u ON u.account_id = f.account_id AND u.app_id = ${appId}
+    LEFT JOIN app_user_mfa_recovery_codes c ON c.account_id = f.account_id
+    WHERE u.id = ${appUserId}
     GROUP BY f.confirmed_at, f.created_at
   `;
   if (!row) return { enabled: false, pendingEnrollment: false, enabledAt: null, recoveryCodesRemaining: 0 };
@@ -370,7 +370,7 @@ export async function beginAppUserMfaEnrollment(appUserId: string, appId: string
   await getDb()`
     INSERT INTO app_user_totp_factors (app_user_id, secret_ciphertext)
     VALUES (${appUserId}, ${ciphertext})
-    ON CONFLICT (app_user_id) DO UPDATE SET
+    ON CONFLICT (account_id) DO UPDATE SET
       secret_ciphertext = EXCLUDED.secret_ciphertext,
       confirmed_at = NULL,
       created_at = NOW(),
@@ -401,7 +401,7 @@ async function confirmFactor(input: {
       `
     : await getDb()`
         SELECT secret_ciphertext, created_at FROM app_user_totp_factors
-        WHERE app_user_id = ${input.identityId} AND confirmed_at IS NULL
+        WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${input.identityId}) AND confirmed_at IS NULL
           AND created_at > NOW() - INTERVAL '10 minutes'
       `;
   const factor = factorRows[0] as { secret_ciphertext: string; created_at: Date } | undefined;
@@ -423,7 +423,7 @@ async function confirmFactor(input: {
         `
       : await tx`
           UPDATE app_user_totp_factors SET confirmed_at = NOW(), last_accepted_step = ${acceptedStep}, updated_at = NOW()
-          WHERE app_user_id = ${input.identityId} AND confirmed_at IS NULL
+          WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${input.identityId}) AND confirmed_at IS NULL
             AND secret_ciphertext = ${factor.secret_ciphertext}
             AND created_at > NOW() - INTERVAL '10 minutes'
           RETURNING id
@@ -438,7 +438,7 @@ async function confirmFactor(input: {
         `;
       }
     } else {
-      await tx`DELETE FROM app_user_mfa_recovery_codes WHERE app_user_id = ${input.identityId}`;
+      await tx`DELETE FROM app_user_mfa_recovery_codes WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${input.identityId})`;
       for (const row of rows) {
         await tx`
           INSERT INTO app_user_mfa_recovery_codes (app_user_id, code_hash, display_suffix)
@@ -472,7 +472,7 @@ async function replaceRecoveryCodes(realm: MfaRealm, identityId: string): Promis
         `;
       }
     } else {
-      await tx`DELETE FROM app_user_mfa_recovery_codes WHERE app_user_id = ${identityId}`;
+      await tx`DELETE FROM app_user_mfa_recovery_codes WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${identityId})`;
       for (const row of rows) {
         await tx`
           INSERT INTO app_user_mfa_recovery_codes (app_user_id, code_hash, display_suffix)
@@ -504,25 +504,25 @@ export async function disableConsoleMfa(userId: string, currentSessionId: string
 
 export async function disableAppUserMfa(appUserId: string, currentSessionId: string): Promise<void> {
   await getDb().begin(async (tx) => {
-    await tx`DELETE FROM app_user_totp_factors WHERE app_user_id = ${appUserId}`;
-    await tx`DELETE FROM app_user_mfa_recovery_codes WHERE app_user_id = ${appUserId}`;
-    await tx`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE app_user_id = ${appUserId} AND consumed_at IS NULL`;
-    await tx`UPDATE app_user_mfa_remembered_browsers SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND revoked_at IS NULL`;
-    await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND id != ${currentSessionId} AND revoked_at IS NULL`;
+    await tx`DELETE FROM app_user_totp_factors WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId})`;
+    await tx`DELETE FROM app_user_mfa_recovery_codes WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId})`;
+    await tx`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND consumed_at IS NULL`;
+    await tx`UPDATE app_user_mfa_remembered_browsers SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND revoked_at IS NULL`;
+    await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND id != ${currentSessionId} AND revoked_at IS NULL`;
   });
 }
 
 async function remainingRecoveryCodes(realm: MfaRealm, identityId: string): Promise<number> {
   const rows = realm === "console"
     ? await getDb()`SELECT COUNT(*)::int AS count FROM user_mfa_recovery_codes WHERE user_id = ${identityId} AND used_at IS NULL`
-    : await getDb()`SELECT COUNT(*)::int AS count FROM app_user_mfa_recovery_codes WHERE app_user_id = ${identityId} AND used_at IS NULL`;
+    : await getDb()`SELECT COUNT(*)::int AS count FROM app_user_mfa_recovery_codes WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${identityId}) AND used_at IS NULL`;
   return Number((rows[0] as { count: number } | undefined)?.count ?? 0);
 }
 
 async function verifyMfaProof(realm: MfaRealm, identityId: string, code: string): Promise<MfaProofResult> {
   const factorRows = realm === "console"
     ? await getDb()`SELECT secret_ciphertext, last_accepted_step FROM user_totp_factors WHERE user_id = ${identityId} AND confirmed_at IS NOT NULL`
-    : await getDb()`SELECT secret_ciphertext, last_accepted_step FROM app_user_totp_factors WHERE app_user_id = ${identityId} AND confirmed_at IS NOT NULL`;
+    : await getDb()`SELECT secret_ciphertext, last_accepted_step FROM app_user_totp_factors WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${identityId}) AND confirmed_at IS NOT NULL`;
   const factor = factorRows[0] as { secret_ciphertext: string; last_accepted_step: number | string | null } | undefined;
   if (!factor) return { ok: false, recoveryCodeUsed: false, recoveryCodesRemaining: 0 };
   const secret = await decryptWithDataKey(factor.secret_ciphertext);
@@ -537,7 +537,7 @@ async function verifyMfaProof(realm: MfaRealm, identityId: string, code: string)
         `
       : await getDb()`
           UPDATE app_user_totp_factors SET last_accepted_step = ${acceptedStep}, updated_at = NOW()
-          WHERE app_user_id = ${identityId} AND confirmed_at IS NOT NULL
+          WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${identityId}) AND confirmed_at IS NOT NULL
             AND (last_accepted_step IS NULL OR last_accepted_step < ${acceptedStep})
           RETURNING id
         `;
@@ -557,7 +557,7 @@ async function verifyMfaProof(realm: MfaRealm, identityId: string, code: string)
       `
     : await getDb()`
         UPDATE app_user_mfa_recovery_codes SET used_at = NOW()
-        WHERE app_user_id = ${identityId} AND code_hash = ${hash} AND used_at IS NULL
+        WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${identityId}) AND code_hash = ${hash} AND used_at IS NULL
         RETURNING id
       `;
   return {
@@ -610,6 +610,7 @@ export async function createAppUserMfaChallenge(
   appId: string,
   primaryMethod: string,
   returnPath?: string | null,
+  sourceSessionId?: string | null,
 ): Promise<CreatedMfaChallenge> {
   await cleanupExpiredMfaData();
   const token = randomToken(32);
@@ -620,8 +621,8 @@ export async function createAppUserMfaChallenge(
     await tx`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND consumed_at IS NULL`;
     await tx`
       INSERT INTO app_user_mfa_challenges (
-        app_user_id, app_id, token_hash, primary_method, return_path, ip_hash, user_agent_hash, expires_at
-      ) VALUES (${appUserId}, ${appId}, ${tokenHash}, ${primaryMethod}, ${returnPath ?? null}, ${fp.ipHash}, ${fp.userAgentHash}, ${expiresAt})
+        app_user_id, app_id, token_hash, primary_method, return_path, ip_hash, user_agent_hash, expires_at, source_session_id
+      ) VALUES (${appUserId}, ${appId}, ${tokenHash}, ${primaryMethod}, ${returnPath ?? null}, ${fp.ipHash}, ${fp.userAgentHash}, ${expiresAt}, ${sourceSessionId ?? null})
     `;
   });
   return { token, expiresAt, setCookie: mfaChallengeCookieHeader(token, expiresAt) };
@@ -643,14 +644,15 @@ export async function resolveMfaChallenge(req: Request): Promise<ResolvedMfaChal
     return { realm: "console", id: String(row.id), userId: String(row.user_id), primaryMethod: row.primary_method, returnPath: row.return_path };
   }
   const [appRow] = await getDb()`
-    SELECT id, app_user_id, app_id, primary_method, return_path
+    SELECT id, app_user_id, app_id, primary_method, return_path, source_session_id
     FROM app_user_mfa_challenges
     WHERE token_hash = ${tokenHash} AND consumed_at IS NULL AND expires_at > NOW()
       AND ip_hash = ${fp.ipHash} AND user_agent_hash = ${fp.userAgentHash}
   `;
   if (!appRow) return null;
-  const row = appRow as { id: string; app_user_id: string; app_id: string; primary_method: string; return_path: string | null };
-  return { realm: "app", id: String(row.id), appUserId: String(row.app_user_id), appId: String(row.app_id), primaryMethod: row.primary_method, returnPath: row.return_path };
+  const row = appRow as { id: string; app_user_id: string; app_id: string; primary_method: string; return_path: string | null; source_session_id: string | null };
+  return { realm: "app", id: String(row.id), appUserId: String(row.app_user_id), appId: String(row.app_id), primaryMethod: row.primary_method, returnPath: row.return_path,
+    sourceSessionId: row.source_session_id ? String(row.source_session_id) : null };
 }
 
 export async function recordMfaChallengeFailure(challenge: ResolvedMfaChallenge): Promise<void> {
@@ -823,14 +825,14 @@ export async function resetAppUserMfaForAdmin(
   const [target] = await getDb()`SELECT 1 FROM app_users WHERE id = ${appUserId} AND app_id = ${appId} AND deleted_at IS NULL`;
   if (!target) return { ok: false, response: problem(404, "Not Found", "App user not found.") };
   await getDb().begin(async (tx) => {
-    await tx`DELETE FROM app_user_totp_factors WHERE app_user_id = ${appUserId}`;
-    await tx`DELETE FROM app_user_mfa_recovery_codes WHERE app_user_id = ${appUserId}`;
-    await tx`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND consumed_at IS NULL`;
-    await tx`UPDATE app_user_mfa_remembered_browsers SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
-    await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
-    await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND used_at IS NULL`;
-    await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
-    await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE app_user_id = ${appUserId} AND app_id = ${appId} AND revoked_at IS NULL`;
+    await tx`DELETE FROM app_user_totp_factors WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId})`;
+    await tx`DELETE FROM app_user_mfa_recovery_codes WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId})`;
+    await tx`UPDATE app_user_mfa_challenges SET consumed_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND consumed_at IS NULL`;
+    await tx`UPDATE app_user_mfa_remembered_browsers SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND revoked_at IS NULL`;
+    await tx`UPDATE app_user_sessions SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND revoked_at IS NULL`;
+    await tx`UPDATE oauth_authorization_codes SET used_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND used_at IS NULL`;
+    await tx`UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND revoked_at IS NULL`;
+    await tx`UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE account_id = (SELECT account_id FROM app_account_bindings WHERE id = ${appUserId}) AND revoked_at IS NULL`;
     const passkeyCount = await resetPasskeys(tx, { realm: "app", appUserId, appId });
     await writeAuditEvent({ actorUserId, action: "mfa.operator_reset", resourceType: "app_user", resourceId: appUserId, payload: { realm: "app", appId, passkeyCount } }, tx);
   });

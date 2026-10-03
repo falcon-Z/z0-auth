@@ -1,8 +1,7 @@
 import type { BunRequest } from "bun";
 
 import { ErrorCodes } from "@z0/contracts/errors";
-import { accountCanAuthenticate, type AccountLifecycleRow } from "./account-lifecycle";
-import { ensureGroupMemberForAppUser } from "./group-sso";
+import { accountCanAuthenticate, finalizeAppPasswordSignIn, type AccountLifecycleRow } from "./account-lifecycle";
 import { writeAuditEvent } from "./audit";
 import { getDb } from "./db";
 import { problem } from "./http";
@@ -105,25 +104,48 @@ export async function completeMfaSignIn(
     setSessionCookie = sessionCookieHeader(session.token, session.expiresAt);
   } else {
     const prepared = await prepareAppSession(req);
-    const session = await getDb().begin(async (tx) => {
-      const [account] = await tx`
-        SELECT status, disabled_at, locked_until, deleted_at, email
-        FROM app_users WHERE id = ${challenge.appUserId} AND app_id = ${challenge.appId} FOR UPDATE
-      `;
-      if (!account) return null;
-      const current = account as AccountLifecycleRow & { status: string };
-      if (current.status !== "active" || !accountCanAuthenticate(current)) return null;
+    const session = await finalizeAppPasswordSignIn(challenge.appUserId, challenge.appId, async (tx) => {
+      let primaryAuthenticatedAt = now;
+      let primaryMethod = challenge.primaryMethod;
+      if (challenge.primaryMethod === "service_group") {
+        if (!challenge.sourceSessionId) return null;
+        // The target Account/subject locks above serialize membership and
+        // lifecycle changes. Source grant/browser locks serialize logout.
+        const [source] = await tx`
+          SELECT s.primary_authenticated_at, s.authentication_method
+          FROM app_user_sessions s JOIN app_browser_sessions b ON b.id = s.browser_session_id
+          JOIN app_users u ON u.id = s.app_user_id AND u.app_id = s.app_id
+          JOIN app_users t ON t.id = ${challenge.appUserId} AND t.app_id = ${challenge.appId}
+          JOIN apps a ON a.id = s.app_id AND a.status = 'active'
+          JOIN apps target_app ON target_app.id = t.app_id AND target_app.status = 'active'
+          JOIN service_group_apps source_group ON source_group.app_id = s.app_id
+          JOIN service_group_apps target_group ON target_group.app_id = t.app_id
+            AND target_group.group_id = source_group.group_id
+          JOIN service_groups g ON g.id = source_group.group_id
+          WHERE s.id = ${challenge.sourceSessionId} AND s.account_id = t.account_id
+            AND s.account_domain_id = t.account_domain_id AND g.account_domain_id = s.account_domain_id
+            AND g.sso_enabled AND s.app_id <> t.app_id
+            AND u.status = 'active' AND u.disabled_at IS NULL AND u.deleted_at IS NULL
+            AND (u.locked_until IS NULL OR u.locked_until <= NOW())
+            AND s.revoked_at IS NULL AND s.expires_at > NOW()
+            AND b.revoked_at IS NULL AND b.expires_at > NOW()
+          FOR UPDATE OF s, b
+          FOR SHARE OF g, a, target_app
+        `;
+        if (!source) return null;
+        primaryAuthenticatedAt = new Date(source.primary_authenticated_at);
+        primaryMethod = String(source.authentication_method);
+      }
       if (!(await consumeMfaChallenge(challenge, tx))) return null;
       return insertAppSession(tx, challenge.appUserId, challenge.appId, prepared, {
-        primaryAuthenticatedAt: now,
+        primaryAuthenticatedAt,
         mfaAuthenticatedAt: now,
-        authenticationMethod: `${challenge.primaryMethod}+totp`,
+        authenticationMethod: `${primaryMethod}+totp`,
       });
     });
     if (!session) return { ok: false, response: problem(401, "Unauthorized", "The MFA challenge expired. Sign in again.") };
     setSessionCookie = appSessionCookieHeader(session.token, session.expiresAt);
-    const [user] = await getDb()`SELECT email FROM app_users WHERE id = ${challenge.appUserId} AND app_id = ${challenge.appId}`;
-    if (user) await ensureGroupMemberForAppUser(challenge.appUserId, challenge.appId, String((user as { email: string }).email));
+
   }
 
   await writeAuditEvent({

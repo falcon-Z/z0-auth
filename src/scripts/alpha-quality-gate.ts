@@ -34,6 +34,11 @@ const phases: Array<{ label: string; command: string[] }> = [
       "tests/integration/migration-integrity.test.ts",
       "tests/integration/account-domains.test.ts",
       "tests/integration/application-memberships.test.ts",
+      "tests/integration/shared-sso-domains.test.ts",
+      "tests/integration/group-sso-flow.test.ts",
+      "tests/integration/shared-federation-domains.test.ts",
+      "tests/integration/passkeys-flow.test.ts",
+      "tests/integration/shared-passkeys.test.ts",
     ],
   },
   {

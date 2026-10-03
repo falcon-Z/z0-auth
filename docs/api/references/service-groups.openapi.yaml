@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: z0-auth Service Groups API
   version: 0.1.0
-  description: Group related apps and enable shared sign-in (SSO) across them (P6).
+  description: SSO groups own one shared Account Domain. Group placement must be configured before identities exist. Membership, metadata, profile claim release, and consent remain application-local.
 servers:
   - url: http://localhost:3000
 tags:
@@ -110,6 +110,7 @@ paths:
     delete:
       tags: [ServiceGroups]
       summary: Delete app group
+      description: Empty groups may be deleted; their apps receive separate private domains. Populated groups return ACCOUNT_DOMAIN_IMMUTABLE.
       operationId: deleteServiceGroup
       security:
         - SessionCookie: []
@@ -121,12 +122,15 @@ paths:
       responses:
         "204":
           description: Group deleted
+        "409":
+          $ref: "common.openapi.yaml#/components/responses/Conflict"
         "404":
           $ref: "common.openapi.yaml#/components/responses/NotFound"
   /api/v1/service-groups/{groupId}/apps:
     put:
       tags: [ServiceGroups]
       summary: Replace apps in group
+      description: Empty apps may join. Removing apps from a populated domain is rejected with ACCOUNT_DOMAIN_IMMUTABLE. Unchanged associations are retained atomically.
       operationId: putServiceGroupApps
       security:
         - SessionCookie: []
@@ -177,7 +181,7 @@ components:
           type: string
     ServiceGroupSummary:
       type: object
-      required: [id, name, slug, ssoEnabled, appCount, createdAt, updatedAt]
+      required: [id, name, slug, ssoEnabled, accountDomainId, boundaryLocked, appCount, createdAt, updatedAt]
       properties:
         id:
           type: string
@@ -186,8 +190,15 @@ components:
           type: string
         slug:
           type: string
+        accountDomainId:
+          type: string
+          format: uuid
+        boundaryLocked:
+          type: boolean
+          description: Accounts have existed in this domain; apps cannot leave or move and the group cannot be deleted in Alpha.
         ssoEnabled:
           type: boolean
+          description: Allow shared session reuse. Turning this off does not separate Accounts or change domain placement.
         appCount:
           type: integer
           minimum: 0
@@ -220,7 +231,7 @@ components:
           maxLength: 64
         ssoEnabled:
           type: boolean
-          default: false
+          default: true
         appIds:
           type: array
           items:

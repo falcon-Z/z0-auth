@@ -50,11 +50,13 @@ export function AppGroupsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [editorLoaded, setEditorLoaded] = useState(true);
   const [editor, setEditor] = useState<EditorState | null>(null);
 
   const [name, setName] = useState("");
-  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(true);
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
+  const [fixedAppIds, setFixedAppIds] = useState<string[]>([]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -74,14 +76,20 @@ export function AppGroupsPage() {
   }, [reload]);
 
   function openCreate() {
+    setNotice(null);
+    setEditorLoaded(true);
+    setFixedAppIds([]);
     setName("");
-    setSsoEnabled(false);
+    setSsoEnabled(true);
     setSelectedAppIds([]);
     setFieldErrors({});
     setEditor({ mode: "create" });
   }
 
   async function openEdit(group: ServiceGroupSummary) {
+    setNotice(null);
+    setEditorLoaded(false);
+    setSelectedAppIds([]);
     setFieldErrors({});
     setName(group.name);
     setSsoEnabled(group.ssoEnabled);
@@ -89,8 +97,11 @@ export function AppGroupsPage() {
     try {
       const detail = await fetchServiceGroup(group.id);
       setSelectedAppIds(detail.apps.map((app) => app.id));
+      setFixedAppIds(detail.boundaryLocked ? detail.apps.map((app) => app.id) : []);
+      setEditorLoaded(true);
     } catch {
       setSelectedAppIds([]);
+      setNotice("Could not load group details. Close the editor and reopen it to try again.");
     }
   }
 
@@ -102,7 +113,7 @@ export function AppGroupsPage() {
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    if (!editor) return;
+    if (!editor || !editorLoaded) return;
     setSaving(true);
     setNotice(null);
     setFieldErrors({});
@@ -115,8 +126,8 @@ export function AppGroupsPage() {
         });
         setNotice("Group created.");
       } else if (editor.group) {
-        await patchServiceGroup(editor.group.id, { name, ssoEnabled });
         await putServiceGroupApps(editor.group.id, { appIds: selectedAppIds });
+        await patchServiceGroup(editor.group.id, { name, ssoEnabled });
         setNotice("Group updated.");
       }
       setEditor(null);
@@ -136,7 +147,7 @@ export function AppGroupsPage() {
   async function handleDelete(group: ServiceGroupSummary) {
     const ok = await confirm({
       title: "Delete group",
-      description: `Remove ${group.name}? Apps stay registered; only the grouping is removed.`,
+      description: `Remove ${group.name}? Empty apps will receive separate account domains. Groups with accounts cannot be deleted in Alpha.`,
       confirmLabel: "Delete group",
       destructive: true,
     });
@@ -216,7 +227,7 @@ export function AppGroupsPage() {
                   <Button variant="outline" size="sm" onClick={() => void openEdit(row)}>
                     Edit
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void handleDelete(row)} disabled={saving}>
+                  <Button variant="ghost" size="sm" onClick={() => void handleDelete(row)} disabled={saving || row.boundaryLocked}>
                     Delete
                   </Button>
                 </div>
@@ -234,6 +245,7 @@ export function AppGroupsPage() {
             <DialogTitle>{editor?.mode === "create" ? "Add group" : "Edit group"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={(event) => void handleSave(event)} className="space-y-4">
+            <ActionNotice message={notice} />
             <FormField label="Name" htmlFor="group-name" error={fieldErrors.name}>
               <Input
                 id="group-name"
@@ -247,7 +259,7 @@ export function AppGroupsPage() {
               <div>
                 <Label htmlFor="group-sso">Shared sign-in</Label>
                 <p className="text-sm text-muted-foreground">
-                  Users signed in to one app can open sibling apps without signing in again.
+                  Share one Account Domain. Each app still requires its own membership; profile claims and metadata remain bounded to that app.
                 </p>
               </div>
               <Switch id="group-sso" checked={ssoEnabled} onCheckedChange={setSsoEnabled} />
@@ -255,6 +267,9 @@ export function AppGroupsPage() {
 
             <div className="space-y-2">
               <Label>Apps in this group</Label>
+              <p className="text-sm text-muted-foreground">
+                Choose SSO before accounts exist. Populated domains cannot join, leave, or move in Alpha.
+              </p>
               {apps.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Register an app first.</p>
               ) : (
@@ -264,6 +279,7 @@ export function AppGroupsPage() {
                       <Checkbox
                         id={`app-${app.id}`}
                         checked={selectedAppIds.includes(app.id)}
+                        disabled={!editorLoaded || fixedAppIds.includes(app.id)}
                         onCheckedChange={(checked) => toggleApp(app.id, checked === true)}
                       />
                       <Label htmlFor={`app-${app.id}`} className="font-normal">
@@ -283,7 +299,7 @@ export function AppGroupsPage() {
                 <Button type="button" variant="outline" onClick={() => setEditor(null)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" disabled={saving || !editorLoaded}>
                   {saving ? "Saving…" : editor?.mode === "create" ? "Create group" : "Save changes"}
                 </Button>
               </FormActions>
