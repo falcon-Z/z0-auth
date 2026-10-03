@@ -66,7 +66,7 @@ export async function issueAppUserAdminReset(req: Request, appId: string, appUse
   const outcome = await getDb().begin(async (tx) => {
     const [row] = await tx`
       SELECT u.email, u.name, u.disabled_at, u.deleted_at, a.name AS app_name,
-        (SELECT client_id FROM app_credentials WHERE app_id = a.id AND status = 'active' ORDER BY created_at LIMIT 1) AS client_id
+        (SELECT client_id FROM oauth_clients WHERE app_id = a.id AND status = 'active' AND purpose = 'interactive' ORDER BY created_at LIMIT 1) AS client_id
       FROM app_users u JOIN apps a ON a.id = u.app_id
       WHERE u.id = ${appUserId} AND u.app_id = ${appId}
       FOR UPDATE OF u

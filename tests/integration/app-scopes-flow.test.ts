@@ -52,7 +52,7 @@ async function createApp(csrf: string, cookie: string) {
     buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: cookie },
-      body: { name: "Scopes App", redirectUris: [REDIRECT], clientType: "confidential" },
+      body: {name: "Scopes App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: []}},
     }),
   );
   expect(res.status).toBe(201);

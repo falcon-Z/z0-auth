@@ -275,15 +275,15 @@ run("OAuth authorization code flow", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "OAuth Confidential", redirectUris: [REDIRECT], clientType: "confidential" },
+        body: {name: "OAuth Confidential", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     const confidential = (await confidentialRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
       clientSecret: string;
     };
-    confidentialClientId = confidential.credential.clientId;
+    confidentialClientId = confidential.client.clientId;
     confidentialSecret = confidential.clientSecret;
     confidentialAppId = confidential.app.id;
 
@@ -291,11 +291,11 @@ run("OAuth authorization code flow", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "OAuth Public", redirectUris: [REDIRECT], clientType: "public" },
+        body: {name: "OAuth Public", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: ([REDIRECT]).map(uri => new URL(uri).origin)}},
       }),
     );
-    const publicApp = (await publicRes.json()) as { app: { id: string }; credential: { clientId: string } };
-    publicClientId = publicApp.credential.clientId;
+    const publicApp = (await publicRes.json()) as { app: { id: string }; client: { clientId: string } };
+    publicClientId = publicApp.client.clientId;
     publicAppId = publicApp.app.id;
 
     const confidentialUserResponse = await dispatchApi(
@@ -904,15 +904,15 @@ run("OIDC discovery and tokens", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "OIDC App", redirectUris: [REDIRECT], clientType: "confidential" },
+        body: {name: "OIDC App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     const created = (await appRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
       clientSecret: string;
     };
-    clientId = created.credential.clientId;
+    clientId = created.client.clientId;
     clientSecret = created.clientSecret;
     appId = created.app.id;
 

@@ -64,15 +64,15 @@ run("OAuth client credentials grant", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "M2M App", redirectUris: [REDIRECT], clientType: "confidential" },
+        body: {name: "M2M App", initialClient: {label: "Test client", clientType: "confidential", purpose: "workload", redirectUris: [], refreshEnabled: false, browserOrigins: []}},
       }),
     );
     const confidential = (await confidentialRes.json()) as {
-      credential: { clientId: string };
+      client: { clientId: string };
       clientSecret: string;
       app: { id: string };
     };
-    confidentialClientId = confidential.credential.clientId;
+    confidentialClientId = confidential.client.clientId;
     confidentialSecret = confidential.clientSecret;
 
     await dispatchApi(
@@ -87,10 +87,10 @@ run("OAuth client credentials grant", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "Public M2M", redirectUris: [REDIRECT], clientType: "public" },
+        body: {name: "Public M2M", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: ([REDIRECT]).map(uri => new URL(uri).origin)}},
       }),
     );
-    publicClientId = ((await publicRes.json()) as { credential: { clientId: string } }).credential.clientId;
+    publicClientId = ((await publicRes.json()) as { client: { clientId: string } }).client.clientId;
   });
 
   afterAll(async () => {
@@ -237,7 +237,7 @@ run("OAuth CORS", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: { name: "CORS App", redirectUris: [REDIRECT], clientType: "confidential" },
+        body: {name: "CORS App", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: [REDIRECT], refreshEnabled: true, browserOrigins: [SPA_ORIGIN]}},
       }),
     );
   });
@@ -246,7 +246,7 @@ run("OAuth CORS", () => {
     await closeDatabase();
   });
 
-  test("OPTIONS preflight allows registered redirect origin", async () => {
+  test("OPTIONS preflight allows explicitly registered browser origin", async () => {
     const res = await dispatchWeb(
       new Request("http://localhost/oauth/token", {
         method: "OPTIONS",

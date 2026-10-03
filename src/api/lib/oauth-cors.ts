@@ -1,34 +1,15 @@
 import { getDb } from "./db";
 
-/** Origins derived from registered redirect URIs (scheme + host + port). */
-export function originsFromRedirectUris(redirectUris: string[]): Set<string> {
-  const origins = new Set<string>();
-  for (const uri of redirectUris) {
-    try {
-      origins.add(new URL(uri).origin);
-    } catch {
-      // ignore invalid stored URIs
-    }
-  }
-  return origins;
+/** CORS authority is registered explicitly on a public child client. */
+export function isOriginAllowedForClient(origin: string | null, browserOrigins: string[]): boolean {
+  return Boolean(origin && browserOrigins.includes(origin));
 }
-
-export function isOriginAllowedForClient(origin: string | null, redirectUris: string[]): boolean {
-  if (!origin) return false;
-  return originsFromRedirectUris(redirectUris).has(origin);
-}
-
 export async function isOAuthCorsOriginAllowed(origin: string | null): Promise<boolean> {
   if (!origin) return false;
-  const rows = await getDb()`
-    SELECT redirect_uris
-    FROM apps
-    WHERE status = 'active'
-  `;
-  for (const row of rows as { redirect_uris: string[] }[]) {
-    if (isOriginAllowedForClient(origin, row.redirect_uris ?? [])) return true;
-  }
-  return false;
+  const [row] = await getDb()`SELECT c.id FROM oauth_clients c JOIN apps a ON a.id = c.app_id
+    WHERE c.status = 'active' AND a.status = 'active' AND c.client_type = 'public'
+      AND c.purpose = 'interactive' AND ${origin} = ANY(c.browser_origins) LIMIT 1`;
+  return Boolean(row);
 }
 
 export function buildOAuthCorsHeaders(origin: string | null): Headers {

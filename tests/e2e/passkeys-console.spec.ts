@@ -21,7 +21,7 @@ test("registers and signs in with a passkey", async ({ page, context }) => {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-      body: JSON.stringify({ name: "Passkey App", redirectUris: ["http://localhost:3000/callback"], clientType: "public" }),
+      body: JSON.stringify({name: "Passkey App", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: ["http://localhost:3000/callback"], refreshEnabled: true, browserOrigins: (["http://localhost:3000/callback"]).map(uri => new URL(uri).origin)}}),
     });
     if (!appResponse.ok) throw new Error(await appResponse.text());
     const created = await appResponse.json();
@@ -37,7 +37,7 @@ test("registers and signs in with a passkey", async ({ page, context }) => {
       }),
     });
     if (!userResponse.ok) throw new Error(await userResponse.text());
-    return { clientId: created.credential.clientId } as { clientId: string };
+    return { clientId: created.client.clientId } as { clientId: string };
   });
 
   await page.getByRole("button", { name: "Add passkey" }).click();

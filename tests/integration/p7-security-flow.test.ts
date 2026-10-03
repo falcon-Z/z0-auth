@@ -115,20 +115,16 @@ run("P7 security & observability", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrfToken,
         cookies: { [SESSION_COOKIE]: sessionCookie },
-        body: {
-          name: "Audit App",
-          clientType: "public",
-          redirectUris: ["http://localhost:5173/callback"],
-        },
+        body: {name: "Audit App", initialClient: {label: "Test client", clientType: "public", purpose: "interactive", redirectUris: ["http://localhost:5173/callback"], refreshEnabled: true, browserOrigins: (["http://localhost:5173/callback"]).map(uri => new URL(uri).origin)}},
       }),
     );
     expect(appRes.status).toBe(201);
     const appBody = (await appRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
     };
     appId = appBody.app.id;
-    clientId = appBody.credential.clientId;
+    clientId = appBody.client.clientId;
 
     const userRes = await dispatchApi(
       buildRequest("POST", `/api/v1/apps/${appId}/users`, {

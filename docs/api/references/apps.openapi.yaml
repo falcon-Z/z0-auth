@@ -2,364 +2,396 @@ openapi: 3.1.0
 info:
   title: z0-auth Applications API
   version: 0.1.0
-  description: |
-    Instance-scoped registered applications, client credentials (M03), and app scopes (M04).
-    All routes require a signed-in instance member.
+  description: Applications own membership, subjects, scopes, display metadata and
+    minimum assurance. Child OAuth clients own protocol configuration. All routes
+    require a signed-in operator with the indicated RBAC scope. Mutations require
+    CSRF; client mutations also preserve privileged verification.
 servers:
-  - url: http://localhost:3000
+- url: http://localhost:3000
 tags:
-  - name: Applications
+- name: Applications
 paths:
   /api/v1/apps:
     get:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: List applications
       operationId: listApps
       security:
-        - SessionCookie: []
+      - SessionCookie: []
       responses:
-        "200":
+        '200':
           description: Applications for this instance
           content:
             application/json:
               schema:
                 type: object
-                required: [apps]
+                required:
+                - apps
                 properties:
                   apps:
                     type: array
                     items:
-                      $ref: "#/components/schemas/AppSummary"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+                      $ref: '#/components/schemas/AppSummary'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
     post:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: Register application
       operationId: createApp
       security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
       parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateAppRequest"
+              $ref: '#/components/schemas/CreateAppRequest'
       responses:
-        "201":
-          description: Application created with default credential
+        '201':
+          description: Application created atomically with its initial child client
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateAppResponse"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
+                $ref: '#/components/schemas/CreateAppResponse'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
   /api/v1/apps/{appId}:
     get:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: Get application
       operationId: getApp
       security:
-        - SessionCookie: []
+      - SessionCookie: []
       parameters:
-        - $ref: "#/components/parameters/AppId"
+      - $ref: '#/components/parameters/AppId'
       responses:
-        "200":
+        '200':
           description: Application detail
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AppDetail"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
+                $ref: '#/components/schemas/AppDetail'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
     patch:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: Update application
       operationId: patchApp
       security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
       parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PatchAppRequest"
+              $ref: '#/components/schemas/PatchAppRequest'
       responses:
-        "200":
+        '200':
           description: Updated application
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AppDetail"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-  /api/v1/apps/{appId}/credentials:
-    get:
-      tags: [Applications]
-      summary: List client credentials
-      operationId: listAppCredentials
-      security:
-        - SessionCookie: []
-      parameters:
-        - $ref: "#/components/parameters/AppId"
-      responses:
-        "200":
-          description: Credentials (secrets never returned)
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [credentials]
-                properties:
-                  credentials:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AppCredentialSummary"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-    post:
-      tags: [Applications]
-      summary: Create client credential
-      operationId: createAppCredential
-      description: Returns `clientSecret` once; it cannot be retrieved again.
-      security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
-      parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCredentialRequest"
-      responses:
-        "201":
-          description: Credential created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateCredentialResponse"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-        "409":
-          description: Application disabled
-  /api/v1/apps/{appId}/credentials/{credentialId}:
-    delete:
-      tags: [Applications]
-      summary: Revoke client credential
-      operationId: revokeAppCredential
-      security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
-      parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
-        - $ref: "#/components/parameters/CredentialId"
-      responses:
-        "200":
-          description: Credential revoked
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-        "409":
-          description: Last active credential or app disabled
-  /api/v1/apps/{appId}/credentials/{credentialId}/rotate:
-    post:
-      tags: [Applications]
-      summary: Rotate client secret
-      operationId: rotateAppCredential
-      description: Replaces the secret for the same `clientId`. Returns the new secret once.
-      security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
-      parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
-        - $ref: "#/components/parameters/CredentialId"
-      responses:
-        "200":
-          description: Secret rotated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RotateCredentialResponse"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-        "409":
-          description: Application disabled
+                $ref: '#/components/schemas/AppDetail'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
   /api/v1/apps/{appId}/scopes:
     get:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: List application scopes
       operationId: listAppScopes
       security:
-        - SessionCookie: []
+      - SessionCookie: []
       parameters:
-        - $ref: "#/components/parameters/AppId"
+      - $ref: '#/components/parameters/AppId'
       responses:
-        "200":
+        '200':
           description: Scopes registered for the application
           content:
             application/json:
               schema:
                 type: object
-                required: [scopes]
+                required:
+                - scopes
                 properties:
                   scopes:
                     type: array
                     items:
-                      $ref: "#/components/schemas/AppScopeSummary"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
+                      $ref: '#/components/schemas/AppScopeSummary'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
     post:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: Register application scope
       operationId: createAppScope
       security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
       parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateAppScopeRequest"
+              $ref: '#/components/schemas/CreateAppScopeRequest'
       responses:
-        "201":
+        '201':
           description: Scope created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AppScopeSummary"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-        "409":
+                $ref: '#/components/schemas/AppScopeSummary'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
           description: Scope name already exists for this application
   /api/v1/apps/{appId}/scopes/{scopeId}:
     patch:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: Update application scope
       operationId: patchAppScope
       security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
       parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
-        - $ref: "#/components/parameters/ScopeId"
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ScopeId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PatchAppScopeRequest"
+              $ref: '#/components/schemas/PatchAppScopeRequest'
       responses:
-        "200":
+        '200':
           description: Scope updated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AppScopeSummary"
-        "400":
-          $ref: "common.openapi.yaml#/components/responses/ValidationError"
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
-        "409":
+                $ref: '#/components/schemas/AppScopeSummary'
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
           description: Scope name already exists for this application
     delete:
-      tags: [Applications]
+      tags:
+      - Applications
       summary: Delete application scope
       operationId: deleteAppScope
       security:
-        - CsrfHeader: []
-          CsrfCookie: []
-          SessionCookie: []
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
       parameters:
-        - $ref: "common.openapi.yaml#/components/parameters/CsrfHeader"
-        - $ref: "#/components/parameters/AppId"
-        - $ref: "#/components/parameters/ScopeId"
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ScopeId'
       responses:
-        "200":
+        '200':
           description: Scope deleted
-        "401":
-          $ref: "common.openapi.yaml#/components/responses/Unauthorized"
-        "403":
-          $ref: "common.openapi.yaml#/components/responses/Forbidden"
-        "404":
-          $ref: "common.openapi.yaml#/components/responses/NotFound"
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+  /api/v1/apps/{appId}/clients:
+    get:
+      tags:
+      - Applications
+      summary: List client clients
+      operationId: listAppClients
+      security:
+      - SessionCookie: []
+      parameters:
+      - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Child clients; no secret material
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - clients
+                properties:
+                  clients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OAuthClientSummary'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+    post:
+      tags:
+      - Applications
+      summary: Create client client
+      operationId: createAppClient
+      description: Returns `clientSecret` once; it cannot be retrieved again.
+      security:
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
+      parameters:
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClientRequest'
+      responses:
+        '201':
+          description: Client configuration and one-time plaintext secret (null for
+            public clients)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateClientResponse'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
+          description: Application disabled
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+  /api/v1/apps/{appId}/clients/{clientId}:
+    patch:
+      tags:
+      - Applications
+      summary: Manage child client
+      operationId: patchAppClient
+      security:
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
+      parameters:
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthClientSummary'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
+          description: Client unavailable or parent Application disabled
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
+      description: Requires apps.clients:update. Public/confidential class, purpose
+        and identity are immutable. Status may be active or disabled; deletion is
+        a separate lifecycle capability.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchClientRequest'
+  /api/v1/apps/{appId}/clients/{clientId}/rotate:
+    post:
+      tags:
+      - Applications
+      summary: Rotate client secret
+      operationId: rotateAppClient
+      description: Replaces the secret for the same `clientId`. Returns the new secret
+        once.
+      security:
+      - CsrfHeader: []
+        CsrfCookie: []
+        SessionCookie: []
+      parameters:
+      - $ref: common.openapi.yaml#/components/parameters/CsrfHeader
+      - $ref: '#/components/parameters/AppId'
+      - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: Client configuration and one-time plaintext secret (null for
+            public clients)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateClientResponse'
+        '401':
+          $ref: common.openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: common.openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: common.openapi.yaml#/components/responses/NotFound
+        '409':
+          description: Application disabled
+        '400':
+          $ref: common.openapi.yaml#/components/responses/ValidationError
 components:
   parameters:
     AppId:
       name: appId
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    CredentialId:
-      name: credentialId
       in: path
       required: true
       schema:
@@ -372,121 +404,298 @@ components:
       schema:
         type: string
         format: uuid
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Child client record UUID (distinct from its protocol client_id)
   schemas:
-    AppStatus:
-      type: string
-      enum: [active, disabled]
-    AppSummary:
-      type: object
-      required:
-        - id
-        - name
-        - slug
-        - clientType
-        - status
-        - redirectUris
-        - activeCredentialCount
-        - createdAt
-        - updatedAt
-        - disabledAt
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        slug: { type: string }
-        clientType:
-          type: string
-          enum: [public, confidential]
-          description: |
-            `public` — browser SPA (PKCE, no client secret).
-            `confidential` — server app with client secret.
-        status: { $ref: "#/components/schemas/AppStatus" }
-        redirectUris:
-          type: array
-          items: { type: string, format: uri }
-        activeCredentialCount: { type: integer }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-        disabledAt: { type: string, format: date-time, nullable: true }
-    AppDetail:
-      $ref: "#/components/schemas/AppSummary"
-    CreateAppRequest:
-      type: object
-      required: [name, redirectUris, clientType]
-      properties:
-        name: { type: string }
-        clientType:
-          type: string
-          enum: [public, confidential]
-        redirectUris:
-          type: array
-          minItems: 1
-          items: { type: string, format: uri }
-    CreateAppResponse:
-      type: object
-      required: [app, credential, clientSecret]
-      properties:
-        app: { $ref: "#/components/schemas/AppDetail" }
-        credential: { $ref: "#/components/schemas/AppCredentialSummary" }
-        clientSecret:
-          type: string
-          nullable: true
-          description: Shown once for confidential clients; null for public clients.
-    PatchAppRequest:
-      type: object
-      properties:
-        name: { type: string }
-        redirectUris:
-          type: array
-          items: { type: string, format: uri }
-        status: { $ref: "#/components/schemas/AppStatus" }
-    CredentialStatus:
-      type: string
-      enum: [active, revoked]
-    AppCredentialSummary:
-      type: object
-      required: [id, clientId, label, status, createdAt, revokedAt]
-      properties:
-        id: { type: string, format: uuid }
-        clientId: { type: string }
-        label: { type: string }
-        status: { $ref: "#/components/schemas/CredentialStatus" }
-        createdAt: { type: string, format: date-time }
-        revokedAt: { type: string, format: date-time, nullable: true }
-    CreateCredentialRequest:
-      type: object
-      properties:
-        label: { type: string }
-    CreateCredentialResponse:
-      type: object
-      required: [credential, clientSecret]
-      properties:
-        credential: { $ref: "#/components/schemas/AppCredentialSummary" }
-        clientSecret:
-          type: string
-          nullable: true
-          description: Null for public application credentials.
-    RotateCredentialResponse:
-      $ref: "#/components/schemas/CreateCredentialResponse"
     AppScopeSummary:
       type: object
-      required: [id, appId, name, description, createdAt, updatedAt]
+      required:
+      - id
+      - appId
+      - name
+      - description
+      - createdAt
+      - updatedAt
       properties:
-        id: { type: string, format: uuid }
-        appId: { type: string, format: uuid }
+        id:
+          type: string
+          format: uuid
+        appId:
+          type: string
+          format: uuid
         name:
           type: string
           description: Lowercase scope identifier (e.g. `read:orders`, `openid`).
-        description: { type: string, nullable: true }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     CreateAppScopeRequest:
       type: object
-      required: [name]
+      required:
+      - name
       properties:
-        name: { type: string }
-        description: { type: string }
+        name:
+          type: string
+        description:
+          type: string
     PatchAppScopeRequest:
       type: object
       properties:
-        name: { type: string }
-        description: { type: string, nullable: true }
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+    AppStatus:
+      type: string
+      enum:
+      - active
+      - disabled
+    Assurance:
+      type: string
+      enum:
+      - baseline
+      - strong
+    ClientStatus:
+      type: string
+      enum:
+      - active
+      - disabled
+      - pending_deletion
+      - purged
+    AppClientType:
+      type: string
+      enum:
+      - public
+      - confidential
+      description: Immutable security class of one Client.
+    ClientPurpose:
+      type: string
+      enum:
+      - interactive
+      - workload
+      description: Immutable purpose; workload clients must be confidential.
+    AppSummary:
+      type: object
+      required:
+      - id
+      - name
+      - slug
+      - status
+      - minimumAssurance
+      - activeClientCount
+      - createdAt
+      - updatedAt
+      - disabledAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          $ref: '#/components/schemas/AppStatus'
+        minimumAssurance:
+          $ref: '#/components/schemas/Assurance'
+        activeClientCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        disabledAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    AppDetail:
+      $ref: '#/components/schemas/AppSummary'
+    OAuthClientSummary:
+      type: object
+      required:
+      - id
+      - appId
+      - clientId
+      - label
+      - clientType
+      - purpose
+      - status
+      - redirectUris
+      - browserOrigins
+      - refreshEnabled
+      - assuranceOverride
+      - effectiveAssurance
+      - createdAt
+      - updatedAt
+      - disabledAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        appId:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+        label:
+          type: string
+        clientType:
+          $ref: '#/components/schemas/AppClientType'
+        purpose:
+          $ref: '#/components/schemas/ClientPurpose'
+        status:
+          $ref: '#/components/schemas/ClientStatus'
+        redirectUris:
+          type: array
+          items:
+            type: string
+            format: uri
+        browserOrigins:
+          type: array
+          items:
+            type: string
+          description: Exact browser origins registered separately; only public interactive
+            clients.
+        refreshEnabled:
+          type: boolean
+        assuranceOverride:
+          type:
+          - string
+          - 'null'
+          enum:
+          - baseline
+          - strong
+          - null
+        effectiveAssurance:
+          $ref: '#/components/schemas/Assurance'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        disabledAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    CreateClientRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - label
+      - clientType
+      - purpose
+      properties:
+        label: &id001
+          type: string
+          minLength: 1
+          maxLength: 64
+        clientType:
+          $ref: '#/components/schemas/AppClientType'
+        purpose:
+          $ref: '#/components/schemas/ClientPurpose'
+        redirectUris: &id002
+          type: array
+          items:
+            type: string
+            format: uri
+          description: Required, nonempty for interactive clients; empty for workloads.
+        browserOrigins: &id003
+          type: array
+          items:
+            type: string
+        refreshEnabled: &id004
+          type: boolean
+          default: false
+        assuranceOverride: &id005
+          type:
+          - string
+          - 'null'
+          enum:
+          - baseline
+          - strong
+          - null
+          description: May strengthen the Application minimum; cannot weaken it.
+    CreateClientResponse:
+      type: object
+      required:
+      - client
+      - clientSecret
+      properties:
+        client:
+          $ref: '#/components/schemas/OAuthClientSummary'
+        clientSecret:
+          type:
+          - string
+          - 'null'
+          description: Returned once. Null for public clients.
+    CreateAppRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      - initialClient
+      properties:
+        name:
+          type: string
+        minimumAssurance:
+          type: string
+          enum:
+          - baseline
+          - strong
+          default: baseline
+        initialClient:
+          $ref: '#/components/schemas/CreateClientRequest'
+    CreateAppResponse:
+      type: object
+      required:
+      - app
+      - client
+      - clientSecret
+      properties:
+        app:
+          $ref: '#/components/schemas/AppDetail'
+        client:
+          $ref: '#/components/schemas/OAuthClientSummary'
+        clientSecret:
+          type:
+          - string
+          - 'null'
+    PatchAppRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/AppStatus'
+        minimumAssurance:
+          $ref: '#/components/schemas/Assurance'
+    PatchClientRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        label: *id001
+        redirectUris: *id002
+        browserOrigins: *id003
+        refreshEnabled: *id004
+        assuranceOverride: *id005
+        status:
+          $ref: '#/components/schemas/AppStatus'

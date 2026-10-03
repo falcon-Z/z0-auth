@@ -123,49 +123,22 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST …/accept` | Existing user | Session email matches invite | `invite_email_mismatch` | 409 | Wrong account message |
 | `POST …/decline` | CSRF | Valid pending invite | `invite_invalid` | 404 | Invalid state |
 
-## Applications (`/api/v1/apps`)
+## Applications and OAuth Clients
 
-| Endpoint | Input | Rule | Code | HTTP | UI |
-|----------|-------|------|------|------|-----|
-| All | Session | Caller is instance member | `permission_denied` | 403 | Access denied |
-| `GET /api/v1/apps` | — | — | — | 200 | Applications list |
-| `POST /api/v1/apps` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `POST /api/v1/apps` | `name` | Non-empty trimmed | `required` | 400 | Inline on name |
-| `POST /api/v1/apps` | `redirectUris` | ≥1 valid http(s) URI; production requires https (except localhost) | `required` / `invalid_redirect_uri` | 400 | Inline on URIs |
-| `POST /api/v1/apps` | `clientType` | `public` or `confidential` | `required` | 400 | Inline on type |
-| `POST /api/v1/apps` | — | Creates app + default credential | — | 201 | Returns `app`, `credential`, `clientSecret` (null for public) |
-| `GET /api/v1/apps/:appId` | `appId` | App exists | `app_not_found` | 404 | Not found state |
-| `PATCH /api/v1/apps/:appId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `PATCH /api/v1/apps/:appId` | `name` / `redirectUris` / `status` | Same rules as create when provided | see above | 400 | Inline |
-| `PATCH /api/v1/apps/:appId` | `appId` | App exists | `app_not_found` | 404 | Not found |
-| `GET …/credentials` | `appId` | App exists | `app_not_found` | 404 | Not found |
-| `POST …/credentials` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `POST …/credentials` | `appId` | App active | `app_disabled` | 409 | Inline / banner |
-| `POST …/credentials` | — | Public app allows one active credential | `credential_limit_reached` | 409 | Banner |
-| `POST …/credentials` | — | Returns `clientSecret` once (null for public) | — | 201 | One-time copy dialog |
-| `DELETE …/credentials/:credentialId` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `DELETE …/credentials/:credentialId` | — | Not last active cred on active app | `last_active_credential` | 409 | Confirm + error |
-| `DELETE …/credentials/:credentialId` | — | Credential exists | `credential_not_found` | 404 | Refresh list |
-| `POST …/credentials/:credentialId/rotate` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `POST …/rotate` | `appId` | App active | `app_disabled` | 409 | Banner |
-| `POST …/rotate` | — | Public client has no secret | `public_client_no_secret` | 409 | Hidden rotate UI |
-| `POST …/rotate` | — | Active credential | `credential_not_found` | 404 | Refresh list |
-| `POST …/rotate` | — | New `clientSecret` once | — | 200 | One-time copy dialog |
-
-## Email settings (`/api/v1/settings/email`)
-
-| Endpoint | Input | Rule | Code | HTTP | UI |
-|----------|-------|------|------|------|-----|
-| All | Session | Instance member | `permission_denied` | 403 | Access denied |
-| `GET …/email` | — | Password never in response | — | 200 | Email settings form |
-| `PUT …/email` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `PUT …/email` | `host`, `port`, `encryption`, `fromAddress` | Valid values | `required` / `invalid_email` | 400 | Inline |
-| `PUT …/email` | `encryption` | `none` disallowed in production | `required` | 400 | Inline |
-| `PUT …/email` | `password` | Required when enabling with no stored password | `required` | 400 | Inline |
-| `POST …/email/test` | CSRF | Valid token | `csrf_invalid` | 403 | Refresh and retry |
-| `POST …/email/test` | `to` | Valid email | `invalid_email` | 400 | Inline on test field |
-| `POST …/email/test` | — | SMTP enabled and configured | `smtp_not_configured` | 409 | Banner |
-| `POST …/email/test` | — | Delivery succeeds | `smtp_delivery_failed` | 502 | Banner |
+| Operation / field | Rule | Result |
+| --- | --- | --- |
+| `POST /api/v1/apps` | Name, optional minimum assurance, required `initialClient` | Application + child Client created atomically; returns `app`, `client`, `clientSecret` |
+| `PATCH /api/v1/apps/:appId` | Display name, lifecycle, minimum assurance only | Client protocol fields rejected |
+| `GET …/clients` | `apps.clients:read` | Child configurations without secrets |
+| `POST …/clients` | `apps.clients:create`, CSRF, existing privileged verification | Independent Client ID; public has no secret; confidential secret shown once |
+| `PATCH …/clients/:clientId` | `apps.clients:update`, CSRF, existing privileged verification | Class, purpose, identity immutable; parent binding required |
+| `assuranceOverride` | Null inherits; baseline/strong cannot weaken parent minimum | 400 on weakening; PostgreSQL enforces invariant under concurrent writes |
+| Workload purpose | Confidential; no redirects, browser origins, refresh or human assurance | Human authorization rejected; Client Credentials allowed |
+| Interactive purpose | Nonempty registered redirects; public clients use PKCE | Client Credentials rejected |
+| Browser origins | Explicit exact origins on public interactive clients | Redirect registration grants no CORS authority |
+| Refresh capability | Explicit opt-in, false by default | Code response omits refresh unless enabled; disable revokes families and retry responses |
+| `POST …/clients/:clientId/rotate` | `apps.clients:rotate`, CSRF, privileged verification; active confidential Client and parent | Stable Client ID; secret returned once; public clients return 409 |
+| Disable child / parent | Blocks authorization, exchange, refresh and new workload issuance | Child containment stays local; re-enable never restores revoked authority |
 
 ## Application scopes (`/api/v1/apps/:appId/scopes`)
 
@@ -237,7 +210,7 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 | `POST /auth/register` | Password | Policy + confirm | `password_policy` / `password_mismatch` | 400 | Checklist |
 | `POST /auth/register` | Success | Creates `app_users` + `z0_app_session` | — | 303 | OAuth resume |
 | `GET /oauth/authorize` | `response_type` | Must be `code` | `invalid_request` | 400 | OAuth error page / response |
-| `GET /oauth/authorize` | `client_id` | Active credential and active app required | `invalid_client` | 400 | App unavailable state |
+| `GET /oauth/authorize` | `client_id` | Active interactive Client and active Application required | `invalid_client` | 400 | App unavailable state |
 | `GET /oauth/authorize` | `redirect_uri` | Exact match with registered URI | `invalid_redirect_uri` | 400 | OAuth error page / response |
 | `GET /oauth/authorize` | `scope` | Requested scopes subset of app scope registry | `invalid_scope` | 400 | Scope error with retry |
 | `GET /oauth/authorize` | PKCE | Public clients require `code_challenge` + `S256` | `pkce_required` | 400 | PKCE guidance error |
@@ -255,10 +228,10 @@ This matrix replaces tenant/platform-RBAC driven validation rules.
 |----------|-------|------|------|------|-----|
 | `POST /oauth/token` | `grant_type` | `authorization_code`, `refresh_token`, `client_credentials` | `unsupported_grant_type` | 400 | Integration logs / API client |
 | `POST /oauth/token` | `code_verifier` | Required and valid for public clients on code exchange | `invalid_grant` | 400 | Integration logs / API client |
-| `POST /oauth/token` | Code exchange success | Returns opaque access token + refresh token | — | 200 | Integration logs / API client |
+| `POST /oauth/token` | Code exchange success | Returns opaque access token; refresh only when the child client enables it | — | 200 | Integration logs / API client |
 | `POST /oauth/token` | `refresh_token` grant | Rotates refresh; reuse of old refresh revokes family | `invalid_grant` | 400 | Integration logs / API client |
 | `POST /oauth/token` | `Idempotency-Key` | 16–128 visible ASCII characters; matching retry returns the original outcome for 10 seconds | `invalid_request` / `invalid_grant` | 400 | Integration logs / API client |
-| `POST /oauth/token` | `client_credentials` | Confidential only; optional scope subset | `unauthorized_client` / `invalid_scope` | 400 | Integration logs / API client |
+| `POST /oauth/token` | `client_credentials` | Explicit confidential workload purpose; optional scope subset | `unauthorized_client` / `invalid_scope` | 400 | Integration logs / API client |
 | `GET /oauth/authorize` | `state` | Required for public clients | `invalid_request` | 400 | OAuth error page |
 | `POST /oauth/token` | CORS | `Origin` must match redirect URI origin | — | 403 preflight | Browser integration |
 | `GET /oauth/userinfo` | CORS | Same as token endpoint | — | 403 preflight | Browser integration |
@@ -378,3 +351,7 @@ The membership integration suite runs explicitly in the Alpha quality gate. The 
 ## Shared SSO Account Domains
 
 Issue #95 is covered by `tests/integration/shared-sso-domains.test.ts` (atomic domain placement, populated rejection, competing assignments, registration races, automatic pre-Alpha grouping retirement, and Account-owned credential persistence), `tests/integration/group-sso-flow.test.ts` (hosted SSO reuse, explicit membership, isolated consent/scopes/metadata, Account MFA, source-authority checks, and authentication timestamp preservation), `tests/integration/passkeys-flow.test.ts` and `tests/integration/shared-passkeys.test.ts` (shared Account credentials and fresh-proof enforcement), and `tests/integration/shared-federation-domains.test.ts` (domain-scoped issuer/subject continuity with independent membership). These run in `quality:alpha` and the full regression suite. The console journey is covered by `tests/e2e/sso-groups-console.spec.ts`.
+
+## Application → Client acceptance evidence (#96)
+
+`tests/integration/apps-flow.test.ts` proves mixed server/SPA clients under one Application, one membership and stable ID Token/UserInfo subject, immutable class and purpose, independent redirects/origins, assurance inheritance and concurrent policy changes, RBAC/CSRF/parent binding, and disable/rotation behavior. Protocol, refresh, migration, and regression suites run in `quality:alpha`. `tests/e2e/oauth-clients-console.spec.ts` exercises create/list/manage beneath an Application.

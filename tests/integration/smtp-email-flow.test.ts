@@ -158,16 +158,12 @@ run("M08 SMTP and password reset", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: cookie },
-        body: {
-          name: "Reset App",
-          redirectUris: ["http://localhost:3000/reset-callback"],
-          clientType: "confidential",
-        },
+        body: {name: "Reset App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["http://localhost:3000/reset-callback"], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     const app = (await appRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
       clientSecret: string;
     };
     const initialAppPassword = makeStrongPassword();
@@ -200,22 +196,22 @@ run("M08 SMTP and password reset", () => {
     expect(unaffectedUserRes.status).toBe(201);
 
     const preRecoverySession = await loginApplicationIdentity(dispatchWeb, {
-      clientId: app.credential.clientId,
+      clientId: app.client.clientId,
       email: "reset-user@example.com",
       password: initialAppPassword,
     });
     const preRecoveryTokens = await issueOAuthTokens({
-      clientId: app.credential.clientId,
+      clientId: app.client.clientId,
       clientSecret: app.clientSecret,
       appSession: preRecoverySession,
     });
     const unaffectedSession = await loginApplicationIdentity(dispatchWeb, {
-      clientId: app.credential.clientId,
+      clientId: app.client.clientId,
       email: "unaffected-reset-user@example.com",
       password: unaffectedAppPassword,
     });
     const unaffectedTokens = await issueOAuthTokens({
-      clientId: app.credential.clientId,
+      clientId: app.client.clientId,
       clientSecret: app.clientSecret,
       appSession: unaffectedSession,
     });
@@ -228,7 +224,7 @@ run("M08 SMTP and password reset", () => {
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: preRecoveryTokens.refreshToken,
-        client_id: app.credential.clientId,
+        client_id: app.client.clientId,
         client_secret: app.clientSecret,
       }),
     }));
@@ -243,7 +239,7 @@ run("M08 SMTP and password reset", () => {
     const appForgotRes = await dispatchApi(
       buildRequest("POST", "/api/auth/forgot-password", {
         csrfToken: appForgotCsrf,
-        body: { email: "reset-user@example.com", clientId: app.credential.clientId },
+        body: { email: "reset-user@example.com", clientId: app.client.clientId },
       }),
     );
     expect(appForgotRes.status).toBe(200);
@@ -257,7 +253,7 @@ run("M08 SMTP and password reset", () => {
         csrfToken: appForgotCsrf,
         body: {
           token: appResetToken,
-          clientId: app.credential.clientId,
+          clientId: app.client.clientId,
           password,
           passwordConfirm: password,
         },
@@ -269,7 +265,7 @@ run("M08 SMTP and password reset", () => {
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: rotatedTokens.refresh_token,
-        client_id: app.credential.clientId,
+        client_id: app.client.clientId,
         client_secret: app.clientSecret,
       }),
     }));
@@ -287,7 +283,7 @@ run("M08 SMTP and password reset", () => {
 
     const sessionsAfterRecovery = await dispatchWeb(
       new Request(
-        `http://localhost/auth/sessions?client_id=${encodeURIComponent(app.credential.clientId)}`,
+        `http://localhost/auth/sessions?client_id=${encodeURIComponent(app.client.clientId)}`,
         {
           headers: {
             cookie: `${APP_SESSION_COOKIE}=${encodeURIComponent(preRecoverySession!)}`,
@@ -307,7 +303,7 @@ run("M08 SMTP and password reset", () => {
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: preRecoveryTokens.refreshToken,
-        client_id: app.credential.clientId,
+        client_id: app.client.clientId,
         client_secret: app.clientSecret,
       }),
     }));
@@ -318,7 +314,7 @@ run("M08 SMTP and password reset", () => {
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: rotatedTokens.refresh_token,
-        client_id: app.credential.clientId,
+        client_id: app.client.clientId,
         client_secret: app.clientSecret,
       }),
     }));
@@ -336,7 +332,7 @@ run("M08 SMTP and password reset", () => {
         body: new URLSearchParams({
           grant_type: "refresh_token",
           refresh_token: racingTokens.refresh_token,
-          client_id: app.credential.clientId,
+          client_id: app.client.clientId,
           client_secret: app.clientSecret,
         }),
       }));
@@ -352,7 +348,7 @@ run("M08 SMTP and password reset", () => {
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: unaffectedTokens.refreshToken,
-        client_id: app.credential.clientId,
+        client_id: app.client.clientId,
         client_secret: app.clientSecret,
       }),
     }));

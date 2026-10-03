@@ -1,1 +1,1 @@
-export const CURRENT_SCHEMA_VERSION = "0045_shared_sso_account_domains";
+export const CURRENT_SCHEMA_VERSION = "0046_oauth_clients";

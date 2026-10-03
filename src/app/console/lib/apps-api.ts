@@ -3,59 +3,55 @@ import type {
   AppSummary,
   CreateAppRequest,
   CreateAppResponse,
-  CreateCredentialRequest,
-  CreateCredentialResponse,
   PatchAppRequest,
-  AppCredentialSummary,
-  RotateCredentialResponse,
+  CreateClientRequest,
+  CreateClientResponse,
+  OAuthClientSummary,
+  PatchClientRequest,
+  RotateClientSecretResponse,
 } from "@z0/contracts/apps";
-
 import { apiFetch } from "./http-client";
-
 export async function fetchApps(): Promise<AppSummary[]> {
-  const { apps } = await apiFetch<{ apps: AppSummary[] }>("/api/v1/apps");
-  return apps;
+  return (await apiFetch<{ apps: AppSummary[] }>("/api/v1/apps")).apps;
 }
-
-export async function fetchApp(appId: string): Promise<AppDetail> {
+export function fetchApp(appId: string) {
   return apiFetch<AppDetail>(`/api/v1/apps/${appId}`);
 }
-
-export async function createApp(body: CreateAppRequest): Promise<CreateAppResponse> {
+export function createApp(body: CreateAppRequest) {
   return apiFetch<CreateAppResponse>("/api/v1/apps", { method: "POST", body });
 }
-
-export async function patchApp(appId: string, body: PatchAppRequest): Promise<AppDetail> {
-  return apiFetch<AppDetail>(`/api/v1/apps/${appId}`, { method: "PATCH", body });
+export function patchApp(appId: string, body: PatchAppRequest) {
+  return apiFetch<AppDetail>(`/api/v1/apps/${appId}`, {
+    method: "PATCH",
+    body,
+  });
 }
-
-export async function fetchAppCredentials(appId: string): Promise<AppCredentialSummary[]> {
-  const { credentials } = await apiFetch<{ credentials: AppCredentialSummary[] }>(
-    `/api/v1/apps/${appId}/credentials`,
-  );
-  return credentials;
+export async function fetchAppClients(appId: string) {
+  return (
+    await apiFetch<{ clients: OAuthClientSummary[] }>(
+      `/api/v1/apps/${appId}/clients`,
+    )
+  ).clients;
 }
-
-export async function createAppCredential(
-  appId: string,
-  body: CreateCredentialRequest = {},
-): Promise<CreateCredentialResponse> {
-  return apiFetch<CreateCredentialResponse>(`/api/v1/apps/${appId}/credentials`, {
+export function createAppClient(appId: string, body: CreateClientRequest) {
+  return apiFetch<CreateClientResponse>(`/api/v1/apps/${appId}/clients`, {
     method: "POST",
     body,
   });
 }
-
-export async function revokeAppCredential(appId: string, credentialId: string): Promise<void> {
-  await apiFetch(`/api/v1/apps/${appId}/credentials/${credentialId}`, { method: "DELETE" });
-}
-
-export async function rotateAppCredential(
+export function patchAppClient(
   appId: string,
-  credentialId: string,
-): Promise<RotateCredentialResponse> {
-  return apiFetch<RotateCredentialResponse>(
-    `/api/v1/apps/${appId}/credentials/${credentialId}/rotate`,
+  id: string,
+  body: PatchClientRequest,
+) {
+  return apiFetch<OAuthClientSummary>(`/api/v1/apps/${appId}/clients/${id}`, {
+    method: "PATCH",
+    body,
+  });
+}
+export function rotateAppClientSecret(appId: string, id: string) {
+  return apiFetch<RotateClientSecretResponse>(
+    `/api/v1/apps/${appId}/clients/${id}/rotate`,
     { method: "POST" },
   );
 }

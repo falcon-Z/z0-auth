@@ -20,4 +20,6 @@ bunx serve -p 5173 .
 - Token exchange from the browser (requires P4M6 CORS on `/oauth/token`)
 - Userinfo call with the access token
 
+Register a public interactive Client beneath your Application, set its redirect URI and explicitly register `http://localhost:5173` in browser origins. Enable refresh tokens on that Client if the example uses refresh.
+
 Never put a `client_secret` in browser code.

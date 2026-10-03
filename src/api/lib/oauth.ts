@@ -27,6 +27,10 @@ export type OAuthClient = {
   clientType: "public" | "confidential";
   clientSecretHash: string | null;
   redirectUris: string[];
+  browserOrigins: string[];
+  purpose: "interactive" | "workload";
+  refreshEnabled: boolean;
+  effectiveAssurance: "baseline" | "strong";
 };
 
 type AuthorizationCodeRow = {
@@ -41,6 +45,7 @@ type AuthorizationCodeRow = {
   oidc_nonce: string | null;
   expires_at: Date;
   used_at: Date | null;
+  issued_assurance: "baseline" | "strong";
 };
 
 type AuthorizationCodePreview = {
@@ -72,6 +77,7 @@ type RefreshTokenRow = {
   retry_response_ciphertext: string | null;
   retry_expires_at: Date | null;
   compromised_at: Date | null;
+  issued_assurance: "baseline" | "strong";
 };
 
 type RefreshRotationOutcome = {
@@ -81,16 +87,26 @@ type RefreshRotationOutcome = {
   appUserId: string;
 };
 
-export async function findActiveOAuthClient(clientId: string): Promise<OAuthClient | null> {
+// Management writes lock the parent before its children. Issuance uses the
+// same order so containment cannot miss a newly committed refresh replacement.
+async function lockClientAuthority(tx: SQL, appId: string, id: string) {
+  await tx`SELECT id FROM apps WHERE id = ${appId} FOR SHARE`;
+  await tx`SELECT id FROM oauth_clients WHERE id = ${id} AND app_id = ${appId} FOR SHARE`;
+}
+
+export async function findActiveOAuthClient(
+  clientId: string,
+): Promise<OAuthClient | null> {
   const [row] = await getDb()`
     SELECT
       c.id AS credential_id,
       c.app_id,
       c.client_id,
       c.client_secret_hash,
-      a.client_type,
-      a.redirect_uris
-    FROM app_credentials c
+      c.client_type,
+      c.redirect_uris, c.browser_origins, c.purpose, c.refresh_enabled,
+      CASE WHEN a.minimum_assurance = 'strong' OR c.assurance_override = 'strong' THEN 'strong' ELSE 'baseline' END AS effective_assurance
+    FROM oauth_clients c
     JOIN apps a ON a.id = c.app_id
     WHERE c.client_id = ${clientId}
       AND c.status = 'active'
@@ -106,6 +122,10 @@ export async function findActiveOAuthClient(clientId: string): Promise<OAuthClie
     client_secret_hash: string | null;
     client_type: "public" | "confidential";
     redirect_uris: string[];
+    browser_origins: string[];
+    purpose: "interactive" | "workload";
+    refresh_enabled: boolean;
+    effective_assurance: "baseline" | "strong";
   };
   return {
     credentialId: String(data.credential_id),
@@ -114,10 +134,17 @@ export async function findActiveOAuthClient(clientId: string): Promise<OAuthClie
     clientType: data.client_type,
     clientSecretHash: data.client_secret_hash,
     redirectUris: (data.redirect_uris as string[]) ?? [],
+    browserOrigins: data.browser_origins,
+    purpose: data.purpose,
+    refreshEnabled: data.refresh_enabled,
+    effectiveAssurance: data.effective_assurance,
   };
 }
 
-export function isAllowedRedirectUri(client: OAuthClient, redirectUri: string): boolean {
+export function isAllowedRedirectUri(
+  client: OAuthClient,
+  redirectUri: string,
+): boolean {
   return client.redirectUris.includes(redirectUri);
 }
 
@@ -155,22 +182,51 @@ export async function validateRequestedScopes(
   return { ok: true, normalizedScope: requested.join(" ") };
 }
 
-export async function issueAuthorizationCode(input: {
-  appId: string;
-  appUserId: string;
-  appCredentialId: string;
-  redirectUri: string;
-  scope: string;
-  codeChallenge: string | null;
-  codeChallengeMethod: string | null;
-  nonce: string | null;
-}, tx?: SQL): Promise<string> {
+export async function issueAuthorizationCode(
+  input: {
+    appId: string;
+    appUserId: string;
+    appCredentialId: string;
+    redirectUri: string;
+    scope: string;
+    codeChallenge: string | null;
+    codeChallengeMethod: string | null;
+    nonce: string | null;
+    sessionId?: string;
+  },
+  tx?: SQL,
+): Promise<string> {
   const code = `z0_ac_${randomToken(16)}`;
   const codeHash = await sha256Hex(code);
   const expiresAt = new Date(Date.now() + AUTH_CODE_TTL_MS);
 
-  const db = tx ?? getDb();
-  await db`
+  const execute = async (db: SQL) => {
+    await lockClientAuthority(db, input.appId, input.appCredentialId);
+    const [authority] =
+      await db`SELECT c.id, c.purpose, c.redirect_uris, a.status AS app_status, c.status,
+      (a.minimum_assurance = 'strong' OR c.assurance_override = 'strong') AS requires_strong
+      FROM oauth_clients c JOIN apps a ON a.id = c.app_id
+      WHERE c.id = ${input.appCredentialId} AND c.app_id = ${input.appId} FOR SHARE OF a, c`;
+    if (
+      !authority ||
+      authority.status !== "active" ||
+      authority.app_status !== "active" ||
+      authority.purpose !== "interactive" ||
+      !authority.redirect_uris.includes(input.redirectUri)
+    )
+      throw new Error("invalid_authorization_authority");
+    let assurance = "baseline";
+    if (input.sessionId) {
+      const [session] =
+        await db`SELECT s.mfa_authenticated_at FROM app_user_sessions s JOIN app_browser_sessions b ON b.id = s.browser_session_id
+        WHERE s.id = ${input.sessionId} AND s.app_user_id = ${input.appUserId} AND s.app_id = ${input.appId}
+          AND s.revoked_at IS NULL AND s.expires_at > NOW() AND b.revoked_at IS NULL AND b.expires_at > NOW()
+        FOR SHARE OF s, b`;
+      if (session?.mfa_authenticated_at) assurance = "strong";
+    }
+    if (authority.requires_strong && assurance !== "strong")
+      throw new Error("insufficient_assurance");
+    await db`
     INSERT INTO oauth_authorization_codes (
       code_hash,
       app_id,
@@ -181,7 +237,7 @@ export async function issueAuthorizationCode(input: {
       code_challenge,
       code_challenge_method,
       oidc_nonce,
-      expires_at
+      expires_at, issued_assurance
     )
     VALUES (
       ${codeHash},
@@ -193,21 +249,32 @@ export async function issueAuthorizationCode(input: {
       ${input.codeChallenge},
       ${input.codeChallengeMethod},
       ${input.nonce},
-      ${expiresAt}
+      ${expiresAt}, ${assurance}
     )
   `;
-
+  };
+  if (tx) await execute(tx);
+  else await getDb().begin(execute);
   return code;
 }
 
 function toBase64Url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   const binary = String.fromCharCode(...bytes);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
 }
 
-async function verifyPkce(codeVerifier: string, codeChallenge: string): Promise<boolean> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
+async function verifyPkce(
+  codeVerifier: string,
+  codeChallenge: string,
+): Promise<boolean> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(codeVerifier),
+  );
   return toBase64Url(digest) === codeChallenge;
 }
 
@@ -221,18 +288,31 @@ export async function exchangeAuthorizationCode(input: {
   client: OAuthClient;
   redirectUri: string;
   codeVerifier?: string;
-}): Promise<{ ok: true } & OAuthTokenSuccess | { ok: false; error: "invalid_grant" | "invalid_request" }> {
+}): Promise<
+  | ({ ok: true } & OAuthTokenSuccess)
+  | { ok: false; error: "invalid_grant" | "invalid_request" }
+> {
+  if (input.client.purpose !== "interactive")
+    return { ok: false, error: "invalid_grant" };
   const preview = await previewAuthorizationCodeForExchange(input);
   if (!preview.ok) return preview;
   const codeHash = await sha256Hex(input.code);
   const [row] = await getDb()`
-    SELECT id, app_id, app_user_id, app_credential_id, scope
+    SELECT id, app_id, app_user_id, app_credential_id, scope, issued_assurance
     FROM oauth_authorization_codes
     WHERE code_hash = ${codeHash}
     LIMIT 1
   `;
   if (!row) return { ok: false, error: "invalid_grant" };
-  const codeRow = row as Pick<AuthorizationCodeRow, "id" | "app_id" | "app_user_id" | "app_credential_id" | "scope">;
+  const codeRow = row as Pick<
+    AuthorizationCodeRow,
+    | "id"
+    | "app_id"
+    | "app_user_id"
+    | "app_credential_id"
+    | "scope"
+    | "issued_assurance"
+  >;
 
   const accessToken = `z0_at_${randomToken(24)}`;
   const tokenHash = await sha256Hex(accessToken);
@@ -242,25 +322,39 @@ export async function exchangeAuthorizationCode(input: {
   const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
   const familyId = crypto.randomUUID();
 
+  let refreshEnabled = false;
   try {
-    await getDb().begin(async (tx) => {
+    refreshEnabled = await getDb().begin(async (tx) => {
+      await lockClientAuthority(
+        tx,
+        input.client.appId,
+        input.client.credentialId,
+      );
       const [fresh] = await tx`
-        SELECT c.id, c.used_at, c.expires_at
+        SELECT c.id, c.used_at, c.expires_at, ac.refresh_enabled
         FROM oauth_authorization_codes c
         JOIN app_users u ON u.id = c.app_user_id
-        JOIN app_credentials ac ON ac.id = c.app_credential_id
+        JOIN oauth_clients ac ON ac.id = c.app_credential_id
         JOIN apps a ON a.id = c.app_id
         WHERE c.id = ${codeRow.id}
           AND u.status = 'active'
           AND u.disabled_at IS NULL AND u.deleted_at IS NULL
           AND (u.locked_until IS NULL OR u.locked_until <= NOW())
-          AND ac.status = 'active'
+          AND ac.status = 'active' AND ac.purpose = 'interactive'
+          AND (c.issued_assurance = 'strong' OR (a.minimum_assurance = 'baseline' AND ac.assurance_override IS DISTINCT FROM 'strong'))
           AND a.status = 'active'
         FOR UPDATE
       `;
       if (!fresh) throw new Error("invalid_grant");
-      const freshRow = fresh as { id: string; used_at: Date | null; expires_at: Date };
-      if (freshRow.used_at || new Date(freshRow.expires_at).getTime() <= Date.now()) {
+      const freshRow = fresh as {
+        id: string;
+        used_at: Date | null;
+        expires_at: Date;
+      };
+      if (
+        freshRow.used_at ||
+        new Date(freshRow.expires_at).getTime() <= Date.now()
+      ) {
         throw new Error("invalid_grant");
       }
 
@@ -291,7 +385,8 @@ export async function exchangeAuthorizationCode(input: {
         )
       `;
 
-      await tx`
+      if (fresh.refresh_enabled)
+        await tx`
         INSERT INTO oauth_refresh_tokens (
           token_hash,
           app_id,
@@ -299,7 +394,7 @@ export async function exchangeAuthorizationCode(input: {
           app_credential_id,
           scope,
           family_id,
-          expires_at
+          expires_at, issued_assurance
         )
         VALUES (
           ${refreshHash},
@@ -308,9 +403,10 @@ export async function exchangeAuthorizationCode(input: {
           ${codeRow.app_credential_id},
           ${codeRow.scope},
           ${familyId},
-          ${refreshExpiresAt}
+          ${refreshExpiresAt}, ${codeRow.issued_assurance}
         )
       `;
+      return Boolean(fresh.refresh_enabled);
     });
   } catch (error) {
     if (error instanceof Error && error.message === "invalid_grant") {
@@ -325,7 +421,7 @@ export async function exchangeAuthorizationCode(input: {
     tokenType: "Bearer",
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
     scope: codeRow.scope ?? "",
-    refreshToken,
+    refreshToken: refreshEnabled ? refreshToken : undefined,
     appUserId: String(codeRow.app_user_id),
   };
 }
@@ -335,7 +431,10 @@ export async function previewAuthorizationCodeForExchange(input: {
   client: OAuthClient;
   redirectUri: string;
   codeVerifier?: string;
-}): Promise<{ ok: true; preview: AuthorizationCodePreview } | { ok: false; error: "invalid_grant" }> {
+}): Promise<
+  | { ok: true; preview: AuthorizationCodePreview }
+  | { ok: false; error: "invalid_grant" }
+> {
   const codeHash = await sha256Hex(input.code);
   const [row] = await getDb()`
     SELECT
@@ -351,7 +450,7 @@ export async function previewAuthorizationCodeForExchange(input: {
       c.used_at
     FROM oauth_authorization_codes c
     JOIN app_users u ON u.id = c.app_user_id
-    JOIN app_credentials ac ON ac.id = c.app_credential_id
+    JOIN oauth_clients ac ON ac.id = c.app_credential_id
     JOIN apps a ON a.id = c.app_id
     WHERE c.code_hash = ${codeHash}
       AND u.status = 'active'
@@ -373,7 +472,8 @@ export async function previewAuthorizationCodeForExchange(input: {
     return { ok: false, error: "invalid_grant" };
   }
   if (codeRow.code_challenge) {
-    if (codeRow.code_challenge_method !== "S256") return { ok: false, error: "invalid_grant" };
+    if (codeRow.code_challenge_method !== "S256")
+      return { ok: false, error: "invalid_grant" };
     if (!input.codeVerifier || !isValidPkceCodeVerifier(input.codeVerifier)) {
       return { ok: false, error: "invalid_grant" };
     }
@@ -425,8 +525,7 @@ export type RefreshTokenExchangeInput = {
 };
 
 export type RefreshTokenExchangeResult =
-  | ({ ok: true } & OAuthTokenSuccess)
-  | { ok: false; error: "invalid_grant" };
+  ({ ok: true } & OAuthTokenSuccess) | { ok: false; error: "invalid_grant" };
 
 async function exchangeRefreshTokenWithDatabase(
   database: SQL,
@@ -436,24 +535,31 @@ async function exchangeRefreshTokenWithDatabase(
   const retryKeyHash = input.retryKey ? await sha256Hex(input.retryKey) : null;
   const accessToken = `z0_at_${randomToken(24)}`;
   const accessHash = await sha256Hex(accessToken);
-  const accessExpiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
+  const accessExpiresAt = new Date(
+    Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000,
+  );
   const newRefreshToken = `z0_rt_${randomToken(24)}`;
   const newRefreshHash = await sha256Hex(newRefreshToken);
   const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
 
   const result = await database.begin(async (tx) => {
-      const [familyRow] = await tx`
+    await lockClientAuthority(
+      tx,
+      input.client.appId,
+      input.client.credentialId,
+    );
+    const [familyRow] = await tx`
         SELECT family_id
         FROM oauth_refresh_tokens
         WHERE token_hash = ${tokenHash}
           AND app_credential_id = ${input.client.credentialId}
         LIMIT 1
       `;
-      if (!familyRow) return { ok: false as const };
-      const familyId = String((familyRow as { family_id: string }).family_id);
-      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${familyId}::text, 0))`;
+    if (!familyRow) return { ok: false as const };
+    const familyId = String((familyRow as { family_id: string }).family_id);
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${familyId}::text, 0))`;
 
-      const [row] = await tx`
+    const [row] = await tx`
         SELECT
           r.id,
           r.app_id,
@@ -467,72 +573,76 @@ async function exchangeRefreshTokenWithDatabase(
           r.retry_key_hash,
           r.retry_response_ciphertext,
           r.retry_expires_at,
-          r.compromised_at
+          r.compromised_at, r.issued_assurance
         FROM oauth_refresh_tokens r
         JOIN app_users u ON u.id = r.app_user_id
         JOIN apps a ON a.id = r.app_id
-        JOIN app_credentials ac ON ac.id = r.app_credential_id
+        JOIN oauth_clients ac ON ac.id = r.app_credential_id
         WHERE r.token_hash = ${tokenHash}
           AND u.status = 'active'
           AND u.disabled_at IS NULL AND u.deleted_at IS NULL
           AND (u.locked_until IS NULL OR u.locked_until <= NOW())
           AND a.status = 'active'
-          AND ac.status = 'active'
+          AND ac.status = 'active' AND ac.refresh_enabled AND ac.purpose = 'interactive'
+          AND (r.issued_assurance = 'strong' OR (a.minimum_assurance = 'baseline' AND ac.assurance_override IS DISTINCT FROM 'strong'))
         FOR UPDATE OF r
       `;
-      if (!row) return { ok: false as const };
-      const refresh = row as RefreshTokenRow;
+    if (!row) return { ok: false as const };
+    const refresh = row as RefreshTokenRow;
 
-      if (String(refresh.app_credential_id) !== input.client.credentialId) {
-        return { ok: false as const };
+    if (String(refresh.app_credential_id) !== input.client.credentialId) {
+      return { ok: false as const };
+    }
+
+    if (refresh.replaced_by_token_id && refresh.revoked_at) {
+      if (refresh.compromised_at) return { ok: false as const };
+      const retryIsValid = Boolean(
+        retryKeyHash &&
+        refresh.retry_key_hash === retryKeyHash &&
+        refresh.retry_response_ciphertext &&
+        refresh.retry_expires_at &&
+        new Date(refresh.retry_expires_at).getTime() > Date.now(),
+      );
+      if (retryIsValid) {
+        const outcome = JSON.parse(
+          await decryptSecret(refresh.retry_response_ciphertext!),
+        ) as RefreshRotationOutcome;
+        return { ok: true as const, outcome };
       }
 
-      if (refresh.replaced_by_token_id && refresh.revoked_at) {
-        if (refresh.compromised_at) return { ok: false as const };
-        const retryIsValid = Boolean(
-          retryKeyHash
-          && refresh.retry_key_hash === retryKeyHash
-          && refresh.retry_response_ciphertext
-          && refresh.retry_expires_at
-          && new Date(refresh.retry_expires_at).getTime() > Date.now(),
-        );
-        if (retryIsValid) {
-          const outcome = JSON.parse(
-            await decryptSecret(refresh.retry_response_ciphertext!),
-          ) as RefreshRotationOutcome;
-          return { ok: true as const, outcome };
-        }
-
-        await revokeRefreshTokenFamily(tx, refresh.family_id, true);
-        await writeRefreshTokenReuseAuditRecord({
+      await revokeRefreshTokenFamily(tx, refresh.family_id, true);
+      await writeRefreshTokenReuseAuditRecord(
+        {
           familyId: refresh.family_id,
           appId: String(refresh.app_id),
           appUserId: String(refresh.app_user_id),
-        }, tx);
-        return { ok: false as const };
-      }
+        },
+        tx,
+      );
+      return { ok: false as const };
+    }
 
-      if (refresh.revoked_at) return { ok: false as const };
+    if (refresh.revoked_at) return { ok: false as const };
 
-      if (new Date(refresh.expires_at).getTime() <= Date.now()) {
-        return { ok: false as const };
-      }
+    if (new Date(refresh.expires_at).getTime() <= Date.now()) {
+      return { ok: false as const };
+    }
 
-      const requestedScopes = [...parseScopeSet(refresh.scope ?? "")];
-      if (requestedScopes.length) {
-        const activeScopeRows = await tx`
+    const requestedScopes = [...parseScopeSet(refresh.scope ?? "")];
+    if (requestedScopes.length) {
+      const activeScopeRows = await tx`
           SELECT name
           FROM app_scopes
           WHERE app_id = ${refresh.app_id}
             AND name IN ${tx(requestedScopes)}
         `;
-        if (activeScopeRows.length !== requestedScopes.length) {
-          await revokeRefreshTokenFamily(tx, refresh.family_id);
-          return { ok: false as const };
-        }
+      if (activeScopeRows.length !== requestedScopes.length) {
+        await revokeRefreshTokenFamily(tx, refresh.family_id);
+        return { ok: false as const };
       }
+    }
 
-      const [replacement] = await tx`
+    const [replacement] = await tx`
         INSERT INTO oauth_refresh_tokens (
           token_hash,
           app_id,
@@ -540,7 +650,7 @@ async function exchangeRefreshTokenWithDatabase(
           app_credential_id,
           scope,
           family_id,
-          expires_at
+          expires_at, issued_assurance
         )
         VALUES (
           ${newRefreshHash},
@@ -549,19 +659,19 @@ async function exchangeRefreshTokenWithDatabase(
           ${refresh.app_credential_id},
           ${refresh.scope},
           ${refresh.family_id},
-          ${refreshExpiresAt}
+          ${refreshExpiresAt}, ${refresh.issued_assurance}
         )
         RETURNING id
       `;
-      const replacementId = (replacement as { id: string }).id;
+    const replacementId = (replacement as { id: string }).id;
 
-      await tx`
+    await tx`
         UPDATE oauth_refresh_tokens
         SET replaced_by_token_id = ${replacementId}, revoked_at = NOW()
         WHERE id = ${refresh.id}
       `;
 
-      await tx`
+    await tx`
         INSERT INTO oauth_access_tokens (
           token_hash,
           app_id,
@@ -582,20 +692,20 @@ async function exchangeRefreshTokenWithDatabase(
         )
       `;
 
-      const outcome: RefreshRotationOutcome = {
-        accessToken,
-        refreshToken: newRefreshToken,
-        scope: refresh.scope ?? "",
-        appUserId: String(refresh.app_user_id),
-      };
-      const retryResponseCiphertext = input.retryKey
-        ? await encryptSecret(JSON.stringify(outcome))
-        : null;
-      const retryExpiresAt = input.retryKey
-        ? new Date(Date.now() + REFRESH_RETRY_TTL_MS)
-        : null;
+    const outcome: RefreshRotationOutcome = {
+      accessToken,
+      refreshToken: newRefreshToken,
+      scope: refresh.scope ?? "",
+      appUserId: String(refresh.app_user_id),
+    };
+    const retryResponseCiphertext = input.retryKey
+      ? await encryptSecret(JSON.stringify(outcome))
+      : null;
+    const retryExpiresAt = input.retryKey
+      ? new Date(Date.now() + REFRESH_RETRY_TTL_MS)
+      : null;
 
-      await tx`
+    await tx`
         UPDATE oauth_refresh_tokens
         SET retry_key_hash = ${retryKeyHash},
             retry_response_ciphertext = ${retryResponseCiphertext},
@@ -603,10 +713,10 @@ async function exchangeRefreshTokenWithDatabase(
         WHERE id = ${refresh.id}
       `;
 
-      return {
-        ok: true as const,
-        outcome,
-      };
+    return {
+      ok: true as const,
+      outcome,
+    };
   });
 
   if (!result.ok) {
@@ -643,35 +753,38 @@ export async function issueClientCredentialsToken(input: {
   | ({ ok: true } & OAuthTokenSuccess)
   | { ok: false; error: "invalid_scope" | "unauthorized_client" }
 > {
-  if (input.client.clientType !== "confidential") {
+  if (
+    input.client.clientType !== "confidential" ||
+    input.client.purpose !== "workload"
+  ) {
     return { ok: false, error: "unauthorized_client" };
   }
 
-  const scopeResult = await validateRequestedScopes(input.client.appId, input.scope);
+  const scopeResult = await validateRequestedScopes(
+    input.client.appId,
+    input.scope,
+  );
   if (!scopeResult.ok) return { ok: false, error: "invalid_scope" };
 
   const accessToken = `z0_at_${randomToken(24)}`;
   const tokenHash = await sha256Hex(accessToken);
   const expiresAt = new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000);
 
-  await getDb()`
-    INSERT INTO oauth_access_tokens (
-      token_hash,
-      app_id,
-      app_user_id,
-      app_credential_id,
-      scope,
-      expires_at
-    )
-    VALUES (
-      ${tokenHash},
-      ${input.client.appId},
-      NULL,
-      ${input.client.credentialId},
-      ${scopeResult.normalizedScope},
-      ${expiresAt}
-    )
+  const rows = await getDb().begin(async (tx) => {
+    await lockClientAuthority(
+      tx,
+      input.client.appId,
+      input.client.credentialId,
+    );
+    return tx`
+    INSERT INTO oauth_access_tokens (token_hash, app_id, app_user_id, app_credential_id, scope, expires_at)
+    SELECT ${tokenHash}, c.app_id, NULL, c.id, ${scopeResult.normalizedScope}, ${expiresAt}
+    FROM oauth_clients c JOIN apps a ON a.id = c.app_id
+    WHERE c.id = ${input.client.credentialId} AND c.status = 'active' AND a.status = 'active'
+      AND c.purpose = 'workload' AND c.client_type = 'confidential' RETURNING id
   `;
+  });
+  if (!rows.length) return { ok: false, error: "unauthorized_client" };
 
   return {
     ok: true,
@@ -682,7 +795,10 @@ export async function issueClientCredentialsToken(input: {
   };
 }
 
-export async function revokeOAuthToken(input: { token: string; client: OAuthClient }): Promise<void> {
+export async function revokeOAuthToken(input: {
+  token: string;
+  client: OAuthClient;
+}): Promise<void> {
   const tokenHash = await sha256Hex(input.token);
   await getDb().begin(async (tx) => {
     await tx`
@@ -701,7 +817,10 @@ export async function revokeOAuthToken(input: { token: string; client: OAuthClie
       LIMIT 1
     `;
     if (refreshRow) {
-      await revokeRefreshTokenFamily(tx, String((refreshRow as { family_id: string }).family_id));
+      await revokeRefreshTokenFamily(
+        tx,
+        String((refreshRow as { family_id: string }).family_id),
+      );
     }
   });
 }
@@ -749,7 +868,9 @@ export async function revokeAllOAuthTokensForAppUser(
   });
 }
 
-export async function revokePendingAuthorizationCodesForAppUser(appUserId: string): Promise<void> {
+export async function revokePendingAuthorizationCodesForAppUser(
+  appUserId: string,
+): Promise<void> {
   await getDb()`
     UPDATE oauth_authorization_codes
     SET used_at = NOW()
@@ -759,7 +880,9 @@ export async function revokePendingAuthorizationCodesForAppUser(appUserId: strin
   `;
 }
 
-export async function findOAuthAccessToken(token: string): Promise<OAuthAccessTokenRecord | null> {
+export async function findOAuthAccessToken(
+  token: string,
+): Promise<OAuthAccessTokenRecord | null> {
   const tokenHash = await sha256Hex(token);
   const [row] = await getDb()`
     SELECT
@@ -771,7 +894,7 @@ export async function findOAuthAccessToken(token: string): Promise<OAuthAccessTo
       t.revoked_at
     FROM oauth_access_tokens t
     JOIN apps a ON a.id = t.app_id
-    JOIN app_credentials ac ON ac.id = t.app_credential_id
+    JOIN oauth_clients ac ON ac.id = t.app_credential_id
     LEFT JOIN app_users u ON u.id = t.app_user_id AND u.app_id = t.app_id
     WHERE t.token_hash = ${tokenHash}
       AND a.status = 'active'
@@ -811,4 +934,16 @@ export function parseScopeSet(scope: string): Set<string> {
       .map((value) => value.trim())
       .filter(Boolean),
   );
+}
+
+export async function sessionMeetsClientAssurance(
+  client: OAuthClient,
+  sessionId: string,
+): Promise<boolean> {
+  if (client.effectiveAssurance === "baseline") return true;
+  const [row] =
+    await getDb()`SELECT s.id FROM app_user_sessions s JOIN app_browser_sessions b ON b.id = s.browser_session_id
+    WHERE s.id = ${sessionId} AND s.app_id = ${client.appId} AND s.mfa_authenticated_at IS NOT NULL
+      AND s.revoked_at IS NULL AND s.expires_at > NOW() AND b.revoked_at IS NULL AND b.expires_at > NOW()`;
+  return Boolean(row);
 }

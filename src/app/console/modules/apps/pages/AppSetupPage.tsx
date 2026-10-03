@@ -1,72 +1,66 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-
-import { useAppWorkspace } from "../../../context/app-workspace-context";
-import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
-
-import type { AppCredentialSummary } from "@z0/contracts/apps";
-import { Badge } from "@z0/components/ui/badge";
+import type {
+  CreateClientRequest,
+  OAuthClientSummary,
+} from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
-import { DataTable } from "../../../components/crud/DataTable";
-import { DestructiveButton } from "../../../components/forms/DestructiveButton";
-import { useConfirm } from "../../../components/feedback/ConfirmDialog";
-import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
 import {
-  createAppCredential,
-  fetchAppCredentials,
-  revokeAppCredential,
-  rotateAppCredential,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@z0/components/ui/dialog";
+import { useAppWorkspace } from "../../../context/app-workspace-context";
+import { usePermissions } from "../../../hooks/use-permissions";
+import { usePageBreadcrumbs } from "../../../hooks/use-page-breadcrumbs";
+import { DataTable } from "../../../components/crud/DataTable";
+import { ListPageSkeleton } from "../../../components/feedback/ListPageSkeleton";
+import { useConfirm } from "../../../components/feedback/ConfirmDialog";
+import {
+  createAppClient,
+  fetchAppClients,
+  patchAppClient,
+  rotateAppClientSecret,
 } from "../../../lib/apps-api";
-import { ApiError } from "../../../lib/api";
+import { ClientFields, defaultClient } from "../components/ClientFields";
 import { CredentialSecretDialog } from "../components/CredentialSecretDialog";
 
-type SetupLocationState = {
-  credentialReveal?: {
-    clientId: string;
-    clientSecret: string | null;
-    title: string;
-  };
-};
-
+type Reveal = { clientId: string; clientSecret: string | null; title: string };
 export function AppSetupPage() {
   const { appId, app, setNotice } = useAppWorkspace();
+  const { hasScope } = usePermissions();
   const confirm = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
-
-  const [credentials, setCredentials] = useState<AppCredentialSummary[]>([]);
+  const [clients, setClients] = useState<OAuthClientSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [secretDialog, setSecretDialog] = useState<{
-    clientId: string;
-    clientSecret: string | null;
-    title: string;
-  } | null>(null);
-
-  const isPublicApp = app.clientType === "public";
-
-  useEffect(() => {
-    const state = location.state as SetupLocationState | null;
-    if (!state?.credentialReveal) return;
-    setSecretDialog(state.credentialReveal);
-    navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, location.state, navigate]);
-
-  const reloadCredentials = useCallback(async () => {
-    setLoading(true);
+  const [busy, setBusy] = useState(false);
+  const [reveal, setReveal] = useState<Reveal | null>(null);
+  const [editing, setEditing] = useState<OAuthClientSummary | null>(null);
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(defaultClient);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useCallback(async () => {
     try {
-      setCredentials(await fetchAppCredentials(appId));
+      setClients(await fetchAppClients(appId));
     } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not load credentials.");
+      setNotice(e instanceof Error ? e.message : "Could not load clients.");
     } finally {
       setLoading(false);
     }
   }, [appId, setNotice]);
-
   useEffect(() => {
-    void reloadCredentials();
-  }, [reloadCredentials]);
-
+    void reload();
+  }, [reload, app.minimumAssurance]);
+  useEffect(() => {
+    const state = location.state as { credentialReveal?: Reveal } | null;
+    if (state?.credentialReveal) {
+      setReveal(state.credentialReveal);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, navigate]);
   usePageBreadcrumbs(
     [
       { label: "Apps", to: "/apps" },
@@ -75,183 +69,236 @@ export function AppSetupPage() {
     ],
     [app.name, appId],
   );
-
-  async function handleCreateCredential() {
-    if (app.status !== "active") return;
-    setBusyId("create");
-    setNotice(null);
+  function edit(client: OAuthClientSummary | null) {
+    setEditing(client);
+    setValue(client ? { ...client } : defaultClient());
+    setError(null);
+    setOpen(true);
+  }
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
     try {
-      const result = await createAppCredential(appId);
-      setSecretDialog({
-        clientId: result.credential.clientId,
-        clientSecret: result.clientSecret,
-        title: "New client credential",
-      });
-      await reloadCredentials();
+      if (editing) {
+        const {
+          label,
+          redirectUris,
+          browserOrigins,
+          refreshEnabled,
+          assuranceOverride,
+        } = value;
+        await patchAppClient(appId, editing.id, {
+          label,
+          redirectUris,
+          browserOrigins,
+          refreshEnabled,
+          assuranceOverride,
+        });
+      } else {
+        const result = await createAppClient(appId, value);
+        setReveal({
+          clientId: result.client.clientId,
+          clientSecret: result.clientSecret,
+          title: "New OAuth client",
+        });
+      }
+      setOpen(false);
+      await reload();
     } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not create credential.");
+      setError(e instanceof Error ? e.message : "Could not save client.");
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
-
-  async function handleRotate(cred: AppCredentialSummary) {
-    const ok = await confirm({
-      title: "Rotate secret",
-      description: "The current secret will stop working immediately.",
-      confirmLabel: "Rotate",
-      destructive: true,
-    });
-    if (!ok) return;
-
-    setBusyId(cred.id);
-    setNotice(null);
+  async function toggle(client: OAuthClientSummary) {
+    const disable = client.status === "active";
+    if (
+      !(await confirm({
+        title: disable ? "Disable client" : "Enable client",
+        description: disable
+          ? "New authorization and token issuance stop. Existing refresh authority will be revoked."
+          : "New use will be allowed again.",
+        confirmLabel: disable ? "Disable" : "Enable",
+        destructive: disable,
+      }))
+    )
+      return;
+    setBusy(true);
     try {
-      const result = await rotateAppCredential(appId, cred.id);
-      setSecretDialog({
-        clientId: result.credential.clientId,
+      await patchAppClient(appId, client.id, {
+        status: disable ? "disabled" : "active",
+      });
+      await reload();
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "Could not update client.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function rotate(client: OAuthClientSummary) {
+    if (
+      !(await confirm({
+        title: "Rotate secret",
+        description: "The current secret will stop working immediately.",
+        confirmLabel: "Rotate",
+        destructive: true,
+      }))
+    )
+      return;
+    setBusy(true);
+    try {
+      const result = await rotateAppClientSecret(appId, client.id);
+      setReveal({
+        clientId: client.clientId,
         clientSecret: result.clientSecret,
         title: "Secret rotated",
       });
-      await reloadCredentials();
     } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not rotate secret.");
+      setNotice(e instanceof Error ? e.message : "Could not rotate secret.");
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
-
-  async function handleRevoke(cred: AppCredentialSummary) {
-    const ok = await confirm({
-      title: "Revoke credential",
-      description: `Revoke ${cred.label} (${cred.clientId})?`,
-      confirmLabel: "Revoke",
-      destructive: true,
-    });
-    if (!ok) return;
-
-    setBusyId(cred.id);
-    setNotice(null);
-    try {
-      await revokeAppCredential(appId, cred.id);
-      setNotice("Credential revoked.");
-      await reloadCredentials();
-    } catch (e) {
-      setNotice(e instanceof ApiError ? e.message : "Could not revoke credential.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   if (loading) return <ListPageSkeleton />;
-
-  const activeCreds = credentials.filter((c) => c.status === "active");
-
   return (
     <div className="space-y-6">
-      <dl className="grid gap-4 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Application type</dt>
-          <dd className="mt-1">
-            {isPublicApp ? "Single-page app (browser)" : "Web app (server)"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Redirect URIs</dt>
-          <dd className="mt-1 space-y-1 font-mono text-xs">
-            {app.redirectUris.map((uri) => (
-              <div key={uri}>{uri}</div>
-            ))}
-          </dd>
-        </div>
-      </dl>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-medium">Client credentials</h2>
-            {isPublicApp ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Public clients use PKCE. No client secret is issued.
-              </p>
-            ) : null}
+      <p className="text-sm">
+        Application minimum assurance: <strong>{app.minimumAssurance}</strong>.
+        All clients share this application's membership and stable subjects.
+      </p>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium">OAuth clients</h2>
+        {hasScope("apps.clients:create") && (
+          <Button
+            disabled={busy || app.status !== "active"}
+            onClick={() => edit(null)}
+          >
+            Add client
+          </Button>
+        )}
+      </div>
+      <DataTable<OAuthClientSummary>
+        columns={[
+          {
+            id: "label",
+            header: "Label",
+            accessorFn: (r) => r.label,
+            cell: (r) => r.label,
+          },
+          {
+            id: "id",
+            header: "Client ID",
+            accessorFn: (r) => r.clientId,
+            cell: (r) => (
+              <span className="font-mono text-xs">{r.clientId}</span>
+            ),
+          },
+          {
+            id: "type",
+            header: "Class / purpose",
+            accessorFn: (r) => `${r.clientType} ${r.purpose}`,
+            cell: (r) => `${r.clientType} / ${r.purpose}`,
+          },
+          {
+            id: "assurance",
+            header: "Assurance",
+            accessorFn: (r) => r.effectiveAssurance,
+            cell: (r) =>
+              r.purpose === "interactive" ? r.effectiveAssurance : "Workload",
+          },
+          {
+            id: "status",
+            header: "Status",
+            accessorFn: (r) => r.status,
+            cell: (r) => r.status,
+          },
+        ]}
+        rows={clients}
+        rowKey={(r) => r.id}
+        emptyMessage="No clients."
+        rowActions={(client) => (
+          <div className="flex gap-2">
+            {hasScope("apps.clients:update") && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => edit(client)}
+                >
+                  Manage
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || app.status !== "active"}
+                  onClick={() => void toggle(client)}
+                >
+                  {client.status === "active" ? "Disable" : "Enable"}
+                </Button>
+              </>
+            )}
+            {hasScope("apps.clients:rotate") &&
+              client.clientType === "confidential" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    busy ||
+                    client.status !== "active" ||
+                    app.status !== "active"
+                  }
+                  onClick={() => void rotate(client)}
+                >
+                  Rotate secret
+                </Button>
+              )}
           </div>
-          {app.status === "active" && credentials.length > 0 && !isPublicApp ? (
-            <Button size="sm" disabled={busyId === "create"} onClick={() => void handleCreateCredential()}>
-              Add credential
-            </Button>
-          ) : null}
-        </div>
-
-        <DataTable<AppCredentialSummary>
-          columns={[
-            { id: "label", header: "Label", accessorFn: (row) => row.label, cell: (row) => row.label },
-            {
-              id: "clientId",
-              header: "Client ID",
-              accessorFn: (row) => row.clientId,
-              cell: (row) => <span className="font-mono text-xs">{row.clientId}</span>,
-            },
-            {
-              id: "status",
-              header: "Status",
-              accessorFn: (row) => row.status,
-              cell: (row) => (
-                <Badge variant={row.status === "active" ? "secondary" : "outline"}>{row.status}</Badge>
-              ),
-            },
-          ]}
-          rows={credentials}
-          rowKey={(row) => row.id}
-          emptyMessage="No credentials yet."
-          emptyAction={
-            app.status === "active" && !isPublicApp ? (
+        )}
+      />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <form onSubmit={(e) => void save(e)}>
+            <DialogHeader>
+              <DialogTitle>
+                {editing ? "Manage client" : "Add client"}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <ClientFields
+                value={value}
+                onChange={setValue}
+                immutable={Boolean(editing)}
+              />
+            </div>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <DialogFooter>
               <Button
                 type="button"
-                disabled={busyId === "create"}
-                onClick={() => void handleCreateCredential()}
+                variant="outline"
+                onClick={() => setOpen(false)}
               >
-                Add credential
+                Cancel
               </Button>
-            ) : undefined
-          }
-          rowActions={(row) =>
-            row.status === "active" ? (
-              <div className="flex gap-2">
-                {!isPublicApp ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={busyId === row.id || app.status !== "active"}
-                    onClick={() => void handleRotate(row)}
-                  >
-                    Rotate
-                  </Button>
-                ) : null}
-                <DestructiveButton
-                  type="button"
-                  size="sm"
-                  disabled={busyId === row.id || (app.status === "active" && activeCreds.length <= 1)}
-                  onClick={() => void handleRevoke(row)}
-                >
-                  Revoke
-                </DestructiveButton>
-              </div>
-            ) : null
-          }
-        />
-      </div>
-
-      {secretDialog ? (
+              <Button type="submit" disabled={busy}>
+                {busy ? "Saving…" : editing ? "Save" : "Create client"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {reveal && (
         <CredentialSecretDialog
           open
-          clientId={secretDialog.clientId}
-          clientSecret={secretDialog.clientSecret}
-          title={secretDialog.title}
-          onClose={() => setSecretDialog(null)}
+          {...reveal}
+          onClose={() => setReveal(null)}
         />
-      ) : null}
+      )}
     </div>
   );
 }

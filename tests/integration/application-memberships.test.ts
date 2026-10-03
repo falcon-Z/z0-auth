@@ -32,8 +32,8 @@ async function fixture() {
   const [domain] = await db`INSERT INTO account_domains (kind) VALUES ('shared') RETURNING id`;
   const apps = [];
   for (const slug of ["a", "b"]) {
-    const [app] = await db`INSERT INTO apps (name, slug, client_type, redirect_uris, account_domain_id)
-      VALUES (${slug}, ${slug}, 'public', ARRAY[${redirect}], ${domain.id}) RETURNING id`;
+    const [app] = await db`INSERT INTO apps (name, slug, account_domain_id)
+      VALUES (${slug}, ${slug}, ${domain.id}) RETURNING id`;
     apps.push(String(app.id));
   }
   const password = makeStrongPassword();
@@ -51,8 +51,8 @@ async function login(appId: string, password: string) {
 
 async function oidcTokens(appId: string, subjectId: string) {
   const clientId = `client-${crypto.randomUUID()}`;
-  const [credential] = await getDb()`INSERT INTO app_credentials (app_id, client_id, label)
-    VALUES (${appId}, ${clientId}, 'Test') RETURNING id`;
+  const [credential] = await getDb()`INSERT INTO oauth_clients (app_id, client_id, label, client_type, redirect_uris, refresh_enabled)
+    VALUES (${appId}, ${clientId}, 'Test', 'public', ARRAY[${redirect}], TRUE) RETURNING id`;
   const verifier = "a".repeat(43);
   const challenge = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
   const code = await issueAuthorizationCode({ appId, appUserId: subjectId, appCredentialId: String(credential.id),
@@ -85,7 +85,7 @@ run("Application Subjects and Memberships", () => {
         VALUES (${app.id}, 'person@example.com', 'Person', '{"team":"a"}', 'disabled', NOW()) RETURNING id, account_id`;
       await db`INSERT INTO app_password_reset_tokens (app_id, app_user_id, token_hash, expires_at)
         VALUES (${app.id}, ${user.id}, 'legacy-reset', NOW() + INTERVAL '1 hour')`;
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(2);
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(3);
       const [upgraded] = await db`SELECT id, account_id, account_status, membership_status, metadata FROM app_users`;
       expect(upgraded.id).toBe(user.id);
       expect(upgraded.account_id).toBe(user.account_id);
@@ -195,7 +195,7 @@ run("Application Subjects and Memberships", () => {
 
   test("membership cannot attach across domains, change subjects, or reactivate a deleted account", async () => {
     const f = await fixture();
-    const [independent] = await getDb()`INSERT INTO apps (name, slug, client_type, redirect_uris) VALUES ('C', 'c', 'public', '{}') RETURNING id`;
+    const [independent] = await getDb()`INSERT INTO apps (name, slug) VALUES ('C', 'c') RETURNING id`;
     const denied = await addApplicationMembershipForApi(String(independent.id), f.accountId, f.actorId);
     expect(!denied.ok && denied.response.status).toBe(404);
     const cross = await removeApplicationMembershipForApi(f.appB, f.subjectA, f.actorId);
@@ -225,7 +225,7 @@ run("Application Subjects and Memberships", () => {
 
   test("concurrent removal and issuance cannot leave renewable application authority", async () => {
     const f = await fixture();
-    const [credential] = await getDb()`INSERT INTO app_credentials (app_id, client_id, label) VALUES (${f.appA}, 'race-client', 'Test') RETURNING id`;
+    const [credential] = await getDb()`INSERT INTO oauth_clients (app_id, client_id, label, client_type, redirect_uris, refresh_enabled) VALUES (${f.appA}, 'race-client', 'Test', 'public', ARRAY[${redirect}], TRUE) RETURNING id`;
     let release!: () => void;
     const hold = new Promise<void>((resolve) => { release = resolve; });
     let signal!: () => void;

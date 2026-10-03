@@ -103,19 +103,15 @@ run("federation flow", () => {
       buildRequest("POST", "/api/v1/apps", {
         csrfToken: csrf,
         cookies: { [SESSION_COOKIE]: session },
-        body: {
-          name: "Fed App",
-          redirectUris: ["http://localhost:3000/oauth/callback"],
-          clientType: "confidential",
-        },
+        body: {name: "Fed App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["http://localhost:3000/oauth/callback"], refreshEnabled: true, browserOrigins: []}},
       }),
     );
     expect(appRes.status).toBe(201);
     const created = (await appRes.json()) as {
       app: { id: string };
-      credential: { clientId: string };
+      client: { clientId: string };
     };
-    const clientId = created.credential.clientId;
+    const clientId = created.client.clientId;
 
     const providerRes = await dispatchApi(
       buildRequest("POST", "/api/v1/federation/providers", {

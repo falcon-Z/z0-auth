@@ -178,7 +178,7 @@ One-way hashes (not encrypted — verification only, plaintext never stored):
 
 | Stored value | Table / column | Protection |
 |--------------|----------------|------------|
-| OAuth client secret | `app_credentials.client_secret_hash` | Password-style hash |
+| OAuth client secret | `oauth_clients.client_secret_hash` | Password-style hash |
 | OAuth / refresh tokens | `oauth_* .token_hash` | SHA-256 hash |
 | Session tokens | `sessions.token_hash`, `app_browser_sessions.token_hash` | SHA-256 hash |
 | MFA recovery/challenge/remembered tokens | `*_mfa_* .code_hash` / `.token_hash` | SHA-256 hash |
@@ -290,7 +290,7 @@ These rules are required for the OAuth authorization server baseline.
 
 ### Refresh tokens
 
-- Issued on authorization code exchange; 30-day absolute TTL
+- Issued on authorization code exchange only when the child Client enables refresh capability; 30-day absolute TTL
 - Rotation on each `refresh_token` grant — old refresh invalidated, new pair issued
 - An identical retry carrying the same 16–128 character `Idempotency-Key` may receive the encrypted original outcome for 10 seconds
 - Reuse without that matching key or after the retry window revokes the entire family, including access tokens issued from it, and records a high-severity Security Event
@@ -299,13 +299,13 @@ These rules are required for the OAuth authorization server baseline.
 
 ### CORS (browser clients)
 
-- `POST /oauth/token` and `GET /oauth/userinfo` return CORS headers when `Origin` matches an origin derived from the client’s registered `redirect_uris`
-- `OPTIONS` preflight uses the same origin allow-list (any active app’s redirect origins on this instance)
+- `POST /oauth/token` and `GET /oauth/userinfo` return CORS headers when `Origin` exactly matches the public interactive Client's explicit `browser_origins` registration.
+- `OPTIONS` preflight permits origins explicitly registered by an active public interactive Client beneath an active Application. The actual response checks the requesting Client's own origins.
 - Public clients must send `state` on `/oauth/authorize`
 
 ### Client credentials (machine-to-machine)
 
-- Confidential clients only; `grant_type=client_credentials` at `/oauth/token`
+- Explicit confidential workload Clients only; `grant_type=client_credentials` at `/oauth/token`
 - Optional `scope` must be a subset of the app scope registry
 - Access tokens have no `app_user_id` — not valid for `/oauth/userinfo`
 
@@ -367,3 +367,7 @@ OIDC builds on OAuth with discovery metadata, JWK distribution, ID tokens, and u
 3. OAuth-related? → Redirect URI, scope subset, PKCE per above
 4. Errors? → `problem()` / `createProblemDetail` + `ErrorCodes`; update OpenAPI + validation matrix
 5. Abuse? → Rate limit or document why exempt
+
+### Application and Client authority
+
+Client class and purpose are immutable. Client protocol configuration, including redirects, browser origins, refresh capability and stronger assurance, belongs to `oauth_clients`, separately from the Application's identity and membership. Raising the Application minimum cannot weaken any child policy. Code and refresh issuance recheck live parent/child authority under locks; a refresh replacement racing containment cannot remain renewable after re-enable. Strong proof is bound to the current browser-authorized session at code issuance, and issuance assurance is carried into the refresh family. Default-deny workload purpose prevents confidential human Clients from also using Client Credentials.

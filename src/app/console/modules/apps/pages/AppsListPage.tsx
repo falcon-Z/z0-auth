@@ -62,11 +62,11 @@ export function AppsListPage() {
             },
             {
               id: "type",
-              header: "Type",
-              accessorFn: (row) => row.clientType,
+              header: "Minimum assurance",
+              accessorFn: (row) => row.minimumAssurance,
               cell: (row) => (
                 <Badge variant="outline">
-                  {row.clientType === "public" ? "SPA" : "Server"}
+                  {row.minimumAssurance}
                 </Badge>
               ),
             },
@@ -80,9 +80,9 @@ export function AppsListPage() {
             },
             {
               id: "credentials",
-              header: "Credentials",
-              accessorFn: (row) => row.activeCredentialCount,
-              cell: (row) => row.activeCredentialCount,
+              header: "Clients",
+              accessorFn: (row) => row.activeClientCount,
+              cell: (row) => row.activeClientCount,
             },
           ]}
           rows={apps}
@@ -99,10 +99,10 @@ export function AppsListPage() {
           navigate(`/apps/${result.app.id}/setup`, {
             state: {
               credentialReveal: {
-                clientId: result.credential.clientId,
+                clientId: result.client.clientId,
                 clientSecret: result.clientSecret,
                 title:
-                  result.app.clientType === "public"
+                  result.client.clientType === "public"
                     ? "Your client ID"
                     : "Copy your client secret",
               },

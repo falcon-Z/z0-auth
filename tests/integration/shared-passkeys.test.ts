@@ -39,7 +39,7 @@ run("canonical Account passkeys in shared SSO domains", () => {
     await resetTestDatabase();
     const ids: string[] = [];
     for (const slug of ["a", "b", "outside", "unjoined"]) {
-      const [app] = await getDb()`INSERT INTO apps (name, slug, client_type, redirect_uris) VALUES (${slug}, ${slug}, 'public', '{}') RETURNING id`;
+      const [app] = await getDb()`INSERT INTO apps (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
       ids.push(String(app.id));
     }
     [a, b, outside, unjoined] = ids as [string, string, string, string];

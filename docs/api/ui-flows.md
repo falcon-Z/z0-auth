@@ -134,3 +134,7 @@ Console member self-service sessions remain at `/profile/sessions` (`GET/DELETE 
 The app-user detail page presents Application membership separately from Account state. Disable membership, Remove membership, and Rejoin application affect only the selected application. Removal retains the Account, credentials, metadata, and stable subject; rejoining does not restore revoked authority.
 
 The Add app user dialog supports New account and Existing account. Existing account uses the operator-visible Account ID to add explicit membership in the same domain while preserving credentials. Suspend account, Enable account, and Delete account describe their effect across every application in the account domain and use separate confirmations.
+
+## Application and Client management
+
+Add app creates the Application with its minimum assurance and initial Client. The Client form chooses interactive sign-in or backend workload purpose and the public/confidential class. Setup lists all child Clients; Add client creates another entry without a new user or membership. Manage edits client label, redirects, explicit browser origins, refresh capability and stronger assurance. Class and purpose remain fixed. Disable/Enable controls child issuance; confidential clients expose Rotate secret with one-time copying. Application Edit manages only its name and minimum assurance.

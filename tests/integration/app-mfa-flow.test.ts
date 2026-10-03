@@ -47,7 +47,7 @@ run("app-user MFA", () => {
     const appResponse = await dispatchApi(buildRequest("POST", "/api/v1/apps", {
       csrfToken: csrf,
       cookies: { [SESSION_COOKIE]: ownerSession },
-      body: { name: "MFA App", redirectUris: ["http://localhost/callback"], clientType: "confidential" },
+      body: {name: "MFA App", initialClient: {label: "Test client", clientType: "confidential", purpose: "interactive", redirectUris: ["http://localhost/callback"], refreshEnabled: true, browserOrigins: []}},
     }));
     appId = String(((await appResponse.json()) as { app: { id: string } }).app.id);
     const userResponse = await dispatchApi(buildRequest("POST", `/api/v1/apps/${appId}/users`, {

@@ -63,3 +63,9 @@ Material under `docs/archive/` is historical reference and must not be treated a
 The current release stage is appropriate for evaluation, development, and integrations that can absorb breaking changes.
 
 Before upgrading or depending on a project-specific interface, check the documentation and release notes for the version you are using. The [roadmap](alpha.md) describes planned release scope; it does not itself guarantee that a capability exists in every development build.
+
+## Application/Client split (migration 0046)
+
+The physical Application store remains `apps`; `oauth_clients` replaces `app_credentials`. Existing Client IDs, record IDs and protocol FK bindings are retained. Client class and redirects move off the Application. Existing clients become interactive; no old client is silently granted workload purpose. Old machine tokens and refresh authority are retired, refresh defaults off, and browser origins require explicit registration. Operators can create dedicated workload clients and explicitly enable refresh/browser origins where needed. Account Domains, Accounts, memberships, subjects, authenticators and sessions retain their ownership and identity.
+
+Application creation now requires `initialClient`; responses return `client` instead of `credential`. The `/credentials` API is replaced by `/clients`, and client RBAC grants migrate to `apps.clients:*` while preserving role assignment. Applications no longer expose class/redirect fields or an active credential count; responses expose `minimumAssurance` and `activeClientCount`.

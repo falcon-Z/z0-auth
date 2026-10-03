@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-
-import type { AppClientType, AppDetail, CreateAppResponse } from "@z0/contracts/apps";
+import { useEffect, useState } from "react";
+import type {
+  Assurance,
+  AppDetail,
+  CreateAppRequest,
+  CreateAppResponse,
+  PatchAppRequest,
+} from "@z0/contracts/apps";
 import { Button } from "@z0/components/ui/button";
 import {
   Dialog,
@@ -11,184 +16,115 @@ import {
 } from "@z0/components/ui/dialog";
 import { Input } from "@z0/components/ui/input";
 import { Label } from "@z0/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@z0/components/ui/select";
-import { ApiError } from "../../../lib/api";
-import { fieldErrorsFromProblem } from "../../../lib/form-errors";
-import { FormField } from "../../../components/forms/FormField";
+import { ClientFields, defaultClient } from "./ClientFields";
 
-const DEFAULT_REDIRECT_URI = "http://localhost:3000/oauth/callback";
-
-type CreateBody = { name: string; redirectUris: string[]; clientType: AppClientType };
-type EditBody = { name: string; redirectUris: string[] };
-
-type AppFormDialogProps =
+type Props = { open: boolean; onOpenChange: (open: boolean) => void } & (
   | {
-      open: boolean;
-      onOpenChange: (open: boolean) => void;
       mode?: "create";
-      initial?: Pick<AppDetail, "name" | "redirectUris">;
-      onSubmit: (body: CreateBody) => Promise<CreateAppResponse>;
+      initial?: never;
+      onSubmit: (body: CreateAppRequest) => Promise<CreateAppResponse>;
       onSuccess: (result: CreateAppResponse) => void;
     }
   | {
-      open: boolean;
-      onOpenChange: (open: boolean) => void;
       mode: "edit";
-      initial?: Pick<AppDetail, "name" | "redirectUris">;
-      onSubmit: (body: EditBody) => Promise<AppDetail>;
+      initial: Pick<AppDetail, "name" | "minimumAssurance">;
+      onSubmit: (body: PatchAppRequest) => Promise<AppDetail>;
       onSuccess: (result: AppDetail) => void;
-    };
-
-export function AppFormDialog({
-  open,
-  onOpenChange,
-  mode = "create",
-  initial,
-  onSubmit,
-  onSuccess,
-}: AppFormDialogProps) {
+    }
+);
+export function AppFormDialog(props: Props) {
   const [name, setName] = useState("");
-  const [clientType, setClientType] = useState<AppClientType>("confidential");
-  const [uris, setUris] = useState([DEFAULT_REDIRECT_URI]);
-  const [submitting, setSubmitting] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const isEdit = mode === "edit";
-  const wasOpen = useRef(false);
-
+  const [minimum, setMinimum] = useState<Assurance>("baseline");
+  const [client, setClient] = useState(defaultClient);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    if (open && !wasOpen.current) {
-      if (isEdit && initial) {
-        setName(initial.name);
-        setUris(initial.redirectUris.length > 0 ? [...initial.redirectUris] : [DEFAULT_REDIRECT_URI]);
-      } else {
-        setName("");
-        setClientType("confidential");
-        setUris([DEFAULT_REDIRECT_URI]);
-      }
-      setFieldErrors({});
+    if (props.open) {
+      setName(props.initial?.name ?? "");
+      setMinimum(props.initial?.minimumAssurance ?? "baseline");
+      setClient(defaultClient());
+      setError(null);
     }
-    wasOpen.current = open;
-  }, [open, isEdit, initial]);
-
-  function setUri(index: number, value: string) {
-    setUris((prev) => prev.map((u, i) => (i === index ? value : u)));
-  }
-
-  function addUri() {
-    setUris((prev) => [...prev, ""]);
-  }
-
-  function removeUri(index: number) {
-    setUris((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
-  }
-
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setSubmitting(true);
-    setFieldErrors({});
+  }, [props.open, props.initial?.name, props.initial?.minimumAssurance]);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
     try {
-      const redirectUris = uris.map((u) => u.trim()).filter(Boolean);
-      if (isEdit) {
-        const updated = await (onSubmit as (body: EditBody) => Promise<AppDetail>)({ name, redirectUris });
-        onOpenChange(false);
-        (onSuccess as (result: AppDetail) => void)(updated);
-      } else {
-        const result = await (onSubmit as (body: CreateBody) => Promise<CreateAppResponse>)({
-          name,
-          redirectUris,
-          clientType,
-        });
-        onOpenChange(false);
-        (onSuccess as (result: CreateAppResponse) => void)(result);
-      }
+      if (props.mode === "edit")
+        props.onSuccess(
+          await props.onSubmit({ name, minimumAssurance: minimum }),
+        );
+      else
+        props.onSuccess(
+          await props.onSubmit({
+            name,
+            minimumAssurance: minimum,
+            initialClient: client,
+          }),
+        );
+      props.onOpenChange(false);
     } catch (e) {
-      if (e instanceof ApiError) {
-        setFieldErrors(fieldErrorsFromProblem(e.problem));
-      } else {
-        setFieldErrors({ name: "Something went wrong. Please try again." });
-      }
+      setError(e instanceof Error ? e.message : "Could not save application.");
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <form onSubmit={(e) => void handleSubmit(e)}>
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <form onSubmit={(e) => void submit(e)}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit app" : "Add app"}</DialogTitle>
+            <DialogTitle>
+              {props.mode === "edit" ? "Edit app" : "Add app"}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <FormField label="Name" htmlFor="appName" error={fieldErrors.name}>
+            <div className="grid gap-2">
+              <Label htmlFor="appName">Name</Label>
               <Input
                 id="appName"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="My product"
-                autoComplete="off"
               />
-            </FormField>
-            {!isEdit ? (
-              <div className="space-y-2">
-                <Label htmlFor="clientType">Application type</Label>
-                <Select value={clientType} onValueChange={(v) => setClientType(v as AppClientType)}>
-                  <SelectTrigger id="clientType" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="confidential">Web app (server)</SelectItem>
-                    <SelectItem value="public">Single-page app (browser)</SelectItem>
-                  </SelectContent>
-                </Select>
-                {fieldErrors.clientType ? (
-                  <p className="text-sm text-destructive">{fieldErrors.clientType}</p>
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {clientType === "public"
-                    ? "Runs in the browser. Uses PKCE instead of a client secret."
-                    : "Runs on your server. Keep the client secret on the server only."}
-                </p>
-              </div>
-            ) : null}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Redirect URIs</p>
-              {fieldErrors.redirectUris ? (
-                <p className="text-sm text-destructive">{fieldErrors.redirectUris}</p>
-              ) : null}
-              {uris.map((uri, index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    value={uri}
-                    onChange={(e) => setUri(index, e.target.value)}
-                    placeholder="https://app.example.com/callback"
-                    aria-label={`Redirect URI ${index + 1}`}
-                  />
-                  {uris.length > 1 ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => removeUri(index)}>
-                      Remove
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" onClick={addUri}>
-                Add URI
-              </Button>
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="appMinimum">Minimum assurance</Label>
+              <select
+                id="appMinimum"
+                className="rounded-md border p-2"
+                value={minimum}
+                onChange={(e) => setMinimum(e.target.value as Assurance)}
+              >
+                <option value="baseline">Baseline</option>
+                <option value="strong">Strong</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Applies to every interactive client in this application.
+              </p>
+            </div>
+            {props.mode !== "edit" && (
+              <>
+                <h3 className="text-sm font-medium">Initial OAuth client</h3>
+                <ClientFields value={client} onChange={setClient} />
+              </>
+            )}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => props.onOpenChange(false)}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Saving…" : isEdit ? "Save" : "Create"}
+            <Button type="submit" disabled={busy}>
+              {busy ? "Saving…" : props.mode === "edit" ? "Save" : "Create"}
             </Button>
           </DialogFooter>
         </form>

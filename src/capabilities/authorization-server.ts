@@ -31,6 +31,7 @@ export type OAuthConsentCompletionInput = Omit<OAuthConsentChallengeInput, "resp
   nonce: string;
   confirmationNonce: string;
   decision: string;
+  sessionId?: string;
 };
 
 export type OAuthConsentContext = { appId: string };

@@ -19,8 +19,8 @@ import { hasTestDatabase, resetTestDatabase } from "../helpers/db";
 
 const run = hasTestDatabase() ? describe : describe.skip;
 async function app(slug: string) {
-  const [row] = await getDb()`INSERT INTO apps (name, slug, client_type, redirect_uris)
-    VALUES (${slug}, ${slug}, 'public', '{}') RETURNING id, account_domain_id`;
+  const [row] = await getDb()`INSERT INTO apps (name, slug)
+    VALUES (${slug}, ${slug}) RETURNING id, account_domain_id`;
   return { id: String(row.id), domainId: String(row.account_domain_id) };
 }
 async function account(appId: string) {
@@ -270,7 +270,8 @@ run("SSO Account Domain placement", () => {
             VALUES (${application.id}, ${credential.id}, 'workload-b', NOW() + INTERVAL '1 hour')`;
         }
       }
-      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(1);
+      await copyFile(path.join(sqlDir, "migrations", "0045_shared_sso_account_domains.sql"), path.join(previous, "migrations", "0045_shared_sso_account_domains.sql"));
+      expect(await applyMigrations(db, path.join(previous, "migrations"), false)).toBe(1);
       expect(await db`SELECT id FROM accounts`).toHaveLength(3);
       for (const table of ['app_user_sessions', 'oauth_access_tokens', 'oauth_refresh_tokens']) {
         const grants = await db.unsafe(`SELECT app_id, revoked_at FROM ${table} WHERE app_user_id IS NOT NULL`);
@@ -305,6 +306,7 @@ run("SSO Account Domain placement", () => {
       expect(upgraded.account_domain_id).toBe(upgraded.group_domain);
       const [retired] = await db`SELECT to_regclass('service_group_members') AS members, to_regclass('service_group_app_users') AS links`;
       expect(retired.members).toBeNull(); expect(retired.links).toBeNull();
+      expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(1);
       expect(await applyMigrations(db, path.join(sqlDir, "migrations"), false)).toBe(0);
     } finally { await db.close(); await rm(previous, { recursive: true, force: true }); }
   });

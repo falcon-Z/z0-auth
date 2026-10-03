@@ -1,5 +1,7 @@
 # OAuth confidential server sample
 
+Create a confidential interactive Client beneath your Application for this flow. Register its callback and explicitly enable refresh if needed. Use a separate confidential workload Client for the Client Credentials example below.
+
 Backend-style authorization code flow (no PKCE; uses client secret on the server only).
 
 ## Flow
